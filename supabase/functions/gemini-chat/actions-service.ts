@@ -1,5 +1,5 @@
 // actions-service.ts
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.92.0';
 import { DB_SCHEMA_DEFINITION } from './db_schema.ts';
 
 export class StuddyHubActionsService {
@@ -8,8 +8,6 @@ export class StuddyHubActionsService {
     constructor(supabaseUrl: string, supabaseKey: string) {
         this.supabase = createClient(supabaseUrl, supabaseKey);
     }
-
-
 
     // ========== GENERIC DB ACTION EXECUTOR ==========
     async executeDbAction(
@@ -37,29 +35,13 @@ export class StuddyHubActionsService {
             // ignore and fallback
         }
 
-        if (allowedTables.length === 0) {
-            allowedTables = [
-                'achievements','admin_activity_logs','admin_system_settings','admin_users','ai_podcasts',
-                'ai_user_memory','app_stats','audio_processing_results','badges','calendar_integrations',
-                'chat_messages','chat_sessions','class_recordings','content_moderation_log',
-                'content_moderation_queue','course_materials','courses','document_folder_items',
-                'document_folders','documents','error_logs','failed_chunks','flashcards',
-                'learning_topic_connections','notes','notification_preferences','notification_subscriptions',
-                'notifications','podcast_invites','podcast_listeners','podcast_members','podcast_shares',
-                'profiles','quiz_attempts','quizzes','referrals','schedule_items','schedule_reminders',
-                'schema_agent_audit','social_bookmarks','social_chat_message_media','social_chat_message_reads',
-                'social_chat_message_resources','social_chat_messages','social_chat_sessions',
-                'social_comment_media','social_comments','social_event_attendees','social_events',
-                'social_follows','social_group_members','social_groups','social_hashtags','social_likes',
-                'social_media','social_notifications','social_post_hashtags','social_post_tags',
-                'social_post_views','social_posts','social_reports','social_shares','social_tags',
-                'social_users','subscriptions','system_settings','user_learning_goals','user_stats'
-            ];
-        }
-
-        if (!allowedTables.includes(table)) {
-            return { success: false, error: `Table '${table}' is not whitelisted for AI actions.` };
-        }
+        // NOTE: Previously this function enforced a hardcoded whitelist of allowed
+        // tables. To allow the AI to return full DB_ACTIONs (so the runtime can
+        // execute them directly), we no longer enforce a fallback hardcoded
+        // whitelist. We still attempt to derive table names from
+        // DB_SCHEMA_DEFINITION above for diagnostics, but if that fails we allow
+        // the operation to proceed. Callers MUST still ensure they only pass
+        // trusted user IDs and that the model output is validated upstream.
 
         // Helper to recursively replace "auth.uid" with actual userId
         const replaceAuthUid = (obj: any): any => {
@@ -83,6 +65,7 @@ export class StuddyHubActionsService {
             }
             return obj;
         };
+        
         // Normalize recurrence days arrays and other scheduling-specific fields
         const normalizeRecurrenceDays = (days: any): number[] | null => {
             if (!days) return null;
@@ -148,9 +131,122 @@ export class StuddyHubActionsService {
         const cleanData = sanitizeForTable(table, replacedData);
         let cleanFilters = sanitizeForTable(table, replacedFilters);
 
-        try {
-            let query = this.supabase.from(table);
+        // Resolve runtime placeholder tokens (e.g. date.today_start) into
+        // concrete ISO timestamps so Postgres receives valid values.
+        const resolveDatePlaceholders = (val: any): any => {
+            const now = new Date();
+            const y = now.getUTCFullYear();
+            const mo = now.getUTCMonth();
+            const d = now.getUTCDate();
 
+            const isoStartToday = new Date(Date.UTC(y, mo, d, 0, 0, 0)).toISOString();
+            const isoEndToday = new Date(Date.UTC(y, mo, d, 23, 59, 59, 999)).toISOString();
+
+            const walk = (x: any): any => {
+                if (x == null) return x;
+                if (typeof x === 'string') {
+                    if (x === 'date.today_start') return isoStartToday;
+                    if (x === 'date.today_end') return isoEndToday;
+                    if (x === 'date.today') return isoStartToday;
+                    return x;
+                }
+                if (Array.isArray(x)) return x.map(walk);
+                if (typeof x === 'object') {
+                    const out: any = {};
+                    for (const k of Object.keys(x)) out[k] = walk(x[k]);
+                    return out;
+                }
+                return x;
+            };
+
+            try {
+                return walk(val);
+            } catch (e) {
+                console.warn('[ActionsService] Failed resolving date placeholders', e);
+                return val;
+            }
+        };
+
+        cleanFilters = resolveDatePlaceholders(cleanFilters);
+
+        const applyFiltersToQuery = (q: any, filtersObj: any) => {
+            if (!filtersObj || typeof filtersObj !== 'object') {
+                console.log('[applyFiltersToQuery] No filters to apply or invalid filtersObj:', filtersObj);
+                return q;
+            }
+
+            for (const fk of Object.keys(filtersObj)) {
+                const fv = filtersObj[fk];
+
+                // Debug: log current state before applying this filter
+                try {
+                    console.log('[applyFiltersToQuery] Processing filter', { key: fk, value: fv, qType: typeof q });
+                } catch (e) {
+                    // ignore logging failures
+                }
+
+                // Revised builder detection: check for PostgrestQueryBuilder shape (url + fetch)
+                const isBuilder = (obj: any) => obj && obj.url && typeof obj.fetch === 'function';
+                if (!isBuilder(q)) {
+                    console.error('[applyFiltersToQuery][CRITICAL] q does not match expected PostgrestQueryBuilder shape. Skipping filter application.', { fk, fv, q });
+                    // Return early to avoid throwing further errors
+                    return q;
+                }
+
+                // If fv is an object with operator keys, support both "gte" and "$gte" styles
+                if (fv && typeof fv === 'object' && !Array.isArray(fv)) {
+                    const ops: Record<string, any> = {};
+                    for (const k of Object.keys(fv)) {
+                        const nk = k.startsWith('$') ? k.slice(1) : k;
+                        ops[nk] = fv[k];
+                    }
+
+                    // Call builder methods without reassigning q to avoid breaking the chain
+                    try { if (ops.gte !== undefined && typeof q.gte === 'function') q.gte(fk, ops.gte); } catch (e) { console.warn('[applyFiltersToQuery] gte failed', { fk, e }); }
+                    try { if (ops.lte !== undefined && typeof q.lte === 'function') q.lte(fk, ops.lte); } catch (e) { console.warn('[applyFiltersToQuery] lte failed', { fk, e }); }
+                    try { if (ops.gt !== undefined && typeof q.gt === 'function') q.gt(fk, ops.gt); } catch (e) { console.warn('[applyFiltersToQuery] gt failed', { fk, e }); }
+                    try { if (ops.lt !== undefined && typeof q.lt === 'function') q.lt(fk, ops.lt); } catch (e) { console.warn('[applyFiltersToQuery] lt failed', { fk, e }); }
+                    try { if (ops.in !== undefined && Array.isArray(ops.in) && typeof q.in === 'function') q.in(fk, ops.in); } catch (e) { console.warn('[applyFiltersToQuery] in failed', { fk, e }); }
+                    if (ops.contains !== undefined) {
+                        try {
+                            if (typeof q.contains === 'function') q.contains(fk, ops.contains);
+                            else if (typeof q.eq === 'function') q.eq(fk, ops.contains);
+                        } catch (e) { console.warn('[applyFiltersToQuery] contains/eq fallback failed', { fk, e }); }
+                    }
+                    try { if (ops.ilike !== undefined && typeof q.ilike === 'function') q.ilike(fk, ops.ilike); } catch (e) { console.warn('[applyFiltersToQuery] ilike failed', { fk, e }); }
+                    try { if (ops.neq !== undefined && typeof q.neq === 'function') q.neq(fk, ops.neq); } catch (e) { console.warn('[applyFiltersToQuery] neq failed', { fk, e }); }
+
+                    const recognized = ['gte','lte','gt','lt','in','contains','ilike','neq'];
+                    const hasRecognized = Object.keys(ops).some(k => recognized.includes(k));
+                    if (!hasRecognized) {
+                        try {
+                            if (typeof q.eq === 'function') q.eq(fk, fv);
+                            else console.warn('[applyFiltersToQuery] No eq function available for fallback equality', { fk });
+                        } catch (e) { console.warn('[applyFiltersToQuery] eq fallback failed', { fk, e }); }
+                    }
+                } else if (Array.isArray(fv)) {
+                    // Use Postgres array operators: .contains for containment
+                    try {
+                        if (typeof q.contains === 'function') q.contains(fk, fv);
+                        else if (typeof q.eq === 'function') q.eq(fk, fv);
+                        else console.warn('[applyFiltersToQuery] Neither contains nor eq available for array filter', { fk });
+                    } catch (e) {
+                        console.log('[applyFiltersToQuery] array filter application failed', { fk, fv, err: String(e) });
+                    }
+                } else {
+                    try {
+                        if (typeof q.eq === 'function') q.eq(fk, fv);
+                        else console.warn('[applyFiltersToQuery] eq function not available for simple equality', { fk });
+                    } catch (e) {
+                        console.warn('[applyFiltersToQuery] simple equality application failed', { fk, e });
+                    }
+                }
+            }
+            return q;
+        };
+ 
+
+        try {
             if (operation === 'INSERT') {
                 if (!cleanData.user_id) {
                     cleanData.user_id = userId;
@@ -181,7 +277,10 @@ export class StuddyHubActionsService {
                     }
                 }
 
-                const { data: result, error } = await query.insert(cleanData).select();
+                const { data: result, error } = await this.supabase
+                    .from(table)
+                    .insert(cleanData)
+                    .select();
                 if (error) throw error;
                 return { success: true, data: result };
 
@@ -264,24 +363,44 @@ export class StuddyHubActionsService {
                     }
                 }
 
-                const { data: result, error } = await query.update(cleanData).match(cleanFilters).select();
+                // Build the update query: start with base query, apply filters, then update
+                let query = this.supabase.from(table);
+                query = applyFiltersToQuery(query, cleanFilters);
+                const { data: result, error } = await query.update(cleanData).select();
                 if (error) throw error;
                 return { success: true, data: result };
 
+                    // CORRECTED DELETE OPERATION - Replace lines 373-383 in actions-service.ts
             } else if (operation === 'DELETE') {
-                if (Object.keys(cleanFilters).length === 0) {
-                    return { success: false, error: 'DELETE operation requires filters' };
-                }
+            if (Object.keys(cleanFilters).length === 0) {
+                return { success: false, error: 'DELETE operation requires filters' };
+            }
 
-                const { error } = await query.delete().match(cleanFilters);
-                if (error) throw error;
-                return { success: true, data: { status: 'deleted' } };
-
-            } else if (operation === 'SELECT') {
-                let selectQuery = query.select();
-                if (cleanFilters) {
-                    selectQuery = selectQuery.match(cleanFilters);
-                }
+            // CRITICAL FIX: For DELETE operations in Supabase, you MUST call .delete() 
+            // FIRST, then apply filters. The filter methods are not available on the
+            // base table builder - they only become available after .delete() is called.
+            //
+            // WRONG: let query = this.supabase.from(table);
+            //        query = applyFiltersToQuery(query, cleanFilters);
+            //        await query.delete();
+            //
+            // RIGHT: let query = this.supabase.from(table).delete();
+            //        query = applyFiltersToQuery(query, cleanFilters);
+            //        await query;
+            
+            let query = this.supabase.from(table).delete();
+            query = applyFiltersToQuery(query, cleanFilters);
+            
+            const { error } = await query;
+            if (error) throw error;
+            return { success: true, data: { status: 'deleted' } };
+        } else if (operation === 'SELECT') {
+                // Prepare select query: call .select('*') immediately so order/limit
+                // methods are available on the builder, then apply filters.
+                let query = this.supabase.from(table).select('*');
+                query = applyFiltersToQuery(query, cleanFilters);
+                
+                // Apply ordering if specified
                 if (order) {
                     let column = '';
                     let ascending = true;
@@ -303,18 +422,43 @@ export class StuddyHubActionsService {
 
                     if (column) {
                         console.log(`[ActionsService] Ordering by ${column} (${ascending ? 'asc' : 'desc'})`);
-                        selectQuery = selectQuery.order(column, { ascending });
+                        if (query && typeof query.order === 'function') {
+                            try { query.order(column, { ascending }); } catch (e) { console.error('[ActionsService] order call failed', e); }
+                        } else {
+                            console.error('[ActionsService] query.order is not a function; skipping ordering. Logging query for debugging.', { table, operation, order, query });
+                        }
                     }
                 }
-                if (limit) {
-                    selectQuery = selectQuery.limit(Number(limit));
+                
+                // Apply limit (defensive)
+                try {
+                    console.log('[ActionsService] Type of query before limit:', typeof query, Object.keys(query || {}));
+                } catch (e) {}
+
+                const parsedLimit = (limit !== null && limit !== undefined) ? Number(limit) : 10;
+                if (!Number.isNaN(parsedLimit) && parsedLimit > 0) {
+                    if (query && typeof query.limit === 'function') {
+                        try { query.limit(parsedLimit); } catch (e) { console.error('[ActionsService] limit call failed', e); }
+                    } else {
+                        console.error('[ActionsService] query.limit is not a function; skipping limit application and logging query object for debugging.', { table, operation, limit, query });
+                    }
                 } else {
-                    selectQuery = selectQuery.limit(10); // Default limit
+                    console.warn('[ActionsService] Invalid limit provided, using default 10', { limit });
+                    if (query && typeof query.limit === 'function') try { query.limit(10); } catch (e) { console.error('[ActionsService] default limit call failed', e); }
                 }
 
-                const { data: result, error } = await selectQuery;
-                if (error) throw error;
-                return { success: true, data: result };
+                try {
+                    // Execute the built query. The Postgrest builder is thenable, so
+                    // awaiting `query` yields the response ({ data, error }).
+                    const execRes: any = await query;
+                    const result = execRes.data;
+                    const selectError = execRes.error;
+                    if (selectError) throw selectError;
+                    return { success: true, data: result };
+                } catch (e) {
+                    console.error('[ActionsService] Error during SELECT execution after building query:', e, { table, operation, filters: cleanFilters, order, limit, query });
+                    throw e;
+                }
             }
 
             return { success: false, error: `Unsupported operation: ${operation}` };
@@ -2065,6 +2209,7 @@ export class StuddyHubActionsService {
         const hashtags = text.match(/#(\w+)/g);
         return hashtags ? hashtags.map(tag => tag.substring(1)) : [];
     }
+    
     // ==================================================================
     // 📱 SOCIAL MEDIA ACTIONS
     // ==================================================================

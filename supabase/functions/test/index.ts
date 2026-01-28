@@ -1717,6 +1717,34 @@ Note: The full DB action guidelines, scheduling guidance, and social-post guidan
 
       // Send final response
       console.log('🏁 Sending final response...');
+      // Extract any image metadata from executed actions so the client can render images immediately
+      const images = (executedActions || [])
+        .filter((a: any) => a?.type === 'GENERATE_IMAGE' && a?.data?.imageUrl)
+        .map((a: any) => ({
+          url: a.data.imageUrl,
+          message: a.data.message || null,
+          prompt: a.data.prompt || null,
+          timestamp: a.timestamp || null,
+        }));
+
+      const topLevelImageUrl = images.length > 0 ? images[0].url : undefined;
+
+      try {
+        console.log('SENT_DONE_PAYLOAD', JSON.stringify({
+          response: generatedText,
+          aiMessageId: savedAiMessage?.id,
+          aiMessageTimestamp: savedAiMessage?.timestamp,
+          userMessageId,
+          userMessageTimestamp,
+          sessionId,
+          userId,
+          executedActions,
+          images,
+        }));
+      } catch (err) {
+        console.error('Failed to serialize SENT_DONE_PAYLOAD', err);
+      }
+
       handler.sendDone({
         response: generatedText,
         aiMessageId: savedAiMessage?.id,
@@ -1725,7 +1753,11 @@ Note: The full DB action guidelines, scheduling guidance, and social-post guidan
         userMessageTimestamp,
         sessionId,
         userId,
-        executedActions: executedActions
+        executedActions: executedActions,
+        images,
+        // convenience top-level fields for older clients
+        imageUrl: topLevelImageUrl,
+        files_metadata: images.length > 0 ? JSON.stringify(images) : undefined,
       });
       console.log('✅ Final response sent, closing stream');
 

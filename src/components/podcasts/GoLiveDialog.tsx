@@ -51,6 +51,7 @@ export const GoLiveDialog: React.FC<GoLiveDialogProps> = ({
   const [description, setDescription] = useState('');
   const [isPublic, setIsPublic] = useState(true);
   const [tags, setTags] = useState('');
+  const [podcastType, setPodcastType] = useState<'audio' | 'image-audio' | 'video' | 'live-stream'>('live-stream');
   const [coverImage, setCoverImage] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isGeneratingAiCover, setIsGeneratingAiCover] = useState(false);
@@ -113,6 +114,7 @@ export const GoLiveDialog: React.FC<GoLiveDialogProps> = ({
           audio_segments: [], // Required field
           duration_minutes: 0, // Will be updated as stream progresses
           sources: [],
+          podcast_type: podcastType,
           style: 'casual', // Using casual style for live streams
           tags: tags.split(',').map(t => t.trim()).filter(Boolean)
         })
@@ -130,21 +132,37 @@ export const GoLiveDialog: React.FC<GoLiveDialogProps> = ({
           role: 'owner'
         });
 
-      // Create social post about going live and attach podcast_id so the post links to the podcast
+      // Create social post about going live via the edge function so moderation/bookkeeping is applied
       let createdPostId: string | null = null;
       if (isPublic) {
-        const { data: post, error: postError } = await supabase
-          .from('social_posts')
-          .insert({
-            author_id: user.id,
-            content: `🔴 LIVE NOW: ${title}${description ? '\n\n' + description : ''}\n\nJoin the live podcast now!`,
-            privacy: 'public',
-          })
-          .select()
-          .single();
+        try {
+          // console.log('[GoLive] Invoking create-social-post edge function');
+          const invokeRes = await supabase.functions.invoke('create-social-post', {
+            body: {
+              author_id: user.id,
+              content: `🔴 LIVE NOW: ${title}${description ? '\n\n' + description : ''}\n\nJoin the live podcast now!`,
+              privacy: 'public',
+              metadata: {
+                type: 'podcast',
+                podcastId: podcast.id,
+                title: podcast.title,
+                description: podcast.description || '',
+                coverUrl: podcast.cover_image_url,
+                authorName: podcast.user?.full_name || 'Anonymous'
+              }
+            }
+          });
 
-        if (postError) throw postError;
-        createdPostId = post?.id || null;
+          if (invokeRes && invokeRes.data) {
+            createdPostId = invokeRes.data.id || invokeRes.data.post_id || null;
+          } else if (invokeRes && invokeRes.error) {
+            throw invokeRes.error;
+          } else {
+            throw new Error('create-social-post returned no data');
+          }
+        } catch (err: any) {
+          throw err;
+        }
       }
 
       // Send notification to all podcast members (including owner)
@@ -170,8 +188,9 @@ export const GoLiveDialog: React.FC<GoLiveDialogProps> = ({
       onLiveStart?.(podcast.id);
       onClose();
 
-      // Navigate to the podcast page so the host sees the live stream immediately
-      navigate(`/podcasts/${podcast.id}`);
+      // Note: navigation is intentionally omitted here to avoid triggering
+      // the public listener view at the same time the host UI is mounted.
+      // The parent component can choose to navigate if desired.
 
       // Reset form
       setTitle('');
@@ -363,6 +382,22 @@ export const GoLiveDialog: React.FC<GoLiveDialogProps> = ({
               value={tags}
               onChange={(e) => setTags(e.target.value)}
             />
+          </div>
+
+          {/* Podcast Type */}
+          <div className="space-y-2">
+            <Label htmlFor="podcastType">Podcast Type</Label>
+            <select
+              id="podcastType"
+              value={podcastType}
+              onChange={(e) => setPodcastType(e.target.value as any)}
+              className="w-full rounded-md border p-2 bg-white dark:bg-slate-800"
+            >
+              <option value="live-stream">Live Stream</option>
+              <option value="audio">Audio</option>
+              <option value="image-audio">Image + Audio</option>
+              <option value="video">Video</option>
+            </select>
           </div>
 
           {/* Public/Private Toggle */}

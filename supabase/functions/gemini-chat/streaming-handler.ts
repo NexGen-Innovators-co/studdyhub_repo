@@ -66,7 +66,7 @@ export class StreamingHandler {
   }
 }
 
-export function createStreamResponse(): {
+export function createStreamResponse(signal?: AbortSignal): {
   stream: ReadableStream;
   handler: StreamingHandler;
 } {
@@ -75,8 +75,25 @@ export function createStreamResponse(): {
   const stream = new ReadableStream({
     start(controller) {
       handler = new StreamingHandler(controller);
+
+      if (signal) {
+        if (signal.aborted) {
+          try { controller.close(); } catch (_) {}
+        } else {
+          const onAbort = () => {
+            try {
+              handler.sendError('Client aborted the request');
+            } catch (e) {
+              // ignore
+            }
+            try { controller.close(); } catch (_) {}
+          };
+          signal.addEventListener('abort', onAbort, { once: true });
+        }
+      }
     }
   });
 
   return { stream, handler: handler! };
 }
+

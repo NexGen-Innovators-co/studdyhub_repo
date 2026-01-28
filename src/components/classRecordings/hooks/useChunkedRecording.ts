@@ -98,17 +98,22 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
     localStorage.removeItem(LOCAL_STORAGE_KEY);
   }, []);
 
-  // Get supported MIME type
-  const getSupportedMimeType = useCallback(() => {
-    const mimeTypes = [
+  // Get supported MIME type. Optionally prefer a provided list (e.g. video-capable types).
+  const getSupportedMimeType = useCallback((preferred?: string[]) => {
+    const defaultTypes = [
       'audio/webm;codecs=opus',
       'audio/webm',
       'audio/mp4',
       'audio/ogg;codecs=opus',
     ];
+    const mimeTypes = Array.isArray(preferred) && preferred.length ? [...preferred, ...defaultTypes] : defaultTypes;
     for (const mimeType of mimeTypes) {
-      if (MediaRecorder.isTypeSupported?.(mimeType)) {
-        return mimeType;
+      try {
+        if (MediaRecorder.isTypeSupported?.(mimeType)) {
+          return mimeType;
+        }
+      } catch (e) {
+        // ignore
       }
     }
     return undefined;
@@ -164,23 +169,100 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
     }, chunkDurationMs);
   }, [chunkDurationMs, finalizeCurrentChunk]);
 
-  // Start recording
-  const startRecording = useCallback(async () => {
+  // Start recording. Accept an optional incoming MediaStream to record (supports audio+video).
+  // This allows callers to pass an existing `localStream` (e.g. from a WebRTC session)
+  // so video tracks are preserved instead of requesting audio-only getUserMedia.
+  const startRecording = useCallback(async (...args: any[]) => {
+    // Flexible signature for backward compatibility:
+    // - startRecording()
+    // - startRecording(stream: MediaStream)
+    // - startRecording(podcastId: string, { stream })
+    let incoming: MediaStream | undefined;
+    if (args.length === 1) {
+      if (args[0] instanceof MediaStream) incoming = args[0];
+      else if (args[0] && typeof args[0] === 'object' && args[0].stream instanceof MediaStream) incoming = args[0].stream;
+    } else if (args.length >= 2) {
+      // support start(podcastId, { stream })
+      const maybeOpts = args[1];
+      if (maybeOpts && typeof maybeOpts === 'object' && maybeOpts.stream instanceof MediaStream) incoming = maybeOpts.stream;
+    }
     try {
       setState(prev => ({ ...prev, error: null }));
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 44100
+      // Determine stream to use: prefer provided incoming stream, otherwise request audio-only.
+      let stream: MediaStream | null = null;
+      if (incoming) {
+        // support calling with either MediaStream or an options object { stream }
+        if ((incoming as any).stream && (incoming as any).stream instanceof MediaStream) {
+          stream = (incoming as any).stream as MediaStream;
+        } else if (incoming instanceof MediaStream) {
+          stream = incoming;
         }
-      });
+      }
+
+      if (!stream) {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 44100
+          }
+        });
+      }
 
       streamRef.current = stream;
-      const mimeType = getSupportedMimeType();
-      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      // Choose a mime type that supports video when the stream contains video tracks
+      const hasVideo = stream.getVideoTracks && stream.getVideoTracks().length > 0;
+      const preferredMimeTypes = hasVideo
+        ? [
+            'video/webm;codecs=vp8,opus',
+            'video/webm;codecs=vp9,opus',
+            'video/webm',
+            'audio/webm;codecs=opus'
+          ]
+        : undefined;
+
+      const mimeType = getSupportedMimeType(preferredMimeTypes);
+      let mediaRecorder: MediaRecorder | null = null;
+      let usedAudioOnlyFallback = false;
+
+      const tryCreateRecorder = (targetStream: MediaStream, options?: MediaRecorderOptions) => {
+        try {
+          return new MediaRecorder(targetStream, options);
+        } catch (e) {
+          // console.warn('[useChunkedRecording] MediaRecorder creation failed with options', options, e);
+          return null;
+        }
+      };
+
+      // Try preferred mimeType first, then without options, then fall back to audio-only stream
+      if (mimeType) {
+        mediaRecorder = tryCreateRecorder(stream, { mimeType });
+      }
+      if (!mediaRecorder) {
+        mediaRecorder = tryCreateRecorder(stream);
+      }
+      if (!mediaRecorder) {
+        // Try audio-only fallback if available
+        const audioTracks = stream.getAudioTracks ? stream.getAudioTracks() : [];
+        if (audioTracks && audioTracks.length) {
+          const audioOnly = new MediaStream(audioTracks.map(t => t.clone()));
+          mediaRecorder = tryCreateRecorder(audioOnly, { mimeType: getSupportedMimeType() });
+          if (mediaRecorder) {
+            usedAudioOnlyFallback = true;
+            streamRef.current = audioOnly;
+            // console.warn('[useChunkedRecording] Falling back to audio-only recording due to MediaRecorder limitations');
+          }
+        }
+      } else {
+        streamRef.current = stream;
+      }
+
+      if (!mediaRecorder) {
+        throw new Error('Unable to create MediaRecorder for the provided stream');
+      }
+
       mediaRecorderRef.current = mediaRecorder;
 
       currentChunkDataRef.current = [];
@@ -198,8 +280,45 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
         onError?.(error);
       };
 
-      // Start recording with timeslice for regular data events
-      mediaRecorder.start(1000);
+      // Start recording with timeslice for regular data events, with guarded start
+      try {
+        mediaRecorder.start(1000);
+        // console.log('[useChunkedRecording] MediaRecorder started', { mimeType: mediaRecorder.mimeType, usedAudioOnlyFallback });
+      } catch (startErr) {
+        // console.warn('[useChunkedRecording] MediaRecorder.start failed, attempting audio-only fallback', startErr);
+        // If start failed and we haven't tried audio-only fallback yet, attempt it
+        if (!usedAudioOnlyFallback) {
+          const audioTracks = stream.getAudioTracks ? stream.getAudioTracks() : [];
+          if (audioTracks && audioTracks.length) {
+            const audioOnly = new MediaStream(audioTracks.map(t => t.clone()));
+            const fallbackRecorder = tryCreateRecorder(audioOnly, { mimeType: getSupportedMimeType() });
+            if (fallbackRecorder) {
+              mediaRecorder = fallbackRecorder;
+              mediaRecorderRef.current = fallbackRecorder;
+              streamRef.current = audioOnly;
+              mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                  currentChunkDataRef.current.push(event.data);
+                }
+              };
+              mediaRecorder.onerror = (event) => {
+                const error = new Error('Recording error occurred');
+                setState(prev => ({ ...prev, error: error.message, isRecording: false }));
+                onError?.(error);
+              };
+              mediaRecorder.start(1000);
+              // console.log('[useChunkedRecording] MediaRecorder started (audio-only fallback)', { mimeType: mediaRecorder.mimeType, usedAudioOnlyFallback });
+              usedAudioOnlyFallback = true;
+            } else {
+              throw startErr;
+            }
+          } else {
+            throw startErr;
+          }
+        } else {
+          throw startErr;
+        }
+      }
       
       // Start chunk timer
       startChunkTimer();
@@ -227,6 +346,7 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
       onError?.(error);
     }
   }, [getSupportedMimeType, startChunkTimer, onError]);
+
 
   // Pause recording
   const pauseRecording = useCallback(() => {
@@ -362,15 +482,20 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
 
   return {
     ...state,
+    // primary API names
     startRecording,
+    stopRecording,
+    // convenience aliases for older callers (e.g. chunked.start/stop)
+    start: startRecording,
+    stop: stopRecording,
     pauseRecording,
     resumeRecording,
-    stopRecording,
     cancelRecording,
     hasBackup: state.chunks.length > 0 && !state.isRecording,
     clearBackup: clearLocalBackup,
     restoreBackup: restoreFromLocalStorage
   };
+
 }
 
 // Helper functions

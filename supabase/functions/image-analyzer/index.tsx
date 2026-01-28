@@ -63,9 +63,28 @@ serve(async (req) => {
     });
 
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash'
-    });
+
+    const MODEL_CHAIN = [
+      'gemini-2.5-flash',
+      'gemini-3-pro-preview',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-2.5-pro',
+      'gemini-2.0-pro',
+      'gemini-1.5-pro'
+    ];
+
+    let model: any = null;
+    for (let i = 0; i < MODEL_CHAIN.length; i++) {
+      try {
+        model = genAI.getGenerativeModel({ model: MODEL_CHAIN[i] });
+        // quick test call could be omitted; we'll attempt generateContent and catch failures
+        break;
+      } catch (err) {
+        console.warn(`Model ${MODEL_CHAIN[i]} not available, trying next...`);
+      }
+    }
+    if (!model) throw new Error('No available Gemini model found');
 
     const imageResponse = await fetch(fileUrl);
     if (!imageResponse.ok) {
@@ -96,10 +115,23 @@ serve(async (req) => {
 If the image contains a diagram or chart, identify its type (e.g., "flowchart", "bar chart", "graph") and briefly describe its main visual components.
 Do NOT interpret the meaning, provide educational context, highlight key concepts, or generate study notes. Your output should be a factual description of the image's raw content.`;
 
-    const result = await model.generateContent([
-      { text: prompt },
-      imagePart
-    ]);
+    let result: any = null;
+    let lastErr: any = null;
+    for (const m of MODEL_CHAIN) {
+      try {
+        const candidateModel = genAI.getGenerativeModel({ model: m });
+        result = await candidateModel.generateContent([
+          { text: prompt },
+          imagePart
+        ]);
+        break;
+      } catch (err) {
+        lastErr = err;
+        console.warn(`Model ${m} failed, trying next.`, err?.message || err);
+        await new Promise(r => setTimeout(r, 500 * (Math.random() + 1)));
+      }
+    }
+    if (!result) throw lastErr || new Error('All Gemini model attempts failed');
 
     const response = result.response;
     let imageDescription = response.text();

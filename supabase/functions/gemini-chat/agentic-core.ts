@@ -1,6 +1,6 @@
 // agentic-core.ts - Advanced Agentic Mechanisms for Accurate Understanding & Response
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.92.0';
 import { DB_SCHEMA_DEFINITION } from './db_schema.ts';
 
 // Provide a default config if ENHANCED_PROCESSING_CONFIG is not defined elsewhere

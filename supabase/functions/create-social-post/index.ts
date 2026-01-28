@@ -145,10 +145,6 @@ serve(async (req) => {
         
         // AI-powered educational analysis using direct API
         const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || '';
-        const apiUrl = new URL('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent');
-        apiUrl.searchParams.set('key', geminiApiKey);
-        
-        console.log('Gemini API URL:', apiUrl.toString().replace(geminiApiKey, 'KEY_HIDDEN'));
 
         const prompt = `You are an educational content moderator for StuddyHub, a learning platform.
 
@@ -182,26 +178,40 @@ Respond in JSON format:
 }`;
 
         console.log('Calling Gemini API...');
-        const response = await fetch(apiUrl.toString(), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{ text: prompt }]
-            }]
-          })
-        });
 
-        console.log('Gemini API call completed, status:', response.status);
+        const MODEL_CHAIN = [
+          'gemini-2.5-flash',
+          'gemini-3-pro-preview',
+          'gemini-2.0-flash',
+          'gemini-1.5-flash',
+          'gemini-2.5-pro',
+          'gemini-2.0-pro',
+          'gemini-1.5-pro'
+        ];
 
-        if (!response.ok) {
-          const errorBody = await response.text();
-          console.error('Gemini API error:', response.status, response.statusText, errorBody);
-          throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+        async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 3): Promise<any> {
+          for (let attempt = 0; attempt < Math.min(maxAttempts, MODEL_CHAIN.length); attempt++) {
+            const model = MODEL_CHAIN[attempt % MODEL_CHAIN.length];
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            try {
+              const resp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+              });
+              if (resp.ok) return await resp.json();
+              const txt = await resp.text();
+              console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
+              if (resp.status === 429 || resp.status === 503) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
+            } catch (err) {
+              console.error(`Error calling Gemini ${model}:`, err);
+              if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
+            }
+          }
+          throw new Error('All Gemini models failed');
         }
 
-        console.log('Gemini API response status:', response.status);
-        const result = await response.json();
+        const result = await callGeminiWithModelChain({ contents: [{ parts: [{ text: prompt }] }] }, geminiApiKey);
         console.log('Gemini API result received, parsing...');
         
         const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text || '';

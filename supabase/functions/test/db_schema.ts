@@ -612,7 +612,7 @@ You may perform INSERT, UPDATE, DELETE, and SELECT operations on the following t
     - size_bytes: bigint
     - mime_type: text
     - created_at: timestamp
-    - NOTE: media rows link to posts via `post_id`. Do NOT use `user_id` on this table.
+    - NOTE: media rows link to posts via post_id. Do NOT use user_id on this table.
 
 56. social_notifications
     - id: uuid (pk)
@@ -658,8 +658,8 @@ You may perform INSERT, UPDATE, DELETE, and SELECT operations on the following t
     - updated_at: timestamp
     - views_count: integer
     - metadata: jsonb
-        - NOTE: the author column for posts is `author_id` (NOT `user_id`).
-            When requesting post creation or updates, use `author_id` exactly.
+        - NOTE: the author column for posts is author_id (NOT user_id).
+            When requesting post creation or updates, use author_id exactly.
 
 61. social_reports
     - id: uuid (pk)

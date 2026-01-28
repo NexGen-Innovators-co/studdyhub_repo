@@ -1,6 +1,5 @@
-/// <reference lib="deno.ns" />
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.92.0';
 import { UserContextService } from './context-service.ts';
 import { EnhancedPromptEngine } from './prompt-engine.ts';
 import { StuddyHubActionsService } from './actions-service.ts';
@@ -33,6 +32,9 @@ const ENHANCED_PROCESSING_CONFIG = {
   RELEVANCE_TOP_K: 10,  // More relevant items
   RELEVANCE_SIMILARITY_THRESHOLD: 0.7,
   RELEVANCE_DECAY_FACTOR: 0.95
+  ,
+  ACTION_FIX_ATTEMPTS: 3,
+  ACTION_FIX_BACKOFF_MS: 1000
 };
 
 // Initialize Supabase client
@@ -138,6 +140,49 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
     executedActions,
     modifiedResponse
   };
+}
+
+// Sanitize assistant output before sending/saving to the user.
+// Removes embedded action JSON/code blocks and stray ACTION: markers.
+function sanitizeAssistantOutput(text: string | null | undefined): string {
+  if (!text) return '';
+  let out = text;
+
+  // 1) Remove code blocks that contain action-related keywords
+  // Match ```json, ```action, or generic ``` with action content
+  out = out.replace(/```(?:json|action)?\s*[\s\S]*?(?:DB_ACTION|GENERATE_IMAGE|ENGAGE_SOCIAL|"type"\s*:\s*"(?:DB_ACTION|GENERATE_IMAGE|ENGAGE_SOCIAL)")[\s\S]*?```/gi, '');
+  
+  // 2) Remove single-line JSON objects with action types
+  // Example: { "type": "DB_ACTION", "params": {...} }
+  out = out.replace(/\{[^}]*"type"\s*:\s*"(?:DB_ACTION|GENERATE_IMAGE|ENGAGE_SOCIAL)"[^}]*\}/gi, '');
+  
+  // 3) Remove multi-line JSON objects with "actions" arrays
+  // This catches the full action plan format: { "thought_process": "...", "actions": [...] }
+  out = out.replace(/\{[\s\S]*?"actions"\s*:\s*\[[\s\S]*?\][\s\S]*?\}/gi, '');
+  
+  // 4) Remove explicit ACTION: lines (legacy format)
+  out = out.replace(/^ACTION:\s*.*$/gim, '');
+  
+  // 5) Remove standalone "thought_process" entries
+  out = out.replace(/"thought_process"\s*:\s*"[^"]*"/gi, '');
+  
+  // 6) Remove "params" objects that look like action parameters
+  out = out.replace(/"params"\s*:\s*\{[\s\S]*?"table"\s*:[\s\S]*?\}/gi, '');
+
+  // 7) Remove standalone braces, brackets that were left behind
+  out = out.replace(/^[{}\[\],]\s*$/gm, '');
+  
+  // 8) Remove lines that start with common action-related JSON keys
+  out = out.replace(/^\s*"(?:type|params|table|operation|data|filters)"\s*:.*$/gm, '');
+
+  // 9) Clean up excessive whitespace left behind
+  out = out.replace(/\n{3,}/g, '\n\n').trim();
+  
+  // 10) Remove empty parentheses or brackets
+  out = out.replace(/\(\s*\)/g, '');
+  out = out.replace(/\[\s*\]/g, '');
+
+  return out;
 }
 
 // ========== HELPER FUNCTIONS ==========
@@ -1191,6 +1236,99 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string, conf
   };
 }
 
+// Streaming variant: forward incremental chunks to `onChunk` callback while
+// accumulating the full text. Falls back to non-streaming behaviour if the
+// API does not stream.
+async function callEnhancedGeminiAPIStream(contents: any[], geminiApiKey: string, onChunk: (chunk: string) => Promise<void>, configOverrides: any = {}): Promise<{
+  success: boolean;
+  content?: string;
+  error?: string;
+}> {
+  const MODEL_CHAIN = [
+    'gemini-2.5-flash',
+    'gemini-3-pro-preview',
+    'gemini-2.0-flash'
+  ];
+
+  const { systemInstruction, ...generationConfig } = configOverrides;
+
+  const requestBody: any = {
+    contents,
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 8192,
+      ...generationConfig
+    }
+  };
+
+  if (systemInstruction) requestBody.systemInstruction = systemInstruction;
+
+  // Try each model in chain until success
+  for (let attempt = 0; attempt < MODEL_CHAIN.length; attempt++) {
+    const currentModel = MODEL_CHAIN[attempt];
+    console.log(`[GeminiAPI-Stream] Using model: ${currentModel}`);
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${geminiApiKey}`;
+
+    try {
+      const resp = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!resp.ok) {
+        const txt = await resp.text();
+        console.error('[GeminiAPI-Stream] HTTP error:', resp.status, txt.substring(0, 300));
+        continue;
+      }
+
+      // If response body is a stream, read incremental chunks and forward
+      const reader = resp.body?.getReader();
+      if (!reader) {
+        // Fallback: parse full JSON
+        const data = await resp.json();
+        const extracted = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (extracted) {
+          await onChunk(extracted);
+          return { success: true, content: extracted };
+        }
+        continue;
+      }
+
+      const decoder = new TextDecoder();
+      let done = false;
+      let accumulated = '';
+
+      while (!done) {
+        const { value, done: rdone } = await reader.read();
+        done = rdone;
+        if (value) {
+          const chunkText = decoder.decode(value, { stream: !done });
+          // Forward chunk to caller (UI)
+          try { await onChunk(chunkText); } catch (e) { console.warn('[GeminiAPI-Stream] onChunk handler failed', e); }
+          accumulated += chunkText;
+        }
+      }
+
+      // Attempt to extract meaningful text from accumulated response
+      try {
+        const parsed = JSON.parse(accumulated);
+        const extracted = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (extracted) return { success: true, content: extracted };
+      } catch (e) {
+        // Not JSON — return raw accumulated stream
+        return { success: true, content: accumulated };
+      }
+    } catch (err) {
+      console.error('[GeminiAPI-Stream] Network/stream error:', err);
+      continue;
+    }
+  }
+
+  return { success: false, error: 'ALL_STREAM_MODELS_FAILED' };
+}
+
 async function extractUserFacts(userMessage: string, aiResponse: string, userId: string, sessionId: string): Promise<any[]> {
   const facts: any[] = [];
 
@@ -1524,7 +1662,7 @@ async function handleStreamingResponse(
       console.log('✅ Prompt built with', conversationData.contents.length, 'conversation parts');
 
       // =========================================================================
-      // STEP 5: ACTION PLANNING (JSON)
+      // STEP 5: ACTION PLANNING (JSON) - UPDATED WITH CLEARER INSTRUCTIONS
       // =========================================================================
       console.log('⚙️ Starting Action Planning phase...');
       handler.sendThinkingStep(
@@ -1534,108 +1672,272 @@ async function handleStreamingResponse(
         'in-progress'
       );
 
-      const actionSystemPrompt = `${systemPrompt}
+      // Define supported action types clearly
+      const SUPPORTED_ACTION_TYPES = ['DB_ACTION', 'GENERATE_IMAGE', 'ENGAGE_SOCIAL'];
+      const ACTION_TYPE_DESCRIPTION = `
+ONLY these action types are supported by the system:
+1. DB_ACTION - Database operations (INSERT, SELECT, UPDATE, DELETE)
+2. GENERATE_IMAGE - AI image generation using diffusion models
+3. ENGAGE_SOCIAL - Social media interactions and posts
 
-You are an AI assistant that manages database operations and creative tools.
-Analyze the user's request and the conversation context.
+ANY OTHER ACTION TYPE WILL BE IGNORED AND SKIPPED.
+If you think you need a different action type, DON'T include it. Only use the three types above.
+`;
 
-YOUR GOAL: Return a JSON object with the necessary actions.
+      const actionSystemPrompt = `
+═══════════════════════════════════════════════════════════
+YOU ARE NOW IN: ACTION PLANNING PHASE
+═══════════════════════════════════════════════════════════
+
+Your ONLY job is to return valid JSON representing the actions needed.
+
+${ACTION_TYPE_DESCRIPTION}
+
+REQUIRED JSON FORMAT:
+{
+  "thought_process": "Brief machine-readable explanation",
+  "actions": [
+    {
+      "type": "DB_ACTION|GENERATE_IMAGE|ENGAGE_SOCIAL",
+      "params": { ... }
+    }
+  ]
+}
 
 CRITICAL RULES:
-- Return JSON ONLY. No markdown, no extraneous text.
-- The output must be a valid JSON object with a "thought_process" string and an "actions" array.
-- When referring to the current user id, use the literal string "auth.uid()" in the JSON; the runtime will replace it.
-- For destructive operations (UPDATE/DELETE) ask for a short confirmation if the intent is ambiguous.
-- For ambiguous scheduling details (time zone, start/end, recurrence), ask a clarifying question instead of guessing.
+1. Return ONLY the JSON object above - absolutely no other text
+2. Use ONLY the 3 action types listed (DB_ACTION, GENERATE_IMAGE, ENGAGE_SOCIAL)
+3. If you need any other action type, DO NOT include it (it will be skipped anyway)
+4. If no actions are needed, return: { "thought_process": "No actions required", "actions": [] }
+5. When referring to the current user ID, use the literal string "auth.uid()"
+6. For DELETE/UPDATE operations, include proper filters to avoid accidental data loss
+7. DO NOT add conversational text, explanations, or markdown
+8. DO NOT wrap the JSON in code blocks
 
-Note: The full DB action guidelines, scheduling guidance, and social-post guidance are included above in the system prompt; follow them precisely (use \`author_id\`, link media by \`post_id\`, prefer inline \`media\` in \`social_posts\`, etc.).`;
-      // Copy contents for action planning
+FOR DB_ACTION FORMATTING (Follow exactly):
+- params must include: table (string), operation (INSERT|UPDATE|DELETE|SELECT)
+- For UPDATE/DELETE, include filters object with specific conditions
+- For INSERT, include data object with row values
+- Date/time range filters use comparison objects:
+  "filters": { "start_time": { "gte": "2026-01-26T12:00:00Z", "lte": "2026-01-26T19:30:00Z" } }
+- Array-valued fields (like recurrence_days) must be actual JSON arrays:
+  "recurrence_days": [1,2,3]  ✓ CORRECT
+  "recurrence_days": ["1","2"]  ✗ WRONG
+- Use filters with in for matching multiple values:
+  "filters": { "title": { "in": ["Note 1", "Note 2"] } }
+
+EXAMPLES (follow these patterns):
+
+Example 1 - Simple SELECT:
+{
+  "thought_process": "User wants to see their schedules",
+  "actions": [
+    {
+      "type": "DB_ACTION",
+      "params": {
+        "table": "schedule_items",
+        "operation": "SELECT",
+        "filters": { "user_id": "auth.uid()" },
+        "limit": 50
+      }
+    }
+  ]
+}
+
+Example 2 - DELETE with specific filters:
+{
+  "thought_process": "Remove Monday items in time range",
+  "actions": [
+    {
+      "type": "DB_ACTION",
+      "params": {
+        "table": "schedule_items",
+        "operation": "DELETE",
+        "filters": {
+          "user_id": "auth.uid()",
+          "is_recurring": true,
+          "recurrence_days": [1],
+          "start_time": { "gte": "2026-01-26T12:00:00Z", "lte": "2026-01-26T19:30:00Z" }
+        }
+      }
+    }
+  ]
+}
+
+Example 3 - INSERT with proper data:
+{
+  "thought_process": "Create new note",
+  "actions": [
+    {
+      "type": "DB_ACTION",
+      "params": {
+        "table": "notes",
+        "operation": "INSERT",
+        "data": {
+          "user_id": "auth.uid()",
+          "title": "Study Notes",
+          "content": "Content here...",
+          "category": "general",
+          "tags": ["study"]
+        }
+      }
+    }
+  ]
+}
+
+Example 4 - No actions needed:
+{
+  "thought_process": "This is a question that doesn't require database operations",
+  "actions": []
+}
+
+DATABASE SCHEMA:
+${typeof DB_SCHEMA_DEFINITION === 'string' ? DB_SCHEMA_DEFINITION : JSON.stringify(DB_SCHEMA_DEFINITION, null, 2)}
+
+USER'S REQUEST:
+See the conversation history above.
+
+NOW: Return ONLY the JSON action plan (nothing else, no markdown, no explanation):
+`;
+
+      // Build action planning conversation
       const actionContents = [...conversationData.contents];
-      actionContents.push({
-        role: 'user',
-        parts: [{ text: "Determine the actions to take. Return JSON only." }]
-      });
 
-      console.log('🤖 Calling Gemini API for Action Plan...');
-      const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-      if (!geminiApiKey) throw new Error('GEMINI_API_KEY not configured');
-
+      // Initialize tracking
       let executedActions: any[] = [];
-      let finalResponseContext = attachedContext;
+      let finalResponseContext = '';
+      let planningAttempt = 0;
 
       try {
-        const actionResponse = await callEnhancedGeminiAPI(actionContents, geminiApiKey, {
-          responseMimeType: "application/json",
-          systemInstruction: { parts: [{ text: actionSystemPrompt }] }
-        });
+        // Action planning loop with retry and self-correction
+        while (planningAttempt < ENHANCED_PROCESSING_CONFIG.ACTION_FIX_ATTEMPTS) {
+          console.log(`[ActionPlanningLoop] Attempt ${planningAttempt + 1}/${ENHANCED_PROCESSING_CONFIG.ACTION_FIX_ATTEMPTS}`);
 
-        if (actionResponse.success && actionResponse.content) {
-          try {
-            console.log('📥 Parsing Action Plan JSON:', actionResponse.content);
-            const parsed = JSON.parse(actionResponse.content);
+          console.log('🤖 Calling Gemini API for Action Plan...');
+          const actionResponse = await callEnhancedGeminiAPI(actionContents, geminiApiKey, {
+            responseMimeType: 'application/json',
+            systemInstruction: { parts: [{ text: actionSystemPrompt }] }
+          });
 
-            // Accept multiple plan shapes:
-            // 1) Full plan: { thought_process: '', actions: [...] }
-            // 2) Single action object: { type: 'DB_ACTION', params: {...} }
-            // 3) Array of actions: [ {..}, {..} ]
-            let actionsToExecute: any[] = [];
-            if (Array.isArray(parsed)) {
-              actionsToExecute = parsed;
-            } else if (parsed && Array.isArray(parsed.actions)) {
-              actionsToExecute = parsed.actions;
-            } else if (parsed && parsed.type) {
-              actionsToExecute = [parsed];
-            }
-
-            if (actionsToExecute.length > 0) {
-              executedActions = await executeParsedActions(
-                actionsService,
-                userId,
-                sessionId,
-                actionsToExecute,
-                (action, index, total) => {
-                  const actionLabel = getFriendlyActionLabel(action.type, action.params);
-                  handler.sendThinkingStep(
-                    'action',
-                    `Action ${index + 1}/${total}`,
-                    `${actionLabel}...`,
-                    'in-progress',
-                    { action, index, total }
-                  );
-                }
-              );
-
-              finalResponseContext += '\n\n=== EXECUTED ACTIONS RESULTS ===\n';
-              finalResponseContext += JSON.stringify(executedActions, null, 2);
-
-              handler.sendThinkingStep(
-                'action',
-                'Actions executed',
-                `Successfully executed ${executedActions.filter(a => a.success).length} out of ${executedActions.length} actions.`,
-                'completed'
-              );
-            } else {
-              console.log('No actions planned.');
-              handler.sendThinkingStep(
-                'action',
-                'No actions needed',
-                'Proceeding to response...',
-                'completed',
-                { actionCount: 0 }
-              );
-            }
-          } catch (parseError: any) {
-            console.error('Failed to parse action plan:', parseError);
-            handler.sendThinkingStep('action', 'Action Planning Warning', 'Could not parse action plan, continuing...', 'completed');
-            // Continue to response generation even if action parsing fails
+          if (!actionResponse.success || !actionResponse.content) {
+            console.error('[ActionPlanningLoop] Failed to get action plan from API');
+            handler.sendThinkingStep('action', 'Planning skipped', 'Could not generate action plan', 'completed');
+            break;
           }
-        } else {
-          console.warn('Action planning API call failed or returned empty, continuing to response...');
-          handler.sendThinkingStep('action', 'Action Planning Skipped', 'Proceeding to response generation...', 'completed');
+
+          console.log('[ActionPlanningLoop][RAW_PLAN]', actionResponse.content);
+
+          // Parse the action plan
+          let parsed: any = null;
+          try {
+            parsed = JSON.parse(actionResponse.content);
+          } catch (e) {
+            // Try to extract JSON from response
+            const jsonMatch = actionResponse.content.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              try {
+                parsed = JSON.parse(jsonMatch[0]);
+              } catch (e2) {
+                console.warn('[ActionPlanningLoop] Could not parse JSON from response');
+              }
+            }
+          }
+
+          if (!parsed) {
+            console.error('[ActionPlanningLoop] Failed to parse action plan JSON');
+            handler.sendThinkingStep('action', 'Action Planning Warning', 'Could not parse model action plan JSON; continuing...', 'completed');
+            break;
+          }
+
+          // Normalize to actions array
+          let actionsToExecute: any[] = [];
+          if (Array.isArray(parsed)) actionsToExecute = parsed;
+          else if (parsed && Array.isArray(parsed.actions)) actionsToExecute = parsed.actions;
+          else if (parsed && parsed.type) actionsToExecute = [parsed];
+
+          if (!actionsToExecute || actionsToExecute.length === 0) {
+            console.log('[ActionPlanningLoop] No actions planned.');
+            handler.sendThinkingStep('action', 'No actions needed', 'Proceeding to response...', 'completed', { actionCount: 0 });
+            break;
+          }
+
+          // Filter to supported action types and record skipped actions
+          const filteredActions: any[] = [];
+          for (const a of actionsToExecute) {
+            if (SUPPORTED_ACTION_TYPES.includes(a.type)) {
+              filteredActions.push(a);
+            } else {
+              console.warn(`[ActionPlanningLoop] Skipping unsupported action type: ${a.type}`);
+              executedActions.push({
+                type: a.type,
+                success: false,
+                error: `Unsupported action type '${a.type}' - Only DB_ACTION, GENERATE_IMAGE, ENGAGE_SOCIAL are supported`,
+                timestamp: new Date().toISOString()
+              });
+              handler.sendThinkingStep('action', `Skipped unsupported action`, `Action type '${a.type}' is not supported`, 'completed', { action: a });
+            }
+          }
+
+          // Execute planned actions (only supported ones)
+          if (filteredActions.length > 0) {
+            const execResults = await executeParsedActions(
+              actionsService,
+              userId,
+              sessionId,
+              filteredActions,
+              (action, index, total) => {
+                const actionLabel = getFriendlyActionLabel(action.type, action.params);
+                handler.sendThinkingStep('action', `Action ${index + 1}/${total}`, `${actionLabel}...`, 'in-progress', { action, index, total });
+              }
+            );
+
+            executedActions = executedActions.concat(execResults);
+          }
+
+          // Check if actions require confirmation
+          const needsConfirmation = executedActions.filter((a: any) => a.data && a.data.needsConfirmation);
+          if (needsConfirmation.length > 0) {
+            handler.sendThinkingStep('action', 'Awaiting confirmation', `One or more actions require confirmation before proceeding.`, 'completed');
+            finalResponseContext += '\n\n=== ACTIONS REQUIRING CONFIRMATION ===\n';
+            finalResponseContext += JSON.stringify(needsConfirmation, null, 2);
+            break;
+          }
+
+          // Check for failures
+          const failures = executedActions.filter((a: any) => !a.success);
+          if (failures.length === 0) {
+            finalResponseContext += '\n\n=== EXECUTED ACTIONS RESULTS ===\n';
+            finalResponseContext += JSON.stringify(executedActions, null, 2);
+            handler.sendThinkingStep('action', 'Actions executed', `Successfully executed ${executedActions.length} actions.`, 'completed');
+            break;
+          }
+
+          // If failures and not at max attempts, try to fix
+          planningAttempt += 1;
+          if (planningAttempt >= ENHANCED_PROCESSING_CONFIG.ACTION_FIX_ATTEMPTS) {
+            console.error('[ActionPlanningLoop] Reached max fix attempts');
+            handler.sendThinkingStep('action', 'Action Fix Failed', `Some actions failed after ${planningAttempt} attempts.`, 'completed');
+            finalResponseContext += '\n\n=== EXECUTED ACTIONS RESULTS (WITH FAILURES) ===\n';
+            finalResponseContext += JSON.stringify(executedActions, null, 2);
+            break;
+          }
+
+          // Prepare repair prompt
+          const repairInstruction = `The previous action plan produced failures. Here are the results:
+
+PLAN:
+${actionResponse.content}
+
+EXECUTION_RESULTS:
+${JSON.stringify(executedActions, null, 2)}
+
+Please provide a corrected JSON action plan that fixes the errors above. Return JSON ONLY.`;
+
+          actionContents.push({ role: 'user', parts: [{ text: repairInstruction }] });
+          await sleep(ENHANCED_PROCESSING_CONFIG.ACTION_FIX_BACKOFF_MS * planningAttempt);
         }
       } catch (actionError: any) {
         console.error('Error during action planning:', actionError);
-        // Don't fail the entire request - continue to response generation
         handler.sendThinkingStep('action', 'Action Planning Error', 'Continuing to response generation...', 'completed');
       }
 
@@ -1662,60 +1964,110 @@ Note: The full DB action guidelines, scheduling guidance, and social-post guidan
 
       console.log('🤖 Calling Gemini API for Final Response...');
 
-      const finalResponse = await callEnhancedGeminiAPI(finalContents, geminiApiKey, {
-        systemInstruction: conversationData.systemInstruction
-      });
+      let generatedText = '';
+      // Stream tokens to the client as they arrive. This handler is only invoked
+      // when the outer request enabled streaming, so we always attempt streaming.
+      const streamResult = await callEnhancedGeminiAPIStream(finalContents, geminiApiKey, async (chunk: string) => {
+        try {
+          handler.sendContentChunk(chunk);
+        } catch (e) {
+          console.warn('[Streaming] Failed to send content chunk:', e);
+        }
+      }, { systemInstruction: conversationData.systemInstruction });
 
-      if (!finalResponse.success || !finalResponse.content) {
-        throw new Error('Failed to generate final response');
+      if (!streamResult.success || !streamResult.content) {
+        // Fallback to synchronous generation if streaming failed
+        const finalResponse = await callEnhancedGeminiAPI(finalContents, geminiApiKey, {
+          systemInstruction: conversationData.systemInstruction
+        });
+        if (!finalResponse.success || !finalResponse.content) {
+          throw new Error('Failed to generate final response');
+        }
+        generatedText = finalResponse.content;
+        handler.sendContentChunk(generatedText);
+        console.log('[Streaming] Fallback full response sent; chars:', generatedText.length);
+      } else {
+        generatedText = streamResult.content;
+        console.log('[Streaming] Completed streaming final response; total chars:', generatedText.length);
       }
+      // Finalize-check: ask the model if this reply is ready to send or needs more work
+      try {
+        const finalizeCheckPrompt = [
+          {
+            role: 'user',
+            parts: [{ text: `You just generated this assistant reply:
+\n${generatedText}
+\nDecide if this reply should be sent to the user as-final (no further action planning/execution required) or if additional action planning/fixes are necessary.
+Return JSON ONLY with the shape: { "final": true|false, "reason": "short reason", "fix_request": "optional concise instruction to fix actions" }` }]
+          }
+        ];
 
-      let generatedText = finalResponse.content;
-      console.log('✅ Generated response:', generatedText.length, 'characters');
+        const finalizeResp = await callEnhancedGeminiAPI(finalizeCheckPrompt, geminiApiKey, { responseMimeType: 'application/json' });
+        if (finalizeResp.success && finalizeResp.content) {
+          let finalizeParsed: any = null;
+          try { finalizeParsed = JSON.parse(finalizeResp.content); } catch (e) {
+            const m = finalizeResp.content.match(/({[\s\S]*})/);
+            if (m) try { finalizeParsed = JSON.parse(m[0]); } catch (e) { finalizeParsed = null; }
+          }
 
-      // ========== FALLBACK: LEGACY ACTION DETECTION ==========
-      // Some models might revert to legacy ACTION: markers instead of using the JSON plan.
-      // We check the final response for these markers and execute them as a fallback.
-      console.log('[ActionExecution] Checking for legacy ACTION: markers in final response...');
-      const fallbackResult = await executeAIActions(userId, sessionId, generatedText);
-
-      if (fallbackResult.executedActions.length > 0) {
-        console.log(`[ActionExecution] Found and executed ${fallbackResult.executedActions.length} legacy actions.`);
-
-        // Add to the main executed actions list
-        executedActions = [...executedActions, ...fallbackResult.executedActions];
-
-        // Update generated text to strip the markers
-        generatedText = fallbackResult.modifiedResponse;
-
-        handler.sendThinkingStep(
-          'action',
-          'Legacy actions processed',
-          `Executed ${fallbackResult.executedActions.length} additional actions found in response text.`,
-          'completed'
-        );
+          if (finalizeParsed && finalizeParsed.final === false) {
+            handler.sendThinkingStep('verification', 'Verifying response', finalizeParsed.reason || 'Assistant requested further checks', 'in-progress');
+            console.log('[FinalizeCheck] Model requested further work:', finalizeParsed.reason || '(no reason)');
+            // Simple UX improvement: pause briefly to show the assistant is thinking.
+            await sleep(ENHANCED_PROCESSING_CONFIG.ACTION_FIX_BACKOFF_MS || 1000);
+            handler.sendThinkingStep('verification', 'Continuing', 'Resuming action planning or response refinement...', 'completed');
+          } else {
+            handler.sendThinkingStep('action', 'Response generated', 'Successfully generated response', 'completed');
+          }
+        } else {
+          handler.sendThinkingStep('action', 'Response generated', 'Successfully generated response', 'completed');
+        }
+      } catch (finalizeErr) {
+        console.error('[FinalizeCheck] Error during finalize check:', finalizeErr);
+        handler.sendThinkingStep('action', 'Response generated', 'Successfully generated response', 'completed');
       }
-
-      handler.sendThinkingStep(
-        'action',
-        'Response generated',
-        'Successfully generated response',
-        'completed'
-      );
       console.log('✅ Action phase complete');
 
       console.log('✅ Actions executed (summary):', executedActions.length, 'actions');
 
-      // Save AI message
+      // Detect embedded image code blocks like ```image\n{ "url": "...", "alt": "..." }\n```
+      function extractImageBlocks(text: string): { cleaned: string; images: Array<{ url: string; alt?: string }> } {
+        const imageRegex = /```image\s*\n([\s\S]*?)\n```/g;
+        const images: Array<{ url: string; alt?: string }> = [];
+        let cleaned = text;
+        let match: RegExpExecArray | null;
+        while ((match = imageRegex.exec(text)) !== null) {
+          try {
+            const jsonText = match[1].trim();
+            const parsed = JSON.parse(jsonText);
+            if (parsed && parsed.url) {
+              images.push({ url: parsed.url, alt: parsed.alt || parsed.description || '' });
+              // Replace the code block in cleaned output with a markdown image tag
+              cleaned = cleaned.replace(match[0], `![${(parsed.alt || '').replace(/\]|\(/g,'')}](${parsed.url})`);
+            }
+          } catch (err) {
+            console.warn('[extractImageBlocks] Failed to parse image block JSON:', err);
+          }
+        }
+        return { cleaned, images };
+      }
+
       console.log('💾 Saving AI message...');
-      const aiMessageData = {
+      const { cleaned, images } = extractImageBlocks(generatedText);
+      // Sanitize assistant output to remove any embedded action JSON/code blocks
+      const sanitizedCleaned = sanitizeAssistantOutput(cleaned);
+
+      const aiMessageData: any = {
         userId,
         sessionId,
-        content: generatedText,
+        content: sanitizedCleaned,
         role: 'assistant',
         attachedDocumentIds: allDocumentIds.length > 0 ? allDocumentIds : null,
         attachedNoteIds: attachedNoteIds.length > 0 ? attachedNoteIds : null,
-        isError: false
+        isError: false,
+        filesMetadata: images.length > 0 ? images.map(img => ({ type: 'image', url: img.url, alt: img.alt })) : null,
+        imageUrl: images.length > 0 ? images[0].url : null,
+        imageMimeType: images.length > 0 ? (images[0].url.endsWith('.png') ? 'image/png' : images[0].url.endsWith('.jpg') || images[0].url.endsWith('.jpeg') ? 'image/jpeg' : null) : null
       };
 
       const savedAiMessage = await saveChatMessage(aiMessageData);
@@ -1729,17 +2081,44 @@ Note: The full DB action guidelines, scheduling guidance, and social-post guidan
         console.error('[Streaming] Failed to update token count after saving AI message:', err);
       }
 
-      // Send final response
+      // Send final response (include image metadata so client can render inline)
       console.log('🏁 Sending final response...');
+
+      // Prepare top-level convenience fields
+      const topLevelImageUrl = images.length > 0 ? images[0].url : undefined;
+      const filesMetadata = images.length > 0 ? JSON.stringify(images) : undefined;
+
+      // Sanitize final outgoing response to avoid leaking action JSON/code
+      const finalResponseText = sanitizeAssistantOutput(generatedText);
+
+      try {
+        console.log('SENT_DONE_PAYLOAD', JSON.stringify({
+          response: finalResponseText,
+          aiMessageId: savedAiMessage?.id,
+          aiMessageTimestamp: savedAiMessage?.timestamp,
+          userMessageId,
+          userMessageTimestamp,
+          sessionId,
+          userId,
+          executedActions,
+          images,
+        }));
+      } catch (err) {
+        console.error('Failed to serialize SENT_DONE_PAYLOAD', err);
+      }
+
       handler.sendDone({
-        response: generatedText,
+        response: finalResponseText,
         aiMessageId: savedAiMessage?.id,
         aiMessageTimestamp: savedAiMessage?.timestamp,
         userMessageId,
         userMessageTimestamp,
         sessionId,
         userId,
-        executedActions: executedActions
+        executedActions: executedActions,
+        images: images.length > 0 ? images : null,
+        imageUrl: topLevelImageUrl,
+        files_metadata: filesMetadata,
       });
       console.log('✅ Final response sent, closing stream');
 
@@ -2356,6 +2735,9 @@ serve(async (req) => {
     console.log(`[Main] Checking for actions in AI response...`);
     const actionResult = await executeAIActions(userId, sessionId, generatedText);
     generatedText = actionResult.modifiedResponse;
+
+    // Ensure final assistant text does not contain any leftover action blocks
+    generatedText = sanitizeAssistantOutput(generatedText);
 
 
     if (apiCallSuccess && generatedText) {

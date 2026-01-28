@@ -15,6 +15,8 @@ import {
   Globe,
   Library,
   List,
+  Image,
+  Headphones,
   WifiOff
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -106,6 +108,9 @@ const sectionTabs = {
     { id: 'discover', label: 'Discover', icon: TrendingUp },
     { id: 'my-podcasts', label: 'My Podcasts', icon: Podcast },
     { id: 'live', label: 'Live Now', icon: Radio },
+    { id: 'audio', label: 'Audio', icon: Headphones },
+    { id: 'video', label: 'Video', icon: Video },
+    { id: 'image-audio', label: 'Image + Audio', icon: Image },
   ],
   // notes: [
   //   // { id: 'all', label: 'All Notes', icon: BookOpen },
@@ -309,7 +314,7 @@ export const Header: React.FC<HeaderProps> = ({
       setDeferredPrompt(null);
       setShowInstallPrompt(false);
     } catch (error) {
-      console.error('Error installing app:', error);
+      // console.error('Error installing app:', error);
       toast.error('Failed to install app. Please try manual installation.');
       showInstallInstructions();
     } finally {

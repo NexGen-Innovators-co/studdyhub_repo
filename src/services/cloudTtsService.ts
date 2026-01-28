@@ -22,6 +22,13 @@ export async function generateSpeech(options: CloudTtsOptions): Promise<CloudTts
   try {
     const { text, voice = 'female', rate = 1.0, pitch = 0 } = options;
 
+    // Notify UI that generation is starting
+    try {
+      window.dispatchEvent(new CustomEvent('cloud-tts:generating', { detail: { length: text.length, voice } }));
+    } catch (e) {
+      // ignore - window may not exist in some runtimes
+    }
+
     const response = await supabase.functions.invoke('cloud-tts', {
       body: {
         text,
@@ -39,11 +46,21 @@ export async function generateSpeech(options: CloudTtsOptions): Promise<CloudTts
       throw new Error('Invalid response from TTS service');
     }
 
+    try {
+      window.dispatchEvent(new CustomEvent('cloud-tts:generated', { detail: { size: response.data.audioContent.length } }));
+    } catch (e) {
+      // ignore
+    }
+
     return {
       audioContent: response.data.audioContent
     };
   } catch (error: any) {
-    //console.error('[CloudTTS] Error:', error);
+    try {
+      window.dispatchEvent(new CustomEvent('cloud-tts:error', { detail: { message: error?.message || String(error) } }));
+    } catch (e) {
+      // ignore
+    }
     return {
       audioContent: '',
       error: error.message || 'Failed to generate speech'
@@ -64,8 +81,24 @@ export function playAudioContent(audioContent: string): HTMLAudioElement {
     .replace(/\s/g, '');
 
   const audio = new Audio(`data:audio/mp3;base64,${cleanedAudio}`);
+
+  // Attach playback events for UI
+  try {
+    audio.addEventListener('playing', () => {
+      try { window.dispatchEvent(new CustomEvent('cloud-tts:playback-start')); } catch (e) {}
+    });
+    audio.addEventListener('ended', () => {
+      try { window.dispatchEvent(new CustomEvent('cloud-tts:playback-ended')); } catch (e) {}
+    });
+    audio.addEventListener('error', (err) => {
+      try { window.dispatchEvent(new CustomEvent('cloud-tts:playback-error', { detail: { error: err } })); } catch (e) {}
+    });
+  } catch (e) {
+    // ignore
+  }
+
   audio.play().catch(err => {
-    //console.error('[CloudTTS] Playback error:', err);
+    try { window.dispatchEvent(new CustomEvent('cloud-tts:playback-error', { detail: { error: err } })); } catch (e) {}
     throw new Error('Failed to play audio');
   });
 

@@ -35,7 +35,15 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onCreateNew }) => {
     const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'activity'>('overview');
-    const { stats, loading, error, refresh } = useDashboardStats(userProfile?.id);
+    const { stats, loading, error, refresh, isCached } = useDashboardStats(userProfile?.id);
+
+    // Trigger an initial load only when we don't already have cached stats for
+    // this user. This prevents repeated refetches when the Dashboard remounts.
+    useEffect(() => {
+        if (userProfile?.id && !isCached) {
+            refresh();
+        }
+    }, [userProfile?.id, isCached, refresh]);
 
     // Sync tab changes with global header
     useEffect(() => {
@@ -97,17 +105,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
         });
     };
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen">
-                <div className="text-center">
-                    <BookPagesAnimation size="lg" showText text="Loading your mind palace..." />
-                </div>
-            </div>
-        );
-    }
-
-    if (error || !stats ) {
+    if (error) {
         return (
             <div className="flex items-center justify-center min-h-screen">
                 <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl">
@@ -117,6 +115,18 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                     <Button onClick={refresh} variant="outline" className="border-red-300">
                         <RefreshCw className="h-4 w-4 mr-2" /> Retry
                     </Button>
+                </div>
+            </div>
+        );
+    }
+
+    // Progressive skeleton when stats not yet available. When cached data
+    // exists this will be skipped and the dashboard renders immediately.
+    if (!stats) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center">
+                    <BookPagesAnimation size="lg" showText text="Loading dashboard..." />
                 </div>
             </div>
         );

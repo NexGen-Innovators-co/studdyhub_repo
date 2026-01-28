@@ -1,3 +1,5 @@
+// Updated prompt-engine.ts with fixes for action leakage
+
 import { DB_SCHEMA_DEFINITION } from './db_schema.ts';
 
 export class EnhancedPromptEngine {
@@ -5,18 +7,171 @@ export class EnhancedPromptEngine {
         const userProfile = userContext.profile;
         const userContextSection = this.buildUserContextSection(userContext);
 
+// ===== CRITICAL: PHASE SEPARATION INSTRUCTIONS =====
+const PHASE_INSTRUCTIONS = `
+**⚠️ CRITICAL: TWO-PHASE OPERATION ⚠️**
+
+You operate in TWO DISTINCT PHASES. Never mix them:
+
+═══════════════════════════════════════════════
+PHASE 1: ACTION PLANNING (When asked for action plan)
+═══════════════════════════════════════════════
+INPUT: "Analyze the request and return an action plan"
+OUTPUT: ONLY valid JSON matching this schema:
+{
+  "thought_process": "brief explanation",
+  "actions": [
+    { "type": "DB_ACTION|GENERATE_IMAGE|ENGAGE_SOCIAL", "params": {...} }
+  ]
+}
+
+RULES FOR PHASE 1:
+✓ Return ONLY the JSON object, nothing else
+✓ Supported types: DB_ACTION, GENERATE_IMAGE, ENGAGE_SOCIAL
+✓ NO conversational text
+✓ NO markdown formatting
+✓ NO code blocks
+✓ If you need an action type other than the three above, DO NOT include it
+
+═══════════════════════════════════════════════
+PHASE 2: FINAL RESPONSE (When generating final response)
+═══════════════════════════════════════════════
+INPUT: "Generate natural response for user" + action execution results
+OUTPUT: Conversational text only
+
+RULES FOR PHASE 2:
+✓ Write natural, friendly responses
+✓ Confirm what was done based on action results
+✓ DO NOT output any JSON
+✓ DO NOT output code blocks with actions
+✓ DO NOT include raw action results
+✓ DO NOT say "let me check" or "I will now..." if actions already executed
+✓ Simply tell the user what you found/did
+
+EXAMPLES OF GOOD PHASE 2 RESPONSES:
+❌ BAD: "Let me check your schedule. { \\"type\\": \\"DB_ACTION\\" ..."
+❌ BAD: "I'll retrieve that now..."
+✅ GOOD: "I've checked your schedule. You currently have no items scheduled."
+✅ GOOD: "I found 3 notes in your account about Biology."
+
+**REMEMBER: You will be explicitly told which phase you are in. Follow the rules for that phase ONLY.**
+`;
+
+// Add this section to prompt-engine.ts in the DB_ACTION_GUIDELINES
+
 const DB_ACTION_GUIDELINES = `
 **🗄️ DATABASE ACTION GUIDELINES:**
-To perform database operations, analyze the provided DATABASE SCHEMA and construct a single JSON action of type ` + "DB_ACTION" + ` with this exact shape:
+
+To perform database operations, analyze the provided DATABASE SCHEMA and construct a single JSON action of type DB_ACTION with this exact shape:
 { "type": "DB_ACTION", "params": { "table": "<table_name>", "operation": "INSERT|UPDATE|DELETE|SELECT", "data": { ... }, "filters": { ... } } }
 
-Rules:
-- Use table and column names exactly as shown in the schema.
-- When referring to the current user id, use the literal string 'auth.uid'. The runtime will replace it with the actual user id.
-- Ask for explicit permission before performing destructive changes (UPDATE/DELETE). For simple CREATE/INSERT you may ask for confirmation when ambiguous.
-- Do NOT emit legacy ACTION: markers or free-form commands — emit DB_ACTION JSON only when you intend the system to act.
+**🔒 CRITICAL: CONFIRMATION RULES FOR DESTRUCTIVE OPERATIONS**
 
-Example (create note):
+DELETE and UPDATE operations REQUIRE USER CONFIRMATION. Follow this TWO-STAGE PROCESS:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STAGE 1: INITIAL REQUEST (NO CONFIRMATION YET)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+User: "Delete my posts about X"
+
+What you do:
+1. Generate action WITHOUT "confirmed": true field
+2. System will return: { needsConfirmation: true, rowCount: N, preflightIds: [...] }
+3. In your response, tell the user: "I found N items matching your criteria. Are you sure you want to delete/update them?"
+4. WAIT for user's confirmation response
+
+Example action (Stage 1):
+{
+  "type": "DB_ACTION",
+  "params": {
+    "table": "social_posts",
+    "operation": "DELETE",
+    "filters": { "author_id": "auth.uid()", "content": { "ilike": "%test%" } }
+    // NO "confirmed" field here - will trigger confirmation prompt
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STAGE 2: AFTER USER CONFIRMS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+User: "Yes, delete them" / "Confirm" / "Go ahead"
+
+What you do:
+1. Generate the SAME action again, but NOW with "confirmed": true
+2. System will execute the deletion/update
+
+Example action (Stage 2):
+{
+  "type": "DB_ACTION",
+  "params": {
+    "table": "social_posts",
+    "operation": "DELETE",
+    "filters": { "author_id": "auth.uid()", "content": { "ilike": "%test%" } },
+    "confirmed": true  // ← NOW include this flag
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXCEPTION: EXPLICIT CONFIRMATION IN ORIGINAL REQUEST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If the user's FIRST message includes clear confirmation language, you MAY include "confirmed": true immediately.
+
+Phrases that indicate explicit confirmation:
+✓ "Yes, delete [them/it/my posts]"
+✓ "Confirm deletion"
+✓ "Go ahead and delete"
+✓ "Proceed with deletion"
+✓ "I'm sure, delete them"
+
+Ambiguous phrases (DO NOT treat as confirmation):
+✗ "Delete my posts" (no confirmation word)
+✗ "Can you delete..." (asking, not confirming)
+✗ "I want to delete..." (expressing desire, not confirming)
+
+Example with explicit confirmation:
+User: "Yes, go ahead and delete all my test posts"
+
+You recognize "yes, go ahead" as confirmation, so:
+{
+  "type": "DB_ACTION",
+  "params": {
+    "table": "social_posts",
+    "operation": "DELETE",
+    "filters": { "content": { "ilike": "%test%" } },
+    "confirmed": true  // ← OK to include because user said "yes, go ahead"
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HANDLING CANCELLATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If user says "no" / "cancel" / "nevermind" after you ask for confirmation:
+- Do NOT generate any action
+- Simply respond: "Okay, I've canceled the [deletion/update]."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUMMARY OF RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. For SELECT and INSERT: No confirmation needed, proceed normally
+2. For DELETE and UPDATE:
+   a. First time: Omit "confirmed", ask user for confirmation
+   b. After user confirms: Include "confirmed": true
+   c. Exception: User says "yes, delete..." in first message → include "confirmed": true immediately
+3. NEVER include "confirmed": true without user's explicit approval
+4. When needsConfirmation is returned, ALWAYS ask the user before proceeding
+
+**General Rules:**
+- Use table and column names exactly as shown in the schema
+- When referring to the current user id, use the literal string 'auth.uid'. The runtime will replace it with the actual user id
+- Do NOT emit legacy ACTION: markers or free-form commands — emit DB_ACTION JSON only when you intend the system to act
+- ONLY emit DB_ACTION during ACTION PLANNING phase, never during FINAL RESPONSE phase
+
+Example (create note - no confirmation needed):
 { "type": "DB_ACTION", "params": { "table": "notes", "operation": "INSERT", "data": { "title": "React", "content": "Brief content...", "category": "general", "tags": ["react"], "user_id": "auth.uid" }, "filters": {} } }
 `;
 // Scheduling guidance appended to DB_ACTION_GUIDELINES to teach the model how to emit schedule_items actions
@@ -27,6 +182,7 @@ const SCHEDULING_GUIDANCE = `
 - Prefer emitting \`recurrence_days\` as an integer array like \`[2,4]\` for Tuesday/Thursday. If you produce weekday names ("Tuesday", "Tue") or numeric strings ("2"), the runtime will normalize them, but integers avoid errors.
 - For non-recurring events set \`is_recurring: false\` and recurrence fields to \`null\`.
 - Use ISO 8601 UTC timestamps for \`start_time\`/\`end_time\` when possible (e.g. \`2026-02-03T09:00:00Z\`).
+- ONLY emit these during ACTION PLANNING phase.
 
 Example - single event:
 {
@@ -76,18 +232,26 @@ Example - recurring weekly event (Tue & Thu):
   }
 }
 `;
+
 const SOCIAL_POST_GUIDANCE = `
 ---
-**📣 SOCIAL POSTS CREATION:**
-- To create a social post, emit a ` + "DB_ACTION" + ` with operation ` + "INSERT" + ` on the ` + "social_posts" + ` table.
-- Include in ` + "data" + `: ` + "{ author_id: 'auth.uid', content: string, privacy?: 'public'|'private'|'group', media?: [], group_id?: string|null, metadata?: any }" + `.
-- Do NOT set bookkeeping fields like ` + "created_at" + ` or counts — the edge function ` + "create-social-post" + ` handles those and runs moderation/subscription checks.
-Example (preferred) — include attachments inline:
+**📣 SOCIAL POSTS CREATION (USE EDGE FUNCTION):**
+
+IMPORTANT: Do NOT emit a DB_ACTION that INSERTs into social_posts or social_media.
+The platform provides an edge function named create-social-post which performs the authoritative creation, moderation, and bookkeeping for posts and media. When you need to create a social post, emit an ENGAGE_SOCIAL action that calls the edge function instead.
+
+Guidelines:
+- Use action type: ENGAGE_SOCIAL (not DB_ACTION) for creating posts.
+- Include a handler or target indicating create-social-post and provide the post payload under data.
+- Do NOT include database bookkeeping fields (created_at, counts, etc.) — the edge function sets those.
+- Prefer embedding media inside the post payload. Do not attempt separate social_media INSERTs unless the caller explicitly requests separate media rows and you have a reason.
+- If the model accidentally suggests DB_ACTION inserts for social_posts or social_media, do NOT output them; instead convert intent to an ENGAGE_SOCIAL action.
+
+Example - create post via edge function (ACTION PLANNING phase):
 {
-  "type": "DB_ACTION",
+  "type": "ENGAGE_SOCIAL",
   "params": {
-    "table": "social_posts",
-    "operation": "INSERT",
+    "handler": "create-social-post",
     "data": {
       "author_id": "auth.uid",
       "content": "Happy Sabbath everyone! Here's a quick study tip...",
@@ -97,25 +261,18 @@ Example (preferred) — include attachments inline:
       ],
       "group_id": null,
       "metadata": { "topic": "study-tips" }
-    },
-    "filters": {}
+    }
   }
 }
 
-If you must create separate media rows in the \`social_media\` table, do NOT include \`user_id\` on that table — link by \`post_id\` and use a post-id placeholder (the runtime will resolve it):
-1) Create the post (INSERT into \`social_posts\`)
-2) Then INSERT into \`social_media\` using \`post_id: "__LAST_INSERT_ID__"\` and fields \`{ type, url, filename, mime_type, size_bytes? }\`.
+If the runtime needs to attach separate media rows, it will do so based on the edge function result. Do not attempt to create social_media  rows directly in planning.
 
 Rules & common pitfalls:
-- Always use \`author_id\` (NOT \`user_id\`) when referring to the post author.
-- \`social_media\` rows link to posts via \`post_id\`. Do not attempt to insert \`user_id\` into \`social_media\`.
-- Do not set counts or \`created_at\` — the edge function handles those.
-- Prefer embedding \`media\` inside the \`social_posts.data\` object; only emit separate \`social_media\` INSERTs when the caller explicitly requests separate media entries.
-`;
-// Append scheduling guidance into the main DB_ACTION_GUIDELINES string so it becomes part of the system prompt
-// (we deliberately keep the original DB_ACTION_GUIDELINES variable intact; the prompt builder concatenates both)
-// NOTE: the prompt builder later should include SCHEDULING_GUIDANCE when composing the system prompt.
-        const diagramRenderingGuidelines = `
+- Always use author_id (NOT user_id) when referring to the post author in the payload.
+- Do not set counts or created_at — the edge function handles those.
+- If unsure whether to emit ENGAGE_SOCIAL or another action, prefer ENGAGE_SOCIAL for anything that results in a public post or content that should go through moderation/notification flows. ;
+ `;
+const diagramRenderingGuidelines = `
 **📊 COMPLETE DIAGRAM & VISUALIZATION SYSTEM:**
 
 **🎨 SYSTEM CAPABILITIES:**
@@ -816,7 +973,7 @@ This shows how different services communicate while remaining independent!"
         **CORE MISSION:**
         - Provide educational support and answer questions
         - Ask for confirmation before destructive database operations (UPDATE/DELETE)
-        - Use the DB_ACTION JSON format to request any database changes
+        - Use the DB_ACTION JSON format to request any database changes (only in ACTION PLANNING phase)
         - Prioritize safety: never perform actions without explicit user intent and appropriate filters
         `;
 
@@ -837,34 +994,25 @@ This shows how different services communicate while remaining independent!"
         `;
 
         const responseExamples = `
-        **CORRECT ACTION EXAMPLES (WITH PERMISSION):**
+        **CORRECT BEHAVIOR EXAMPLES:**
         
-        User: "Create a note about genetics"
-        You: "I can create a comprehensive note about genetics covering DNA. Shall I proceed?"
+        PHASE 1 (Action Planning):
+        Input: "Analyze request: Create a note about genetics"
+        Output: { "thought_process": "User wants to create a genetics note", "actions": [{ "type": "DB_ACTION", "params": { "table": "notes", "operation": "INSERT", "data": { "title": "Genetics", "content": "...", "user_id": "auth.uid" }}}]}
         
-        [User responds: "yes"]
-        You: "Great! Creating your genetics note now."
-        { "type": "DB_ACTION", "params": { "table": "notes", "operation": "INSERT", "data": { "title": "Genetics", "content": "Genetics is the study of heredity...", "category": "science", "tags": ["biology", "genetics"], "user_id": "auth.uid" }, "filters": {} } }
+        PHASE 2 (Final Response):
+        Input: "Generate response. Actions completed: [INSERT note success]"
+        Output: "I've created a comprehensive note about genetics covering DNA structure and heredity. You can find it in your notes section."
         
-        User: "Schedule a math study session tomorrow at 2 PM"
-        You: "I can schedule a math study session for tomorrow. Shall I add this?"
+        ❌ WRONG - Mixing phases:
+        "I'll create that note for you. { \\"type\\": \\"DB_ACTION\\" ... }"
         
-        [User responds: "yes"]
-        You: "Adding to your calendar!"
-        { "type": "DB_ACTION", "params": { "table": "schedule_items", "operation": "INSERT", "data": { "title": "Math Study", "start_time": "2024-12-11T14:00:00Z", "type": "study", "user_id": "auth.uid" }, "filters": {} } }
-        
-        User: "Delete my old chemistry notes"
-        You: "Are you sure you want to delete your chemistry notes?"
-        
-        [User responds: "yes"]
-        You: "Okay, deleting them."
-        { "type": "DB_ACTION", "params": { "table": "notes", "operation": "DELETE", "filters": { "title": "Chemistry Notes", "user_id": "auth.uid" } } }
-
-        **QUESTION EXAMPLES (NO ACTION):**
-        User: "What's in my genetics note?"
-        You: "Your genetics note covers DNA structure..."
+        ✅ RIGHT - Phase separation:
+        Planning: JSON only
+        Response: Text only
         `;
-        // 2. NEW: Image Generation Guidelines (ADD THIS)
+
+        // 2. Image Generation Guidelines
         const IMAGE_ACTION_GUIDELINES = `
         **🎨 IMAGE GENERATION GUIDELINES:**
         To generate a visual image (PNG/JPG) using AI:
@@ -872,7 +1020,9 @@ This shows how different services communicate while remaining independent!"
         - Format: { "type": "GENERATE_IMAGE", "params": { "prompt": "Detailed description of the image..." } }
         - Use this when the user asks to "generate an image", "draw", "create a picture", or "visualize" artistically.
         - Do NOT use this for technical diagrams (use Mermaid) or interactive 3D (use Three.js).
+        - ONLY use during ACTION PLANNING phase.
         `;
+
         // Inject DB schema guidance so the model can construct DB_ACTION objects
         const dbSchemaText = typeof DB_SCHEMA_DEFINITION === 'string' ? DB_SCHEMA_DEFINITION : JSON.stringify(DB_SCHEMA_DEFINITION, null, 2);
         const dbInstruction = `
@@ -888,6 +1038,9 @@ This shows how different services communicate while remaining independent!"
 
         return `
         ${coreIdentity}
+        
+        ${PHASE_INSTRUCTIONS}
+        
         ${DB_ACTION_GUIDELINES}
         ${SOCIAL_POST_GUIDANCE}
         ${SCHEDULING_GUIDANCE}
@@ -901,9 +1054,10 @@ This shows how different services communicate while remaining independent!"
         ${userContextSection}
         
         **FINAL REMINDERS:**
-        • **ALWAYS ASK PERMISSION** before database operations (create/update/delete)
-        • Only include ACTION: markers AFTER user confirms
-        • Use Mermaid diagrams (\`\`\`mermaid) for visual explanations
+        • Understand which PHASE you are in (planning vs response)
+        • In ACTION PLANNING: Return JSON only, use supported action types only
+        • In FINAL RESPONSE: Return conversational text only, NO JSON
+        • Use Mermaid diagrams (\`\`\`mermaid) for visual explanations in FINAL RESPONSE
         • Follow Mermaid best practices (flowchart TD, proper syntax)
         • Answer questions directly without permission
         • Be helpful, educational, and personalized

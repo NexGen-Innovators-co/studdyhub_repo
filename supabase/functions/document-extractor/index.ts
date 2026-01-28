@@ -767,10 +767,18 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
     return mergedContent;
 }
 /**
- * Enhanced Gemini API caller with better error handling and retries
+ * Enhanced Gemini API caller with model-chain retries
  */ async function callEnhancedGeminiAPI(contents, geminiApiKey) {
-    const apiUrl = new URL('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent');
-    apiUrl.searchParams.append('key', geminiApiKey);
+    const MODEL_CHAIN = [
+        'gemini-2.5-flash',
+        'gemini-3-pro-preview',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+        'gemini-2.5-pro',
+        'gemini-2.0-pro',
+        'gemini-1.5-pro'
+    ];
+
     const requestBody = {
         contents,
         generationConfig: {
@@ -780,9 +788,12 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
             topP: 0.8
         }
     };
+
     for (let attempt = 0; attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS; attempt++) {
+        const model = MODEL_CHAIN[attempt % MODEL_CHAIN.length];
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
         try {
-            const response = await fetch(apiUrl.toString(), {
+            const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -805,9 +816,8 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
                 }
             } else {
                 const errorText = await response.text();
-                if (response.status === 429 && attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
-                    const delay = Math.pow(2, attempt) * ENHANCED_PROCESSING_CONFIG.RATE_LIMIT_DELAY + Math.random() * 1000;
-                    //console.log(`Rate limited, retrying in ${delay}ms...`);
+                if ((response.status === 429 || response.status === 503) && attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
+                    const delay = Math.pow(2, attempt) * ENHANCED_PROCESSING_CONFIG.INITIAL_RETRY_DELAY + Math.random() * 1000;
                     await new Promise((resolve) => setTimeout(resolve, delay));
                     continue;
                 }

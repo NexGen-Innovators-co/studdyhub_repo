@@ -27,6 +27,39 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY")!;
+
+    const MODEL_CHAIN = [
+      'gemini-2.5-flash',
+      'gemini-3-pro-preview',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-2.5-pro',
+      'gemini-2.0-pro',
+      'gemini-1.5-pro'
+    ];
+
+    async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 3): Promise<any> {
+      for (let attempt = 0; attempt < Math.min(maxAttempts, MODEL_CHAIN.length); attempt++) {
+        const model = MODEL_CHAIN[attempt % MODEL_CHAIN.length];
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        try {
+          const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+          });
+
+          if (resp.ok) return await resp.json();
+          const txt = await resp.text();
+          console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
+          if (resp.status === 429 || resp.status === 503) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
+        } catch (err) {
+          console.error(`Error calling Gemini ${model}:`, err);
+          if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
+        }
+      }
+      throw new Error('All Gemini models failed');
+    }
     const gcpServiceAccountJson = Deno.env.get("GCP_SERVICE_ACCOUNT_JSON");
     const gcpProjectId = "gen-lang-client-0612038711";
 
@@ -212,24 +245,10 @@ serve(async (req) => {
 
     const scriptPrompt = generateScriptPrompt(content, sources, style, duration, hosts.map(h => h.name));
 
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${geminiApiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: scriptPrompt }]
-          }],
-          generationConfig: {
-            temperature: 0.9,
-            maxOutputTokens: 8000,
-          }
-        })
-      }
-    );
-
-    const geminiData = await geminiResponse.json();
+    const geminiData = await callGeminiWithModelChain({
+      contents: [{ parts: [{ text: scriptPrompt }] }],
+      generationConfig: { temperature: 0.9, maxOutputTokens: 8000 }
+    }, geminiApiKey);
 
     // Validate Gemini response structure
     if (!geminiData || !geminiData.candidates || geminiData.candidates.length === 0) {
@@ -259,29 +278,19 @@ ${script.substring(0, 1500)}
 
 Title:`;
 
-      const titleResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${geminiApiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: titlePrompt }] }],
-            generationConfig: {
-              temperature: 0.8,
-              maxOutputTokens: 100
-            }
-          })
-        }
-      );
+      try {
+        const titleData = await callGeminiWithModelChain({
+          contents: [{ parts: [{ text: titlePrompt }] }],
+          generationConfig: { temperature: 0.8, maxOutputTokens: 100 }
+        }, geminiApiKey);
 
-      if (titleResponse.ok) {
-        const titleData = await titleResponse.json();
         const generatedTitle = titleData.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
         if (generatedTitle && generatedTitle.length > 0 && generatedTitle.length <= 100) {
-          // Remove quotes if present
-          podcastTitle = generatedTitle.replace(/^["']|["']$/g, '');
+          podcastTitle = generatedTitle.replace(/^['"]|['"]$/g, '');
           console.log(`[Podcast] Generated title: ${podcastTitle}`);
         }
+      } catch (titleError) {
+        console.error('[Podcast] Title generation error:', titleError);
       }
     } catch (titleError) {
       console.error("[Podcast] Title generation error:", titleError);
@@ -427,23 +436,13 @@ Title:`;
 
       Format: [{"concept": "brief title", "description": "detailed visual description for image generation", "segmentIndex": 3}]`;
 
-        const conceptResponse = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${geminiApiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: conceptPrompt }] }],
-              generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 10048  // Increased from 1000 to prevent MAX_TOKENS errors
-              }
-            })
-          }
-        );
+        const conceptData = await callGeminiWithModelChain({
+          contents: [{ parts: [{ text: conceptPrompt }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 10048 }
+        }, geminiApiKey);
 
-        if (!conceptResponse.ok) {
-          throw new Error(`Concept extraction failed: ${conceptResponse.status}`);
+        if (!conceptData) {
+          throw new Error('Concept extraction failed: empty response');
         }
 
         const conceptData = await conceptResponse.json();

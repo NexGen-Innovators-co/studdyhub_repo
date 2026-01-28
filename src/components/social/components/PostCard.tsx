@@ -125,7 +125,11 @@ const MediaDisplay = memo(({ media, onOpenFullscreen }: { media: any[]; onOpenFu
       currentPlayingVideo = videoEl;
       setVideoStates(prev => ({
         ...prev,
-        [index]: { ...prev[index], isPlaying: true }
+        [index]: {
+          ...prev[index],
+          isPlaying: true,
+          isMuted: videoEl.muted
+        }
       }));
     } catch (err) {
       //console.log('Autoplay prevented:', err);
@@ -243,19 +247,41 @@ const MediaDisplay = memo(({ media, onOpenFullscreen }: { media: any[]; onOpenFu
 
                 {/* Video Controls Overlay */}
                 <div className="absolute inset-0 pointer-events-none">
-                  {/* Play/Pause Overlay */}
-                  {!state.isPlaying && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                      <div className="pointer-events-auto cursor-pointer bg-white/90 rounded-full p-4 hover:bg-white transition-colors">
+                  {/* Play/Pause Overlay (always clickable) */}
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                    <button
+                      className="pointer-events-auto cursor-pointer bg-white/90 rounded-full p-4 hover:bg-white transition-colors flex items-center justify-center"
+                      onClick={e => {
+                        e.stopPropagation();
+                        togglePlayPause(index);
+                      }}
+                      aria-label={state.isPlaying ? 'Pause' : 'Play'}
+                    >
+                      {state.isPlaying ? (
+                        <Pause className="h-8 w-8 text-slate-900" />
+                      ) : (
                         <Play className="h-8 w-8 text-slate-900" />
-                      </div>
-                    </div>
-                  )}
+                      )}
+                    </button>
+                  </div>
 
                   {/* Bottom Controls */}
                   <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3">
-                    {/* Progress Bar */}
-                    <div className="w-full h-0.5 bg-white/30 rounded-full mb-2">
+                    {/* Progress Bar (clickable for seeking) */}
+                    <div
+                      className="w-full h-0.5 bg-white/30 rounded-full mb-2 cursor-pointer"
+                      onClick={e => {
+                        e.stopPropagation();
+                        const video = videoRefs.current.get(index);
+                        if (!video) return;
+                        const rect = (e.target as HTMLDivElement).getBoundingClientRect();
+                        const x = e.clientX - rect.left;
+                        const pct = x / rect.width;
+                        if (video.duration) {
+                          video.currentTime = pct * video.duration;
+                        }
+                      }}
+                    >
                       <div
                         className="h-full bg-white rounded-full transition-all duration-100"
                         style={{ width: `${state.progress}%` }}
@@ -692,7 +718,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
           onClick={(e) => {
             e.stopPropagation();
             if (podcastId) {
-              navigate(`/podcasts/${podcastId}`);
+              navigate(`/podcast/${podcastId}`);
             }
           }}
         >

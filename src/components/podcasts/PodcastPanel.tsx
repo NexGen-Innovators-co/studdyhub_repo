@@ -13,6 +13,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../integrations/supabase/client';
+import { getBlobDuration } from '@/services/podcastLiveService';
+import { transcribeLivePodcast } from '@/services/transcriptionService';
+import { saveTranscriptionResult } from '@/services/podcastLiveService';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Sheet, SheetContent, SheetTrigger } from '../ui/sheet';
@@ -24,6 +27,8 @@ interface AudioSegment {
   text: string;
   audioContent?: string;
   audio_url?: string;
+  transcript?: string | null;
+  summary?: string | null;
   index: number;
   start_time?: number;
   end_time?: number;
@@ -61,8 +66,12 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [showTranscript, setShowTranscript] = useState(false);
-  const [showMobileListeners, setShowMobileListeners] = useState(true);
-  const [showMobileRelated, setShowMobileRelated] = useState(true);
+  // Live captions state
+  const [showLiveCaptions, setShowLiveCaptions] = useState(false);
+  const [liveCaptions, setLiveCaptions] = useState<string[]>([]);
+  const liveCaptionSubRef = useRef<any>(null);
+  const [showMobileListeners, setShowMobileListeners] = useState(false);
+  const [showMobileRelated, setShowMobileRelated] = useState(false);
   const [liked, setLiked] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [subscribed, setSubscribed] = useState(false);
@@ -70,14 +79,16 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   const [relatedPodcasts, setRelatedPodcasts] = useState<any[]>([]);
   const [relatedPage, setRelatedPage] = useState(0);
   const [relatedLoading, setRelatedLoading] = useState(false);
-  const [relatedHasMore, setRelatedHasMore] = useState(true);
+  const [relatedHasMore, setRelatedHasMore] = useState(false);
   const relatedSentinelRef = useRef<HTMLDivElement | null>(null);
+  const relatedContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [listenersList, setListenersList] = useState<any[]>([]);
   const [listenersPage, setListenersPage] = useState(0);
   const [listenersLoading, setListenersLoading] = useState(false);
-  const [listenersHasMore, setListenersHasMore] = useState(true);
+  const [listenersHasMore, setListenersHasMore] = useState(false);
   const listenersSentinelRef = useRef<HTMLDivElement | null>(null);
+  const listenersContainerRef = useRef<HTMLDivElement | null>(null);
   const relatedLoadingRef = useRef(false);
   const listenersLoadingRef = useRef(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -86,7 +97,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   const [showPrompts, setShowPrompts] = useState(false);
   const [replay, setReplay] = useState(false);
   const [showControls, setShowControls] = useState(false);
-  const [controlsTimeout, setControlsTimeout] = useState<NodeJS.Timeout | null>(null);
+  const controlsTimeoutRef = useRef<number | null>(null);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [showMoreInfo, setShowMoreInfo] = useState(false);
   const [isPodcastDataLoaded, setIsPodcastDataLoaded] = useState(false);
@@ -101,10 +112,34 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   const [fullAudioProgress, setFullAudioProgress] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const signedUrlCacheRef = useRef<Map<string, string>>(new Map());
+  const [playbackSrc, setPlaybackSrc] = useState<string | null>(null);
+  const [mediaLoading, setMediaLoading] = useState(false);
   const audioLoadTimeoutRef = useRef<number | null>(null);
   const videoAreaRef = useRef<HTMLDivElement>(null);
   const mainContainerRef = useRef<HTMLDivElement>(null);
   const autoAdvancingRef = useRef(false);
+  const switchingPodcastRef = useRef<{ active: boolean; timeout?: number | null }>({ active: false, timeout: null });
+  const audioStaleRef = useRef(false);
+
+  // Transcript auto-scroll refs and user-interaction detection
+  const transcriptContainerRef = useRef<HTMLDivElement | null>(null);
+  const segmentRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const userInteractingRef = useRef(false);
+  const userInteractTimeoutRef = useRef<number | null>(null);
+
+  const markUserInteraction = useCallback(() => {
+    userInteractingRef.current = true;
+    if (userInteractTimeoutRef.current) {
+      window.clearTimeout(userInteractTimeoutRef.current);
+    }
+    userInteractTimeoutRef.current = window.setTimeout(() => {
+      userInteractingRef.current = false;
+      userInteractTimeoutRef.current = null;
+    }, 2000) as unknown as number;
+  }, []);
+
 
   // Derive a single full-audio URL from podcast data (some recordings store audio_url inside segments)
   const deriveFullAudioUrl = () => {
@@ -138,6 +173,10 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   // Cleanup audio on unmount
   useEffect(() => {
     return () => {
+      if (controlsTimeoutRef.current) {
+        window.clearTimeout(controlsTimeoutRef.current);
+        controlsTimeoutRef.current = null;
+      }
       if (audioRef.current) {
         try {
           audioRef.current.pause();
@@ -152,18 +191,61 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
         window.clearTimeout(audioLoadTimeoutRef.current);
         audioLoadTimeoutRef.current = null;
       }
+      if (switchingPodcastRef.current.timeout) {
+        window.clearTimeout(switchingPodcastRef.current.timeout as number);
+        switchingPodcastRef.current.timeout = null;
+      }
+    };
+  }, []);
+
+  // Pause/resume when CloudTTS generates audio elsewhere
+  useEffect(() => {
+    const pausedByTtsRef = { current: false } as { current: boolean };
+
+    const onGenerating = (_: Event) => {
+      try {
+        if (audioRef.current && !audioRef.current.paused) {
+          audioRef.current.pause();
+          pausedByTtsRef.current = true;
+          setIsPlaying(false);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    const resumeIfPaused = (_: Event) => {
+      try {
+        if (pausedByTtsRef.current && audioRef.current) {
+          audioRef.current.play().catch(() => {});
+          pausedByTtsRef.current = false;
+          setIsPlaying(true);
+        }
+      } catch (e) {}
+    };
+
+    window.addEventListener('cloud-tts:generating', onGenerating as EventListener);
+    window.addEventListener('cloud-tts:generated', resumeIfPaused as EventListener);
+    window.addEventListener('cloud-tts:playback-ended', resumeIfPaused as EventListener);
+    window.addEventListener('cloud-tts:error', resumeIfPaused as EventListener);
+
+    return () => {
+      window.removeEventListener('cloud-tts:generating', onGenerating as EventListener);
+      window.removeEventListener('cloud-tts:generated', resumeIfPaused as EventListener);
+      window.removeEventListener('cloud-tts:playback-ended', resumeIfPaused as EventListener);
+      window.removeEventListener('cloud-tts:error', resumeIfPaused as EventListener);
     };
   }, []);
 
   // Cleanup previous audio when switching podcasts: pause and clear audio element and timers
+  // Only run when panel is open to avoid unnecessary teardown during closed state transitions
   useEffect(() => {
+    if (!isOpen) return;
     // This runs on podcast.id change; pause/clear any previously playing audio
     if (audioRef.current) {
       try {
         audioRef.current.pause();
-        // remove src to help GC and stop network
-        try { audioRef.current.src = ''; } catch (e) {}
-        // remove event handlers
+        // remove event handlers to avoid stray callbacks
         try {
           (audioRef.current as any).onloadedmetadata = null;
           (audioRef.current as any).ontimeupdate = null;
@@ -179,7 +261,8 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
           try { URL.revokeObjectURL(obj); } catch (e) {}
         }
       } catch (e) {}
-      audioRef.current = null;
+      // Mark existing audio as stale so initialization can replace it.
+      audioStaleRef.current = true;
     }
 
     if (audioLoadTimeoutRef.current) {
@@ -195,28 +278,22 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     setFullAudioProgress(0);
     setReplay(false);
     setCurrentSegmentIndex(0);
-  }, [podcast?.id]);
-
-  // Check if podcast has single audio or segmented audio
-  useEffect(() => {
-    if (podcast) {
-      // Check if podcast has a single audio file or segmented audio
-      const hasFullAudio = !!derivedFullAudioUrl;
-      setIsSingleAudio(hasFullAudio);
-      
-      if (hasFullAudio && derivedFullAudioUrl) {
-        // For single audio, preload it
-        const audio = new Audio(derivedFullAudioUrl);
-        audio.onloadedmetadata = () => {
-          setFullAudioDuration(audio.duration);
-          calculateSegmentsProgress();
-        };
-      } else {
-        // For segmented audio, calculate based on segment durations
-        calculateSegmentsProgress();
-      }
+    // Clear visual assets immediately to avoid showing previous podcast images
+    setCurrentImage(null);
+    setDisplayedVisualAsset(null);
+    setPrevVisualAsset(null);
+    // Mark that we are switching podcasts for a short window to suppress
+    // transient error toasts that occur due to the old audio element being torn down.
+    if (switchingPodcastRef.current.timeout) {
+      window.clearTimeout(switchingPodcastRef.current.timeout as number);
     }
-  }, [podcast]);
+    switchingPodcastRef.current.active = true;
+    switchingPodcastRef.current.timeout = window.setTimeout(() => {
+      switchingPodcastRef.current.active = false;
+      switchingPodcastRef.current.timeout = null;
+    }, 800) as unknown as number;
+  }, [podcast?.id, isOpen]);
+
 
   // Calculate segment progress for YouTube-style segmented progress bar
   const calculateSegmentsProgress = useCallback(() => {
@@ -232,8 +309,8 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     if (hasExplicitTimes) {
       progressSegments = segments.map(s => ({ start: s.start_time || 0, end: s.end_time || 0 }));
     } else {
-      // Fallback: use podcast.duration or fullAudioDuration to split evenly
-      const total = podcast.duration || fullAudioDuration || 0;
+      // Fallback: use podcast.duration (minutes) converted to seconds, or fullAudioDuration (seconds)
+      const total = (podcast?.duration ? (podcast.duration * 60) : fullAudioDuration) || 0;
       const segmentDuration = total > 0 ? total / segments.length : 0;
       progressSegments = segments.map((_, index) => {
         const start = index * segmentDuration;
@@ -245,8 +322,16 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     setSegmentsProgress(progressSegments);
   }, [podcast?.audioSegments, fullAudioDuration]);
 
+  // Recalculate segments progress whenever segments, podcast duration, or full audio duration change
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!podcast) return;
+    calculateSegmentsProgress();
+  }, [isOpen, podcast?.audioSegments, podcast?.duration, fullAudioDuration, calculateSegmentsProgress, isSegmentsLoaded]);
+
   // Set initial image when podcast loads
   useEffect(() => {
+    if (!isOpen) return;
     if (podcast?.visual_assets && podcast.visual_assets.length > 0) {
       const firstImage = podcast.visual_assets.find(asset => 
         asset.type === 'image' && asset.segmentIndex === 0
@@ -261,11 +346,17 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
         concept: podcast.title
       });
       setDisplayedVisualAsset({ type: 'image', url: podcast.cover_image_url, concept: podcast.title });
+    } else {
+      // Clear any previous image when podcast has no visuals
+      setCurrentImage(null);
+      setDisplayedVisualAsset(null);
+      setPrevVisualAsset(null);
     }
-  }, [podcast]);
+  }, [isOpen, podcast]);
 
   // Update image when segment changes (for segmented audio)
   useEffect(() => {
+    if (!isOpen) return;
     if (!isSingleAudio && podcast?.visual_assets && podcast.visual_assets.length > 0) {
       const imageAssets = podcast.visual_assets.filter(asset => 
         asset.type === 'image' && asset.segmentIndex !== undefined
@@ -290,10 +381,11 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
         }
       }
     }
-  }, [currentSegmentIndex, podcast?.visual_assets, isSingleAudio]);
+  }, [isOpen, currentSegmentIndex, podcast?.visual_assets, isSingleAudio]);
 
   // Reset loading states when podcast changes
   useEffect(() => {
+    if (!isOpen) return;
     if (podcast) {
       setIsPodcastDataLoaded(false);
       setIsSegmentsLoaded(false);
@@ -328,10 +420,11 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
       setIsPodcastDataLoaded(false);
       setIsSegmentsLoaded(false);
     }
-  }, [podcast?.id]);
+  }, [podcast?.id, isOpen]);
 
   // Also watch for updates to segments/raw audio and clear loading when they arrive
   useEffect(() => {
+    if (!isOpen) return;
     if (!podcast) return;
 
     const hasParsedSegments = podcast.audioSegments?.length > 0;
@@ -349,8 +442,8 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
 
     if (!isSegmentsLoaded && (hasParsedSegments || hasRawSegmentsWithAudio || !!derivedFullAudioUrl)) {
       if (process.env.NODE_ENV !== 'production') {
-        // eslint-disable-next-line no-//console
-        //console.debug('PodcastPanel: segments became available', { id: podcast.id, hasParsedSegments, hasRawSegmentsWithAudio, derivedFullAudioUrl });
+        // eslint-disable-next-line no-////console
+        ////console.debug('PodcastPanel: segments became available', { id: podcast.id, hasParsedSegments, hasRawSegmentsWithAudio, derivedFullAudioUrl });
       }
       setIsSegmentsLoaded(true);
       setLoadingAudio(false);
@@ -359,51 +452,166 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
         audioLoadTimeoutRef.current = null;
       }
     }
-  }, [podcast?.audioSegments, (podcast as any).audio_segments, derivedFullAudioUrl]);
+  }, [isOpen, podcast?.audioSegments, podcast ? (podcast as any).audio_segments : undefined, derivedFullAudioUrl]);
+
+  // Attach scroll/interaction listeners to transcript container to detect manual scrolling
+  useEffect(() => {
+    if (!isOpen) return;
+    const el = transcriptContainerRef.current;
+    if (!el) return;
+
+    const onUserInteract = () => markUserInteraction();
+    el.addEventListener('wheel', onUserInteract, { passive: true });
+    el.addEventListener('touchstart', onUserInteract, { passive: true });
+    el.addEventListener('pointerdown', onUserInteract, { passive: true });
+    el.addEventListener('scroll', onUserInteract, { passive: true });
+
+    return () => {
+      el.removeEventListener('wheel', onUserInteract);
+      el.removeEventListener('touchstart', onUserInteract);
+      el.removeEventListener('pointerdown', onUserInteract);
+      el.removeEventListener('scroll', onUserInteract);
+      if (userInteractTimeoutRef.current) {
+        window.clearTimeout(userInteractTimeoutRef.current);
+        userInteractTimeoutRef.current = null;
+      }
+    };
+  }, [isOpen, showTranscript, isSegmentsLoaded, markUserInteraction]);
+
+  // Auto-scroll the active transcript segment into view when currentSegmentIndex changes,
+  // but avoid doing so if the user is interacting (manual scroll) to prevent interrupting them.
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!showTranscript || !isSegmentsLoaded) return;
+    const container = transcriptContainerRef.current;
+    const active = segmentRefs.current[currentSegmentIndex];
+    if (!container || !active) return;
+
+    // If user is interacting, skip auto-scroll
+    if (userInteractingRef.current) return;
+
+    // If already fully visible, skip scrolling
+    const cRect = container.getBoundingClientRect();
+    const aRect = active.getBoundingClientRect();
+    const padding = 8;
+    if (aRect.top >= cRect.top + padding && aRect.bottom <= cRect.bottom - padding) {
+      return;
+    }
+
+    try {
+      active.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (e) {
+      // fallback: set scrollTop
+      const offset = active.offsetTop - (container.clientHeight / 2) + (active.clientHeight / 2);
+      container.scrollTo({ top: offset, behavior: 'smooth' });
+    }
+  }, [currentSegmentIndex, showTranscript, isSegmentsLoaded]);
 
   // Show controls on mouse move in video area
   const handleVideoAreaMouseMove = () => {
     setShowControls(true);
-    if (controlsTimeout) clearTimeout(controlsTimeout);
-    
-    const timeout = setTimeout(() => {
+    if (controlsTimeoutRef.current) window.clearTimeout(controlsTimeoutRef.current);
+    controlsTimeoutRef.current = window.setTimeout(() => {
       if (isPlaying) {
         setShowControls(false);
       }
-    }, 3000);
-    
-    setControlsTimeout(timeout);
+      controlsTimeoutRef.current = null;
+    }, 3000) as unknown as number;
   };
 
   // Touch events for mobile
   const handleTouchStart = () => {
     setShowControls(true);
-    if (controlsTimeout) clearTimeout(controlsTimeout);
-    
-    const timeout = setTimeout(() => {
+    if (controlsTimeoutRef.current) window.clearTimeout(controlsTimeoutRef.current);
+    controlsTimeoutRef.current = window.setTimeout(() => {
       setShowControls(false);
-    }, 3000);
-    
-    setControlsTimeout(timeout);
+      controlsTimeoutRef.current = null;
+    }, 3000) as unknown as number;
+  };
+
+  const handleControlsMouseEnter = () => {
+    setShowControls(true);
+    if (controlsTimeoutRef.current) {
+      window.clearTimeout(controlsTimeoutRef.current);
+      controlsTimeoutRef.current = null;
+    }
+  };
+
+  const handleControlsMouseLeave = () => {
+    if (controlsTimeoutRef.current) window.clearTimeout(controlsTimeoutRef.current);
+    controlsTimeoutRef.current = window.setTimeout(() => {
+      if (isPlaying) setShowControls(false);
+      controlsTimeoutRef.current = null;
+    }, 3000) as unknown as number;
   };
 
   // Handle close with audio cleanup
   const handleClose = () => {
-    if (audioRef.current) {
-      try {
-        audioRef.current.pause();
-        const obj = (audioRef.current as any)?._objectUrl;
-        if (obj) {
-          try { URL.revokeObjectURL(obj); } catch (e) {}
-        }
-      } catch (e) {}
-      audioRef.current = null;
+    try {
+      // Pause and clear audio
+      if (audioRef.current) {
+        try { audioRef.current.pause(); } catch (e) {}
+        try {
+          const obj = (audioRef.current as any)?._objectUrl;
+          if (obj) { try { URL.revokeObjectURL(obj); } catch (e) {} }
+        } catch (e) {}
+        audioRef.current = null;
+      }
+
+      // Pause and clear video
+      if (videoRef.current) {
+        try { videoRef.current.pause(); } catch (e) {}
+        try {
+          const vobj = (videoRef.current as any)?._objectUrl;
+          if (vobj) { try { URL.revokeObjectURL(vobj); } catch (e) {} }
+        } catch (e) {}
+        try { videoRef.current.src = ''; } catch (e) {}
+        videoRef.current = null;
+      }
+
+      // Clear timers and timeouts
+      if (controlsTimeoutRef.current) { window.clearTimeout(controlsTimeoutRef.current); controlsTimeoutRef.current = null; }
+      if (audioLoadTimeoutRef.current) { window.clearTimeout(audioLoadTimeoutRef.current); audioLoadTimeoutRef.current = null; }
+      if (switchingPodcastRef.current.timeout) { window.clearTimeout(switchingPodcastRef.current.timeout as number); switchingPodcastRef.current.timeout = null; }
+      if (userInteractTimeoutRef.current) { window.clearTimeout(userInteractTimeoutRef.current); userInteractTimeoutRef.current = null; }
+
+      // Reset UI state
+      setIsPlaying(false);
+      setIsMuted(false);
+      setProgress(0);
+      setCurrentTime(0);
+      setDuration(0);
+      setFullAudioDuration(0);
+      setFullAudioProgress(0);
+      setCurrentSegmentIndex(0);
+      setSegmentsProgress([]);
+      setIsPodcastDataLoaded(false);
+      setIsSegmentsLoaded(false);
+      setLoadingAudio(false);
+      setMediaLoading(false);
+      setPlaybackSrc(null);
+      setDisplayedVisualAsset(null);
+      setPrevVisualAsset(null);
+      setCurrentImage(null);
+      setRelatedPodcasts([]);
+      setRelatedPage(0);
+      setRelatedHasMore(false);
+      setListenersList([]);
+      setListenersPage(0);
+      setListenersHasMore(false);
+      setCreatorInfo(null);
+      setShowTranscript(false);
+      setShowControls(false);
+    } catch (e) {
+      // swallow any errors during cleanup
     }
+
     onClose();
   };
 
   // Fetch creator info
   useEffect(() => {
+    if (!isOpen) return;
     const fetchCreatorInfo = async () => {
       if (!podcast?.user_id) return;
       
@@ -436,7 +644,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
             }
         }
       } catch (error) {
-        //console.error('Error fetching creator info:', error);
+        ////console.error('Error fetching creator info:', error);
         setCreatorInfo({
           full_name: 'Creator',
           avatar_url: undefined,
@@ -446,7 +654,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     };
 
     fetchCreatorInfo();
-  }, [podcast?.user_id]);
+  }, [isOpen, podcast?.user_id]);
 
   // Fetch related podcasts
   // Paginated fetch for related podcasts
@@ -478,12 +686,17 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
 
       if (error) throw error;
       const rows = data || [];
-      setRelatedPodcasts(prev => page === 0 ? rows : [...prev, ...rows]);
+      setRelatedPodcasts(prev => {
+        const merged = page === 0 ? rows : [...prev, ...rows];
+        const byId = new Map<string, any>();
+        merged.forEach(r => { if (r && r.id) byId.set(r.id, r); });
+        return Array.from(byId.values());
+      });
       setRelatedHasMore(rows.length === RELATED_PAGE_SIZE);
       setRelatedPage(page);
     } catch (err) {
-      //console.error('Error fetching related podcasts (page):', err);
-      // stop further attempts on error to avoid flooding //console
+      ////console.error('Error fetching related podcasts (page):', err);
+      // stop further attempts on error to avoid flooding ////console
       setRelatedHasMore(false);
     } finally {
       relatedLoadingRef.current = false;
@@ -533,11 +746,25 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
       // preserve ordering based on userIds
       const usersById = new Map((usersData || []).map((u: any) => [u.id, u]));
       rows = userIds.map((id: any) => usersById.get(id)).filter(Boolean);
-      setListenersList(prev => page === 0 ? rows : [...prev, ...rows]);
+      setListenersList(prev => {
+        const merged = page === 0 ? rows : [...prev, ...rows];
+        // preserve order but dedupe by id
+        const seen = new Set<any>();
+        const unique = [] as any[];
+        merged.forEach(u => {
+          const id = u?.id || u;
+          if (!id) return;
+          if (!seen.has(id)) {
+            seen.add(id);
+            unique.push(u);
+          }
+        });
+        return unique;
+      });
       setListenersHasMore(rows.length === LISTENERS_PAGE_SIZE);
       setListenersPage(page);
     } catch (err) {
-      //console.error('Error fetching listeners page:', err);
+      ////console.error('Error fetching listeners page:', err);
       // stop further paging when errors occur
       setListenersHasMore(false);
     } finally {
@@ -548,6 +775,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
 
   // Initialize pages when podcast changes
   useEffect(() => {
+    if (!isOpen) return;
     if (!podcast) return;
     setRelatedPodcasts([]);
     setRelatedPage(0);
@@ -558,12 +786,14 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     setListenersPage(0);
     setListenersHasMore(true);
     fetchListenersPage(0);
-  }, [podcast?.id]);
+  }, [podcast?.id, isOpen]);
 
   // IntersectionObserver to load more related podcasts when sentinel visible
   useEffect(() => {
+    if (!isOpen) return;
     if (!relatedHasMore) return;
     const node = relatedSentinelRef.current;
+    const rootEl = relatedContainerRef.current || null;
     if (!node) return;
     const obs = new IntersectionObserver(entries => {
       entries.forEach(entry => {
@@ -571,15 +801,17 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
           fetchRelatedPage(relatedPage + 1);
         }
       });
-    }, { root: null, rootMargin: '200px', threshold: 0.1 });
+    }, { root: rootEl, rootMargin: '200px', threshold: 0.1 });
     obs.observe(node);
     return () => obs.disconnect();
-  }, [relatedSentinelRef.current, relatedPage, relatedHasMore]);
+  }, [isOpen, relatedSentinelRef.current, relatedPage, relatedHasMore]);
 
-  // IntersectionObserver to load more listeners
+  // IntersectionObserver to load more listeners (observe inside the listeners scroll container)
   useEffect(() => {
+    if (!isOpen) return;
     if (!listenersHasMore) return;
     const node = listenersSentinelRef.current;
+    const rootEl = listenersContainerRef.current || null;
     if (!node) return;
     const obs = new IntersectionObserver(entries => {
       entries.forEach(entry => {
@@ -587,10 +819,10 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
           fetchListenersPage(listenersPage + 1);
         }
       });
-    }, { root: null, rootMargin: '200px', threshold: 0.1 });
+    }, { root: rootEl, rootMargin: '200px', threshold: 0.1 });
     obs.observe(node);
     return () => obs.disconnect();
-  }, [listenersSentinelRef.current, listenersPage, listenersHasMore]);
+  }, [isOpen, listenersSentinelRef.current, listenersPage, listenersHasMore]);
 
   // Play single continuous audio
   const playFullAudio = useCallback(async () => {
@@ -598,65 +830,181 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
       toast.error('No audio available');
       return;
     }
-
     setLoadingAudio(true);
+    setMediaLoading(true);
 
     try {
-      // Stop current audio
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
+      // Resolve signed URL if needed
+      const resolveUrl = async (url?: string | null) => {
+        if (!url) return undefined;
+        try {
+          const idx = url.indexOf('/podcasts/');
+          if (idx === -1) return url;
+          const path = url.substring(idx + '/podcasts/'.length);
+          const cached = signedUrlCacheRef.current.get(path);
+          if (cached) return cached;
+          const { data, error } = await supabase.storage.from('podcasts').createSignedUrl(path, 3600);
+          if (error) throw error;
+          const signed = (data && (data.signedUrl || (data as any).signedURL || (data as any).signed_url));
+          if (signed) {
+            signedUrlCacheRef.current.set(path, signed);
+            return signed;
+          }
+          return url;
+        } catch (e) {
+          //console.warn('[PodcastPanel] Signed URL resolution failed, falling back to original url', e);
+          return url;
+        }
+      };
+
+      const resolved = await resolveUrl(derivedFullAudioUrl as string);
+
+      // If this podcast is video, use the visible video player
+      if (podcast?.podcast_type === 'video') {
+        setPlaybackSrc(resolved || null);
+        // stop any existing audio
+        if (audioRef.current) {
+          try { audioRef.current.pause(); } catch (e) {}
+          audioRef.current = null;
+        }
+
+        // Configure video element (if present)
+        const vid = videoRef.current;
+        if (!vid) {
+          throw new Error('Video element not available');
+        }
+        vid.src = resolved || '';
+        vid.playbackRate = playbackSpeed;
+        vid.muted = isMuted;
+
+        vid.onloadedmetadata = () => {
+          setFullAudioDuration(vid.duration || 0);
+          setDuration(vid.duration || 0);
+          setLoadingAudio(false);
+          setMediaLoading(false);
+        };
+
+        vid.ontimeupdate = () => {
+          const current = vid.currentTime;
+          setCurrentTime(current);
+          setFullAudioProgress(current);
+          if (vid.duration > 0) {
+            const progress = (current / vid.duration) * 100;
+            setProgress(progress);
+            if (podcast.audioSegments?.length > 0) {
+              const segmentIndex = Math.floor((current / vid.duration) * podcast.audioSegments.length);
+              setCurrentSegmentIndex(segmentIndex);
+            }
+          }
+        };
+
+        vid.onended = () => {
+          setIsPlaying(false);
+          setProgress(100);
+          setCurrentTime(vid.duration || 0);
+          setFullAudioProgress(vid.duration || 0);
+          setReplay(true);
+          if (podcast?.cover_image_url) {
+            setCurrentImage({ type: 'image', url: podcast.cover_image_url, concept: podcast.title });
+          }
+        };
+
+        vid.onerror = (e) => {
+          if (!switchingPodcastRef.current.active) toast.error('Video unavailable – contact support');
+          setLoadingAudio(false);
+          setMediaLoading(false);
+          setIsPlaying(false);
+        };
+
+        try {
+          await vid.play();
+        } catch (err) {
+          // fetch fallback
+          try {
+            const resp = await fetch(resolved as string, { mode: 'cors' });
+            if (!resp.ok) throw new Error('Fetch failed');
+            const blob = await resp.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            vid.src = objectUrl;
+            (vid as any)._objectUrl = objectUrl;
+            await vid.play();
+          } catch (fetchErr) {
+            throw fetchErr;
+          }
+        }
+
+        setIsPlaying(true);
+        return;
       }
 
-      // Create audio element for full podcast
-      const audio = new Audio(derivedFullAudioUrl as string);
-      audio.playbackRate = playbackSpeed;
-      audio.muted = isMuted;
-      
-      // Set up event listeners
-      audio.onloadedmetadata = () => {
-        setFullAudioDuration(audio.duration);
-        setDuration(audio.duration);
+      // AUDIO flow (fallback / default)
+      // Use existing hidden audio element when available to avoid creating multiple
+      // detached Audio() instances which can cause playback races in some browsers.
+      let audioEl: HTMLAudioElement | HTMLAudioElement | null = null;
+      if (audioRef.current && (audioRef.current instanceof HTMLAudioElement)) {
+        audioEl = audioRef.current as HTMLAudioElement;
+      } else if (audioRef.current && (audioRef.current as any).tagName === 'AUDIO') {
+        audioEl = audioRef.current as HTMLAudioElement;
+      } else {
+        // If ref was replaced with a programmatic Audio, keep using it
+        if (audioRef.current && (audioRef.current as any).src) {
+          audioEl = audioRef.current as unknown as HTMLAudioElement;
+        } else {
+          // Fallback: create a new audio element and attach to ref
+          const created = new Audio();
+          audioRef.current = created as any;
+          audioEl = created as HTMLAudioElement;
+        }
+      }
+
+      // Assign source and configure
+      try {
+        audioEl.pause();
+      } catch (e) {}
+      audioEl.src = resolved as string;
+      audioEl.playbackRate = playbackSpeed;
+      audioEl.muted = isMuted;
+
+      audioEl.onloadedmetadata = () => {
+        setFullAudioDuration(audioEl!.duration);
+        setDuration(audioEl!.duration);
         setLoadingAudio(false);
+        setMediaLoading(false);
         if (audioLoadTimeoutRef.current) {
           window.clearTimeout(audioLoadTimeoutRef.current);
           audioLoadTimeoutRef.current = null;
         }
       };
-      
-      audio.ontimeupdate = () => {
-        const current = audio.currentTime;
+
+      audioEl.ontimeupdate = () => {
+        const current = audioEl!.currentTime;
         setCurrentTime(current);
         setFullAudioProgress(current);
-        
-        if (audio.duration > 0) {
-          const progress = (current / audio.duration) * 100;
+        if (audioEl!.duration > 0) {
+          const progress = (current / audioEl!.duration) * 100;
           setProgress(progress);
-          
-          // Update current segment based on time (for segmented display)
           if (podcast.audioSegments?.length > 0) {
-            const segmentIndex = Math.floor((current / audio.duration) * podcast.audioSegments.length);
+            const segmentIndex = Math.floor((current / audioEl!.duration) * podcast.audioSegments.length);
             setCurrentSegmentIndex(segmentIndex);
           }
         }
       };
-      
-      audio.onended = () => {
+
+      audioEl.onended = () => {
         setIsPlaying(false);
         setProgress(100);
-        setCurrentTime(audio.duration);
-        setFullAudioProgress(audio.duration);
+        setCurrentTime(audioEl!.duration);
+        setFullAudioProgress(audioEl!.duration);
         setReplay(true);
-        // When full audio ends, show the cover image if available
         if (podcast?.cover_image_url) {
           setCurrentImage({ type: 'image', url: podcast.cover_image_url, concept: podcast.title });
         }
       };
 
-      audio.onerror = (e) => {
-        //console.error('Audio playback error:', e);
-        toast.error('Failed to load audio');
+      audioEl.onerror = (e) => {
+        if (!switchingPodcastRef.current.active) toast.error('Failed to load audio');
         setLoadingAudio(false);
+        setMediaLoading(false);
         if (audioLoadTimeoutRef.current) {
           window.clearTimeout(audioLoadTimeoutRef.current);
           audioLoadTimeoutRef.current = null;
@@ -664,48 +1012,41 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
         setIsPlaying(false);
       };
 
-      audioRef.current = audio;
+      audioStaleRef.current = false;
       setReplay(false);
-      
-      // Start playback
+
       try {
-        await audio.play();
+        await audioEl.play();
       } catch (err: any) {
-        // Some browsers report NotSupportedError or other errors if the source
-        // is blocked or not directly playable. Try fetching the resource and
-        // playing from a blob URL as a fallback.
-        //console.warn('Initial play failed, attempting fetch fallback', err);
         try {
-          const resp = await fetch(derivedFullAudioUrl as string, { mode: 'cors' });
+          const resp = await fetch(resolved as string, { mode: 'cors' });
           if (!resp.ok) throw new Error('Fetch failed');
           const blob = await resp.blob();
           const objectUrl = URL.createObjectURL(blob);
-          audio.src = objectUrl;
-          // remember object URL on element for cleanup
-          (audio as any)._objectUrl = objectUrl;
-          await audio.play();
+          audioEl.src = objectUrl;
+          (audioEl as any)._objectUrl = objectUrl;
+          await audioEl.play();
         } catch (fetchErr: any) {
-          //console.error('Fetch fallback failed:', fetchErr);
           throw fetchErr;
         }
       }
-      // Safety timeout: clear loading state if load events don't fire
+
       if (audioLoadTimeoutRef.current) window.clearTimeout(audioLoadTimeoutRef.current);
       audioLoadTimeoutRef.current = window.setTimeout(() => {
         setLoadingAudio(false);
       }, 2000) as unknown as number;
       setIsPlaying(true);
-      
+
     } catch (error: any) {
-      //console.error('Playback error:', error);
-      toast.error('Failed to play audio: ' + (error.message || 'Unknown error'));
+      if (!switchingPodcastRef.current.active) toast.error('Failed to play media: ' + (error.message || 'Unknown error'));
       setLoadingAudio(false);
+      setMediaLoading(false);
       setIsPlaying(false);
     }
   }, [podcast, playbackSpeed, isMuted]);
 
   // Play segment (for segmented audio)
-  const playSegment = useCallback(async (segmentIndex: number) => {
+  const playSegment = useCallback(async (segmentIndex: number, opts?: { autoAdvance?: boolean }) => {
     // Check if segments are loaded
     if (!isSegmentsLoaded) {
       toast.error('Audio segments are still loading. Please wait.');
@@ -717,123 +1058,196 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
       return;
     }
 
-    setLoadingAudio(true);
+    // Only show loader for user-initiated segment changes. When auto-advancing
+    // between segments we keep `isPlaying` true and avoid showing the loader
+    // to provide a seamless transition.
+    if (!opts?.autoAdvance) setLoadingAudio(true);
+    // Reset playback timing state immediately when starting a new segment
+    // to avoid briefly displaying leftover time from the previous segment.
+    setCurrentTime(0);
+    setProgress(0);
+    setDuration(0);
     const segment = podcast.audioSegments[segmentIndex];
 
     try {
-      // Stop current audio
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
+      let sourceUrl: string | undefined;
 
-      let audioUrl: string;
-
-      // Check for audio_url first (for live/uploaded podcasts)
+      // Prefer audio_url
       if (segment.audio_url) {
-        audioUrl = segment.audio_url;
-      } 
-      // Check for audioContent (base64 encoded audio)
-      else if (segment.audioContent) {
-        // Sanitize audioContent to remove backticks and whitespace
+        sourceUrl = segment.audio_url;
+      } else if (segment.audioContent) {
         const cleanedAudio = segment.audioContent.replace(/`/g, '').trim();
-        audioUrl = `data:audio/mp3;base64,${cleanedAudio}`;
-      } 
-      // For podcasts without direct audio, try to generate or use placeholder
-      else {
+        sourceUrl = `data:audio/mp3;base64,${cleanedAudio}`;
+      } else {
         toast.error('No audio source available for this segment');
         setLoadingAudio(false);
         return;
       }
 
-      // Create audio element
-      const audio = new Audio(audioUrl);
-      audio.playbackRate = playbackSpeed;
-      audio.muted = isMuted;
-      
-      // Set up event listeners
-      audio.onloadedmetadata = () => {
-        setDuration(audio.duration);
+      // Resolve signed url when possible
+      const resolveUrl = async (url?: string) => {
+        if (!url) return undefined;
+        try {
+          const idx = url.indexOf('/podcasts/');
+          if (idx === -1) return url;
+          const path = url.substring(idx + '/podcasts/'.length);
+          const cached = signedUrlCacheRef.current.get(path);
+          if (cached) return cached;
+          const { data, error } = await supabase.storage.from('podcasts').createSignedUrl(path, 3600);
+          if (error) throw error;
+          const signed = (data && (data.signedUrl || (data as any).signedURL || (data as any).signed_url));
+          if (signed) {
+            signedUrlCacheRef.current.set(path, signed);
+            return signed;
+          }
+          return url;
+        } catch (e) {
+          //console.warn('[PodcastPanel] Signed URL resolution failed for segment', e);
+          return url;
+        }
+      };
+
+      const resolved = await resolveUrl(sourceUrl as string);
+
+      // If podcast is video, use video player
+      if (podcast?.podcast_type === 'video') {
+        const vid = videoRef.current;
+        if (!vid) throw new Error('Video element not available');
+        setPlaybackSrc(resolved || null);
+        vid.src = resolved || '';
+        vid.playbackRate = playbackSpeed;
+        vid.muted = isMuted;
+
+        vid.onloadedmetadata = () => {
+          setDuration(vid.duration || 0);
+          setLoadingAudio(false);
+        };
+
+        vid.ontimeupdate = () => {
+          setCurrentTime(vid.currentTime);
+          if (vid.duration > 0) setProgress((vid.currentTime / vid.duration) * 100);
+        };
+
+        vid.onended = () => {
+          setProgress(100);
+          setCurrentTime(vid.duration || 0);
+          if (segmentIndex < (podcast.audioSegments?.length || 0) - 1) {
+            autoAdvancingRef.current = true;
+            setTimeout(() => {
+              setCurrentSegmentIndex(segmentIndex + 1);
+              playSegment(segmentIndex + 1, { autoAdvance: true }).catch(console.error).finally(() => {
+                window.setTimeout(() => { autoAdvancingRef.current = false; }, 700);
+              });
+            }, 500);
+          } else {
+            setIsPlaying(false);
+            setReplay(true);
+            if (podcast?.cover_image_url) setCurrentImage({ type: 'image', url: podcast.cover_image_url, concept: podcast.title });
+          }
+        };
+
+        vid.onerror = (e) => {
+          if (!switchingPodcastRef.current.active) toast.error('Video unavailable – contact support');
+          setLoadingAudio(false);
+          setIsPlaying(false);
+        };
+
+        setCurrentSegmentIndex(segmentIndex);
+        setReplay(false);
+        try { await vid.play(); } catch (err) {
+          try {
+            const resp = await fetch(resolved as string, { mode: 'cors' });
+            if (!resp.ok) throw new Error('Fetch failed');
+            const blob = await resp.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            vid.src = objectUrl;
+            (vid as any)._objectUrl = objectUrl;
+            await vid.play();
+          } catch (fetchErr) { throw fetchErr; }
+        }
+
+        setIsPlaying(true);
+        return;
+      }
+
+      // Audio flow — reuse hidden DOM audio element when possible to avoid races
+      let audioEl: HTMLAudioElement | null = null;
+      if (audioRef.current && (audioRef.current instanceof HTMLAudioElement)) {
+        audioEl = audioRef.current as HTMLAudioElement;
+      } else if (audioRef.current && (audioRef.current as any).src) {
+        audioEl = audioRef.current as unknown as HTMLAudioElement;
+      } else {
+        // create fallback audio and attach to ref
+        const created = new Audio();
+        audioRef.current = created as any;
+        audioEl = created as HTMLAudioElement;
+      }
+
+      try {
+        audioEl.pause();
+      } catch (e) {}
+      audioEl.src = resolved as string;
+      audioEl.playbackRate = playbackSpeed;
+      audioEl.muted = isMuted;
+
+      audioEl.onloadedmetadata = () => {
+        setDuration(audioEl!.duration);
         setLoadingAudio(false);
-        if (audioLoadTimeoutRef.current) {
-          window.clearTimeout(audioLoadTimeoutRef.current);
-          audioLoadTimeoutRef.current = null;
-        }
+        if (audioLoadTimeoutRef.current) { window.clearTimeout(audioLoadTimeoutRef.current); audioLoadTimeoutRef.current = null; }
       };
-      
-      audio.ontimeupdate = () => {
-        setCurrentTime(audio.currentTime);
-        if (audio.duration > 0) {
-          setProgress((audio.currentTime / audio.duration) * 100);
-        }
+
+      audioEl.ontimeupdate = () => {
+        setCurrentTime(audioEl!.currentTime);
+        if (audioEl!.duration > 0) setProgress((audioEl!.currentTime / audioEl!.duration) * 100);
       };
-      
-      audio.onended = () => {
-        setIsPlaying(false);
+
+      audioEl.onended = () => {
         setProgress(100);
-        setCurrentTime(audio.duration);
-        setReplay(true);
-        
-        // Auto-play next segment if available
-        if (segmentIndex < podcast.audioSegments.length - 1) {
+        setCurrentTime(audioEl!.duration);
+        if (segmentIndex < (podcast.audioSegments?.length || 0) - 1) {
           autoAdvancingRef.current = true;
           setTimeout(() => {
             setCurrentSegmentIndex(segmentIndex + 1);
-            playSegment(segmentIndex + 1).catch(console.error).finally(() => {
-              // allow overlay/state to settle after auto-advance
+            playSegment(segmentIndex + 1, { autoAdvance: true }).catch(console.error).finally(() => {
               window.setTimeout(() => { autoAdvancingRef.current = false; }, 700);
             });
           }, 500);
         } else {
-          // If this was the last segment, show cover image when available
-          if (podcast?.cover_image_url) {
-            setCurrentImage({ type: 'image', url: podcast.cover_image_url, concept: podcast.title });
-          }
+          setIsPlaying(false);
+          setReplay(true);
+          if (podcast?.cover_image_url) setCurrentImage({ type: 'image', url: podcast.cover_image_url, concept: podcast.title });
         }
       };
 
-      audio.onerror = (e) => {
-        //console.error('Audio playback error:', e);
-        toast.error('Failed to load audio segment');
+      audioEl.onerror = (e) => {
+        if (!switchingPodcastRef.current.active) toast.error('Failed to load audio segment');
         setLoadingAudio(false);
-        if (audioLoadTimeoutRef.current) {
-          window.clearTimeout(audioLoadTimeoutRef.current);
-          audioLoadTimeoutRef.current = null;
-        }
+        if (audioLoadTimeoutRef.current) { window.clearTimeout(audioLoadTimeoutRef.current); audioLoadTimeoutRef.current = null; }
         setIsPlaying(false);
       };
 
-      audioRef.current = audio;
+      audioStaleRef.current = false;
       setCurrentSegmentIndex(segmentIndex);
       setReplay(false);
-      
-      // Start playback
-      try {
-        await audio.play();
-      } catch (err: any) {
-        //console.warn('Segment play failed, attempting fetch fallback', err);
+
+      try { await audioEl.play(); } catch (err) {
         try {
-          const resp = await fetch(audioUrl, { mode: 'cors' });
+          const resp = await fetch(resolved as string, { mode: 'cors' });
           if (!resp.ok) throw new Error('Fetch failed');
           const blob = await resp.blob();
           const objectUrl = URL.createObjectURL(blob);
-          audio.src = objectUrl;
-          (audio as any)._objectUrl = objectUrl;
-          await audio.play();
-        } catch (fetchErr: any) {
-          //console.error('Fetch fallback failed for segment:', fetchErr);
-          throw fetchErr;
-        }
+          audioEl.src = objectUrl;
+          (audioEl as any)._objectUrl = objectUrl;
+          await audioEl.play();
+        } catch (fetchErr) { throw fetchErr; }
       }
+
       if (audioLoadTimeoutRef.current) window.clearTimeout(audioLoadTimeoutRef.current);
-      audioLoadTimeoutRef.current = window.setTimeout(() => {
-        setLoadingAudio(false);
-      }, 2000) as unknown as number;
+      audioLoadTimeoutRef.current = window.setTimeout(() => { setLoadingAudio(false); }, 2000) as unknown as number;
       setIsPlaying(true);
-      
+
     } catch (error: any) {
-      //console.error('Playback error:', error);
-      toast.error('Failed to play audio: ' + (error.message || 'Unknown error'));
+      if (!switchingPodcastRef.current.active) toast.error('Failed to play media: ' + (error.message || 'Unknown error'));
       setLoadingAudio(false);
       setIsPlaying(false);
     }
@@ -841,20 +1255,19 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
 
   // Initialize playback on podcast load
   useEffect(() => {
+    if (!isOpen) return;
     if (!isSegmentsLoaded) return;
-
     // If audio is already initialized or playing, avoid re-initializing
     // This prevents interrupting an in-progress segment when segments become available
-    if (audioRef.current || isPlaying) {
+    if ((audioRef.current && !audioStaleRef.current) || isPlaying) {
       return;
     }
-
     if (isSingleAudio && derivedFullAudioUrl) {
       playFullAudio().catch(console.error);
     } else if (podcast?.audioSegments?.length > 0) {
       playSegment(0).catch(console.error);
     }
-  }, [podcast?.id, isSegmentsLoaded, isSingleAudio]);
+  }, [isOpen, podcast?.id, isSegmentsLoaded, isSingleAudio]);
 
   // Handle play/pause
   const handlePlayPause = () => {
@@ -1042,7 +1455,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
         toast.success('Link copied to clipboard!');
       }
     } catch (error) {
-      //console.error('Error sharing:', error);
+      ////console.error('Error sharing:', error);
     }
   };
 
@@ -1059,67 +1472,90 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     }
   };
 
-  // Mobile compact controls
-  const MobileControls = () => (
-    <div className="flex items-center justify-between px-4 py-3 dark:bg-gray-800 bg-white">
-      <div className="flex items-center gap-3">
-                
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handlePreviousSegment}
-            disabled={loadingAudio || !isSegmentsLoaded}
-            className="h-8 w-8 text-dark dark:text-white"
-          >
-            <SkipBack className="h-4 w-4" />
-          </Button>
-          <Button
-          onClick={handlePlayPause}
-          size="icon"
-          className="h-12 w-12 bg-red-600 hover:bg-red-700 text-white rounded-full"
-          disabled={loadingAudio || !isSegmentsLoaded}
-        >
-          {!isSegmentsLoaded ? (
-            <Loader2 className="h-6 w-6 animate-spin" />
-          ) : loadingAudio ? (
-            <Loader2 className="h-6 w-6 animate-spin" />
-          ) : replay ? (
-            <RefreshCcw className="h-6 w-6" />
-          ) : isPlaying ? (
-            <Pause className="h-6 w-6" />
-          ) : (
-            <Play className="h-6 w-6 ml-0.5" />
-          )}
-        </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleNextSegment}
-            disabled={!podcast || loadingAudio || !isSegmentsLoaded}
-            className="h-8 w-8 text-dark dark:text-white"
-          >
-            <SkipForward className="h-4 w-4" />
-          </Button>
+  // Mobile compact controls with media type label
+  const MobileControls = () => {
+    // Determine media type label
+    let mediaTypeLabel = '';
+    if (podcast?.podcast_type === 'video') {
+      mediaTypeLabel = podcast?.is_live ? 'Live Video' : 'Video';
+    } else if (podcast?.podcast_type === 'audio') {
+      mediaTypeLabel = podcast?.is_live ? 'Live Audio' : 'Audio';
+    }
+
+    return (
+      <div className="flex items-center justify-between px-4 py-3 dark:bg-gray-800 bg-white">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handlePreviousSegment}
+              disabled={loadingAudio || !isSegmentsLoaded}
+              className="h-8 w-8 text-dark dark:text-white"
+            >
+              <SkipBack className="h-4 w-4" />
+            </Button>
+            <Button
+              onClick={handlePlayPause}
+              size="icon"
+              className="h-12 w-12 bg-red-600 hover:bg-red-700 text-white rounded-full"
+              disabled={loadingAudio || !isSegmentsLoaded}
+            >
+              {loadingAudio ? (
+                <Loader2 className="h-6 w-6 animate-spin" />
+              ) : replay ? (
+                <RefreshCcw className="h-6 w-6" />
+              ) : isPlaying ? (
+                <Pause className="h-6 w-6" />
+              ) : (
+                <Play className="h-6 w-6 ml-0.5" />
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleNextSegment}
+              disabled={!podcast || loadingAudio || !isSegmentsLoaded}
+              className="h-8 w-8 text-dark dark:text-white"
+            >
+              <SkipForward className="h-4 w-4" />
+            </Button>
+            {/* Live Caption Button for mobile */}
+            {podcast?.is_live && (
+              <Button
+                variant={showLiveCaptions ? 'secondary' : 'ghost'}
+                size="icon"
+                onClick={() => setShowLiveCaptions(v => !v)}
+                className={showLiveCaptions ? 'bg-blue-600 text-white' : ''}
+                title={showLiveCaptions ? 'Hide Live Captions' : 'Show Live Captions'}
+              >
+                <Captions className="h-5 w-5" />
+              </Button>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1 min-w-[70px]">
+          <span className="dark:text-white text-dark text-xs font-semibold leading-tight">
+            {mediaTypeLabel}
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="dark:text-white text-dark text-sm">
+              {currentSegmentIndex + 1}/{podcast?.audioSegments?.length || 0}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleToggleMute}
+              className="h-8 w-8 dark:text-white text-dark"
+              disabled={!isSegmentsLoaded}
+            >
+              {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+            </Button>
+          </div>
         </div>
       </div>
-      
-      <div className="flex items-center gap-2">
-        <span className="dark:text-white text-dark text-sm">
-          {currentSegmentIndex + 1}/{podcast?.audioSegments?.length || 0}
-        </span>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleToggleMute}
-          className="h-8 w-8 dark:text-white text-dark"
-          disabled={!isSegmentsLoaded}
-        >
-          {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-        </Button>
-      </div>
-    </div>
-  );
+    );
+  };
 
   // YouTube-style segmented progress bar component
   const SegmentedProgressBar = () => {
@@ -1158,26 +1594,26 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
 
     return (
       <div className="relative h-2 w-full bg-gray-600 rounded-full overflow-hidden">
-        {/* Overall progress background */}
-        <div 
-          className="absolute h-full bg-red-600"
-          style={{ width: `${pct}%` }}
+        {/* Overall progress background - use left/right to avoid tiny rounding gaps */}
+        <div
+          className="absolute h-full bg-red-600 z-20"
+          style={{ left: '0%', right: `${100 - pct}%` }}
         />
 
-        {/* Segment markers */}
+        {/* Segment markers - render underneath the fill so the fill covers them when passed */}
         {segmentsProgress.map((seg, index) => {
           if (!totalDuration) return null;
           const markerPosition = (seg.end / totalDuration) * 100;
           return (
             <div
               key={index}
-              className="absolute top-0 h-full w-px bg-white/30"
-              style={{ left: `${markerPosition}%` }}
+              className="absolute top-0 h-full w-px bg-white/30 z-10 pointer-events-none"
+              style={{ left: `${markerPosition}%`, transform: 'translateX(-50%)' }}
             />
           );
         })}
 
-        {/* Segment clickable areas */}
+        {/* Segment clickable areas - keep these on top for interactions */}
         {segmentsProgress.map((seg, index) => {
           if (!totalDuration) return null;
           const leftPct = (seg.start / totalDuration) * 100;
@@ -1185,7 +1621,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
           return (
             <button
               key={index}
-              className="absolute top-0 h-full"
+              className="absolute top-0 h-full z-30"
               style={{
                 left: `${leftPct}%`,
                 width: `${widthPct}%`,
@@ -1204,7 +1640,8 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   let displayCurrent = 0;
   if (!isSingleAudio && segmentsProgress && segmentsProgress.length > 0) {
     const maxEnd = Math.max(...segmentsProgress.map(s => s.end || 0));
-    displayTotalDuration = maxEnd > 0 ? maxEnd : (segmentsProgress.reduce((sum, s) => sum + (s.end - s.start), 0) || podcast?.duration || duration || 0);
+    // podcast.duration is stored in minutes; convert to seconds for UI calculations
+    displayTotalDuration = maxEnd > 0 ? maxEnd : (segmentsProgress.reduce((sum, s) => sum + (s.end - s.start), 0) || (podcast?.duration ? podcast.duration * 60 : duration) || 0);
     const segIdx = Math.min(Math.max(currentSegmentIndex, 0), segmentsProgress.length - 1);
     const segStart = segmentsProgress[segIdx]?.start || 0;
     displayCurrent = segStart + (isFinite(currentTime) ? currentTime : 0);
@@ -1213,72 +1650,102 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     displayTotalDuration = fullAudioDuration || 0;
     displayCurrent = fullAudioProgress || 0;
   } else {
-    displayTotalDuration = podcast?.duration || duration || 0;
+    displayTotalDuration = podcast?.duration ? podcast.duration * 60 : (duration || 0);
     displayCurrent = Math.min(currentTime || 0, displayTotalDuration);
   }
 
   if (!isOpen || !podcast) return null;
 
   const audioSegments = podcast.audioSegments || [];
+  // Normalize segments so the panel can render both AI-generated and live-recorded segment shapes
+  const audioSegmentsNormalized = (() => {
+    const mapped = (audioSegments || []).map((s: any, idx: number) => {
+      const transcriptField = s?.transcript || s?.text || s?.summary || null;
+      return {
+        index: typeof s?.index === 'number' ? s.index : idx,
+        speaker: s?.speaker || 'Speaker',
+        text: typeof s?.text === 'string' && s.text.trim() ? s.text : (typeof transcriptField === 'string' ? transcriptField : ''),
+        transcript: typeof s?.transcript === 'string' ? s.transcript : (typeof transcriptField === 'string' ? transcriptField : null),
+        summary: s?.summary || null,
+        audio_url: s?.audio_url || s?.audioUrl || null,
+        audioContent: s?.audioContent || s?.audio_content || null,
+        created_at: s?.created_at || s?.createdAt || null,
+        raw: s
+      } as AudioSegment;
+    });
+
+    // Deduplicate by `index` to avoid rendering duplicates if the source contains repeated segments
+    const seen = new Set<number>();
+    return mapped.filter(seg => {
+      if (seen.has(seg.index)) return false;
+      seen.add(seg.index);
+      return true;
+    });
+  })();
+
+  const [isReprocessing, setIsReprocessing] = useState(false);
+
+  
+
+  const reprocessAudio = async () => {
+    if (!podcast) return;
+    try {
+      setIsReprocessing(true);
+      // find an audio URL to fetch (guard when there are no segments)
+      const seg = (audioSegmentsNormalized && audioSegmentsNormalized.length > 0)
+        ? (audioSegmentsNormalized.find(s => s.audio_url) || audioSegmentsNormalized[0])
+        : null;
+      const url = (seg && seg.audio_url) || derivedFullAudioUrl;
+      if (!url) {
+        toast.error('No audio URL available to reprocess');
+        setIsReprocessing(false);
+        return;
+      }
+      //console.log('Reprocessing audio, fetched URL:', url);
+      const resp = await fetch(url, { mode: 'cors' });
+      if (!resp.ok) throw new Error('Failed to fetch audio');
+      const blob = await resp.blob();
+      const seconds = await getBlobDuration(blob);
+      //console.log('Reprocessed audio duration (seconds):', seconds);
+      const minutes = Math.ceil((seconds || 0) / 60);
+      // update DB
+      try {
+        await supabase.from('ai_podcasts').update({ duration_minutes: minutes }).eq('id', podcast.id);
+        //console.log('Updated duration_minutes to', minutes);
+      } catch (dbErr) {
+        //console.warn('Failed to update duration_minutes', dbErr);
+      }
+      // update local UI state
+      setFullAudioDuration(seconds || 0);
+      setDuration(seconds || 0);
+
+      // If no script exists, run transcription (best-effort)
+      if (!podcast.script) {
+        try {
+          const transcription = await transcribeLivePodcast(blob as Blob, podcast.title || 'Live Podcast', Math.floor(seconds || 0), url);
+          if (transcription && transcription.transcript) {
+            const { data } = await supabase.auth.getUser();
+            const userId = data?.user?.id || null;
+            await saveTranscriptionResult(podcast.id, url || '', transcription.transcript, transcription.summary, userId, transcription.script || null);
+          }
+        } catch (tErr) {
+          //console.warn('Reprocess transcription failed', tErr);
+        }
+      }
+
+      toast.success('Audio reprocessed');
+    } catch (e: any) {
+      //console.error('Reprocess audio failed', e);
+      toast.error('Failed to reprocess audio');
+    } finally {
+      setIsReprocessing(false);
+    }
+  };
   const tags = podcast.tags || [];
   const currentVisualAsset = displayedVisualAsset;
 
   return (
   <div className="fixed inset-0 z-50 bg-white dark:bg-black overflow-hidden">
-    {/* Top Navigation - Responsive */}
-    <div className={`absolute top-0 left-0 right-0 z-40 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-      <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/80 to-transparent dark:from-black/80 dark:to-transparent">
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleClose}
-            variant="ghost"
-            size="icon"
-            className="text-white hover:bg-white/20"
-          >
-            <X className="h-5 w-5 md:h-6 md:w-6" />
-          </Button>
-          <div className="text-white max-w-[60vw] md:max-w-lg">
-            <h1 className="text-xs md:text-sm font-medium truncate">
-              {!isPodcastDataLoaded ? 'Loading podcast...' : podcast.title}
-            </h1>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-1 md:gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleShare}
-            className="text-white hover:bg-white/20 h-8 w-8 md:h-10 md:w-10"
-            disabled={!isPodcastDataLoaded}
-          >
-            <Share2 className="h-4 w-4 md:h-5 md:w-5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsFullScreen(!isFullScreen)}
-            className="text-white hover:bg-white/20 h-8 w-8 md:h-10 md:w-10 hidden sm:flex"
-            disabled={!isPodcastDataLoaded}
-          >
-            {isFullScreen ? <Minimize2 className="h-4 w-4 md:h-5 md:w-5" /> : <Maximize2 className="h-4 w-4 md:h-5 md:w-5" />}
-          </Button>
-          
-          {/* Mobile menu for related podcasts */}
-          <div className="md:hidden">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowMobileSidebar(!showMobileSidebar)}
-              className="text-white hover:bg-white/20 h-8 w-8"
-              disabled={!isPodcastDataLoaded}
-            >
-              <Menu className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
 
     {/* Main Content - Responsive Layout */}
     <div 
@@ -1293,13 +1760,79 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
         onTouchStart={handleTouchStart}
         onClick={() => setShowControls(true)}
       >
-        {/* Loading overlay for entire content area */}
+        {/* Top Navigation - Responsive (scoped to video area so it doesn't stretch full viewport) */}
+        <div className={`absolute top-0 left-0 right-0 z-40 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+          <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/80 to-transparent dark:from-black/80 dark:to-transparent">
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleClose}
+                variant="ghost"
+                size="icon"
+                className="text-white hover:bg-white/20"
+              >
+                <X className="h-5 w-5 md:h-6 md:w-6" />
+              </Button>
+              <div className="text-white max-w-[60vw] md:max-w-lg">
+                <h1 className="text-xs md:text-sm font-medium truncate">
+                  {!isPodcastDataLoaded ? 'Loading podcast...' : podcast.title}
+                </h1>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-1 md:gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleShare}
+                className="text-white hover:bg-white/20 h-8 w-8 md:h-10 md:w-10"
+                disabled={!isPodcastDataLoaded}
+              >
+                <Share2 className="h-4 w-4 md:h-5 md:w-5" />
+              </Button>
+              {/* Reprocess audio fallback when duration is zero */}
+              {isPodcastDataLoaded && podcast?.duration === 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={reprocessAudio}
+                  className="ml-2 text-white border-white/30"
+                  disabled={isReprocessing}
+                >
+                  {isReprocessing ? 'Processing…' : 'Reprocess audio'}
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsFullScreen(!isFullScreen)}
+                className="text-white hover:bg-white/20 h-8 w-8 md:h-10 md:w-10 hidden sm:flex"
+                disabled={!isPodcastDataLoaded}
+              >
+                {isFullScreen ? <Minimize2 className="h-4 w-4 md:h-5 md:w-5" /> : <Maximize2 className="h-4 w-4 md:h-5 md:w-5" />}
+              </Button>
+              
+              {/* Mobile menu for related podcasts */}
+              <div className="md:hidden">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowMobileSidebar(!showMobileSidebar)}
+                  className="text-white hover:bg-white/20 h-8 w-8"
+                  disabled={!isPodcastDataLoaded}
+                >
+                  <Menu className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* Loading overlay for entire content area
         {!isPodcastDataLoaded && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-white dark:bg-black z-10">
             <Loader2 className="h-12 w-12 md:h-16 md:w-16 animate-spin text-blue-500 dark:text-blue-400 mb-4" />
             <p className="text-black dark:text-white text-sm md:text-base">Loading podcast data...</p>
           </div>
-        )}
+        )} */}
 
         {/* Video/Image Content */}
         <div className="w-full h-full flex items-center justify-center">
@@ -1312,15 +1845,17 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
             </div>
           ) : currentVisualAsset ? (
             <div className="w-full h-full relative">
-              {currentVisualAsset.type === 'video' ? (
+              {currentVisualAsset.type === 'video' || podcast?.podcast_type === 'video' ? (
+                // If the overall podcast is a video podcast we render a controlled video
                 <video
-                  src={currentVisualAsset.url}
+                  ref={videoRef}
+                  src={podcast?.podcast_type === 'video' ? (playbackSrc || currentVisualAsset.url) : currentVisualAsset.url}
                   className="w-full h-full object-contain"
-                  autoPlay
-                  loop
+                  autoPlay={podcast?.podcast_type === 'video'}
+                  loop={podcast?.podcast_type !== 'video'}
                   muted={isMuted}
                   playsInline
-                  key={currentVisualAsset.url} // Force re-render on change
+                  key={(podcast?.podcast_type === 'video' ? (playbackSrc || currentVisualAsset.url) : currentVisualAsset.url) || 'video'}
                 />
               ) : (
                 <div className="w-full h-full relative">
@@ -1328,6 +1863,8 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                     <img
                       src={prevVisualAsset.url}
                       alt={prevVisualAsset.concept}
+                      loading="eager"
+                      decoding="async"
                       className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-600 ease-out ${currentImageVisible ? 'opacity-0' : 'opacity-100'}`}
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = `https://placehold.co/1792x1024/333/white?text=${encodeURIComponent(prevVisualAsset.concept)}`;
@@ -1338,6 +1875,8 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                     <img
                       src={currentVisualAsset.url}
                       alt={currentVisualAsset.concept}
+                      loading="eager"
+                      decoding="async"
                       className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-600 ease-out ${currentImageVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-105'}`}
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = `https://placehold.co/1792x1024/333/white?text=${encodeURIComponent(currentVisualAsset.concept)}`;
@@ -1352,6 +1891,8 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
               <img
                 src={podcast.cover_image_url}
                 alt={podcast.title}
+                loading="eager"
+                decoding="async"
                 className="w-full h-full object-contain"
                 key={podcast.cover_image_url}
               />
@@ -1360,25 +1901,59 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
               <Radio className="h-24 w-24 md:h-32 md:w-32 text-gray-400 dark:text-gray-700" />
             </div>
           )}
-
-          {/* Loading overlay for audio */}
-          {(!isSegmentsLoaded) && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white/70 dark:bg-black/70">
-              <div className="text-center">
-                <Loader2 className="h-12 w-12 md:h-16 md:w-16 animate-spin text-black dark:text-white mx-auto mb-4" />
-                <p className="text-black dark:text-white text-sm">Loading audio segments...</p>
+            {/* Unified loading / live overlay: show big overlay when podcast data or segments not yet available
+                If podcast is live but has no recorded segments, show a Live banner and Join control. */}
+            {!isPodcastDataLoaded && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white/70 dark:bg-black/70 z-20">
+                <div className="text-center">
+                  <Loader2 className="h-12 w-12 md:h-16 md:w-16 animate-spin text-black dark:text-white mx-auto mb-4" />
+                  <p className="text-black dark:text-white text-sm">Loading podcast...</p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+
+            {/* Live-but-not-recorded state: show clear banner and a Join button (mobile-friendly) */}
+            {isPodcastDataLoaded && podcast?.is_live && !isSegmentsLoaded && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 z-20 p-4">
+                <div className="bg-red-600 text-white px-3 py-1 rounded-full text-xs mb-3">LIVE</div>
+                <h3 className="text-white text-lg font-semibold mb-2">{podcast.title}</h3>
+                <p className="text-white/90 text-sm mb-4">This session is live but not being recorded. Listeners can join live, but no recording will be saved.</p>
+                <div className="flex items-center gap-3">
+                  <Button
+                    className="bg-red-600"
+                    onClick={() => {
+                      onClose();
+                      if (onPodcastSelect) {
+                        onPodcastSelect(podcast.id);
+                      }
+                    }}
+                  >
+                    Join Live
+                  </Button>
+                  <Button variant="ghost" onClick={() => { /* refresh listeners or open chat */ }}>
+                    <Users className="h-4 w-4 mr-2 inline" />
+                    {((podcast as any)?.live_listeners ?? (podcast as any)?.member_count ?? podcast?.listen_count ?? 0)} listeners
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Loading audio segments when podcast data is ready but segments are not live/available */}
+            {isPodcastDataLoaded && !isSegmentsLoaded && !podcast?.is_live && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white/70 dark:bg-black/70 z-20">
+                <div className="text-center">
+                  <Loader2 className="h-12 w-12 md:h-16 md:w-16 animate-spin text-black dark:text-white mx-auto mb-4" />
+                  <p className="text-black dark:text-white text-sm">Loading audio segments...</p>
+                </div>
+              </div>
+            )}
+
+          {/* Hidden audio/video elements used for playback when podcast includes media */}
+          <audio ref={audioRef} className="hidden" />
 
           {/* YouTube-style Center Play Button (Desktop only) */}
-          {!isSegmentsLoaded ? (
-            <div className="absolute inset-0 hidden md:flex items-center justify-center">
-              <div className="bg-black/50 rounded-full p-6 md:p-8">
-                <Loader2 className="h-12 w-12 md:h-20 md:w-20 animate-spin text-white" />
-              </div>
-            </div>
-          ) : (
+          {(!isPodcastDataLoaded || !isSegmentsLoaded) ? null : (
+            // Full-screen center CTA when not playing or when controls are visible
             ((!isPlaying || showControls) && !loadingAudio && !autoAdvancingRef.current) ? (
               <button
                 onClick={handlePlayPause}
@@ -1388,6 +1963,8 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                 <div className="bg-black/50 group-hover:bg-black/70 rounded-full p-6 md:p-8 transition-all transform group-hover:scale-110">
                   {replay ? (
                     <RefreshCcw className="h-12 w-12 md:h-20 md:w-20 text-white" />
+                  ) : isPlaying ? (
+                    <Pause className="h-12 w-12 md:h-20 md:w-20 text-white" />
                   ) : (
                     <Play className="h-12 w-12 md:h-20 md:w-20 text-white ml-2 md:ml-3" />
                   )}
@@ -1400,6 +1977,8 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
           <div 
             className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-3 md:p-4 transition-all duration-300 hidden md:block ${showControls && isSegmentsLoaded ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
             onClick={(e) => e.stopPropagation()}
+            onMouseEnter={handleControlsMouseEnter}
+            onMouseLeave={handleControlsMouseLeave}
           >
             {/* Segmented Progress Bar */}
             <div className="mb-3 md:mb-4">
@@ -1416,33 +1995,29 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={handlePlayPause}
-                  className="text-white hover:bg-white/20 h-8 w-8 md:h-10 md:w-10"
-                  disabled={loadingAudio || !isSegmentsLoaded}
-                >
-                  {!isSegmentsLoaded ? (
-                    <Loader2 className="h-4 w-4 md:h-5 md:w-5 animate-spin" />
-                  ) : loadingAudio ? (
-                    <Loader2 className="h-4 w-4 md:h-5 md:w-5 animate-spin" />
-                  ) : replay ? (
-                    <RefreshCcw className="h-4 w-4 md:h-5 md:w-5" />
-                  ) : isPlaying ? (
-                    <Pause className="h-4 w-4 md:h-5 md:w-5" />
-                  ) : (
-                    <Play className="h-4 w-4 md:h-5 md:w-5 ml-0.5" />
-                  )}
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  size="icon"
                   onClick={handlePreviousSegment}
                   disabled={loadingAudio || !isSegmentsLoaded}
                   className="text-white hover:bg-white/20 h-7 w-7 md:h-8 md:w-8"
                 >
                   <SkipBack className="h-3 w-3 md:h-4 md:w-4" />
                 </Button>
-
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handlePlayPause}
+                  className="text-white hover:bg-white/20 h-8 w-8 md:h-10 md:w-10"
+                  disabled={loadingAudio || !isSegmentsLoaded}
+                >
+                  {loadingAudio ? (
+                      <Loader2 className="h-4 w-4 md:h-5 md:w-5 animate-spin" />
+                    ) : replay ? (
+                      <RefreshCcw className="h-4 w-4 md:h-5 md:w-5" />
+                    ) : isPlaying ? (
+                      <Pause className="h-4 w-4 md:h-5 md:w-5" />
+                    ) : (
+                      <Play className="h-4 w-4 md:h-5 md:w-5 ml-0.5" />
+                    )}
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1478,7 +2053,18 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                 >
                   <Captions className="h-3 w-3 md:h-4 md:w-4" />
                 </Button>
-
+                {/* Live Caption Button for desktop */}
+                {podcast?.is_live && (
+                  <Button
+                    variant={showLiveCaptions ? 'secondary' : 'ghost'}
+                    size="icon"
+                    onClick={() => setShowLiveCaptions(v => !v)}
+                    className={showLiveCaptions ? 'bg-blue-600 text-white' : ''}
+                    title={showLiveCaptions ? 'Hide Live Captions' : 'Show Live Captions'}
+                  >
+                    <Captions className="h-3 w-3 md:h-4 md:w-4" />
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1489,6 +2075,26 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                   <span className="text-xs">{playbackSpeed}x</span>
                 </Button>
               </div>
+              {/* Live Captions Overlay */}
+              {showLiveCaptions && podcast?.is_live && (
+                <div className="pointer-events-none fixed left-0 right-0 bottom-24 md:bottom-12 z-[100] flex flex-col items-center px-2 md:px-0">
+                  <div className="max-w-2xl w-full bg-black/80 text-white rounded-xl p-3 text-base md:text-lg shadow-xl animate-fade-in-up" style={{ wordBreak: 'break-word', minHeight: 40 }}>
+                    {liveCaptions.length === 0 ? (
+                      <span className="opacity-60">Waiting for live captions...</span>
+                    ) : (
+                      <span>{liveCaptions[liveCaptions.length - 1]}</span>
+                    )}
+                  </div>
+                  {/* Optionally show recent lines above */}
+                  {liveCaptions.length > 1 && (
+                    <div className="max-w-2xl w-full mt-1 text-xs text-gray-200 text-center opacity-70">
+                      {liveCaptions.slice(-4, -1).map((line, i) => (
+                        <div key={i}>{line}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1511,8 +2117,8 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
           {isSegmentsLoaded && (
             <div className="absolute bottom-16 left-0 right-0 px-4 md:hidden">
               <div className="flex items-center justify-between text-xs text-gray-300 mb-1">
-                <span>{formatTime(isSingleAudio ? fullAudioProgress : currentTime)}</span>
-                <span>{formatTime(isSingleAudio ? fullAudioDuration : duration)}</span>
+                <span>{formatTime(isSingleAudio ? fullAudioProgress : displayCurrent)}</span>
+                <span>{formatTime(isSingleAudio ? fullAudioDuration : displayTotalDuration)}</span>
               </div>
               <SegmentedProgressBar />
             </div>
@@ -1627,10 +2233,14 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
               </Button>
               
               {showTranscript && isSegmentsLoaded && (
-                <div className="mt-3 max-h-60 overflow-y-auto">
-                  {audioSegments.map((segment, index) => (
+                <div
+                  ref={transcriptContainerRef}
+                  className="mt-3 max-h-60 overflow-y-auto"
+                >
+                  {audioSegmentsNormalized.map((segment, index) => (
                     <div
                       key={index}
+                      ref={(el) => { segmentRefs.current[index] = el; }}
                       className={`p-3 rounded-lg cursor-pointer transition-colors mb-2 ${index === currentSegmentIndex
                         ? 'bg-gray-200 dark:bg-gray-800'
                         : 'hover:bg-gray-100 dark:hover:bg-gray-900'
@@ -1651,7 +2261,39 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                             </span>
                             <span className="text-xs text-gray-600 dark:text-gray-400">#{index + 1}</span>
                           </div>
-                          <p className="text-gray-700 dark:text-gray-300 text-sm">{segment.text}</p>
+                          <div>
+                            <p className="text-gray-700 dark:text-gray-300 text-sm">{segment.text}</p>
+                            {segment.transcript && segment.transcript !== segment.text && (
+                              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 italic">{segment.transcript}</p>
+                            )}
+                            {segment.summary && !segment.transcript && (
+                              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{segment.summary}</p>
+                            )}
+                            <div className="mt-2 flex items-center gap-2">
+                              {segment.audio_url && (
+                                <a href={segment.audio_url} target="_blank" rel="noreferrer" className="text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600">
+                                  <Download className="inline-block mr-1 h-4 w-4 align-middle" />
+                                  Download
+                                </a>
+                              )}
+                              {segment.transcript && (
+                                <button
+                                  className="text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600 flex items-center gap-1"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      await navigator.clipboard.writeText(segment.transcript || '');
+                                      toast.success('Transcript copied');
+                                    } catch (err) {
+                                      toast.error('Copy failed');
+                                    }
+                                  }}
+                                >
+                                  <MessageSquare className="h-4 w-4" /> Copy
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1663,7 +2305,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
           {/* Listeners (infinite scroll) */}
           <h3 className="text-black dark:text-white font-semibold mb-2 text-lg">Listeners</h3>
           <div className="mb-4">
-            <div className="max-h-40 overflow-y-auto space-y-2 pr-2">
+            <div ref={listenersContainerRef} className="max-h-40 overflow-y-auto space-y-2 p-2">
               {listenersList.length === 0 && !listenersLoading ? (
                 <div className="text-sm text-gray-500">No listeners yet</div>
               ) : (
@@ -1688,7 +2330,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
 
                 {/* Related Podcasts (infinite scroll) */}
           <h3 className="text-black dark:text-white font-semibold mb-4 text-lg">More Podcasts</h3>
-          <div className="space-y-4">
+          <div ref={relatedContainerRef} className="space-y-2 overflow-y-auto max-h-96 p-2">
             {relatedPodcasts.map((relatedPodcast) => (
               <div 
                 key={relatedPodcast.id} 

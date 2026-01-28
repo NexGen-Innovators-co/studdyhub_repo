@@ -32,6 +32,7 @@ interface CreatePostDialogProps {
   upgradeMessage?: string;
 }
 
+
 export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
   isOpen,
   onOpenChange,
@@ -52,6 +53,13 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
   const { canPostSocials: canPostSocialsAccess, tier } = useFeatureAccess();
   const navigate = useNavigate();
   const [isRewriting, setIsRewriting] = useState(false);
+  // Internal state for textarea
+  const [localContent, setLocalContent] = useState(content);
+
+  // Keep localContent in sync if dialog is opened with new content
+  React.useEffect(() => {
+    if (isOpen) setLocalContent(content);
+  }, [isOpen, content]);
 
   const canPostSocials = disabled !== undefined ? !disabled : canPostSocialsAccess;
   const displayUpgradeMessage = upgradeMessage || 'Social posting requires Scholar plan or higher';
@@ -74,12 +82,13 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
       });
       return;
     }
-
+    // Only update parent state when sending
+    onContentChange(localContent);
     onSubmit();
   };
 
   const handleAiRewrite = async () => {
-    if (!content.trim() || !currentUser) return;
+    if (!localContent.trim() || !currentUser) return;
 
     setIsRewriting(true);
     toast.info('AI is rewriting your post...');
@@ -93,17 +102,17 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
       } as any;
 
       const response = await generateInlineContent(
-        content,
-        content,
+        localContent,
+        localContent,
         minimalProfile,
         'rewrite',
         'Rewrite this social media post to be more engaging, professional, and clear. Maintain the original core message and any hashtags. Keep the tone suitable for a student community.'
       );
 
+      setLocalContent(response);
       onContentChange(response);
       toast.success('Post rewritten!');
     } catch (error: any) {
-      //console.error('Rewrite error:', error);
       toast.error(error.message || 'Failed to rewrite post');
     } finally {
       setIsRewriting(false);
@@ -134,8 +143,8 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
           )}
           <div className="relative">
             <Textarea
-              value={content}
-              onChange={(e) => onContentChange(e.target.value)}
+              value={localContent}
+              onChange={(e) => setLocalContent(e.target.value)}
               placeholder="What's on your mind?"
               disabled={!canPostSocials || isUploading || isRewriting}
               className="bg-white dark:bg-gray-700 text-slate-800 dark:text-gray-200 border-slate-200 dark:border-gray-600 disabled:opacity-50 pr-10 min-h-[150px]"
@@ -147,7 +156,7 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
               type="button"
               className="absolute top-2 right-2 h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30"
               onClick={handleAiRewrite}
-              disabled={!canPostSocials || isUploading || !content.trim() || isRewriting}
+              disabled={!canPostSocials || isUploading || !localContent.trim() || isRewriting}
               title="Rewrite with AI"
             >
               {isRewriting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}

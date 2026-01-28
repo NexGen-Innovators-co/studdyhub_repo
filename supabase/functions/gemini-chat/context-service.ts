@@ -1,5 +1,5 @@
 // context-service.ts
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.92.0';
 
 export class UserContextService {
     supabase;

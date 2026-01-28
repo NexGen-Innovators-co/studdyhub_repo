@@ -51,35 +51,53 @@ type PodcastTab = 'discover' | 'my-podcasts' | 'live';
 
 const PAGE_SIZE = 12; // Reduced from 20 for better performance
 
-export const usePodcasts = (activeTab: PodcastTab) => {
+export const usePodcasts = (activeTab: PodcastTab, options?: { lightweight?: boolean }) => {
+  const useLight = typeof options?.lightweight === 'boolean' ? options!.lightweight : activeTab === 'discover';
   return useInfiniteQuery({
-    queryKey: ['podcasts', activeTab],
-    staleTime: 1000 * 60 * 5,
+    queryKey: ['podcasts', activeTab, useLight ? 'light' : 'full'],
+    staleTime: useLight ? 1000 * 60 * 5 : 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
+    refetchOnMount: useLight ? false : true,
+    refetchOnWindowFocus: useLight ? false : true,
     queryFn: async ({ pageParam = 1 }) => {
       try {
         // First, get current user (if needed)
         const { data: { user } } = await supabase.auth.getUser();
         
         // Build base query
+        // Use a lighter select when in lightweight mode to reduce payload size
+        const selectLight = `
+          id,
+          user_id,
+          title,
+          cover_image_url,
+          duration_minutes,
+          is_public,
+          is_live,
+          created_at,
+          listen_count,
+          podcast_type
+        `;
+
+        const selectFull = `
+          id,
+          user_id,
+          title,
+          description,
+          cover_image_url,
+          duration_minutes,
+          is_public,
+          is_live,
+          created_at,
+          listen_count,
+          share_count,
+          tags,
+          podcast_type
+        `;
+
         let query = supabase
           .from('ai_podcasts')
-          .select(`
-            id,
-            user_id,
-            title,
-            description,
-            cover_image_url,
-            duration_minutes,
-            is_public,
-            is_live,
-            created_at,
-            listen_count,
-            share_count,
-            tags
-          `, { count: 'exact' })
+          .select(useLight ? selectLight : selectFull, { count: 'exact' })
           .eq('status', 'completed')
           .order('created_at', { ascending: false })
           .range((pageParam - 1) * PAGE_SIZE, pageParam * PAGE_SIZE - 1);
@@ -129,18 +147,20 @@ export const usePodcasts = (activeTab: PodcastTab) => {
           ])
         );
 
-        // OPTIMIZATION: Batch fetch member counts in a single query
+        // OPTIMIZATION: Batch fetch member counts only for full mode
         const podcastIds = data.map((p: any) => p.id);
-        const { data: memberData, error: memberError } = await supabase
-          .from('podcast_members')
-          .select('podcast_id')
-          .in('podcast_id', podcastIds);
-
         const memberCounts = new Map<string, number>();
-        if (!memberError && memberData) {
-          memberData.forEach((row: any) => {
-            memberCounts.set(row.podcast_id, (memberCounts.get(row.podcast_id) || 0) + 1);
-          });
+        if (!useLight) {
+          const { data: memberData, error: memberError } = await supabase
+            .from('podcast_members')
+            .select('podcast_id')
+            .in('podcast_id', podcastIds);
+
+          if (!memberError && memberData) {
+            memberData.forEach((row: any) => {
+              memberCounts.set(row.podcast_id, (memberCounts.get(row.podcast_id) || 0) + 1);
+            });
+          }
         }
 
         // Transform podcasts with minimal data
@@ -167,7 +187,7 @@ export const usePodcasts = (activeTab: PodcastTab) => {
             sources: [], // Will be fetched on demand
             script: '', // Will be fetched on demand
             style: '', // Will be fetched on demand
-            podcast_type: null, // Will be fetched on demand
+            podcast_type: podcast.podcast_type ?? null, // Pass through from DB
             status: 'completed',
             user: usersMap.get(podcast.user_id) || {
               full_name: 'Anonymous User',
@@ -185,15 +205,15 @@ export const usePodcasts = (activeTab: PodcastTab) => {
           };
         });
 
-        // Save to offline storage
-        if (transformedPodcasts.length > 0) {
+        // Save to offline storage only for full mode
+        if (!useLight && transformedPodcasts.length > 0) {
           await offlineStorage.save(STORES.PODCASTS, transformedPodcasts);
         }
 
         return transformedPodcasts;
 
       } catch (error: any) {
-        console.error('Error fetching podcasts:', error);
+        // console.error('Error fetching podcasts:', error);
         
         // If offline, try to get from local storage
         if (!navigator.onLine) {
@@ -201,7 +221,7 @@ export const usePodcasts = (activeTab: PodcastTab) => {
             const offlinePodcasts = await offlineStorage.getAll<any>(STORES.PODCASTS);
             return offlinePodcasts;
           } catch (offlineError) {
-            console.error('Offline storage error:', offlineError);
+            //console.error('Offline storage error:', offlineError);
           }
         }
         
@@ -238,20 +258,53 @@ export const fetchFullPodcastData = async (podcastId: string): Promise<PodcastWi
       .single();
 
     if (userError) {
-      console.warn('Error fetching social user:', userError);
+      //console.warn('Error fetching social user:', userError);
     }
 
-    // Parse audio_segments
+    // Prefer normalized `audio_segments` table rows if present
     let audioSegments: AudioSegment[] = [];
-    if (typeof podcastData.audio_segments === 'string') {
-      try {
-        audioSegments = JSON.parse(podcastData.audio_segments);
-      } catch (e) {
-        console.error('Error parsing audio_segments:', e);
-        audioSegments = [];
+    try {
+      const { data: rows, error: rowsErr } = await supabase
+        .from('audio_segments')
+        .select('*')
+        .eq('podcast_id', podcastId)
+        .order('segment_index', { ascending: true });
+      if (!rowsErr && Array.isArray(rows) && rows.length > 0) {
+        audioSegments = rows.map((r: any) => ({
+          speaker: r.speaker || '',
+          text: r.transcript || r.summary || '',
+          audioContent: null,
+          audio_url: r.audio_url || null,
+          index: typeof r.segment_index === 'number' ? r.segment_index : 0,
+          start_time: r.start_time || undefined,
+          end_time: r.end_time || undefined,
+        }));
+      } else {
+        // Fallback to legacy JSONB field on ai_podcasts
+        if (typeof podcastData.audio_segments === 'string') {
+          try {
+            audioSegments = JSON.parse(podcastData.audio_segments);
+          } catch (e) {
+            //console.error('Error parsing audio_segments:', e);
+            audioSegments = [];
+          }
+        } else {
+          audioSegments = podcastData.audio_segments || [];
+        }
       }
-    } else {
-      audioSegments = podcastData.audio_segments || [];
+    } catch (e) {
+      //console.error('Error fetching audio_segments table:', e);
+      // Fallback to legacy JSONB field on ai_podcasts
+      if (typeof podcastData.audio_segments === 'string') {
+        try {
+          audioSegments = JSON.parse(podcastData.audio_segments);
+        } catch (e) {
+          //console.error('Error parsing audio_segments fallback:', e);
+          audioSegments = [];
+        }
+      } else {
+        audioSegments = podcastData.audio_segments || [];
+      }
     }
 
     // Parse visual_assets
@@ -261,7 +314,7 @@ export const fetchFullPodcastData = async (podcastId: string): Promise<PodcastWi
         try {
           visualAssets = JSON.parse(podcastData.visual_assets);
         } catch (e) {
-          console.error('Error parsing visual_assets:', e);
+          //console.error('Error parsing visual_assets:', e);
           visualAssets = null;
         }
       } else {
@@ -323,7 +376,52 @@ export const fetchFullPodcastData = async (podcastId: string): Promise<PodcastWi
     } as PodcastWithMeta;
 
   } catch (error) {
-    console.error('Error fetching full podcast data:', error);
+    //console.error('Error fetching full podcast data:', error);
+    return null;
+  }
+};
+
+// Lightweight fetch for initial render: returns minimal fields useful for list/detail previews.
+export const fetchLightPodcastData = async (podcastId: string): Promise<Partial<PodcastWithMeta> | null> => {
+  try {
+    const { data: podcastData, error: podcastError } = await supabase
+      .from('ai_podcasts')
+      .select('id, user_id, title, description, cover_image_url, duration_minutes, is_public, is_live, tags, listen_count, share_count')
+      .eq('id', podcastId)
+      .single();
+
+    if (podcastError || !podcastData) {
+      //console.warn('Light fetch: podcast not found', podcastError);
+      return null;
+    }
+
+    const { data: userData } = await supabase
+      .from('social_users')
+      .select('id, display_name, avatar_url, username')
+      .eq('id', podcastData.user_id)
+      .single();
+
+    return {
+      id: podcastData.id,
+      user_id: podcastData.user_id,
+      title: podcastData.title || 'Untitled Podcast',
+      description: podcastData.description || '',
+      cover_image_url: podcastData.cover_image_url || null,
+      duration: podcastData.duration_minutes || 0,
+      is_public: podcastData.is_public || false,
+      is_live: podcastData.is_live || false,
+      tags: podcastData.tags || [],
+      listen_count: podcastData.listen_count || 0,
+      share_count: podcastData.share_count || 0,
+      user: userData ? {
+        full_name: userData.display_name || 'Anonymous User',
+        avatar_url: userData.avatar_url,
+        username: userData.username || ''
+      } : { full_name: 'Anonymous User', avatar_url: undefined, username: '' }
+    };
+
+  } catch (e) {
+    //console.error('Error fetching light podcast data:', e);
     return null;
   }
 };

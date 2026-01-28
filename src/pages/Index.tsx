@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Sidebar } from '../components/layout/Sidebar';
+import LivePodcastViewer from '@/components/podcasts/LivePodcastViewer';
+import LivePodcastHost from '@/components/podcasts/LivePodcastHost';
+import { fetchFullPodcastData, fetchLightPodcastData } from '@/hooks/usePodcasts';
+// Lazy-load PodcastPanel so the shell can show a podcast-shaped skeleton while it loads
+const PodcastPanel = React.lazy(() => import('@/components/podcasts/PodcastPanel').then(m => ({ default: m.PodcastPanel })));
 import { Header } from '../components/layout/Header';
 import { TabContent } from '../components/layout/TabContent';
 import { useRef } from 'react';
@@ -26,6 +31,7 @@ const Index = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
+  const navState = (location.state || null) as { podcast?: any } | null;
 
   // Context
   const {
@@ -94,25 +100,67 @@ const Index = () => {
 
   // Notifications modal state and logic (now inside Index to access 'user')
   const { preferences } = useNotifications();
-  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  // Onboarding modal controls: unified flow to request notifications, mic, camera
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [requestingPermission, setRequestingPermission] = useState(false);
+  const ONBOARDING_KEY = 'studdyhub_onboarding_completed_v1';
 
-  // Show onboarding modal if push_notifications is enabled and permission is 'default'
+  // Show unified onboarding modal when the user prefers notifications but hasn't
+  // completed onboarding. Persist in localStorage to avoid repeat prompts.
   useEffect(() => {
-    if (user && preferences?.push_notifications) {
+    if (!user) return;
+    try {
+      const done = localStorage.getItem(ONBOARDING_KEY);
+      if (done === '1') return; // already completed
+    } catch (e) {
+      // ignore localStorage errors
+    }
+
+    if (preferences?.push_notifications) {
       const permission = getNotificationPermissionStatus();
       if (permission === 'default') {
-        setShowNotificationModal(true);
+        setShowOnboardingModal(true);
       }
     }
   }, [user, preferences]);
 
-  // Handler for enabling push notifications
-  const handleEnablePushNotifications = async () => {
+  // Unified handler: request notifications, microphone, and camera in sequence
+  const handleEnableAllPermissions = async () => {
     setRequestingPermission(true);
-    await requestNotificationPermission();
-    setRequestingPermission(false);
-    setShowNotificationModal(false);
+    try {
+      // Notifications
+      try { await requestNotificationPermission(); } catch (e) { console.warn('Notification permission request failed', e); }
+
+      // Microphone
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+      } catch (e) {
+        // console.warn('Microphone permission request failed or denied', e);
+      }
+
+      // Camera
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          await navigator.mediaDevices.getUserMedia({ video: true });
+        }
+      } catch (e) {
+        //console.warn('Camera permission request failed or denied', e);
+      }
+
+      // Optionally: request other permissions here (geolocation, clipboard, etc.)
+    } finally {
+      setRequestingPermission(false);
+      setShowOnboardingModal(false);
+      try { localStorage.setItem(ONBOARDING_KEY, '1'); } catch (e) { /* ignore */ }
+    }
+  };
+
+  // If the user dismisses onboarding, mark as completed for now so it doesn't retrigger immediately
+  const handleDismissOnboarding = () => {
+    try { localStorage.setItem(ONBOARDING_KEY, '1'); } catch (e) { /* ignore */ }
+    setShowOnboardingModal(false);
   };
 
   let activeSocialTab: string | undefined;
@@ -215,6 +263,61 @@ const Index = () => {
   const userId = params.userId;
   const tab = params.tab;
   const podcastId = params.podcastId;
+  const liveId = params.id; // for /podcast/live/:id or /podcast/:id
+
+  // Detect live route
+  const isLiveRoute = location.pathname.startsWith('/podcast/live/');
+  const liveQuery = new URLSearchParams(location.search);
+  const liveHostMode = liveQuery.get('host') === '1' || liveQuery.get('live') === 'host';
+
+  const isPodcastPage = location.pathname.startsWith('/podcast/') && !isLiveRoute;
+  const podcastPageId = isPodcastPage ? params.id : null;
+  const [podcastPageData, setPodcastPageData] = useState<any | null>(null);
+
+  // Load podcast data when visiting /podcast/:id. Use navigation state if available to avoid flash.
+  useEffect(() => {
+    let mounted = true;
+
+    // If the navigator passed the podcast data in state, use it immediately
+    if (navState?.podcast && podcastPageId && navState.podcast.id === podcastPageId) {
+      setPodcastPageData(navState.podcast);
+      return () => { mounted = false; };
+    }
+
+    (async () => {
+      if (!podcastPageId) return;
+      try {
+        // First try to fetch lightweight data for fast render
+        const light = await fetchLightPodcastData(podcastPageId);
+        if (mounted && light) {
+          // Merge with existing minimal shape expected by PodcastPanel
+          setPodcastPageData(prev => ({ ...(prev || {}), ...light }));
+        }
+
+        // Then fetch full data in background and hydrate
+        const full = await fetchFullPodcastData(podcastPageId);
+        if (mounted && full) {
+          setPodcastPageData(full);
+        }
+      } catch (e) {
+        // console.warn('Failed to load podcast page data', e);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [podcastPageId, navState]);
+
+  // // Provide a minimal placeholder podcast object while full data is loading
+  // const placeholderPodcast = useMemo(() => ({
+  //   id: podcastPageId || 'loading',
+  //   title: 'Loading podcast…',
+  //   description: '',
+  //   audioSegments: [],
+  //   duration: 0,
+  //   visual_assets: [],
+  //   cover_image_url: null,
+  //   tags: [],
+  //   audio_url: null,
+  // }), [podcastPageId]);
 
   if (location.pathname.startsWith('/social/group/')) {
     activeSocialTab = 'group';
@@ -603,21 +706,29 @@ const Index = () => {
 
     <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
 
-      {/* Onboarding Notification Modal */}
-      <Dialog open={showNotificationModal} onOpenChange={setShowNotificationModal}>
+      {/* Unified Onboarding Modal (Notifications + Microphone + Camera) */}
+      <Dialog open={showOnboardingModal} onOpenChange={setShowOnboardingModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Enable Push Notifications?</DialogTitle>
+            <DialogTitle>Get the best StuddyHub experience</DialogTitle>
             <DialogDescription>
-              Stay up to date with schedule reminders, social updates, and important alerts. You can change this later in Settings.
+              To provide reminders, live audio features, and inline media, we'd like permission to send notifications and access your microphone and camera. You can change these later in Settings.
             </DialogDescription>
           </DialogHeader>
+          <div className="mt-4 space-y-2">
+            <div className="text-sm text-gray-600">What we'll request:</div>
+            <ul className="list-disc ml-5 text-sm text-gray-700">
+              <li>Push notifications for reminders and social updates</li>
+              <li>Microphone access for voice messages and recordings</li>
+              <li>Camera access for profile photos and live sessions</li>
+            </ul>
+          </div>
           <DialogFooter>
-            <Button onClick={() => setShowNotificationModal(false)} variant="outline" disabled={requestingPermission}>
+            <Button onClick={handleDismissOnboarding} variant="outline" disabled={requestingPermission}>
               Not Now
             </Button>
-            <Button onClick={handleEnablePushNotifications} disabled={requestingPermission}>
-              {requestingPermission ? 'Enabling...' : 'Enable Notifications'}
+            <Button onClick={handleEnableAllPermissions} disabled={requestingPermission}>
+              {requestingPermission ? 'Enabling...' : 'Enable All'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -631,17 +742,20 @@ const Index = () => {
           <meta property="og:description" content={pageSEO.description} />
         </Helmet>
       )}
-      <header className={`
-        sticky top-0 
-        bg-white dark:bg-slate-900 
-        border-b border-slate-200 dark:border-slate-800 
-        shadow-sm z-20
-        ${(currentActiveTab !== 'chat')
-          ? '  lg:z-20 '
-          : 'block lg:hidden'}
-      `}>
-        <Header onThemeChange={handleThemeChange} {...headerProps} />
-      </header>
+      {/* Hide the header on podcast pages and live podcast routes */}
+      {!(isLiveRoute || isPodcastPage) && (
+        <header className={`
+          sticky top-0 
+          bg-white dark:bg-slate-900 
+          border-b border-slate-200 dark:border-slate-800 
+          shadow-sm z-20
+          ${(currentActiveTab !== 'chat')
+            ? '  lg:z-20 '
+            : 'block lg:hidden'}
+        `}>
+          <Header onThemeChange={handleThemeChange} {...headerProps} />
+        </header>
+      )}
 
       {/* Subscription Status Bar for free users */}
       <SubscriptionStatusBar />
@@ -654,13 +768,57 @@ const Index = () => {
         {/* Main Content */}
         <div className="flex-1 h-full overflow-y-auto modern-scrollbar bg-gray-50 dark:bg-slate-900">
           <div className="min-h-full">
-            <TabContent {...tabContentProps} />
+            {isLiveRoute && liveId ? (
+              // Render the live page inline instead of a modal
+              liveHostMode ? (
+                <LivePodcastHost podcastId={liveId} onEndStream={() => navigate('/podcasts')} />
+              ) : (
+                <LivePodcastViewer podcastId={liveId} onClose={() => navigate('/podcasts')} />
+              )
+            ) : isPodcastPage && podcastPageId ? (
+              // Render podcast detail page inline; lazy-load the panel and show a podcast-shaped skeleton while loading
+              <React.Suspense fallback={
+                <div className="p-6 animate-pulse">
+                  <div className="h-8 bg-gray-200 dark:bg-slate-700 rounded w-1/3 mb-4" />
+                  <div className="h-56 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="h-6 bg-gray-200 dark:bg-slate-700 rounded" />
+                    <div className="h-6 bg-gray-200 dark:bg-slate-700 rounded" />
+                  </div>
+                  <div className="mt-4 h-36 bg-gray-200 dark:bg-slate-700 rounded" />
+                </div>
+              }>
+                {podcastPageData === null ? (
+                <div className="p-6 animate-pulse">
+                  <div className="h-8 bg-gray-200 dark:bg-slate-700 rounded w-1/3 mb-4" />
+                  <div className="h-56 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="h-6 bg-gray-200 dark:bg-slate-700 rounded" />
+                    <div className="h-6 bg-gray-200 dark:bg-slate-700 rounded" />
+                  </div>
+                  <div className="mt-4 h-36 bg-gray-200 dark:bg-slate-700 rounded" />
+                </div>
+                ) : (
+                  <PodcastPanel
+                    podcast={podcastPageData}
+                    onClose={() => navigate('/podcasts')}
+                    isOpen={true}
+                  />
+                )}
+              </React.Suspense>
+            ) : (
+              <TabContent {...tabContentProps} />
+            )}
           </div>
         </div>
       </div>
 
       {/* Bottom Navigation - Hide when inside a chat session on mobile */}
-      {(currentActiveTab !== 'chat' || !activeChatSessionId || location.pathname !== '/chat/' + activeChatSessionId) && (
+      {!(
+        (currentActiveTab === 'chat' && activeChatSessionId && location.pathname === '/chat/' + activeChatSessionId)
+        || isLiveRoute
+        || isPodcastPage
+      ) && (
         <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 z-20 shadow-2xl">
           <div className="flex justify-around items-center h-16 max-w-lg mx-auto">
             {[
