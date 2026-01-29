@@ -1,5 +1,6 @@
 // PodcastPanel.tsx - Complete fixed version
 import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { ScrollArea } from '../ui/scroll-area';
@@ -38,7 +39,8 @@ interface VisualAsset {
   type: 'image' | 'video';
   url: string;
   concept: string;
-  segmentIndex?: number;
+  segmentIndex?: number; // legacy support
+  segmentIndices?: number[]; // NEW: supports multiple segments
 }
 
 interface PodcastPanelProps {
@@ -94,6 +96,8 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [currentSegmentIndex, setCurrentSegmentIndex] = useState(0);
   const [loadingAudio, setLoadingAudio] = useState(false);
+  const [audioReady, setAudioReady] = useState(false);
+  const [imageReady, setImageReady] = useState(false);
   const [showPrompts, setShowPrompts] = useState(false);
   const [replay, setReplay] = useState(false);
   const [showControls, setShowControls] = useState(false);
@@ -139,6 +143,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
       userInteractTimeoutRef.current = null;
     }, 2000) as unknown as number;
   }, []);
+  const isOnline = useOnlineStatus();
 
 
   // Derive a single full-audio URL from podcast data (some recordings store audio_url inside segments)
@@ -170,7 +175,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     audioRef
   }));
 
-  // Cleanup audio on unmount
+  // Cleanup audio on unmount and always clear playbackSrc
   useEffect(() => {
     return () => {
       if (controlsTimeoutRef.current) {
@@ -180,6 +185,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
       if (audioRef.current) {
         try {
           audioRef.current.pause();
+          audioRef.current.src = '';
           const obj = (audioRef.current as any)?._objectUrl;
           if (obj) {
             try { URL.revokeObjectURL(obj); } catch (e) {}
@@ -195,8 +201,10 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
         window.clearTimeout(switchingPodcastRef.current.timeout as number);
         switchingPodcastRef.current.timeout = null;
       }
+      setPlaybackSrc(null);
     };
   }, []);
+
 
   // Pause/resume when CloudTTS generates audio elsewhere
   useEffect(() => {
@@ -245,6 +253,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     if (audioRef.current) {
       try {
         audioRef.current.pause();
+        audioRef.current.src = '';
         // remove event handlers to avoid stray callbacks
         try {
           (audioRef.current as any).onloadedmetadata = null;
@@ -282,6 +291,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     setCurrentImage(null);
     setDisplayedVisualAsset(null);
     setPrevVisualAsset(null);
+    setPlaybackSrc(null);
     // Mark that we are switching podcasts for a short window to suppress
     // transient error toasts that occur due to the old audio element being torn down.
     if (switchingPodcastRef.current.timeout) {
@@ -333,10 +343,13 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   useEffect(() => {
     if (!isOpen) return;
     if (podcast?.visual_assets && podcast.visual_assets.length > 0) {
-      const firstImage = podcast.visual_assets.find(asset => 
-        asset.type === 'image' && asset.segmentIndex === 0
+      // Find first image for segment 0 (support both segmentIndex and segmentIndices)
+      const firstImage = podcast.visual_assets.find(asset =>
+        asset.type === 'image' && (
+          (Array.isArray(asset.segmentIndices) && asset.segmentIndices.includes(0)) ||
+          asset.segmentIndex === 0
+        )
       ) || podcast.visual_assets[0];
-      
       setCurrentImage(firstImage);
       setDisplayedVisualAsset(firstImage);
     } else if (podcast?.cover_image_url) {
@@ -358,13 +371,14 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   useEffect(() => {
     if (!isOpen) return;
     if (!isSingleAudio && podcast?.visual_assets && podcast.visual_assets.length > 0) {
-      const imageAssets = podcast.visual_assets.filter(asset => 
-        asset.type === 'image' && asset.segmentIndex !== undefined
-      );
+      // Support both segmentIndex (legacy) and segmentIndices (array)
+      const imageAssets = podcast.visual_assets.filter(asset => asset.type === 'image' && (asset.segmentIndex !== undefined || Array.isArray(asset.segmentIndices)));
 
-      // Only change image when there is an asset that matches the current segment index.
-      // If no asset matches, keep the last rendered asset.
-      const matchingAsset = imageAssets.find(asset => asset.segmentIndex === currentSegmentIndex);
+      // Find asset matching current segment index
+      const matchingAsset = imageAssets.find(asset =>
+        (Array.isArray(asset.segmentIndices) && asset.segmentIndices.includes(currentSegmentIndex)) ||
+        asset.segmentIndex === currentSegmentIndex
+      );
       if (matchingAsset) {
         const currentUrl = currentImage?.url || (currentImage as any)?.url;
         const newUrl = matchingAsset.url;
@@ -383,14 +397,13 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     }
   }, [isOpen, currentSegmentIndex, podcast?.visual_assets, isSingleAudio]);
 
-  // Reset loading states when podcast changes
+  // Reset loading states when podcast changes, and clear audio if podcast data is missing
   useEffect(() => {
     if (!isOpen) return;
     if (podcast) {
       setIsPodcastDataLoaded(false);
       setIsSegmentsLoaded(false);
       setLoadingAudio(true);
-      
       // Simulate data loading
       const timer = setTimeout(() => {
         setIsPodcastDataLoaded(true);
@@ -408,15 +421,19 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
             hasRawSegmentsWithAudio = false;
           }
         }
-
         if (hasParsedSegments || hasDerivedFullAudio || hasRawSegmentsWithAudio) {
           setIsSegmentsLoaded(true);
         }
         setLoadingAudio(false);
       }, 300);
-      
       return () => clearTimeout(timer);
     } else {
+      // Podcast data failed to load or is null: stop and clear audio
+      if (audioRef.current) {
+        try { audioRef.current.pause(); audioRef.current.src = ''; } catch (e) {}
+        audioRef.current = null;
+      }
+      setPlaybackSrc(null);
       setIsPodcastDataLoaded(false);
       setIsSegmentsLoaded(false);
     }
@@ -611,7 +628,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
 
   // Fetch creator info
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !isOnline) return;
     const fetchCreatorInfo = async () => {
       if (!podcast?.user_id) return;
       
@@ -660,7 +677,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   // Paginated fetch for related podcasts
   const RELATED_PAGE_SIZE = 6;
   const fetchRelatedPage = async (page: number) => {
-    if (!podcast || relatedLoadingRef.current) return;
+    if (!isOnline || !podcast || relatedLoadingRef.current) return;
     relatedLoadingRef.current = true;
     setRelatedLoading(true);
     try {
@@ -707,7 +724,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   // Paginated fetch for listeners (users who listened to this podcast)
   const LISTENERS_PAGE_SIZE = 12;
   const fetchListenersPage = async (page: number) => {
-    if (!podcast || listenersLoadingRef.current) return;
+    if (!isOnline || !podcast || listenersLoadingRef.current) return;
     listenersLoadingRef.current = true;
     setListenersLoading(true);
     try {
@@ -775,7 +792,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
 
   // Initialize pages when podcast changes
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !isOnline) return;
     if (!podcast) return;
     setRelatedPodcasts([]);
     setRelatedPage(0);
@@ -786,11 +803,11 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     setListenersPage(0);
     setListenersHasMore(true);
     fetchListenersPage(0);
-  }, [podcast?.id, isOpen]);
+  }, [podcast?.id, isOpen, isOnline]);
 
   // IntersectionObserver to load more related podcasts when sentinel visible
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !isOnline) return;
     if (!relatedHasMore) return;
     const node = relatedSentinelRef.current;
     const rootEl = relatedContainerRef.current || null;
@@ -808,7 +825,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
 
   // IntersectionObserver to load more listeners (observe inside the listeners scroll container)
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !isOnline) return;
     if (!listenersHasMore) return;
     const node = listenersSentinelRef.current;
     const rootEl = listenersContainerRef.current || null;
@@ -826,6 +843,10 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
 
   // Play single continuous audio
   const playFullAudio = useCallback(async () => {
+    if (!isOnline) {
+      toast.error('No internet connection');
+      return;
+    }
     if (!derivedFullAudioUrl) {
       toast.error('No audio available');
       return;
@@ -1048,6 +1069,10 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   // Play segment (for segmented audio)
   const playSegment = useCallback(async (segmentIndex: number, opts?: { autoAdvance?: boolean }) => {
     // Check if segments are loaded
+    if (!isOnline) {
+      toast.error('No internet connection');
+      return;
+    }
     if (!isSegmentsLoaded) {
       toast.error('Audio segments are still loading. Please wait.');
       return;
@@ -1688,6 +1713,10 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   
 
   const reprocessAudio = async () => {
+    if (!isOnline) {
+      toast.error('No internet connection');
+      return;
+    }
     if (!podcast) return;
     try {
       setIsReprocessing(true);
@@ -1741,8 +1770,23 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
       setIsReprocessing(false);
     }
   };
+
   const tags = podcast.tags || [];
   const currentVisualAsset = displayedVisualAsset;
+
+  // Reset audio/image ready state on segment change
+  useEffect(() => {
+    setAudioReady(false);
+    setImageReady(false);
+  }, [currentSegmentIndex, currentVisualAsset?.url]);
+
+  // Progressive play: only play when both audio and image are ready
+  useEffect(() => {
+    if (audioReady && imageReady && audioRef.current && audioRef.current.paused && !isPlaying) {
+      audioRef.current.play();
+      setIsPlaying(true);
+    }
+  }, [audioReady, imageReady]);
 
   return (
   <div className="fixed inset-0 z-50 bg-white dark:bg-black overflow-hidden">
@@ -1851,11 +1895,20 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                   ref={videoRef}
                   src={podcast?.podcast_type === 'video' ? (playbackSrc || currentVisualAsset.url) : currentVisualAsset.url}
                   className="w-full h-full object-contain"
-                  autoPlay={podcast?.podcast_type === 'video'}
                   loop={podcast?.podcast_type !== 'video'}
                   muted={isMuted}
                   playsInline
                   key={(podcast?.podcast_type === 'video' ? (playbackSrc || currentVisualAsset.url) : currentVisualAsset.url) || 'video'}
+                  // Only play when ready
+                  autoPlay={false}
+                  onCanPlay={() => {
+                    if (videoRef.current && !videoRef.current.paused && !isPlaying) {
+                      videoRef.current.play();
+                      setIsPlaying(true);
+                    }
+                  }}
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
                 />
               ) : (
                 <div className="w-full h-full relative">
@@ -1878,8 +1931,15 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                       loading="eager"
                       decoding="async"
                       className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-600 ease-out ${currentImageVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-105'}`}
+                      onLoad={() => setImageReady(true)}
                       onError={(e) => {
+                        setImageReady(true); // allow audio to play even if fallback
                         (e.target as HTMLImageElement).src = `https://placehold.co/1792x1024/333/white?text=${encodeURIComponent(currentVisualAsset.concept)}`;
+                        if (audioRef.current && !audioRef.current.paused) {
+                          audioRef.current.pause();
+                          setIsPlaying(false);
+                        }
+                        toast.error('Image failed to load. Audio has been paused.');
                       }}
                       key={currentVisualAsset.url}
                     />
@@ -1938,18 +1998,49 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
               </div>
             )}
 
-            {/* Loading audio segments when podcast data is ready but segments are not live/available */}
-            {isPodcastDataLoaded && !isSegmentsLoaded && !podcast?.is_live && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white/70 dark:bg-black/70 z-20">
+            {/* Loading audio segments, network error, or not recorded message */}
+            {isPodcastDataLoaded && !isSegmentsLoaded && !podcast?.is_live && mediaLoading && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/70 dark:bg-black/70 z-20">
                 <div className="text-center">
-                  <Loader2 className="h-12 w-12 md:h-16 md:w-16 animate-spin text-black dark:text-white mx-auto mb-4" />
-                  <p className="text-black dark:text-white text-sm">Loading audio segments...</p>
+                  {!isOnline ? (
+                    <>
+                      <Radio className="h-12 w-12 md:h-16 md:w-16 text-red-500 dark:text-red-400 mx-auto mb-4" />
+                      <p className="text-red-600 dark:text-red-400 text-base font-semibold mb-2">No internet connection</p>
+                      <p className="text-black dark:text-white text-sm mb-4">Please check your network and try again.</p>
+                      <button
+                        className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 transition"
+                        onClick={() => window.location.reload()}
+                      >
+                        Retry
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 className="h-12 w-12 md:h-16 md:w-16 animate-spin text-black dark:text-white mx-auto mb-4" />
+                      <p className="text-black dark:text-white text-sm mb-2">Loading audio segments...</p>
+                      {/* If segments are still not available after loading, show a not recorded message */}
+                      {(!loadingAudio) && (
+                        <div className="mt-2 text-red-600 dark:text-red-400 font-semibold">
+                          This podcast was not recorded or the recording is unavailable.
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             )}
 
           {/* Hidden audio/video elements used for playback when podcast includes media */}
-          <audio ref={audioRef} className="hidden" />
+
+          <audio
+            ref={audioRef}
+            className="hidden"
+            src={podcast?.audioSegments?.[currentSegmentIndex]?.audio_url}
+            onCanPlay={() => setAudioReady(true)}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+          />
+
 
           {/* YouTube-style Center Play Button (Desktop only) */}
           {(!isPodcastDataLoaded || !isSegmentsLoaded) ? null : (

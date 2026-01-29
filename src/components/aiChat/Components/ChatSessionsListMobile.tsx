@@ -1,5 +1,5 @@
 // src/components/aiChat/ChatSessionsListMobile.tsx
-import React from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import { Plus, MessageCircle, Trash2, Edit2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -35,6 +35,34 @@ export const ChatSessionsListMobile: React.FC<ChatSessionsListMobileProps> = ({
   onLoadMoreChatSessions,
   isLoading,
 }) => {
+  // Infinite scroll: observe the sentinel div at the end of the list
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const loadingRef = useRef(isLoading);
+  loadingRef.current = isLoading;
+
+  const handleIntersect = useCallback((entries: IntersectionObserverEntry[]) => {
+    if (entries[0].isIntersecting && hasMoreChatSessions && !loadingRef.current) {
+      onLoadMoreChatSessions();
+    }
+  }, [hasMoreChatSessions, onLoadMoreChatSessions]);
+
+  useEffect(() => {
+    const observer = new window.IntersectionObserver(handleIntersect, {
+      root: null,
+      rootMargin: '0px',
+      threshold: 0.1,
+    });
+    if (sentinelRef.current) {
+      observer.observe(sentinelRef.current);
+    }
+    return () => {
+      if (sentinelRef.current) {
+        observer.unobserve(sentinelRef.current);
+      }
+      observer.disconnect();
+    };
+  }, [handleIntersect]);
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -100,25 +128,14 @@ export const ChatSessionsListMobile: React.FC<ChatSessionsListMobileProps> = ({
                 </CardContent>
               </Card>
             ))}
-          </div>
-        )}
-
-        {hasMoreChatSessions && (
-          <div className="p-4 text-center">
-            <Button
-              variant="outline"
-              onClick={onLoadMoreChatSessions}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Loading...
-                </>
-              ) : (
-                'Load More'
-              )}
-            </Button>
+            {/* Infinite scroll sentinel */}
+            {hasMoreChatSessions && (
+              <div ref={sentinelRef} className="w-full flex justify-center py-4">
+                {isLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                ) : null}
+              </div>
+            )}
           </div>
         )}
       </div>

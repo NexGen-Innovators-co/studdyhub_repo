@@ -336,4 +336,5 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
     return <>{content}</>;
 });
 
+export const MemoizedCodeBlock = memo(CodeBlock);
 export { CodeBlock };

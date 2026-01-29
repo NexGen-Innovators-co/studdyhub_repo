@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { useCopyToClipboard } from '../../../hooks/useCopyToClipboard';
 import { useTypingAnimation } from '../../../hooks/useTypingAnimation';
-import { CodeBlock, CodeBlockErrorBoundary } from './CodeBlock';
+import { MemoizedCodeBlock as CodeBlock, CodeBlockErrorBoundary } from './CodeBlock';
 import { calculateTypingSpeed } from '@/utils/calculateTypyingSpeed';
 import remarkEmoji from 'remark-emoji';
 
@@ -18,7 +18,7 @@ interface MemoizedMarkdownRendererProps {
   onSuggestAiCorrection: (prompt: string) => void;
   onViewDiagram: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html' | 'slides', content?: string, language?: string, imageUrl?: string) => void;
   onToggleUserMessageExpansion: (messageContent: string) => void;
-  expandedMessages: Set<string>;
+  expandedMessages: string[];
   enableTyping?: boolean;
   isLastMessage?: boolean;
   onTypingComplete?: (messageId: string) => void;
@@ -106,7 +106,7 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
     : 'bg-gray-50 border-gray-300 dark:bg-gray-800 dark:border-gray-600';
 
   const MAX_USER_MESSAGE_LENGTH = 200;
-  const isExpanded = expandedMessages.has(content);
+  const isExpanded = expandedMessages.includes(content);
   const needsExpansion = isUserMessage && content.length > MAX_USER_MESSAGE_LENGTH;
 
   const blockIndexRef = useRef(0);

@@ -163,8 +163,15 @@ export const useMessageHandlers = () => {
 
       // Build the parts for the current user message
       const currentMessageParts: MessagePart[] = [];
-      if (messageContent) {
-        currentMessageParts.push({ text: messageContent });
+      let processedMessageContent = messageContent;
+      // Auto-convert bare image URLs to Markdown image syntax for inline rendering
+      if (processedMessageContent) {
+        // Regex to match image URLs (png, jpg, jpeg, gif, webp)
+        processedMessageContent = processedMessageContent.replace(
+          /(https?:\/\/[\w\-./%?=&]+\.(?:png|jpg|jpeg|gif|webp))(?!\))/gi,
+          (url) => `![image](${url})`
+        );
+        currentMessageParts.push({ text: processedMessageContent });
       }
 
       const currentAttachedContext = buildRichContext(
@@ -405,18 +412,28 @@ export const useMessageHandlers = () => {
                 //console.error('Error fetching final messages:', error);
                 // Fallback: create messages from finalData
                 const realUserMessage: Message = {
-                  id: userMessageId,
-                  content: messageContent || '[Files attached]',
-                  role: 'user',
-                  timestamp: finalData.userMessageTimestamp || new Date().toISOString(),
+                  id: aiMessageId,
+                  content: finalData.response,
+                  role: 'assistant',
+                  timestamp: finalData.aiMessageTimestamp || new Date().toISOString(),
                   isError: false,
                   attachedDocumentIds: finalAttachedDocumentIds,
                   attachedNoteIds: finalAttachedNoteIds,
                   session_id: currentSessionId,
-                  has_been_displayed: true,
-                  image_url: imageUrl,
+                  has_been_displayed: false,
+                  // Extract images and executedActions from backend payload
+                  images: Array.isArray(finalData.images) ? finalData.images : [],
+                  executedActions: Array.isArray(finalData.executedActions) ? finalData.executedActions : [],
+                  // Robust image_url extraction
+                  image_url: (Array.isArray(finalData.images) && finalData.images.length > 0 && finalData.images[0])
+                    ? finalData.images[0]
+                    : (Array.isArray(finalData.executedActions) && finalData.executedActions.length > 0 && finalData.executedActions[0] && finalData.executedActions[0].data && finalData.executedActions[0].data.imageUrl)
+                      ? finalData.executedActions[0].data.imageUrl
+                      : (typeof finalData.response === 'string' && finalData.response.match(/^https?:\/\//))
+                        ? finalData.response
+                        : null,
                   image_mime_type: imageMimeType,
-                  files_metadata: processedFiles.length > 0 ? JSON.stringify(processedFiles) : undefined,
+                  files_metadata: undefined,
                 };
 
                 const finalMessage: Message = {
@@ -535,12 +552,17 @@ export const useMessageHandlers = () => {
           attachedNoteIds: [],
           session_id: currentSessionId,
           has_been_displayed: false,
+          images: Array.isArray(data.images) ? data.images : [],
+          executedActions: Array.isArray(data.executedActions) ? data.executedActions : [],
+          image_url: (Array.isArray(data.images) && data.images.length > 0 && data.images[0])
+            ? data.images[0]
+            : (Array.isArray(data.executedActions) && data.executedActions.length > 0 && data.executedActions[0] && data.executedActions[0].data && data.executedActions[0].data.imageUrl)
+              ? data.executedActions[0].data.imageUrl
+              : (typeof data.response === 'string' && data.response.match(/^https?:\/\//))
+                ? data.response
+                : null,
         };
-
-        // //console.log('[handleSubmitMessage] Replacing optimistic messages with real IDs:', {
-        //   userMessageId: realUserMessage.id,
-        //   aiMessageId: realAiMessage.id
-        // });
+            console.log('[AI Message Handler] Constructed AI message:', realAiMessage);
 
         // Update UI with real messages
         setChatMessages(prev => {

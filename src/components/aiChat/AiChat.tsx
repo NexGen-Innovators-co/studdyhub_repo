@@ -27,7 +27,6 @@ import { useTextToSpeech } from './hooks/useTextToSpeech';
 import { getFileType, validateFile, stripCodeBlocks, generateOptimisticId, overrideTsMimeType } from './utils/helpers';
 import { ContextBadges } from './Components/ContextBadges';
 import { DragOverlay } from './Components/DragOverlay';
-import { state } from 'mermaid/dist/rendering-util/rendering-elements/shapes/state.js';
 import { AppContext } from '@/contexts/AppContext';
 import { initialAppState } from '@/contexts/appReducer';
 import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
@@ -155,7 +154,7 @@ const AIChat: React.FC<AIChatProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
+  const [expandedMessages, setExpandedMessages] = useState<string[]>([]);
   const [showScrollToBottomButton, setShowScrollToBottomButton] = useState(false);
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
   // NEW: State for editing message
@@ -640,7 +639,7 @@ const AIChat: React.FC<AIChatProps> = ({
 
       setIsLastAiMessageDisplayed(false);
       setAttachedFiles([]);
-      setExpandedMessages(new Set());
+      setExpandedMessages([]);
 
     } catch (error: any) {
       // No need to decrement - we don't increment on send anymore
@@ -668,7 +667,7 @@ const AIChat: React.FC<AIChatProps> = ({
       toast.error(`Error: ${errorMessage}`);
       setInputMessage('');
       setAttachedFiles([]);
-      setExpandedMessages(new Set());
+      setExpandedMessages([]);
     } finally {
       setIsLoading(false);
       setIsCurrentlySending(false);
@@ -789,7 +788,7 @@ const AIChat: React.FC<AIChatProps> = ({
       // Batch state updates
       setInputMessage('');
       setAttachedFiles([]);
-      setExpandedMessages(new Set());
+      setExpandedMessages([]);
       setIsCurrentlySending(false);
       setIsAiTyping(false);
       setActiveDiagram(null);
@@ -829,13 +828,11 @@ const AIChat: React.FC<AIChatProps> = ({
 
   const handleToggleUserMessageExpansion = useCallback((messageContent: string) => {
     setExpandedMessages(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(messageContent)) {
-        newSet.delete(messageContent);
+      if (prev.includes(messageContent)) {
+        return prev.filter(msg => msg !== messageContent);
       } else {
-        newSet.add(messageContent);
+        return [...prev, messageContent];
       }
-      return newSet;
     });
   }, []);
 
@@ -879,6 +876,8 @@ const AIChat: React.FC<AIChatProps> = ({
   }, []);
 
   const handleEditClick = useCallback((message: Message) => {
+      // LOG: AiChat received message
+      console.log('[AiChat] handleEditClick message:', message);
     if (message.role !== 'user') return;
 
     setInputMessage(message.content);
@@ -999,7 +998,7 @@ const AIChat: React.FC<AIChatProps> = ({
 
         {/* Chat Panel */}
         <div
-          className={`flex flex-col h-full rounded-lg panel-transition bg-transparent dark:bg-transparent transition-all duration-300 relative ${isDiagramPanelOpen ? 'flex-shrink-0' : 'flex-1'} ${isPhone() ? 'fixed inset-0 z-30 rounded-none h-screen w-screen pt-24' : ''} ${(!isDiagramPanelOpen && !activePodcast && !isPhone()) ? 'max-w-3xl mx-auto' : ''}`}
+          className={`flex flex-col h-full rounded-lg panel-transition bg-transparent dark:bg-transparent transition-all duration-300 relative ${isDiagramPanelOpen ? 'flex-shrink-0' : 'flex-1'} ${isPhone() ? 'fixed inset-0 z-30 rounded-none h-screen w-screen ' : ''} ${(!isDiagramPanelOpen && !activePodcast && !isPhone()) ? 'max-w-3xl mx-auto' : ''}`}
           style={isDiagramPanelOpen && !isPhone() ? { width: `calc(${100 - panelWidth}% - 1px)` } : isPhone() ? { width: '100vw', height: '100vh', left: 0, top: 0 } : { flex: 1 }}
         >
           {/* Enhanced Loading States */}

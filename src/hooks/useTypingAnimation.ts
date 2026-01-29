@@ -180,7 +180,25 @@ export const useTypingAnimation = ({
       clearTimeout(blockUpdateTimerRef.current);
     }
 
+
+    const MAX_TYPING_DURATION = 30000; // 30 seconds in ms
+
     const typeNextWord = () => {
+      const now = performance.now();
+      const elapsed = now - (typingStartTimeRef.current || now);
+      if (elapsed >= MAX_TYPING_DURATION) {
+        // Max duration reached: finish typing immediately
+        setDisplayedText(text);
+        setIsTyping(false);
+        setCurrentBlock(null);
+        setBlockText('');
+        durationRef.current = elapsed;
+        const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+        const actualWPS = wordCount / (durationRef.current / 1000);
+        onCompleteRef.current?.(messageId, durationRef.current, actualWPS);
+        return;
+      }
+
       if (indexRef.current >= words.length) {
         setIsTyping(false);
         setCurrentBlock(null);

@@ -5,6 +5,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Badge } from '@/components/ui/badge';
 import { CourseMaterial, Course } from '@/hooks/useCourseLibrary';
 import { useNavigate } from 'react-router-dom';
+import { useAppContext } from '@/hooks/useAppContext';
 
 interface ResourceCardProps {
   material: CourseMaterial;
@@ -14,6 +15,8 @@ interface ResourceCardProps {
 export const ResourceCard: React.FC<ResourceCardProps> = ({ material, course }) => {
   const navigate = useNavigate();
 
+  const { setPendingAttachment } = useAppContext();
+
   const handleAskAI = () => {
     if (material.document_id) {
       // Navigate to chat tab with document ID and optional course context
@@ -22,6 +25,10 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ material, course }) 
       if (course?.id) params.set('courseId', course.id);
       if (course?.title) params.set('courseTitle', course.title);
       if (course?.code) params.set('courseCode', course.code);
+
+      // Set pending attachment in global state for fallback
+      setPendingAttachment([material.document_id]);
+
       navigate(`/chat?${params.toString()}`);
     }
   };

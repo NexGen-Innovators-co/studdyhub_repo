@@ -70,6 +70,8 @@ export interface Message {
   isLoading?: boolean;
   image_url?: string; // Legacy image URL
   image_mime_type?: string; // Legacy image MIME type
+  images?: string[];
+  executedActions?: any[];
   files_metadata?: string | Array<{ // Use string | array to handle both JSON string and array
     id: string;
     name: string;

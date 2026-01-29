@@ -56,6 +56,7 @@ import {
   FilePlus, // Add FilePlus icon
   Lightbulb, // Add Lightbulb icon
   Highlighter, // Changed from Sparkles for better semantic meaning
+  Podcast, // Add Podcast icon
 } from 'lucide-react';
 import { supabase } from '../../../integrations/supabase/client';
 
@@ -65,6 +66,7 @@ import { FlashcardDeck } from './FlashcardDeck';
 import { InlineAIEditor } from './InlineAIEditor';
 import { Note, UserProfile, NoteCategory } from '../../../types';
 import { Button } from '../../ui/button';
+import { PodcastGenerator } from '../../podcasts/PodcastGenerator';
 import { Input } from '../../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../ui/dropdown-menu';
@@ -745,6 +747,15 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
 
     const NOTE_EDITOR_TUTORIAL = getNoteEditorTutorial(isMobile, false);
     // Define your toolbar groups as React nodes
+    const [showPodcastGenerator, setShowPodcastGenerator] = useState(false);
+
+    const handleOpenPodcastGenerator = () => {
+      setShowPodcastGenerator(true);
+    };
+    const handleClosePodcastGenerator = () => {
+      setShowPodcastGenerator(false);
+    };
+
     const toolbarItems: React.ReactNode[] = [
       // Navigation
       <React.Fragment key="nav">
@@ -1181,9 +1192,16 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
 
       // AI & Flashcards
       <React.Fragment key="ai">
+         <button
+          onClick={handleOpenPodcastGenerator}
+          className="p-2 rounded-md hover:bg-pink-100 dark:hover:bg-pink-900 hover:text-pink-600 dark:hover:text-pink-400 transition-all duration-200"
+          title="Generate Podcast from Note"
+        >
+          <Podcast className="w-4 h-4" />
+        </button>
         <button
           onClick={startAI}
-          className="p-2 rounded-md bg-gradient-to-r from-blue-500 to-blue-500 hover:from-blue-600 hover:to-blue-600 text-white shadow-md hover:shadow-lg transition-all duration-200"
+          className="p-2 rounded-md hover:bg-pink-100 dark:hover:bg-pink-900 hover:text-pink-600 dark:hover:text-pink-400 transition-all duration-200"
           title="AI Assist"
           data-tutorial="ai-assistant-button"
         >
@@ -1197,7 +1215,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
               setShowDeck(false);
             }
           }}
-          className="px-3 py-2 text-sm rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white flex items-center gap-1.5 font-medium shadow-md hover:shadow-lg transition-all duration-200"
+          className="p-2 rounded-md hover:bg-pink-100 dark:hover:bg-pink-900 hover:text-pink-600 dark:hover:text-pink-400 transition-all duration-200"
           title="Flashcards Menu"
           data-tutorial="flashcards-button"
         >
@@ -1212,6 +1230,13 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
 
     return (
       <div className="flex flex-col h-full w-full overflow-hidden bg-white dark:bg-gray-900">
+        {/* Podcast Generator Dialog */}
+        {showPodcastGenerator && (
+          <PodcastGenerator
+            selectedNoteIds={note?.id ? [note.id] : []}
+            onClose={handleClosePodcastGenerator}
+          />
+        )}
         {/* Hidden file inputs */}
         <input
           type="file"

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Sidebar } from '../components/layout/Sidebar';
 import LivePodcastViewer from '@/components/podcasts/LivePodcastViewer';
@@ -28,6 +29,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { MobileMenu } from '@/components/layout/MobileMenu';
 
 const Index = () => {
+  const isOnline = useOnlineStatus();
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
@@ -35,6 +37,8 @@ const Index = () => {
 
   // Context
   const {
+      pendingAttachment,
+      setPendingAttachment,
     user,
     authLoading,
     dataLoading,
@@ -99,6 +103,25 @@ const Index = () => {
   } = useAppContext();
 
   // Notifications modal state and logic (now inside Index to access 'user')
+
+  // Network error display (top-level)
+  if (!isOnline) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-yellow-50">
+        <div className="p-6 bg-white border border-yellow-200 rounded-lg shadow-md flex flex-col items-center">
+          <span className="text-yellow-800 text-lg font-semibold mb-2">You're offline</span>
+          <span className="text-yellow-700 mb-4">Please check your internet connection to continue using StuddyHub.</span>
+          <Button
+            variant="outline"
+            className="text-yellow-800 border-yellow-300 hover:bg-yellow-100"
+            onClick={() => window.location.reload()}
+          >
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
   const { preferences } = useNotifications();
   // Onboarding modal controls: unified flow to request notifications, mic, camera
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
@@ -240,6 +263,8 @@ const Index = () => {
     }
 
     if (documentId) {
+      // Clear pendingAttachment if present
+      if (pendingAttachment) setPendingAttachment(null);
       // Force new chat mode if we are in a session
       if (activeChatSessionId) {
         dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: null });
@@ -247,8 +272,12 @@ const Index = () => {
       if (!selectedDocumentIds.includes(documentId)) {
         dispatch({ type: 'SET_SELECTED_DOCUMENT_IDS', payload: [documentId] });
       }
+    } else if (pendingAttachment && pendingAttachment.length > 0) {
+      // If no documentId in URL but pendingAttachment exists, use it
+      dispatch({ type: 'SET_SELECTED_DOCUMENT_IDS', payload: pendingAttachment });
+      setPendingAttachment(null);
     }
-  }, [location.search, documents, externalDocuments, dispatch, selectedDocumentIds, activeChatSessionId]);
+  }, [location.search, documents, externalDocuments, dispatch, selectedDocumentIds, activeChatSessionId, pendingAttachment, setPendingAttachment]);
 
   const allDocuments = useMemo(() => {
     const existingIds = new Set(documents.map(d => d.id));
@@ -278,6 +307,9 @@ const Index = () => {
   useEffect(() => {
     let mounted = true;
 
+    // Only clear podcastPageData if the podcastPageId actually changes
+    setPodcastPageData(prev => (prev && prev.id !== podcastPageId ? null : prev));
+
     // If the navigator passed the podcast data in state, use it immediately
     if (navState?.podcast && podcastPageId && navState.podcast.id === podcastPageId) {
       setPodcastPageData(navState.podcast);
@@ -301,6 +333,7 @@ const Index = () => {
         }
       } catch (e) {
         // console.warn('Failed to load podcast page data', e);
+        // podcastPageData will remain null, so no stale data is shown
       }
     })();
     return () => { mounted = false; };

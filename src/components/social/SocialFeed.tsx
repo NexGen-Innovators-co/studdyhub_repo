@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
+import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import {
   useNavigate,
   useParams,
@@ -63,6 +64,7 @@ export interface SocialFeedHandle {
 export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
   ({ activeTab: initialActiveTab, postId, searchQuery: externalSearchQuery, onSearchChange }, ref) => {
     // State management
+    const isOnline = useOnlineStatus();
     const [activeTab, setActiveTab] = useState<'feed' | 'trending' | 'groups' | 'profile' | 'notifications' | 'userProfile'>(initialActiveTab as any || 'feed');
     const [internalSearch, setInternalSearch] = useState('');
     const [showPostDialog, setShowPostDialog] = useState(false);
@@ -1095,8 +1097,29 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     return (
       <div className=" bg-transparent font-sans">
 
+
+        {/* Network error display */}
+        {!isOnline && (
+          <div className="mx-4 mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="text-yellow-800 text-sm flex items-center gap-2">
+                <span>You're offline. Please check your internet connection.</span>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                className="text-yellow-800 border-yellow-300 hover:bg-yellow-100"
+                disabled={!isOnline}
+              >
+                Retry
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Error display */}
-        {error && (
+        {error && isOnline && (
           <div className="mx-4 mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
             <div className="flex items-center justify-between">
               <div className="text-red-800 text-sm">{error}</div>
