@@ -56,6 +56,7 @@ export interface VisualAsset {
   url: string;
   timestamp: number | null;
   segmentIndex?: number;
+  segmentIndices?: number[]; // Support multiple segments for a visual asset
 }
 
 export interface PodcastData {

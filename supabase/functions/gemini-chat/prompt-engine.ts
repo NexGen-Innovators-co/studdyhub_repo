@@ -47,12 +47,14 @@ RULES FOR PHASE 2:
 ✓ DO NOT include raw action results
 ✓ DO NOT say "let me check" or "I will now..." if actions already executed
 ✓ Simply tell the user what you found/did
+✓ **If you reference an image URL, ALWAYS format it as a Markdown image: ![alt text](image_url). Do NOT output plain URLs.**
 
 EXAMPLES OF GOOD PHASE 2 RESPONSES:
-❌ BAD: "Let me check your schedule. { \\"type\\": \\"DB_ACTION\\" ..."
+❌ BAD: "Let me check your schedule. { \"type\": \"DB_ACTION\" ..."
 ❌ BAD: "I'll retrieve that now..."
 ✅ GOOD: "I've checked your schedule. You currently have no items scheduled."
 ✅ GOOD: "I found 3 notes in your account about Biology."
+✅ GOOD: "Here is your generated image: ![A cat reading a book](https://example.com/cat.png)"
 
 **REMEMBER: You will be explicitly told which phase you are in. Follow the rules for that phase ONLY.**
 `;
@@ -1021,6 +1023,9 @@ This shows how different services communicate while remaining independent!"
         - Use this when the user asks to "generate an image", "draw", "create a picture", or "visualize" artistically.
         - Do NOT use this for technical diagrams (use Mermaid) or interactive 3D (use Three.js).
         - ONLY use during ACTION PLANNING phase.
+        
+        **When you include an image in your FINAL RESPONSE, ALWAYS use Markdown image syntax: ![alt text](image_url). Do NOT output plain URLs.**
+        Example: Here is your image: ![A cat reading a book](https://example.com/cat.png)
         `;
 
         // Inject DB schema guidance so the model can construct DB_ACTION objects

@@ -422,19 +422,18 @@ Title:`;
 
       try {
         // Dynamically determine how many visual concepts are appropriate based on segments and detected insights
-        const approxInsights = segments.filter(s => /insight|interesting|key point|takeaway|interesting thing|insights?/i.test(s.text)).length;
-        const estimatedMinutes = estimateDuration(segments);
-        // Determine desired number of visual concepts based on insights, segment count, and duration.
-        // Allow more than 5 when the podcast is longer or has many segments; cap at 12 for practical reasons.
-        let computed = Math.max(1, Math.round(Math.max(approxInsights, segments.length / 6, estimatedMinutes / 3)));
-        let desiredConceptCount = Math.min(12, computed);
 
-        const conceptPrompt = `Based on this podcast script, extract ${desiredConceptCount} key visual concepts that would make compelling images. Prioritize concepts that align with the most insightful segments; for each concept include the segment index (0-based) where it appears if possible. Return ONLY a JSON array of objects with "concept", "description" and optional "segmentIndex" fields.
+        const conceptPrompt = `Based on this podcast script, determine the optimal number of key visual concepts (images) needed to best illustrate the content, but do not exceed 12 total concepts. For each concept, return:
+  - "concept": a brief title
+  - "description": a detailed visual description for image generation
+  - "segmentIndices": an array of 0-based segment indices (e.g. [0,1,2,3]) indicating which segments this image should be shown for. You may assign a concept to multiple segments if relevant, and segments may share images. Ensure all segments are covered by at least one concept.
 
-      Script excerpt:
-      ${script.substring(0, 2000)}
+You must decide how many visuals are needed for this script, but never return more than 12 concepts. If fewer are sufficient, return only as many as needed.
 
-      Format: [{"concept": "brief title", "description": "detailed visual description for image generation", "segmentIndex": 3}]`;
+Script excerpt:
+${script.substring(0, 2000)}
+
+Format: [{"concept": "brief title", "description": "detailed visual description", "segmentIndices": [0,1,2]}]`;
 
         const conceptData = await callGeminiWithModelChain({
           contents: [{ parts: [{ text: conceptPrompt }] }],
@@ -444,8 +443,6 @@ Title:`;
         if (!conceptData) {
           throw new Error('Concept extraction failed: empty response');
         }
-
-        const conceptData = await conceptResponse.json();
 
         // Check for MAX_TOKENS or empty response
         const candidate = conceptData.candidates?.[0];
@@ -459,7 +456,8 @@ Title:`;
         }
 
         const conceptText = conceptData.candidates[0].content.parts[0].text;
-        let concepts: Array<{ concept: string, description: string, segmentIndex?: number }> = [];
+
+        let concepts: Array<{ concept: string, description: string, segmentIndices?: number[] }> = [];
         try {
           const jsonMatch = conceptText.match(/\[[\s\S]*\]/);
           if (jsonMatch) {
@@ -471,29 +469,11 @@ Title:`;
           console.error("[Podcast] Failed to parse concepts:", e);
           concepts = [{
             concept: "Main Topic",
-            description: `A professional educational illustration about ${sources.join(", ")}, featuring modern design elements, clean typography, and vibrant colors`
+            description: `A professional educational illustration about ${sources.join(", ")} , featuring modern design elements, clean typography, and vibrant colors`,
+            segmentIndices: Array.from({length: segments.length}, (_, i) => i)
           }];
         }
 
-        // For each concept, find the most relevant segment (by simple keyword match)
-        function findRelevantSegmentIndex(concept: string, segments: Array<{ speaker: string; text: string }>): number {
-          const lowerConcept = concept.toLowerCase();
-          let bestIndex = 0;
-          let bestScore = 0;
-          for (let i = 0; i < segments.length; i++) {
-            const segText = segments[i].text.toLowerCase();
-            // Score: count of concept words present in segment
-            let score = 0;
-            for (const word of lowerConcept.split(/\s+/)) {
-              if (segText.includes(word)) score++;
-            }
-            if (score > bestScore) {
-              bestScore = score;
-              bestIndex = i;
-            }
-          }
-          return bestIndex;
-        }
 
         // Use the generate-image-from-text edge function to upload and get a public URL for each image
         for (let i = 0; i < concepts.length; i++) {
@@ -524,16 +504,12 @@ Title:`;
             console.error(`[Podcast] Image upload exception:`, error);
           }
 
-          // Prefer provided segmentIndex if present, otherwise find the most relevant segment
-          const providedIndex = (typeof (concept as any).segmentIndex === 'number') ? (concept as any).segmentIndex : undefined;
-          const segmentIndex = typeof providedIndex === 'number' ? providedIndex : findRelevantSegmentIndex(concept.concept, segments);
-
           visualAssets.push({
             type: 'image',
             concept: concept.concept,
             description,
             url: imageUrl || `https://placehold.co/1792x1024/6366f1/white?text=${encodeURIComponent(concept.concept)}`,
-            segmentIndex,
+            segmentIndices: Array.isArray(concept.segmentIndices) ? concept.segmentIndices : [],
             timestamp: null // will be set in UI based on segmentIndex
           });
         }
@@ -615,7 +591,41 @@ Title:`;
       }
     }
 
-    // 5. Save podcast to database
+
+
+    // AI-driven mapping: assign images to segments based on segmentIndices from visualAssets
+
+    let segmentImageMap: string[] = Array(segments.length).fill(null);
+    if (visualAssets.length > 0 && segments.length > 0) {
+      visualAssets.forEach(asset => {
+        // Support both segmentIndices (array) and segmentIndex (number)
+        if (Array.isArray(asset.segmentIndices)) {
+          asset.segmentIndices.forEach((segIdx: number) => {
+            if (segIdx >= 0 && segIdx < segments.length) {
+              segmentImageMap[segIdx] = asset.url;
+            }
+          });
+        } else if (typeof asset.segmentIndex === 'number') {
+          const segIdx = asset.segmentIndex;
+          if (segIdx >= 0 && segIdx < segments.length) {
+            segmentImageMap[segIdx] = asset.url;
+          }
+        }
+      });
+      // Fallback: if any segment is still missing an image, assign the first image
+      for (let i = 0; i < segmentImageMap.length; i++) {
+        if (!segmentImageMap[i] && visualAssets[0]) {
+          segmentImageMap[i] = visualAssets[0].url;
+        }
+      }
+    }
+
+    // Attach imageUrl to each audio segment for downstream use
+    const audioSegmentsWithImages = validAudioSegments.map((seg, idx) => ({
+      ...seg,
+      imageUrl: segmentImageMap[idx] || null
+    }));
+
     const optimizedVisualAssets = visualAssets.length > 0 ? visualAssets.map(asset => {
       if (asset.url.startsWith('data:')) {
         return {
@@ -637,7 +647,7 @@ Title:`;
         title: podcastTitle,
         sources: sources,
         script: script,
-        audio_segments: validAudioSegments,
+        audio_segments: audioSegmentsWithImages,
         duration_minutes: estimateDuration(segments),
         style: style,
         podcast_type: podcastType,

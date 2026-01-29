@@ -963,9 +963,18 @@ async function buildEnhancedGeminiConversation(
     const actionableContext = await contextService.getActionableContext(userId);
     const actionableContextText = buildActionableContextText(actionableContext);
 
+
+
+    // Build a full user context summary for the system prompt
+    const uc = userContext;
+    const studyHabits = uc.studyHabits;
+    const learningPatterns = uc.learningPatterns;
+    const topicMastery = uc.topicMastery;
+    const totalCounts = uc.totalCounts;
+    const userContextSummary = `\n\nUSER CONTEXT SUMMARY:\n- Notes: ${uc.allNotes?.length ?? 0}\n- Documents: ${uc.allDocuments?.length ?? 0}\n- Recent Quizzes: ${uc.recentQuizzes?.length ?? 0}\n- Learning Schedule: ${uc.learningSchedule?.length ?? 0}\n- Learning Goals: ${uc.learningGoals?.length ?? 0}\n- User Memory: ${uc.userMemory?.length ?? 0}\n- Achievements: ${uc.achievements?.length ?? 0}\n- Flashcards: ${uc.flashcards?.length ?? 0}\n- Social Profile: ${uc.socialProfile ? 'Yes' : 'No'}\n- Recent Recordings: ${uc.recentRecordings?.length ?? 0}\n- Document Folders: ${uc.documentFolders?.length ?? 0}\n- Note Title Index: ${uc.noteTitleIndex?.size ?? 0}\n- Document Title Index: ${uc.documentTitleIndex?.size ?? 0}\n- Total Counts: ${JSON.stringify(totalCounts)}\n\nLEARNING PATTERNS:\n- Strong Subjects: ${Array.from(learningPatterns?.strongSubjects?.keys() ?? []).join(', ') || 'None'}\n- Weak Subjects: ${Array.from(learningPatterns?.weakSubjects?.keys() ?? []).join(', ') || 'None'}\n- Study Times: ${Array.from(learningPatterns?.studyTimes?.entries() ?? []).map(([k,v])=>`${k}: ${v}`).join(', ') || 'None'}\n- Preferred Note Categories: ${Array.from(learningPatterns?.preferredNoteCategories?.keys() ?? []).join(', ') || 'None'}\n- Frequent Topics: ${Array.from(learningPatterns?.frequentTopics?.keys() ?? []).join(', ') || 'None'}\n- Study Consistency: ${learningPatterns?.studyConsistency ?? 'N/A'}\n- Average Study Duration: ${learningPatterns?.averageStudyDuration ?? 'N/A'} min\n- Preferred Quiz Types: ${Array.from(learningPatterns?.preferredQuizTypes?.keys() ?? []).join(', ') || 'None'}\n- Top Tags: ${Array.from(learningPatterns?.topTags?.keys() ?? []).join(', ') || 'None'}\n- Recent Topics: ${learningPatterns?.recentTopics?.map(t=>t.content).join(', ') || 'None'}\n\nSTUDY HABITS:\n- Most Active Day: ${studyHabits?.mostActiveDay ?? 'N/A'}\n- Most Active Hour: ${studyHabits?.mostActiveHour ?? 'N/A'}\n- Average Sessions/Week: ${studyHabits?.averageSessionsPerWeek ?? 'N/A'}\n- Average Quizzes/Week: ${studyHabits?.averageQuizzesPerWeek ?? 'N/A'}\n- Average Notes/Week: ${studyHabits?.averageNotesPerWeek ?? 'N/A'}\n\nTOPIC MASTERY:\n${topicMastery && typeof topicMastery.forEach === 'function' && topicMastery.size > 0 ? Array.from(topicMastery.entries()).map(([topic, data]) => `- ${topic}: ${JSON.stringify(data)}`).join('\n') : 'No topic mastery data.'}`;
+
     const userProfile = userContext.profile;
     let userName = 'User';
-
     if (userProfile) {
       userName = userProfile.full_name || 'User';
     }
@@ -997,24 +1006,27 @@ async function buildEnhancedGeminiConversation(
         }).join('\n');
       }
 
+
       const enhancedSystemPrompt = `${systemPrompt}
 
-**ACTIONABLE CONTEXT:**
-${actionableContextText}
+    **ACTIONABLE CONTEXT:**
+    ${actionableContextText}
 
-**USE THIS CONTEXT TO:**
-1. Reference specific notes/documents by their exact titles when creating related content
-2. Link items that already exist in the user's database
-3. Update existing goals, notes, or schedule items
-4. Avoid creating duplicate content
+    ${userContextSummary}
 
-**MEMORY & RECALL INSTRUCTIONS:**
-- When you recall previous conversations, mention specific topics and details
-- Use phrases like "I remember we discussed..." or "Based on our previous conversation about..."
-- Connect current questions to past learning topics explicitly
-- Reference specific interests the user has shown before
-- If you have summary information, use it to show continuity
-- NEVER say "I don't have specific details memorized" - instead use the context provided`;
+    **USE THIS CONTEXT TO:**
+    1. Reference specific notes/documents by their exact titles when creating related content
+    2. Link items that already exist in the user's database
+    3. Update existing goals, notes, or schedule items
+    4. Avoid creating duplicate content
+
+    **MEMORY & RECALL INSTRUCTIONS:**
+    - When you recall previous conversations, mention specific topics and details
+    - Use phrases like "I remember we discussed..." or "Based on our previous conversation about..."
+    - Connect current questions to past learning topics explicitly
+    - Reference specific interests the user has shown before
+    - If you have summary information, use it to show continuity
+    - NEVER say "I don't have specific details memorized" - instead use the context provided`;
 
       // Add current date and time context
       const currentDateTime = new Date();

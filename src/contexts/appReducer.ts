@@ -35,7 +35,8 @@ export type AppAction =
   | { type: 'SET_CURRENT_COURSE'; payload: { id: string; code?: string; title?: string } | null }
   | { type: 'SET_CURRENT_TAB'; payload: string }
   | { type: 'RESET_CHAT_STATE' }
-  | { type: 'RESET_ALL_STATE' };
+  | { type: 'RESET_ALL_STATE' }
+  | { type: 'SET_PENDING_ATTACHMENT'; payload: string[] | null };
 
 export interface FileProcessingProgress {
   processing: boolean;
@@ -50,6 +51,7 @@ export interface AppState {
   chatSessions: ChatSession[];
   activeChatSessionId: string | null;
   selectedDocumentIds: string[];
+  pendingAttachment: string[] | null;
   currentCourse: { id: string; code?: string; title?: string } | null;
   isNotesHistoryOpen: boolean;
   isSubmittingUserMessage: boolean;
@@ -71,6 +73,7 @@ export const initialAppState: AppState = {
   chatSessions: [],
   activeChatSessionId: null,
   selectedDocumentIds: [],
+  pendingAttachment: null,
   currentCourse: null,
   isNotesHistoryOpen: false,
   isSubmittingUserMessage: false,
@@ -90,6 +93,8 @@ export const initialAppState: AppState = {
 
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
+    case 'SET_PENDING_ATTACHMENT':
+      return { ...state, pendingAttachment: action.payload };
     case 'SET_THEME':
       return { ...state, currentTheme: action.payload };
     case 'SET_CHAT_SESSIONS':

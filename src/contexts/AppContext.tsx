@@ -31,6 +31,7 @@ import { offlineStorage, STORES } from '@/utils/offlineStorage';
 
 // Context interface
 interface AppContextType extends AppState {
+    setPendingAttachment: (ids: string[] | null) => void;
   // Auth & data hooks
   user: any;
   authLoading: boolean;
@@ -245,6 +246,10 @@ const useLoadingWithTimeout = (initialState = false) => {
 // Provider component
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialAppState);
+    // Setter for pendingAttachment
+    const setPendingAttachment = useCallback((ids: string[] | null) => {
+      dispatch({ type: 'SET_PENDING_ATTACHMENT', payload: ids });
+    }, []);
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -1157,6 +1162,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const contextValue: AppContextType = {
     // State
     ...state,
+  setPendingAttachment,
 
     // Auth & data
     user,

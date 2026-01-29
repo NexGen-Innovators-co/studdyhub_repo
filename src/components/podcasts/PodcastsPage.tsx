@@ -1,5 +1,6 @@
 // PodcastsPage.tsx - Complete fixed version
 import React, { useState, useEffect, useCallback, useRef, useMemo, useDeferredValue, memo } from 'react';
+import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -473,7 +474,25 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
   onNavigateToTab,
   socialFeedRef,
 }) => {
+  const isOnline = useOnlineStatus();
   const navigate = useNavigate();
+  if (!isOnline) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-yellow-50">
+        <div className="p-6 bg-white border border-yellow-200 rounded-lg shadow-md flex flex-col items-center">
+          <span className="text-yellow-800 text-lg font-semibold mb-2">You're offline</span>
+          <span className="text-yellow-700 mb-4">Please check your internet connection to continue browsing podcasts.</span>
+          <Button
+            variant="outline"
+            className="text-yellow-800 border-yellow-300 hover:bg-yellow-100"
+            onClick={() => window.location.reload()}
+          >
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
   const [activeTab, setActiveTab] = useState<'discover' | 'my-podcasts' | 'live'>('discover');
   const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
   const [isMobileLayout, setIsMobileLayout] = useState(false);

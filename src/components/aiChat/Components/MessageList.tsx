@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useState, useRef, useEffect } from 'react';
+import React, { memo, useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { Copy, FileText, Image, RefreshCw, Trash2, Volume2, Pause, Square, X, Loader2, StickyNote, User, File, Download, Check, Paperclip, AlertTriangle, Pencil } from 'lucide-react';
@@ -42,7 +42,7 @@ interface MessageListProps {
     onMermaidError: (code: string, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => void;
     onSuggestAiCorrection: (prompt: string) => void;
     onToggleUserMessageExpansion: (messageContent: string) => void;
-    expandedMessages: Set<string>;
+    expandedMessages: string[];
     isSpeaking: boolean;
     speakingMessageId: string | null;
     isPaused: boolean;
@@ -136,6 +136,7 @@ const parseAttachedFiles = (message: Message): AttachedFile[] => {
             status: 'completed'
         });
     }
+
     return files;
 };
 
@@ -269,19 +270,25 @@ export const MessageList = memo(({
         }
     }, [onDiagramCodeUpdate]);
 
-    const renderAttachments = useCallback((message: Message) => {
-        const attachedFiles = parseAttachedFiles(message);
-        const attachedDocumentTitles = message.attachedDocumentIds?.map(id => {
-            const doc = mergedDocuments.find(d => d.id === id);
-            return { id, name: doc ? doc.title : 'loading document...', type: 'document' as const, doc, processing_status: doc?.processing_status, processing_error: doc?.processing_error };
-        }) || [];
-        const attachedNoteTitles = message.attachedNoteIds?.map(id => {
-            const note = mergedDocuments.find(d => d.id === id);
-            return { id, name: note ? note.title : 'loading Note...', type: 'note' as const };
-        }) || [];
+    // Memoize attachments for all messages up front
+    const memoizedAttachments = useMemo(() => {
+        return messages.map(message => {
+            const attachedFiles = parseAttachedFiles(message);
+            const attachedDocumentTitles = message.attachedDocumentIds?.map(id => {
+                const doc = mergedDocuments.find(d => d.id === id);
+                return { id, name: doc ? doc.title : 'loading document...', type: 'document' as const, doc, processing_status: doc?.processing_status, processing_error: doc?.processing_error };
+            }) || [];
+            const attachedNoteTitles = message.attachedNoteIds?.map(id => {
+                const note = mergedDocuments.find(d => d.id === id);
+                return { id, name: note ? note.title : 'loading Note...', type: 'note' as const };
+            }) || [];
+            return { attachedFiles, attachedDocumentTitles, attachedNoteTitles };
+        });
+    }, [messages, mergedDocuments]);
 
+    const renderAttachments = useCallback((message: Message, attachments: { attachedFiles: any[]; attachedDocumentTitles: any[]; attachedNoteTitles: any[] }) => {
+        const { attachedFiles, attachedDocumentTitles, attachedNoteTitles } = attachments;
         const hasAttachments = attachedFiles.length > 0 || attachedDocumentTitles.length > 0 || attachedNoteTitles.length > 0;
-
         if (!hasAttachments) return null;
 
         const allAttachments = [
@@ -421,11 +428,11 @@ export const MessageList = memo(({
             </div>
         );
     }, [mergedDocuments, handleFilePreview, handleViewAttachedFile, getFileIcon]);
-
+ 
     const renderMessage = useCallback((message: Message, index: number) => {
         const isUserMessage = message.role === 'user';
         const isLastMessage = index === messages.length - 1;
-        const isMessageExpanded = expandedMessages.has(message.content);
+        const isMessageExpanded = expandedMessages.includes(message.content);
         const messageDate = formatDate(message.timestamp);
         const showDateHeader = lastDateRef.current !== messageDate;
         lastDateRef.current = messageDate;
@@ -438,10 +445,12 @@ export const MessageList = memo(({
         let contentToRender;
 
         if (isUserMessage) {
+            // Find the memoized attachments for this message
+            const attachments = memoizedAttachments[index] || { attachedFiles: [], attachedDocumentTitles: [], attachedNoteTitles: [] };
             contentToRender = (
                 <>
                     <div className="flex flex-col gap-3 max-w-xs sm:max-w-lg overflow-x-auto items-end justify-items-end">
-                        {renderAttachments(message)}
+                        {renderAttachments(message, attachments)}
                         <div className=" text-md text-slate-700 right-0 dark:text-slate-300 bg-slate-500/10 dark:bg-slate-950/30 p-2 sm:p-3 rounded-lg border border-slate-200/5 dark:border-blue-800 max-w-xs font-claude leading-relaxed break-words whitespace-pre-wrap overflow-auto">
 
                             {message.content.length > 200 && !isMessageExpanded ? (
@@ -558,7 +567,7 @@ export const MessageList = memo(({
         }
 
         return (
-            <React.Fragment key={`${message.id}-${index}`}>
+            <React.Fragment key={message.id}>
                 {showDateHeader && (
                     <div className="flex justify-center my-3 sm:my-4">
                         <Badge
@@ -683,6 +692,9 @@ export const MessageList = memo(({
         isSpeaking, speakingMessageId, isPaused, resumeSpeech, pauseSpeech, stopSpeech, speakMessage, renderAttachments,
         messages
     ]);
+
+// NOTE: For best performance, ensure expandedMessages is memoized in the parent:
+// const expandedMessages = useMemo(() => new Set([...]), [/* dependencies */]);
 
     return (
         <div
