@@ -675,7 +675,9 @@ export const useAppData = () => {
           if (offlineDocs && offlineDocs.length > 0) {
             setDocuments(offlineDocs);
           }
-        }).catch(err => console.warn('Failed to load offline documents:', err));
+        }).catch(err => {
+          // Failed to load offline documents
+        });
       }
     }
 
@@ -808,14 +810,16 @@ export const useAppData = () => {
             return;
           }
         } catch (err) {
-          console.warn('Failed to load offline recordings:', err);
+          // console.warn('Failed to load offline recordings:', err);
         }
       } else {
         offlineStorage.getAll<ClassRecording>(STORES.RECORDINGS).then(offlineRecs => {
           if (offlineRecs && offlineRecs.length > 0) {
             setRecordings(offlineRecs);
           }
-        }).catch(err => console.warn('Failed to load offline recordings:', err));
+        }).catch(err => {
+          // Failed to load offline recordings
+        });
       }
     }
 
@@ -935,14 +939,16 @@ export const useAppData = () => {
             return;
           }
         } catch (err) {
-          console.warn('Failed to load offline schedule:', err);
+          // console.warn('Failed to load offline schedule:', err);
         }
       } else {
         offlineStorage.getAll<ScheduleItem>(STORES.SCHEDULE).then(offlineItems => {
           if (offlineItems && offlineItems.length > 0) {
             setScheduleItems(offlineItems);
           }
-        }).catch(err => console.warn('Failed to load offline schedule:', err));
+        }).catch(err => {
+          // Failed to load offline schedule
+        });
       }
     }
 
@@ -1067,7 +1073,9 @@ export const useAppData = () => {
           if (offlineQuizzes && offlineQuizzes.length > 0) {
             setQuizzes(offlineQuizzes);
           }
-        }).catch(err => console.warn('Failed to load offline quizzes:', err));
+        }).catch(err => {
+          // Failed to load offline quizzes
+        });
       }
     }
 
@@ -1125,7 +1133,7 @@ export const useAppData = () => {
               parsedQuestions = JSON.parse(quiz.questions);
             }
           } catch (e) {
-            console.error('Error parsing quiz questions:', e);
+            // console.error('Error parsing quiz questions:', e);
             parsedQuestions = [];
           }
 
@@ -1222,7 +1230,7 @@ export const useAppData = () => {
                 setFolderTree(buildFolderTree(offlineFolders));
               }
             } catch (e) {
-              console.warn('Could not build folder tree offline:', e);
+              // console.warn('Could not build folder tree offline:', e);
             }
 
             setDataLoaded(prev => new Set([...prev, 'folders']));
@@ -1230,14 +1238,16 @@ export const useAppData = () => {
             return;
           }
         } catch (err) {
-          console.warn('Failed to load offline folders:', err);
+          // console.warn('Failed to load offline folders:', err);
         }
       } else {
         offlineStorage.getAll<DocumentFolder>(STORES.FOLDERS).then(offlineFolders => {
           if (offlineFolders && offlineFolders.length > 0) {
             setFolders(offlineFolders);
           }
-        }).catch(err => console.warn('Failed to load offline folders:', err));
+        }).catch(err => {
+          // console.warn('Failed to load offline folders:', err)
+        });
       }
     }
 
@@ -1546,14 +1556,16 @@ export const useAppData = () => {
             return;
           }
         } catch (err) {
-          console.warn('Failed to load offline notes:', err);
+          // console.warn('Failed to load offline notes:', err);
         }
       } else {
         offlineStorage.getAll<Note>(STORES.NOTES).then(offlineNotes => {
           if (offlineNotes && offlineNotes.length > 0) {
             setNotes(offlineNotes);
           }
-        }).catch(err => console.warn('Failed to load offline notes:', err));
+        }).catch(err => {
+          // Failed to load offline notes
+        });
       }
     }
 
@@ -2062,6 +2074,43 @@ export const useAppData = () => {
     toast.success('Retrying all failed loads...');
   }, [currentUser, dataErrors, loadNotesPage, loadDocumentsPage, loadRecordingsPage, loadSchedulePage, loadQuizzesPage, loadFolders, addToQueue]);
 
+  // Search notes from database
+  const searchNotesFromDB = useCallback(async (searchQuery: string): Promise<Note[]> => {
+    if (!currentUser?.id || !searchQuery.trim()) return [];
+
+    try {
+      const searchLower = searchQuery.toLowerCase();
+
+      // Query notes table with search on title and content
+      const { data, error } = await supabase
+        .from('notes')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .or(`title.ilike.%${searchLower}%,content.ilike.%${searchLower}%`)
+        .order('updated_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('Note search error:', error);
+        return [];
+      }
+
+      // Also filter by tags if needed (since ilike doesn't work on arrays)
+      const results = (data || []).filter((note: any) => {
+        const matchesSearch = 
+          note.title?.toLowerCase().includes(searchLower) ||
+          note.content?.toLowerCase().includes(searchLower) ||
+          note.tags?.some((tag: string) => tag.toLowerCase().includes(searchLower));
+        return matchesSearch;
+      });
+
+      return results as Note[];
+    } catch (error) {
+      console.error('Note search error:', error);
+      return [];
+    }
+  }, [currentUser?.id]);
+
   // Return optimized hook API
   return {
     // State
@@ -2202,6 +2251,7 @@ export const useAppData = () => {
     loadSpecificDocuments,
     loadSpecificNotes,
     clearLoadedIds,
+    searchNotesFromDB,
 
     // Enhanced functions
     checkConnectionHealth,

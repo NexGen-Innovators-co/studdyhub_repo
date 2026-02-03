@@ -18,6 +18,8 @@ import { Document } from '../../types/Document';
 import { useAuth } from '../../hooks/useAuth';
 import { useAppContext } from '../../hooks/useAppContext';
 import { DocumentFolder, CreateFolderInput, UpdateFolderInput } from '../../types/Folder';
+import { useGlobalSearch } from '../../hooks/useGlobalSearch';
+import { SEARCH_CONFIGS } from '../../services/globalSearchService';
 import { Skeleton } from '../ui/skeleton';
 import DocumentMarkdownRenderer from '../aiChat/Components/DocumentMarkdownRenderer';
 import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
@@ -127,6 +129,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
   // Enhanced UI State
   const [internalSearch, setInternalSearch] = useState('');
+  const [hasSearched, setHasSearched] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [sortBy, setSortBy] = useState('date');
@@ -134,6 +137,20 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [docUserId, setDocUserId] = useState<string | null>(null);
+
+  // Initialize global search hook for documents
+  const { search, results: searchResults, isSearching: isSearchingDocs } = useGlobalSearch(
+    SEARCH_CONFIGS.documents,
+    docUserId,
+    { debounceMs: 500 }
+  );
+
+  // Get user ID on mount
+  useEffect(() => {
+    if (!user?.id) return;
+    setDocUserId(user.id);
+  }, [user?.id]);
   
   // Podcast selection state
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
@@ -143,6 +160,12 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
   const handleSearchChange = (value: string) => {
     setInternalSearch(value);
+    if (!value.trim()) {
+      setHasSearched(false);
+    } else {
+      setHasSearched(true);
+      search(value);
+    }
     onSearchChange?.(value);
   };
 
@@ -189,7 +212,7 @@ const allDocuments = contextDocuments || documents;
           setPreviewOpen(true);
         }
       } catch (error) {
-        // console.error('Error fetching preview document:', error);
+        // // console.error('Error fetching preview document:', error);
         toast.error('Failed to load document preview');
       }
     };
@@ -535,9 +558,9 @@ function overrideTsMimeType(file: File): File {
     return stats;
   }, [allDocuments]);
 
-  // Filter and sort documents
+  // Filter and sort documents - use global search when hasSearched, otherwise use local filter
   const filteredAndSortedDocuments = useMemo(() => {
-     let filtered = allDocuments.filter(doc => {
+     let filtered = (hasSearched && effectiveSearch.trim()) ? (searchResults as Document[]) : allDocuments.filter(doc => {
     const matchesSearch = doc.title.toLowerCase().includes(effectiveSearch.toLowerCase()) ||
       doc.content_extracted?.toLowerCase().includes(effectiveSearch.toLowerCase());
 
@@ -579,7 +602,7 @@ function overrideTsMimeType(file: File): File {
     });
 
     return filtered;
-  }, [allDocuments, effectiveSearch, selectedCategory, selectedStatus, sortBy, sortOrder]);
+  }, [allDocuments, effectiveSearch, selectedCategory, selectedStatus, sortBy, sortOrder, hasSearched, searchResults]);
 
   const handleFileSelection = useCallback((file: File) => {
     // Fix .ts files being misclassified as video
@@ -1030,7 +1053,7 @@ const lastDocumentElementRef = useCallback(
           entries[0].isIntersecting &&
           dataPagination.documents.hasMore
         ) {
-          // console.log('Load more triggered'); 
+          // // console.log('Load more triggered'); 
           loadMoreDocuments();
         }
       },

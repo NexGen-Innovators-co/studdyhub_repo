@@ -40,7 +40,7 @@ export const useDailyQuizTracker = () => {
 
             setDailyCounts(counts);
         } catch (err) {
-            console.error('Error fetching daily quiz counts:', err);
+            // console.error('Error fetching daily quiz counts:', err);
         } finally {
             setLoading(false);
         }

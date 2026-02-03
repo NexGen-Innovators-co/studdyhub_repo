@@ -13,7 +13,7 @@ import {
 } from '../../ui/dropdown-menu';
 import {
   MoreHorizontal,
-  Heart,
+  Lightbulb,
   MessageCircle,
   Share2,
   Bookmark,
@@ -390,7 +390,7 @@ const ActionButton = ({ icon: Icon, label, count, active, activeColor, onClick, 
         ) : !canInteract ? (
           <Lock className="h-5 w-5" />
         ) : (
-          <Icon className={`h-5 w-5 ${active ? 'fill-current' : ''} ${animate ? 'heart-beat' : ''} transition-transform`} />
+          <Icon className={`h-5 w-5 ${active ? 'fill-current' : ''} ${animate ? 'lightbulb-glow' : ''} transition-transform`} />
         )}
       </div>
       <span className={`text-sm font-medium ${active ? '' : 'group-hover:text-blue-500'}`}>
@@ -929,10 +929,10 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                 {/* Footer Actions */}
                 <div className="flex items-center border-t border-slate-200 dark:border-slate-800 mt-2 justify-between pt-2 p-4 -ml-2">
                   <ActionButton
-                    icon={Heart}
+                    icon={Lightbulb}
                     count={post.likes_count}
                     active={post.is_liked}
-                    activeColor="text-pink-600"
+                    activeColor="text-yellow-600"
                     onClick={canInteract ? handleLike : () => setShowUpgradePrompt(true)}
                     isLoading={isLiking}
                     isLikeButton={true}
@@ -948,7 +948,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
 
                   <ActionButton
                     icon={Share2}
-                    label="Share"
+                    label=""
                     count={post.shares_count}
                     onClick={canInteract ? handleShare : () => setShowUpgradePrompt(true)}
                     isLoading={isSharing}
@@ -1094,10 +1094,10 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                   {/* Actions */}
                   <div className="flex items-center justify-between mb-4">
                     <ActionButton
-                      icon={Heart}
-                      label="Like"
+                      icon={Lightbulb}
+                      label="Insightful"
                       active={post.is_liked}
-                      activeColor="text-pink-600"
+                      activeColor="text-yellow-600"
                       onClick={handleLike}
                       isLoading={isLiking}
                       isLikeButton={true}
@@ -1105,7 +1105,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
 
                     <ActionButton
                       icon={MessageCircle}
-                      label="Comment"
+                      label="Discuss"
                       onClick={onComment}
                     />
 
@@ -1118,7 +1118,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
 
                     <ActionButton
                       icon={Bookmark}
-                      label="Bookmark"
+                      label="Save"
                       active={post.is_bookmarked}
                       activeColor="text-blue-600"
                       onClick={handleBookmark}

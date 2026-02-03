@@ -65,10 +65,10 @@ serve(async (req) => {
 
           if (resp.ok) return await resp.json();
           const txt = await resp.text();
-          console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
+          // console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
           if (resp.status === 429 || resp.status === 503) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
         } catch (err) {
-          console.error(`Error calling Gemini ${model}:`, err);
+          // console.error(`Error calling Gemini ${model}:`, err);
           if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
         }
       }
@@ -94,7 +94,7 @@ Please provide a summary that highlights the most important information and lear
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Error in generate-summary function:', error);
+    // console.error('Error in generate-summary function:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

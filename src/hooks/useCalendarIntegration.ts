@@ -32,7 +32,7 @@ export function useCalendarIntegration() {
       const authUrl = await calendarIntegrationService.connectGoogleCalendar(user.id);
       window.location.href = authUrl;
     } catch (error) {
-      console.error('Error connecting to Google Calendar:', error);
+      // console.error('Error connecting to Google Calendar:', error);
       toast.error('Failed to connect to Google Calendar');
     }
   }, [user]);
@@ -151,3 +151,4 @@ export function useCalendarIntegration() {
     refresh: fetchIntegrations
   };
 }
+

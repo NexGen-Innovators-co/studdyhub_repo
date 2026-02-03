@@ -7,7 +7,7 @@ interface StickyRailProps {
 }
 
 export const StickyRail: React.FC<StickyRailProps> = ({ children, className }) => (
-  <div className={clsx("space-y-6 w-full max-w-[360px]", className)}>
+  <div className={clsx("space-y-4 w-full", className)}>
     {children}
   </div>
 );

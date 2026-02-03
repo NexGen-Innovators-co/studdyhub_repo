@@ -8,6 +8,9 @@ import { Input } from '../../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { PodcastButton } from '../../dashboard/PodcastButton';
 import { Checkbox } from '../../ui/checkbox';
+import { useGlobalSearch } from '../../../hooks/useGlobalSearch';
+import { SEARCH_CONFIGS } from '../../../services/globalSearchService';
+import { supabase } from '../../../integrations/supabase/client';
 
 interface NotesListProps {
   notes: Note[] | null; // Allow notes to be null
@@ -25,6 +28,8 @@ interface NotesListProps {
   // Add refresh prop
   onRefresh?: () => void;
   navigateToNote?: (noteId: string | null) => void;
+  // Add search from DB prop
+  onSearchNotes?: (searchQuery: string) => Promise<Note[]>;
 }
 
 export const NotesList: React.FC<NotesListProps> = ({
@@ -40,7 +45,8 @@ export const NotesList: React.FC<NotesListProps> = ({
   onLoadMore,
   isLoading = false, // Default to false for backward compatibility
   onRefresh, // New refresh prop
-  navigateToNote
+  navigateToNote,
+  onSearchNotes // New search prop
 }) => {
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -48,7 +54,6 @@ export const NotesList: React.FC<NotesListProps> = ({
   const [editTitle, setEditTitle] = useState('');
   const [editCategory, setEditCategory] = useState<NoteCategory>('general');
   const [editTags, setEditTags] = useState('');
-  const [noteSearch, setNoteSearch] = useState('');
   // Track if we've loaded any notes yet
   const [hasInitialNotes, setHasInitialNotes] = useState(false);
   // Track refresh loading state
@@ -56,6 +61,36 @@ export const NotesList: React.FC<NotesListProps> = ({
   // Track selected notes for podcast generation
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   const [showSelection, setShowSelection] = useState(false);
+  const [noteSearch, setNoteSearch] = useState('');
+  const [hasSearched, setHasSearched] = useState(false);
+
+  // Get current user for search
+  const [userId, setUserId] = useState<string | null>(null);
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserId(user?.id || null);
+    };
+    getUser();
+  }, []);
+
+  // Use global search hook for notes
+  const { search, results: searchResults, isSearching } = useGlobalSearch(
+    SEARCH_CONFIGS.notes,
+    userId,
+    { debounceMs: 500 }
+  );
+
+  // Handle search input change
+  const handleSearchInputChange = (value: string) => {
+    setNoteSearch(value);
+    if (!value.trim()) {
+      setHasSearched(false);
+    } else {
+      setHasSearched(true);
+      search(value);
+    }
+  };
 
   // Reset hasInitialNotes when notes change
   useEffect(() => {
@@ -105,6 +140,13 @@ export const NotesList: React.FC<NotesListProps> = ({
       }
     };
   }, [hasMore, isLoadingMore, onLoadMore, isLoading, hasInitialNotes]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Component cleanup if needed
+    };
+  }, []);
 
   const truncateContent = (content: string, maxLength: number = 100) => {
     if (content.length <= maxLength) return content;
@@ -196,7 +238,10 @@ export const NotesList: React.FC<NotesListProps> = ({
   // Handle null notes by providing default empty array
   const safeNotes = notes || [];
 
-  const filteredNotes = noteSearch.trim()
+  // Use search results if searching, otherwise use local filtering
+  const filteredNotes = hasSearched && noteSearch.trim() 
+    ? searchResults
+    : noteSearch.trim()
     ? safeNotes.filter((note) => {
         const searchLower = noteSearch.toLowerCase();
         return (
@@ -220,7 +265,7 @@ export const NotesList: React.FC<NotesListProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h3 className="font-medium text-slate-800 text-sm sm:text-base dark:text-gray-100">
-              {showLoading ? 'Loading...' : `${filteredNotes.length} ${filteredNotes.length === 1 ? 'Note' : 'Notes'}`}
+              {showLoading ? 'Loading...' : isSearching ? 'Searching...' : `${filteredNotes.length} ${filteredNotes.length === 1 ? 'Note' : 'Notes'}`}
             </h3>
 
             {/* Manual Refresh Button */}
@@ -229,7 +274,7 @@ export const NotesList: React.FC<NotesListProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={handleRefresh}
-                disabled={isRefreshing || isLoadingMore}
+                disabled={isRefreshing || isLoadingMore || isSearching}
                 className="h-6 w-6 p-0 hover:bg-slate-100 dark:hover:bg-gray-800 dark:text-gray-400"
                 title="Refresh notes list"
               >
@@ -287,16 +332,21 @@ export const NotesList: React.FC<NotesListProps> = ({
           <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <Input
             value={noteSearch}
-            onChange={(e) => setNoteSearch(e.target.value)}
+            onChange={(e) => handleSearchInputChange(e.target.value)}
             placeholder="Search notes..."
             className="pl-9 pr-10"
           />
-          {noteSearch && (
+          {isSearching && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <div className="h-4 w-4 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
+            </div>
+          )}
+          {noteSearch && !isSearching && (
             <Button
               variant="ghost"
               size="icon"
               className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-slate-500"
-              onClick={() => setNoteSearch('')}
+              onClick={() => handleSearchInputChange('')}
               aria-label="Clear search"
             >
               <X className="h-4 w-4" />
@@ -323,10 +373,10 @@ export const NotesList: React.FC<NotesListProps> = ({
             <div className="p-6 sm:p-8 text-center text-slate-400 dark:text-gray-500">
               <div className="text-3xl sm:text-4xl mb-3">📝</div>
               <p className="text-sm sm:text-base">
-                {notes === null ? 'Failed to load notes.' : noteSearch ? 'No matching notes.' : 'No notes available.'}
+                {notes === null ? 'Failed to load notes.' : noteSearch ? 'No matching notes found.' : 'No notes available.'}
               </p>
               <p className="text-xs sm:text-sm">
-                {notes === null ? 'Please try again later' : noteSearch ? 'Try a different search term' : 'Create your first note to get started'}
+                {notes === null ? 'Please try again later' : noteSearch ? 'Try adjusting your search terms or create a new note' : 'Create your first note to get started'}
               </p>
               {(notes === null || safeNotes.length === 0) && onRefresh && (
                 <div className="mt-4 flex gap-2 justify-center">

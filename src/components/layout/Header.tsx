@@ -94,9 +94,10 @@ const sectionTabs = {
   ],
   quizzes: [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
+    { id: 'live', label: 'Live', icon: Users2 },
     { id: 'recordings', label: 'Recordings', icon: Play },
     { id: 'notes', label: 'Notes', icon: FileText },
-    {id: 'ai', label: 'AI Generated', icon: Sparkles },
+    { id: 'ai', label: 'AI Generated', icon: Sparkles },
     { id: 'history', label: 'History', icon: History },
   ],
   recordings: [
@@ -314,7 +315,7 @@ export const Header: React.FC<HeaderProps> = ({
       setDeferredPrompt(null);
       setShowInstallPrompt(false);
     } catch (error) {
-      // console.error('Error installing app:', error);
+      // // console.error('Error installing app:', error);
       toast.error('Failed to install app. Please try manual installation.');
       showInstallInstructions();
     } finally {

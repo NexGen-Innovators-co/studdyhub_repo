@@ -119,7 +119,7 @@ serve(async (req: Request) => {
       .single();
 
     if (insertError) {
-      console.error("Error creating comment:", insertError);
+      // console.error("Error creating comment:", insertError);
       return createSubErrorResponse("Failed to create comment", 500);
     }
 
@@ -131,7 +131,8 @@ serve(async (req: Request) => {
       201
     );
   } catch (error) {
-    console.error("Unexpected error:", error);
+    // console.error("Unexpected error:", error);
     return createSubErrorResponse("Internal server error", 500);
   }
 });
+

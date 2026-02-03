@@ -562,7 +562,7 @@ export const useMessageHandlers = () => {
                 ? data.response
                 : null,
         };
-            console.log('[AI Message Handler] Constructed AI message:', realAiMessage);
+            // console.log('[AI Message Handler] Constructed AI message:', realAiMessage);
 
         // Update UI with real messages
         setChatMessages(prev => {
@@ -1096,3 +1096,4 @@ export const useDataHelpers = () => {
 };
 
 export default useMessageHandlers;
+

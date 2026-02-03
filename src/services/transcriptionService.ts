@@ -145,10 +145,10 @@ export const transcribeLivePodcast = async (
           const res = supabase.storage.from('podcasts').getPublicUrl(filename) as any;
           fileUrl = res?.data?.publicUrl || res?.publicUrl || fileUrl;
         } else {
-          console.warn('transcribeLivePodcast: upload error', uploadErr);
+          // console.warn('transcribeLivePodcast: upload error', uploadErr);
         }
       } catch (e) {
-        console.warn('transcribeLivePodcast: failed to upload blob for transcription', e);
+        // console.warn('transcribeLivePodcast: failed to upload blob for transcription', e);
       }
     }
 
@@ -212,7 +212,7 @@ export const transcribeLivePodcast = async (
         throw new Error('No file URL, using inline base64');
       }
     } catch (primaryErr: any) {
-      console.warn('transcribeLivePodcast: primary invocation failed, trying inline base64', primaryErr);
+      // console.warn('transcribeLivePodcast: primary invocation failed, trying inline base64', primaryErr);
 
       // Fallback to inline base64 of the blob
       const base64 = await blobToBase64(audioBlob);
@@ -221,11 +221,11 @@ export const transcribeLivePodcast = async (
       const rawMimeType = (audioBlob as any).type || 'audio/webm';
       const normalizedMime = rawMimeType.split(';')[0].trim();
       
-      console.log('Sending inline base64:', {
-        base64Length: base64.length,
-        base64Preview: base64.substring(0, 50),
-        mime: normalizedMime
-      });
+      // console.log('Sending inline base64:', {
+      //   base64Length: base64.length,
+      //   base64Preview: base64.substring(0, 50),
+      //   mime: normalizedMime
+      // });
 
       const { data: data2, error: err2 } = await supabase.functions.invoke('podcast-transcribe', {
         body: { 
@@ -250,7 +250,8 @@ export const transcribeLivePodcast = async (
       summary: resp.summary || 'Live podcast recording' 
     };
   } catch (error: any) {
-    console.error('Error in live podcast transcription:', error);
+    // console.error('Error in live podcast transcription:', error);
     throw new Error(`Transcription failed: ${error.message || 'Unknown error'}`);
   }
 };
+

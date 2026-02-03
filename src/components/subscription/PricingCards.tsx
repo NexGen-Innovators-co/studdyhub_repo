@@ -167,7 +167,7 @@ export function PricingCards() {
       toast.success(`Successfully subscribed to ${planType}!`);
       await refreshSubscription();
     } catch (error) {
-      console.error('Error updating subscription:', error);
+      // console.error('Error updating subscription:', error);
       toast.error('Failed to activate subscription. Please contact support.');
     } finally {
       setIsProcessing(false);

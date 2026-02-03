@@ -43,7 +43,7 @@ export class UserContextService {
         learningPatterns
       };
     } catch (error) {
-      console.error('Error getting user context:', error);
+      // console.error('Error getting user context:', error);
       return this.getFallbackContext(userId);
     }
   }
@@ -225,7 +225,7 @@ export class UserContextService {
 
       return crossSessionContext;
     } catch (error) {
-      console.error('Error getting cross-session context:', error);
+      // console.error('Error getting cross-session context:', error);
       return null;
     }
   }
@@ -276,7 +276,7 @@ export class UserContextService {
         }
       }
     } catch (error) {
-      console.error('Error updating user memory:', error);
+      // console.error('Error updating user memory:', error);
     }
   }
 
@@ -292,7 +292,7 @@ export class UserContextService {
           connection_strength: strength
         });
     } catch (error) {
-      console.error('Error recording topic connection:', error);
+      // console.error('Error recording topic connection:', error);
     }
   }
 }

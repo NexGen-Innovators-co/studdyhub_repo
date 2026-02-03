@@ -75,11 +75,15 @@ export const saveTranscriptionResult = async (podcastId: string, fileUrl: string
       await supabase.from('ai_podcasts').update(updatePayload).eq('id', podcastId);
     } catch (attachErr) {
       // If attaching to audio_segments fails, at least persist the visual_assets metadata
-      try { await supabase.from('ai_podcasts').update({ visual_assets: visual }).eq('id', podcastId); } catch (vErr) { console.warn('Failed to update visual_assets', vErr); }
+      try { 
+        await supabase.from('ai_podcasts').update({ visual_assets: visual }).eq('id', podcastId); 
+      } catch (vErr) { 
+        // console.warn('Failed to update visual_assets', vErr); 
+      }
     }
   } catch (e) {
     // best-effort
-    console.warn('Failed to attach transcript metadata to podcast', e);
+    // console.warn('Failed to attach transcript metadata to podcast', e);
   }
 
   return data;
@@ -101,7 +105,7 @@ export const uploadTempChunk = async (blob: Blob) => {
     const publicUrl = res?.data?.publicUrl || res?.publicUrl;
     return publicUrl;
   } catch (e) {
-    console.warn('uploadTempChunk failed', e);
+    // console.warn('uploadTempChunk failed', e);
     throw e;
   }
 };
@@ -152,11 +156,11 @@ export const invokeRealtimeTranscription = async (fileUrl?: string, inlineBase64
 
     // Log payload minimally for debugging
     try { 
-      console.debug('[podcastLiveService] invokeRealtimeTranscription payload:', {
-        hasFileUrl: !!payload.file_url,
-        inlineBase64Length: payload.inline_base64 ? payload.inline_base64.length : 0,
-        mimeType: payload.mime_type || null
-      }); 
+      // // console.debug('[podcastLiveService] invokeRealtimeTranscription payload:', {
+      //   hasFileUrl: !!payload.file_url,
+      //   inlineBase64Length: payload.inline_base64 ? payload.inline_base64.length : 0,
+      //   mimeType: payload.mime_type || null
+      // }); 
     } catch (e) { }
 
     const { data, error } = await supabase.functions.invoke('realtime-transcribe', {
@@ -166,7 +170,7 @@ export const invokeRealtimeTranscription = async (fileUrl?: string, inlineBase64
     if (error) throw error;
     return data;
   } catch (e) {
-    console.warn('invokeRealtimeTranscription failed', e);
+    // console.warn('invokeRealtimeTranscription failed', e);
     throw e;
   }
 };
@@ -194,10 +198,10 @@ export const saveRecordingAsSegment = async (podcastId: string, blob: Blob) => {
         const res = supabase.storage.from('podcasts').getPublicUrl(filename) as any;
         publicUrl = res?.data?.publicUrl || res?.publicUrl || null;
       } else {
-        console.warn('saveRecordingAsSegment: storage upload error', uploadErr);
+        // console.warn('saveRecordingAsSegment: storage upload error', uploadErr);
       }
     } catch (e) {
-      console.warn('saveRecordingAsSegment: storage upload failed', e);
+      // console.warn('saveRecordingAsSegment: storage upload failed', e);
     }
 
     // fetch existing audio_segments (maybeSingle to avoid PGRST116 when 0 rows)
@@ -235,7 +239,7 @@ export const saveRecordingAsSegment = async (podcastId: string, blob: Blob) => {
 
     return newSegment;
   } catch (e) {
-    console.warn('saveRecordingAsSegment failed', e);
+    // console.warn('saveRecordingAsSegment failed', e);
     throw e;
   }
 };
@@ -288,23 +292,23 @@ export const saveRecordingAsSegment = async (podcastId: string, blob: Blob) => {
     }
   };
 
-  // --- Chunked recording orchestration helpers ---
+// --- Chunked recording orchestration helpers ---
 
-  export const createRecordingSession = async (podcastId: string, userId?: string | null) => {
-    try {
-      const now = new Date().toISOString();
-      const payload: any = { podcast_id: podcastId, status: 'in_progress', started_at: now };
-      if (userId) payload.user_id = userId;
-      const { data, error } = await supabase.from('podcast_recordings').insert(payload).select().single();
-      if (error) throw error;
-      return data;
-    } catch (e) {
-      console.warn('createRecordingSession failed', e);
-      throw e;
-    }
-  };
+export const createRecordingSession = async (podcastId: string, userId?: string | null) => {
+  try {
+    const now = new Date().toISOString();
+    const payload: any = { podcast_id: podcastId, status: 'in_progress', started_at: now };
+    if (userId) payload.user_id = userId;
+    const { data, error } = await supabase.from('podcast_recordings').insert(payload).select().single();
+    if (error) throw error;
+    return data;
+  } catch (e) {
+    // console.warn('createRecordingSession failed', e);
+    throw e;
+  }
+};
 
-  export const uploadChunk = async (podcastId: string, uploadSessionId: string, chunkIndex: number, blob: Blob, options?: { mimeType?: string }) => {
+export const uploadChunk = async (podcastId: string, uploadSessionId: string, chunkIndex: number, blob: Blob, options?: { mimeType?: string }) => {
     try {
       const mimeType = options?.mimeType || (blob && (blob as any).type) || 'audio/webm';
       const filename = `live-podcasts/${podcastId}/${uploadSessionId}/${chunkIndex}_${Date.now()}.webm`;
@@ -335,44 +339,45 @@ export const saveRecordingAsSegment = async (podcastId: string, blob: Blob) => {
 
       return { chunk: data, publicUrl };
     } catch (e) {
-      console.warn('uploadChunk failed', e);
+      // console.warn('uploadChunk failed', e);
       throw e;
     }
-  };
+};
 
-  export const finalizeRecording = async (podcastId: string, uploadSessionId: string, assemblePath?: string, triggerTranscription = true) => {
+export const finalizeRecording = async (podcastId: string, uploadSessionId: string, assemblePath?: string, triggerTranscription = true) => {
+  try {
+    // mark recording as assembling in DB (best-effort)
     try {
-      // mark recording as assembling in DB (best-effort)
-      try {
-        await supabase.from('podcast_recordings').update({ status: 'assembling', updated_at: new Date().toISOString() }).eq('session_id', uploadSessionId).eq('podcast_id', podcastId);
-      } catch (e) { /* best-effort */ }
+      await supabase.from('podcast_recordings').update({ status: 'assembling', updated_at: new Date().toISOString() }).eq('session_id', uploadSessionId).eq('podcast_id', podcastId);
+    } catch (e) { /* best-effort */ }
 
-      // invoke edge function to assemble chunks
-      const payload: any = { podcast_id: podcastId, upload_session_id: uploadSessionId };
-      if (assemblePath) payload.assemble_path = assemblePath;
-      if (triggerTranscription !== undefined) payload.trigger_transcription = triggerTranscription;
+    // invoke edge function to assemble chunks
+    const payload: any = { podcast_id: podcastId, upload_session_id: uploadSessionId };
+    if (assemblePath) payload.assemble_path = assemblePath;
+    if (triggerTranscription !== undefined) payload.trigger_transcription = triggerTranscription;
 
-      const { data, error } = await supabase.functions.invoke('complete-podcast-chunks', { body: payload } as any);
-      if (error) throw error;
-      return data;
-    } catch (e) {
-      console.warn('finalizeRecording failed', e);
-      throw e;
-    }
-  };
+    const { data, error } = await supabase.functions.invoke('complete-podcast-chunks', { body: payload } as any);
+    if (error) throw error;
+    return data;
+  } catch (e) {
+    // console.warn('finalizeRecording failed', e);
+    throw e;
+  }
+};
 
-  export const triggerChunkTranscription = async (fileUrl: string, podcastId?: string, metadata?: any) => {
-    try {
-      const payload: any = { file_url: fileUrl };
-      if (podcastId) payload.podcast_id = podcastId;
-      if (metadata) payload.metadata = metadata;
+export const triggerChunkTranscription = async (fileUrl: string, podcastId?: string, metadata?: any) => {
+  try {
+    const payload: any = { file_url: fileUrl };
+    if (podcastId) payload.podcast_id = podcastId;
+    if (metadata) payload.metadata = metadata;
 
-      // use process-audio to create an async job and avoid inline base64
-      const { data, error } = await supabase.functions.invoke('process-audio', { body: payload } as any);
-      if (error) throw error;
-      return data;
-    } catch (e) {
-      console.warn('triggerChunkTranscription failed', e);
-      throw e;
-    }
-  };
+    // use process-audio to create an async job and avoid inline base64
+    const { data, error } = await supabase.functions.invoke('process-audio', { body: payload } as any);
+    if (error) throw error;
+    return data;
+  } catch (e) {
+    // console.warn('triggerChunkTranscription failed', e);
+    throw e;
+  }
+};
+

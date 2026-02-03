@@ -37,6 +37,24 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   }
 
   const { quiz, recording } = quizMode;
+  
+  // Validate quiz has questions
+  if (!quiz.questions || !Array.isArray(quiz.questions) || quiz.questions.length === 0) {
+    return (
+      <Dialog open={true} onOpenChange={onExitQuizMode}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Quiz Error</DialogTitle>
+            <DialogDescription>
+              This quiz has no questions available. Please try generating a new quiz.
+            </DialogDescription>
+          </DialogHeader>
+          <Button onClick={onExitQuizMode}>Close</Button>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+  
   const currentQuestion = quiz.questions[currentQuestionIndex];
   const selectedAnswer = userAnswers[currentQuestionIndex];
 
@@ -161,7 +179,8 @@ ${selectedAnswer === optionIndex
                 </Button>
                 <Button
                   onClick={onNextQuestion}
-                  className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-500 text-white hover:from-blue-600 hover:to-blue-600 w-full sm:w-auto"
+                  disabled={selectedAnswer === null || selectedAnswer === undefined}
+                  className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-500 text-white hover:from-blue-600 hover:to-blue-600 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed w-full sm:w-auto"
                 >
                   {isLastQuestion ? 'Submit Quiz' : 'Next Question'} <ArrowRight className="h-4 w-4" />
                 </Button>

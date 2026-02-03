@@ -128,7 +128,7 @@ serve(async (req) => {
 
     // Debug: log request summary (don't print full base64)
     try {
-      console.log('realtime-transcribe: sending to Gemini model=', model, 'mime=', mime_type || 'audio/webm', 'base64_len=', (audioBase64 || '').length)
+      // console.log('realtime-transcribe: sending to Gemini model=', model, 'mime=', mime_type || 'audio/webm', 'base64_len=', (audioBase64 || '').length)
     } catch (e) { }
 
     const resp = await fetch(url, {
@@ -169,3 +169,4 @@ serve(async (req) => {
     })
   }
 })
+

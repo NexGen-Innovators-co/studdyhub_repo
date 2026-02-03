@@ -14,7 +14,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log('create-social-post function called:', req.method);
+  // console.log('create-social-post function called:', req.method);
   
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -22,7 +22,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Starting post creation process...');
+    // console.log('Starting post creation process...');
     
     // Extract config and parse body early so we can accept author_id fallback
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
@@ -30,15 +30,15 @@ serve(async (req) => {
 
     // Parse request body early so an explicit author_id can be used as a fallback
     const body = await req.json();
-    console.log('Request body parsed (early):', { contentLength: body.content?.length, privacy: body.privacy, author_id_present: !!body.author_id });
+    // console.log('Request body parsed (early):', { contentLength: body.content?.length, privacy: body.privacy, author_id_present: !!body.author_id });
 
     let userId = await extractUserIdFromAuth(req, supabaseUrl, supabaseServiceKey);
-    console.log('User ID extracted from auth:', userId);
+    // console.log('User ID extracted from auth:', userId);
 
     // If no authenticated user but the client provided an explicit author_id, accept it as a fallback
     if (!userId && body && body.author_id) {
       userId = String(body.author_id);
-      console.warn('No auth header present — using provided body.author_id as fallback for author identification. Ensure this is intended.');
+      // console.warn('No auth header present — using provided body.author_id as fallback for author identification. Ensure this is intended.');
     }
 
     if (!userId) {
@@ -50,7 +50,7 @@ serve(async (req) => {
 
     // Check subscription for social posting
     const canPost = await validator.canPostSocial(userId);
-    console.log('Subscription check result:', canPost);
+    // console.log('Subscription check result:', canPost);
     
     if (!canPost.allowed) {
       return createErrorResponse(canPost.message || 'Not allowed to post', 403);
@@ -73,7 +73,7 @@ serve(async (req) => {
 
     // ===== CONTENT MODERATION: Check if content is educational =====
     try {
-      console.log('Starting content moderation...');
+      // console.log('Starting content moderation...');
       
       // Get moderation settings
       const { data: settings } = await supabase
@@ -82,7 +82,7 @@ serve(async (req) => {
         .eq('key', 'content_moderation')
         .single();
 
-      console.log('Moderation settings:', settings ? 'found' : 'not found');
+      // console.log('Moderation settings:', settings ? 'found' : 'not found');
 
       const moderationSettings = settings?.value || {
         enabled: true,
@@ -98,10 +98,10 @@ serve(async (req) => {
         minEducationalScore: 0.6
       };
 
-      console.log('Moderation enabled:', moderationSettings.enabled);
+      // console.log('Moderation enabled:', moderationSettings.enabled);
 
       if (moderationSettings.enabled) {
-        console.log('Starting keyword check...');
+        // console.log('Starting keyword check...');
         
         // Quick keyword check
         const lowerContent = content.toLowerCase();
@@ -141,7 +141,7 @@ serve(async (req) => {
           });
         }
 
-        console.log('Keyword check passed, starting AI analysis...');
+        // console.log('Keyword check passed, starting AI analysis...');
         
         // AI-powered educational analysis using direct API
         const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || '';
@@ -177,7 +177,7 @@ Respond in JSON format:
   "suggestions": array of strings
 }`;
 
-        console.log('Calling Gemini API...');
+        // console.log('Calling Gemini API...');
 
         const MODEL_CHAIN = [
           'gemini-2.5-flash',
@@ -201,10 +201,10 @@ Respond in JSON format:
               });
               if (resp.ok) return await resp.json();
               const txt = await resp.text();
-              console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
+              // console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
               if (resp.status === 429 || resp.status === 503) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
             } catch (err) {
-              console.error(`Error calling Gemini ${model}:`, err);
+              // console.error(`Error calling Gemini ${model}:`, err);
               if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
             }
           }
@@ -212,16 +212,16 @@ Respond in JSON format:
         }
 
         const result = await callGeminiWithModelChain({ contents: [{ parts: [{ text: prompt }] }] }, geminiApiKey);
-        console.log('Gemini API result received, parsing...');
+        // console.log('Gemini API result received, parsing...');
         
         const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
         
         if (!responseText) {
-          console.error('Empty response from Gemini API:', JSON.stringify(result));
+          // console.error('Empty response from Gemini API:', JSON.stringify(result));
           throw new Error('Empty response from Gemini API');
         }
         
-        console.log('Response text length:', responseText.length);
+        // console.log('Response text length:', responseText.length);
         let jsonText = responseText.trim();
         if (jsonText.startsWith('```json')) {
           jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -229,10 +229,10 @@ Respond in JSON format:
           jsonText = jsonText.replace(/```\n?/g, '').trim();
         }
         
-        console.log('Parsing AI analysis JSON...');
+        // console.log('Parsing AI analysis JSON...');
         const aiAnalysis = JSON.parse(jsonText);
-        console.log('AI analysis result:', aiAnalysis.isEducational, 'score:', aiAnalysis.educationalValue?.score);
-        console.log('AI analysis parsed, isEducational:', aiAnalysis.isEducational);
+        // console.log('AI analysis result:', aiAnalysis.isEducational, 'score:', aiAnalysis.educationalValue?.score);
+        // console.log('AI analysis parsed, isEducational:', aiAnalysis.isEducational);
 
         const approved = aiAnalysis.isEducational && 
                         aiAnalysis.educationalValue.score >= moderationSettings.minEducationalScore &&
@@ -293,7 +293,7 @@ Respond in JSON format:
         }
       }
     } catch (moderationError) {
-      console.error('Content moderation error:', moderationError);
+      // console.error('Content moderation error:', moderationError);
       // Don't block post creation if moderation fails, just log it
       await supabase.from('content_moderation_log').insert({
         user_id: userId,
@@ -323,7 +323,7 @@ Respond in JSON format:
       .single();
 
     if (error) {
-      console.error('Error creating post:', error);
+      // console.error('Error creating post:', error);
       return createErrorResponse('Failed to create post', 500);
     }
 
@@ -344,7 +344,7 @@ Respond in JSON format:
         .insert(mediaRecords);
 
       if (mediaError) {
-        console.error('Error creating media:', mediaError);
+        // console.error('Error creating media:', mediaError);
         // Don't fail the whole request, just log the error
       }
     }
@@ -418,7 +418,7 @@ Respond in JSON format:
           });
         }
       } catch (err) {
-        console.error('Error triggering notifications:', err);
+        // console.error('Error triggering notifications:', err);
       }
     })();
 
@@ -434,7 +434,8 @@ Respond in JSON format:
     });
 
   } catch (error) {
-    console.error('Error in create-social-post:', error);
+    // console.error('Error in create-social-post:', error);
     return createErrorResponse('Internal server error', 500);
   }
 });
+

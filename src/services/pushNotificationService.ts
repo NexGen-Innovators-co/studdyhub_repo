@@ -196,7 +196,7 @@ class PushNotificationService {
   //     if (error) throw error;
   //     return true;
   //   } catch (error) {
-  //     console.error('Failed to send test notification:', error);
+  //     // console.error('Failed to send test notification:', error);
   //     return false;
   //   }
   // }
@@ -225,7 +225,7 @@ class PushNotificationService {
       if (error) throw error;
       return true;
     } catch (error) {
-      console.error('Failed to schedule notification:', error);
+      // console.error('Failed to schedule notification:', error);
       return false;
     }
   }
@@ -313,3 +313,4 @@ class PushNotificationService {
 
 export { PushNotificationService };
 export const pushNotificationService = new PushNotificationService();
+

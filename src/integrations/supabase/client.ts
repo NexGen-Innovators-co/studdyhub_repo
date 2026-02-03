@@ -18,15 +18,15 @@ if (import.meta.env.DEV && typeof window !== 'undefined' && window.fetch) {
 				if (!headers.has('Accept')) headers.set('Accept', 'application/json, text/plain, */*');
 				// ensure we pass through headers
 				const newInit = { ...(init || {}), headers } as RequestInit;
-				console.debug('[supabase:fetch]', url, newInit);
+				// console.debug('[supabase:fetch]', url, newInit);
 				const resp = await originalFetch(input, newInit);
 				if (!resp.ok) {
 					try {
-						const text = await resp.text();
+						const text = await resp.clone().text();
 						// Log full body to aid debugging 406/Not Acceptable responses
-						console.warn('[supabase:fetch] non-OK response', { status: resp.status, statusText: resp.statusText, body: text, url });
+						// console.warn('[supabase:fetch] non-OK response', { status: resp.status, statusText: resp.statusText, body: text, url });
 					} catch (e) {
-						console.warn('[supabase:fetch] non-OK response', resp.status, resp.statusText, url);
+						// console.warn('[supabase:fetch] non-OK response', resp.status, resp.statusText, url);
 					}
 				}
 				return resp;
@@ -41,3 +41,4 @@ if (import.meta.env.DEV && typeof window !== 'undefined' && window.fetch) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, clientOptions)
+

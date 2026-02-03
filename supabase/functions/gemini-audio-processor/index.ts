@@ -44,10 +44,10 @@ async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAtt
 
       if (resp.ok) return await resp.json();
       const txt = await resp.text();
-      console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
+      // console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
       if (resp.status === 429 || resp.status === 503) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
     } catch (err) {
-      console.error(`Error calling Gemini ${model}:`, err);
+      // console.error(`Error calling Gemini ${model}:`, err);
       if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
     }
   }
@@ -91,13 +91,13 @@ async function uploadToGemini(url: string, mimeType: string): Promise<string> {
 
   const uploadResult = await uploadResponse.json();
   const fileUri = uploadResult.file.uri;
-  console.log(`[Gemini] File uploaded successfully: ${fileUri}`);
+  // console.log(`[Gemini] File uploaded successfully: ${fileUri}`);
   return fileUri;
 }
 
 async function processAudioBackground(recordingId: string, fileUrl: string, targetLanguage: string) {
   try {
-    console.log(`[Background] Starting processing for ${recordingId}`);
+    // console.log(`[Background] Starting processing for ${recordingId}`);
     
     // 1. Mark as processing and fetch current duration to preserve it
     const { data: currentRec } = await supabase
@@ -121,7 +121,7 @@ async function processAudioBackground(recordingId: string, fileUrl: string, targ
             }
         };
     } catch (uploadError) {
-        console.warn("Gemini File Upload failed, falling back to legacy inline method (risky for memory)", uploadError);
+        // console.warn("Gemini File Upload failed, falling back to legacy inline method (risky for memory)", uploadError);
         
         // Fallback: Legacy Inline Method
         const audioResponse = await fetch(fileUrl);
@@ -211,10 +211,10 @@ async function processAudioBackground(recordingId: string, fileUrl: string, targ
        }).eq('id', currentRec.document_id);
     }
 
-    console.log(`[Background] Completed ${recordingId}`);
+    // console.log(`[Background] Completed ${recordingId}`);
 
   } catch (error: any) {
-    console.error(`[Background] Failed ${recordingId}:`, error);
+    // console.error(`[Background] Failed ${recordingId}:`, error);
     await supabase
       .from('class_recordings')
       .update({ 
@@ -245,7 +245,7 @@ serve(async (req) => {
 
     // === NEW: Background Processing Path ===
     if (recording_id && file_url) {
-        console.log(`[Handler] Received background job for ${recording_id}`);
+        // console.log(`[Handler] Received background job for ${recording_id}`);
         
         // Return 202 Accepted immediately
         const promise = processAudioBackground(recording_id, file_url, target_language);
@@ -406,3 +406,4 @@ serve(async (req) => {
     });
   }
 });
+

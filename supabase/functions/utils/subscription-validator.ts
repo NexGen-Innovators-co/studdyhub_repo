@@ -57,7 +57,7 @@ export class SubscriptionValidator {
       .single();
 
     if (error) {
-      console.error('Error fetching subscription:', error);
+      // console.error('Error fetching subscription:', error);
       // Default to free tier
       return { subscription_tier: 'free' };
     }
@@ -182,7 +182,7 @@ export class SubscriptionValidator {
         .lte('timestamp', `${today}T23:59:59`);
 
       if (error) {
-        console.error('Error counting messages:', error);
+        // console.error('Error counting messages:', error);
         return { allowed: true }; // Allow on error to not break user experience
       }
 
@@ -220,7 +220,7 @@ export class SubscriptionValidator {
         .eq('user_id', userId);
 
       if (error) {
-        console.error('Error counting notes:', error);
+        // console.error('Error counting notes:', error);
         return { allowed: true };
       }
 
@@ -270,7 +270,7 @@ export class SubscriptionValidator {
         .eq('user_id', userId);
 
       if (error) {
-        console.error('Error counting documents:', error);
+        // console.error('Error counting documents:', error);
         return { allowed: true };
       }
 
@@ -308,7 +308,7 @@ export class SubscriptionValidator {
         .eq('user_id', userId);
 
       if (error) {
-        console.error('Error counting recordings:', error);
+        // console.error('Error counting recordings:', error);
         return { allowed: true };
       }
 
@@ -350,7 +350,7 @@ export class SubscriptionValidator {
       .lte('created_at', `${today}T23:59:59`);
 
     if (error) {
-      console.error('Error counting quizzes:', error);
+      // console.error('Error counting quizzes:', error);
       return { allowed: true };
     }
 
@@ -462,7 +462,8 @@ export async function extractUserIdFromAuth(
 
     return user.id;
   } catch (error) {
-    console.error('Error extracting user ID:', error);
+    // console.error('Error extracting user ID:', error);
     return null;
   }
 }
+

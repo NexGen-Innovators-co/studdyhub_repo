@@ -149,6 +149,7 @@ interface TabContentProps {
   navigateToNote: (noteId: string | null) => void; // Fix the syntax error
   setSocialFeedRef?: (ref: RefObject<SocialFeedHandle>) => void;
   onSuggestAiCorrection?: (prompt: string) => Promise<void>;
+  onSearchNotes?: (searchQuery: string) => Promise<Note[]>;
 }
 
 export const TabContent: React.FC<TabContentProps> = (props) => {
@@ -380,7 +381,8 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     onLoadMore: props.onLoadMoreNotes,
     onRefresh: props.refreshNotes,
     isLoading: props.isLoadingNotes && !props.filteredNotes.length,
-    navigateToNote: props.navigateToNote
+    navigateToNote: props.navigateToNote,
+    onSearchNotes: props.onSearchNotes
   }), [
     props.filteredNotes,
     props.activeNote,
@@ -394,7 +396,8 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     props.onLoadMoreNotes,
     props.onRefresh,
     props.refreshNotes,
-    props.navigateToNote
+    props.navigateToNote,
+    props.onSearchNotes
   ]);
 
   const dashboardProps = useMemo(() => ({
@@ -630,7 +633,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
         <div className="flex-1 overflow-hidden" style={{ display: activeTab === 'podcasts' ? 'block' : 'none', height: activeTab === 'podcasts' ? '100%' : '0px' }}>
           <ErrorBoundary>
             <React.Suspense fallback={
-              <div className="flex items-center justify-center h-full">
+              <div className="flex items-center justify-center h-full opacity-0">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
               </div>
             }>

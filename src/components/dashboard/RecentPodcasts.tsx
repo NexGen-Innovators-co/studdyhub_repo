@@ -83,7 +83,7 @@ export const RecentPodcasts: React.FC = () => {
 
       setPodcasts(transformedData);
     } catch (error: any) {
-      // console.warn('[RecentPodcasts] fetch error', error);
+      // // console.warn('[RecentPodcasts] fetch error', error);
       toast.error('Failed to load recent podcasts');
     } finally {
       setLoading(false);
@@ -296,3 +296,4 @@ export const RecentPodcasts: React.FC = () => {
     </Card>
   );
 };
+

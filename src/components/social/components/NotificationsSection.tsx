@@ -223,7 +223,7 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
           break;
       }
     } catch (error) {
-      console.error('Navigation error:', error);
+      // console.error('Navigation error:', error);
       toast.error('Failed to navigate');
     }
   };

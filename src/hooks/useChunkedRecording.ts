@@ -40,7 +40,7 @@ export function useChunkedRecording(): UseChunkedRecordingReturn {
           await uploadChunkService(s.podcastId, s.sessionId || '', chunkIndex, ev.data);
           chunkIndex += 1;
         } catch (e) {
-          // console.warn('chunk upload failed', e);
+          // // console.warn('chunk upload failed', e);
           setLastError(e as Error);
         }
       };
@@ -78,3 +78,4 @@ export function useChunkedRecording(): UseChunkedRecordingReturn {
 
   return { start, stop, isRecording, lastError };
 }
+

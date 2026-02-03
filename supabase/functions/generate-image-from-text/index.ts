@@ -16,7 +16,7 @@ serve(async (req) => {
 
     try {
         const { description, userId } = await req.json();
-        console.log('[generate-image-from-text] Incoming data:', { description, userId });
+        // console.log('[generate-image-from-text] Incoming data:', { description, userId });
         if (!description || typeof description !== 'string' || !description.trim()) {
             return new Response(JSON.stringify({ error: 'Missing or empty description for image generation.' }), {
                 status: 400,
@@ -143,7 +143,7 @@ serve(async (req) => {
             });
 
         if (uploadError) {
-            console.error('Supabase Storage upload error:', uploadError.message);
+            // console.error('Supabase Storage upload error:', uploadError.message);
             throw new Error(`Failed to upload image to storage: ${uploadError.message}`);
         }
 
@@ -162,7 +162,7 @@ serve(async (req) => {
         });
 
     } catch (error) {
-        console.error('Edge function error in generate-image-from-text:', error.message);
+        // console.error('Edge function error in generate-image-from-text:', error.message);
         return new Response(JSON.stringify({ error: error.message }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },

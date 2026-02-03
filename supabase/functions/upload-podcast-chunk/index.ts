@@ -115,7 +115,8 @@ serve(async (req: Request) => {
 
     return new Response(JSON.stringify({ success: true, chunk: data, publicUrl }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (e: any) {
-    console.error('upload-podcast-chunk error', e);
+    // console.error('upload-podcast-chunk error', e);
     return new Response(JSON.stringify({ success: false, error: e?.message || String(e) }), { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
   }
 });
+

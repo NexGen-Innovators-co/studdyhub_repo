@@ -33,7 +33,9 @@ const ICE_SERVERS = [
 
 const DEBUG = true;
 const log = (...args: any[]) => {
-  if (DEBUG) console.log('[WebRTC]', ...args);
+  if (DEBUG) {
+    // console.log('[WebRTC]', ...args);
+  }
 };
 
 export const useWebRTC = ({

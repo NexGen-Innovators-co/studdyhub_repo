@@ -1,4 +1,4 @@
-// src/components/quizzes/components/NotesSelector.tsx - UPDATED
+// src/components/quizzes/components/NotesSelector.tsx - UPDATED WITH GLOBAL SEARCH
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
@@ -7,6 +7,8 @@ import { Badge } from '../../ui/badge';
 import { Search, FileText, Check, ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../../../integrations/supabase/client';
 import { MarkdownRenderer } from '../../ui/MarkDownRendererUi';
+import { useGlobalSearch } from '../../../hooks/useGlobalSearch';
+import { SEARCH_CONFIGS } from '../../../services/globalSearchService';
 
 interface Note {
   id: string;
@@ -27,30 +29,41 @@ export const NotesSelector: React.FC<NotesSelectorProps> = ({
   selectedNotes
 }) => {
   const [notes, setNotes] = useState<Note[]>([]);
-  const [filteredNotes, setFilteredNotes] = useState<Note[]>([]);
+  const [userId, setUserId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [hasSearched, setHasSearched] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedNote, setExpandedNote] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [previewMode, setPreviewMode] = useState<'rendered' | 'raw'>('rendered');
 
+  // Get user ID
   useEffect(() => {
-    fetchNotes();
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserId(user?.id || null);
+    };
+    getUser();
   }, []);
 
+  // Use global search hook for searching
+  const { search, results: searchResults, isSearching } = useGlobalSearch(
+    SEARCH_CONFIGS.notes,
+    userId,
+    { debounceMs: 500 }
+  );
+
   useEffect(() => {
-    filterNotes();
-  }, [notes, searchQuery, selectedCategory]);
+    fetchNotes();
+  }, [userId]);
 
   const fetchNotes = async () => {
+    if (!userId) return;
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
       const { data, error } = await supabase
         .from('notes')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -62,25 +75,26 @@ export const NotesSelector: React.FC<NotesSelectorProps> = ({
     }
   };
 
-  const filterNotes = () => {
-    let filtered = notes;
-
-    // Filter by search query
-    if (searchQuery) {
-      filtered = filtered.filter(note =>
-        note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        note.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        note.category.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+  // Handle search input
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    if (!value.trim()) {
+      setHasSearched(false);
+    } else {
+      setHasSearched(true);
+      search(value);
     }
-
-    // Filter by category
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter(note => note.category === selectedCategory);
-    }
-
-    setFilteredNotes(filtered);
   };
+
+  // Determine which notes to display
+  let displayNotes = hasSearched && searchQuery.trim() 
+    ? searchResults 
+    : notes;
+
+  // Filter by category if needed
+  if (selectedCategory !== 'all' && !hasSearched) {
+    displayNotes = displayNotes.filter(note => note.category === selectedCategory);
+  }
 
   const toggleNoteSelection = (note: Note) => {
     const isSelected = selectedNotes.some(n => n.id === note.id);
@@ -143,7 +157,8 @@ export const NotesSelector: React.FC<NotesSelectorProps> = ({
             <Input
               placeholder="Search notes..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              disabled={isSearching}
               className="pl-10"
             />
           </div>
@@ -185,7 +200,7 @@ export const NotesSelector: React.FC<NotesSelectorProps> = ({
 
         {/* Notes List */}
         <div className="space-y-3 max-h-96 overflow-y-auto modern-scrollbar">
-          {filteredNotes.length === 0 ? (
+          {displayNotes.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
               <p className="font-medium">No notes found</p>
@@ -197,7 +212,7 @@ export const NotesSelector: React.FC<NotesSelectorProps> = ({
               </p>
             </div>
           ) : (
-            filteredNotes.map(note => {
+            displayNotes.map(note => {
               const isSelected = selectedNotes.some(n => n.id === note.id);
               const isExpanded = expandedNote === note.id;
 

@@ -14,7 +14,7 @@ interface AppShellProps {
  */
 export const AppShell: React.FC<AppShellProps> = ({ left, right, children, className }) => {
   return (
-    <div className="bg-transparent font-sans">
+    <div className="bg-transparent font-sans min-h-screen">
       <div className="max-w-[1240px] mx-auto px-0">
         <div className={clsx("grid grid-cols-1 lg:grid-cols-12 gap-0 lg:gap-6 relative", className)}>
           {left && (
@@ -25,7 +25,7 @@ export const AppShell: React.FC<AppShellProps> = ({ left, right, children, class
             </div>
           )}
 
-          <main className="col-span-1 lg:col-span-6 min-h-screen pb-20 lg:pb-20">
+          <main className="col-span-1 lg:col-span-6 pb-20 lg:pb-20">
             {children}
           </main>
 

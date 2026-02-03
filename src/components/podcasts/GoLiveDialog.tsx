@@ -136,7 +136,7 @@ export const GoLiveDialog: React.FC<GoLiveDialogProps> = ({
       let createdPostId: string | null = null;
       if (isPublic) {
         try {
-          // console.log('[GoLive] Invoking create-social-post edge function');
+          // // console.log('[GoLive] Invoking create-social-post edge function');
           const invokeRes = await supabase.functions.invoke('create-social-post', {
             body: {
               author_id: user.id,
@@ -531,3 +531,4 @@ export const GoLiveDialog: React.FC<GoLiveDialogProps> = ({
     </Dialog>
   );
 };
+

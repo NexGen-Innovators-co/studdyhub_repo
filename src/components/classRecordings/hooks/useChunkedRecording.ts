@@ -231,7 +231,7 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
         try {
           return new MediaRecorder(targetStream, options);
         } catch (e) {
-          // console.warn('[useChunkedRecording] MediaRecorder creation failed with options', options, e);
+          // // console.warn('[useChunkedRecording] MediaRecorder creation failed with options', options, e);
           return null;
         }
       };
@@ -252,7 +252,7 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
           if (mediaRecorder) {
             usedAudioOnlyFallback = true;
             streamRef.current = audioOnly;
-            // console.warn('[useChunkedRecording] Falling back to audio-only recording due to MediaRecorder limitations');
+            // // console.warn('[useChunkedRecording] Falling back to audio-only recording due to MediaRecorder limitations');
           }
         }
       } else {
@@ -283,9 +283,9 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
       // Start recording with timeslice for regular data events, with guarded start
       try {
         mediaRecorder.start(1000);
-        // console.log('[useChunkedRecording] MediaRecorder started', { mimeType: mediaRecorder.mimeType, usedAudioOnlyFallback });
+        // // console.log('[useChunkedRecording] MediaRecorder started', { mimeType: mediaRecorder.mimeType, usedAudioOnlyFallback });
       } catch (startErr) {
-        // console.warn('[useChunkedRecording] MediaRecorder.start failed, attempting audio-only fallback', startErr);
+        // // console.warn('[useChunkedRecording] MediaRecorder.start failed, attempting audio-only fallback', startErr);
         // If start failed and we haven't tried audio-only fallback yet, attempt it
         if (!usedAudioOnlyFallback) {
           const audioTracks = stream.getAudioTracks ? stream.getAudioTracks() : [];
@@ -307,7 +307,7 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
                 onError?.(error);
               };
               mediaRecorder.start(1000);
-              // console.log('[useChunkedRecording] MediaRecorder started (audio-only fallback)', { mimeType: mediaRecorder.mimeType, usedAudioOnlyFallback });
+              // // console.log('[useChunkedRecording] MediaRecorder started (audio-only fallback)', { mimeType: mediaRecorder.mimeType, usedAudioOnlyFallback });
               usedAudioOnlyFallback = true;
             } else {
               throw startErr;
@@ -517,3 +517,4 @@ function base64ToBlob(base64: string, mimeType: string): Blob {
   }
   return new Blob([ab], { type: mimeType });
 }
+

@@ -213,7 +213,7 @@ export const usePodcasts = (activeTab: PodcastTab, options?: { lightweight?: boo
         return transformedPodcasts;
 
       } catch (error: any) {
-        // console.error('Error fetching podcasts:', error);
+        // // console.error('Error fetching podcasts:', error);
         
         // If offline, try to get from local storage
         if (!navigator.onLine) {

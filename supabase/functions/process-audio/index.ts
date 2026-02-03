@@ -51,7 +51,7 @@ async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAtt
       }
 
       const text = await resp.text();
-      console.warn(`Gemini ${model} returned ${resp.status}: ${text.substring(0, 200)}`);
+      // console.warn(`Gemini ${model} returned ${resp.status}: ${text.substring(0, 200)}`);
       // retry on transient errors
       if (resp.status === 429 || resp.status === 503) {
         await sleep(1000 * (attempt + 1));
@@ -61,7 +61,7 @@ async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAtt
         continue;
       }
     } catch (err) {
-      console.error(`Network/model error with ${model}:`, err);
+      // console.error(`Network/model error with ${model}:`, err);
       if (attempt < maxAttempts - 1) await sleep(1000 * (attempt + 1));
     }
   }
@@ -96,7 +96,7 @@ async function extractAudioDuration(audioBlob: Blob): Promise<number | null> {
     
     return null;
   } catch (error) {
-    console.error('Error extracting audio duration:', error);
+    // console.error('Error extracting audio duration:', error);
     return null;
   }
 }
@@ -171,7 +171,7 @@ async function processAudioInBackground(file_url: string, target_language: strin
     };
 
   } catch (error) {
-    console.error('Background processing error:', error);
+    // console.error('Background processing error:', error);
     // Return error status for the caller to handle and update the database
     return { transcript: null, summary: null, translated_content: null, status: 'error', error_message: error.message };
   }
@@ -198,7 +198,7 @@ function extractTextFromGeminiResponse(result: any, defaultMessage: string) {
   if (result?.candidates?.[0]?.content?.parts?.[0]?.text) {
     return result.candidates[0].content.parts[0].text;
   }
-  console.error('Unexpected Gemini response structure:', JSON.stringify(result));
+  // console.error('Unexpected Gemini response structure:', JSON.stringify(result));
   return defaultMessage;
 }
 
@@ -220,11 +220,11 @@ async function generateSummary(transcript: string) {
       const summaryResult = await callGeminiWithModelChain(summaryPayload, GEMINI_API_KEY);
       return extractTextFromGeminiResponse(summaryResult, 'No summary available.');
     } catch (err) {
-      console.error('Summary generation error:', err);
+      // console.error('Summary generation error:', err);
       return 'Failed to generate summary due to an error.';
     }
   } catch (error: any) {
-    console.error('Summary generation error:', error);
+    // console.error('Summary generation error:', error);
     return 'Failed to generate summary due to an error.';
   }
 }
@@ -247,11 +247,11 @@ async function translateContent(transcript: string, targetLanguage: string) {
       const translationResult = await callGeminiWithModelChain(translationPayload, GEMINI_API_KEY);
       return extractTextFromGeminiResponse(translationResult, 'No translation available.');
     } catch (err) {
-      console.error('Translation error:', err);
+      // console.error('Translation error:', err);
       return 'Failed to translate due to an error.';
     }
   } catch (error: any) {
-    console.error('Translation error:', error);
+    // console.error('Translation error:', error);
     return 'Failed to translate due to an error.';
   }
 }
@@ -342,10 +342,11 @@ serve(async (req) => {
     });
 
   } catch (error: any) {
-    console.error('Error initiating audio processing:', error);
+    // console.error('Error initiating audio processing:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
     });
   }
 });
+

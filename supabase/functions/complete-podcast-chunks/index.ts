@@ -59,7 +59,7 @@ serve(async (req: Request) => {
         buffers.push(ab);
         if (!detectedMime && c.mime_type) detectedMime = c.mime_type;
       } catch (e) {
-        console.error('Failed to fetch chunk for assembly:', e);
+        // console.error('Failed to fetch chunk for assembly:', e);
         throw e;
       }
     }
@@ -120,16 +120,17 @@ serve(async (req: Request) => {
         const { data: userInfo } = await supabase.auth.getUser();
         const userId = userInfo?.user?.id || null;
         const { data: procData, error: procErr } = await supabase.functions.invoke('process-audio', { body: { file_url: finalPublicUrl, user_id: userId } as any } as any);
-        if (procErr) console.warn('process-audio invocation error', procErr);
+        if (procErr) // console.warn('process-audio invocation error', procErr);
         jobResp = procData || null;
       } catch (e) {
-        console.warn('Failed to invoke process-audio', e);
+        // console.warn('Failed to invoke process-audio', e);
       }
     }
 
     return new Response(JSON.stringify({ success: true, assembled_file_url: finalPublicUrl, segment: segData, job: jobResp }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (e: any) {
-    console.error('complete-podcast-chunks error', e);
+    // console.error('complete-podcast-chunks error', e);
     return new Response(JSON.stringify({ success: false, error: e?.message || String(e) }), { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
   }
 });
+

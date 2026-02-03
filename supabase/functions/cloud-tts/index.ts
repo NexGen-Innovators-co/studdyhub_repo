@@ -25,7 +25,7 @@ serve(async (req) => {
     try {
       body = await req.json();
     } catch (e) {
-      console.error("[CloudTTS] JSON parse error:", e);
+      // console.error("[CloudTTS] JSON parse error:", e);
       throw new Error("Invalid request body - expected JSON");
     }
 
@@ -35,7 +35,7 @@ serve(async (req) => {
       throw new Error("Text is required");
     }
 
-    console.log(`[CloudTTS] Generating audio for ${text.length} characters, voice: ${voice}`);
+    // console.log(`[CloudTTS] Generating audio for ${text.length} characters, voice: ${voice}`);
 
     // Map voice to Google TTS voice name. Accept explicit voice names (e.g. en-US-Neural2-D)
     let voiceName: string;
@@ -67,18 +67,18 @@ serve(async (req) => {
 
     if (!ttsResponse.ok) {
       const errorText = await ttsResponse.text();
-      console.error(`[CloudTTS] TTS API error:`, ttsResponse.status, errorText);
+      // console.error(`[CloudTTS] TTS API error:`, ttsResponse.status, errorText);
       throw new Error(`TTS API failed: ${ttsResponse.status}`);
     }
 
     const ttsData = await ttsResponse.json();
 
     if (!ttsData.audioContent) {
-      console.error("[CloudTTS] No audioContent in response:", JSON.stringify(ttsData));
+      // console.error("[CloudTTS] No audioContent in response:", JSON.stringify(ttsData));
       throw new Error("TTS response missing audioContent");
     }
 
-    console.log(`[CloudTTS] Audio generated successfully, size: ${ttsData.audioContent.length}`);
+    // console.log(`[CloudTTS] Audio generated successfully, size: ${ttsData.audioContent.length}`);
 
     return new Response(
       JSON.stringify({
@@ -91,7 +91,7 @@ serve(async (req) => {
     );
 
   } catch (error: any) {
-    console.error("[CloudTTS] Error:", error);
+    // console.error("[CloudTTS] Error:", error);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       {
@@ -101,3 +101,4 @@ serve(async (req) => {
     );
   }
 });
+

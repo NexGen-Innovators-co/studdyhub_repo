@@ -15,7 +15,11 @@ export const useSocialComments = (
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
 
   const fetchComments = async (postId: string) => {
-    if (comments[postId]) return;
+    if (comments[postId]) {
+      // Still subscribe to updates even if we have cached comments
+      subscribeToComments(postId);
+      return;
+    }
 
     try {
       setLoadingComments(prev => new Set([...prev, postId]));
@@ -32,6 +36,9 @@ export const useSocialComments = (
         ...prev,
         [postId]: data || []
       }));
+
+      // Subscribe to real-time updates
+      subscribeToComments(postId);
     } catch (error) {
 
     } finally {
@@ -41,6 +48,40 @@ export const useSocialComments = (
         return newSet;
       });
     }
+  };
+
+  const subscribeToComments = (postId: string) => {
+    const subscription = supabase
+      .channel(`comments:${postId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'social_comments',
+          filter: `post_id=eq.${postId}`
+        },
+        (payload) => {
+          // Fetch the full comment with author data
+          const newComment = payload.new as any;
+          supabase
+            .from('social_comments')
+            .select('*, author:social_users(*)')
+            .eq('id', newComment.id)
+            .single()
+            .then(({ data }) => {
+              if (data) {
+                setComments(prev => ({
+                  ...prev,
+                  [postId]: [...(prev[postId] || []), data as SocialCommentWithDetails]
+                }));
+              }
+            });
+        }
+      )
+      .subscribe();
+
+    return subscription;
   };
 
   const addComment = async (postId: string) => {
@@ -53,6 +94,13 @@ export const useSocialComments = (
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+
+      // Clear the input immediately
+      setNewComment(prev => ({
+        ...prev,
+        [postId]: ''
+      }));
+
       // Use edge function to add comment with validation
       const { data: response, error: functionError } = await supabase.functions.invoke('comment-on-post', {
         body: {
@@ -62,7 +110,7 @@ export const useSocialComments = (
       });
 
       if (functionError) {
-        // Handle subscription limit errors
+        
         if (functionError.message) {
           toast.error(functionError.message);
         } else {
@@ -71,33 +119,7 @@ export const useSocialComments = (
         return;
       }
 
-      if (!response?.success || !response?.comment) {
-        throw new Error('Failed to add comment');
-      }
-
-      const comment = response.comment;
-
-      // Fetch author data for the comment
-      const { data: authorData } = await supabase
-        .from('social_users')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      const commentWithAuthor = {
-        ...comment,
-        author: authorData
-      };
-
-      setComments(prev => ({
-        ...prev,
-        [postId]: [...(prev[postId] || []), commentWithAuthor]
-      }));
-
-      setNewComment(prev => ({
-        ...prev,
-        [postId]: ''
-      }));
+       const comment = response.comment;
 
       // Create notification for post author
       const post = posts.find(p => p.id === postId);
