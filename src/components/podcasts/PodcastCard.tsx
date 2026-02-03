@@ -72,7 +72,10 @@ const PodcastCardComponent: React.FC<PodcastCardProps> = ({
   fileInputRef
 }) => {
   const [showActions, setShowActions] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const preventCardClickRef = useRef(false);
+  const dropdownClickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Hide overlay with delay on mouse leave
   const handleMouseLeave = () => {
@@ -90,11 +93,46 @@ const PodcastCardComponent: React.FC<PodcastCardProps> = ({
     setShowActions(true);
   };
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (dropdownOpen || preventCardClickRef.current) {
+      e.stopPropagation();
+      return;
+    }
+    setShowActions(!showActions);
+  };
+
+  // Helper to block card clicks after dropdown actions
+  const handleDropdownItemClick = (callback: () => void) => {
+    return (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      preventCardClickRef.current = true;
+      
+      // Close the dropdown
+      setDropdownOpen(false);
+      
+      if (dropdownClickTimeoutRef.current) {
+        clearTimeout(dropdownClickTimeoutRef.current);
+      }
+      
+      // Extended timeout to prevent any cascading navigation
+      dropdownClickTimeoutRef.current = setTimeout(() => {
+        preventCardClickRef.current = false;
+        dropdownClickTimeoutRef.current = null;
+      }, 500);
+      
+      callback();
+    };
+  };
+
   // Clean up timeout on unmount
   useEffect(() => {
     return () => {
       if (hideTimeoutRef.current) {
         clearTimeout(hideTimeoutRef.current);
+      }
+      if (dropdownClickTimeoutRef.current) {
+        clearTimeout(dropdownClickTimeoutRef.current);
       }
     };
   }, []);
@@ -136,7 +174,7 @@ const PodcastCardComponent: React.FC<PodcastCardProps> = ({
       className="group"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      onClick={() => setShowActions(!showActions)}
+      onClick={handleCardClick}
     >
       <Card className="overflow-hidden hover:shadow-2xl transition-all duration-300 border-b border-slate-200 dark:border-slate-800 sm:border-b-0 sm:border sm:border-blue-200/50 sm:dark:border-blue-900/50 h-full flex flex-col relative rounded-lg sm:rounded-2xl cursor-pointer bg-white/90 dark:bg-slate-900/70 dark:hover:border-blue-700/50 dark:hover:shadow-blue-900/20">
         {/* Background Image with Overlay */}
@@ -267,45 +305,46 @@ const PodcastCardComponent: React.FC<PodcastCardProps> = ({
                 <Share2 className="h-4 w-4" />
               </Button>
 
-              <DropdownMenu>
+              <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                    }}
                     className="h-8 w-8 rounded-md border-slate-200 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:bg-slate-800/80"
                   >
                     <MoreVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className='bg-white dark:bg-slate-900/95 rounded-xl border border-slate-100 dark:border-slate-800 shadow-2xl'>
+                <DropdownMenuContent 
+                  align="end" 
+                  className='bg-white dark:bg-slate-900/95 rounded-xl border border-slate-100 dark:border-slate-800 shadow-2xl'
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                >
                   {isOwner && (
                     <>
                       <DropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onInvite(podcast);
-                        }}
+                        onClick={handleDropdownItemClick(() => onInvite(podcast))}
                         className="rounded-lg m-1"
                       >
                         <UserPlus className="h-4 w-4 mr-2" />
                         Invite Members
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onManageMembers(podcast);
-                        }}
+                        onClick={handleDropdownItemClick(() => onManageMembers(podcast))}
                         className="rounded-lg m-1"
                       >
                         <Users className="h-4 w-4 mr-2" />
                         Manage Members
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onTogglePublic(podcast);
-                        }}
+                        onClick={handleDropdownItemClick(() => onTogglePublic(podcast))}
                         className="rounded-lg m-1"
                       >
                         {podcast.is_public ? <Lock className="h-4 w-4 mr-2" /> : <Globe className="h-4 w-4 mr-2" />}
@@ -313,10 +352,7 @@ const PodcastCardComponent: React.FC<PodcastCardProps> = ({
                       </DropdownMenuItem>
                       <DropdownMenuSeparator className="bg-slate-100 dark:bg-slate-700" />
                       <DropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onUpdateCover(podcast.id);
-                        }}
+                        onClick={handleDropdownItemClick(() => onUpdateCover(podcast.id))}
                         disabled={isUpdatingCover === podcast.id}
                         className="rounded-lg m-1"
                       >
@@ -328,10 +364,7 @@ const PodcastCardComponent: React.FC<PodcastCardProps> = ({
                         Update Cover
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onGenerateAiCover(podcast);
-                        }}
+                        onClick={handleDropdownItemClick(() => onGenerateAiCover(podcast))}
                         disabled={isGeneratingAiCover === podcast.id}
                         className="rounded-lg m-1"
                       >
@@ -344,10 +377,7 @@ const PodcastCardComponent: React.FC<PodcastCardProps> = ({
                       </DropdownMenuItem>
                       <DropdownMenuSeparator className="bg-slate-100 dark:bg-slate-700" />
                       <DropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDelete(podcast);
-                        }}
+                        onClick={handleDropdownItemClick(() => onDelete(podcast))}
                         className="text-red-600 focus:text-red-600 focus:bg-red-50 rounded-lg m-1 font-semibold"
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
@@ -356,10 +386,7 @@ const PodcastCardComponent: React.FC<PodcastCardProps> = ({
                     </>
                   )}
                   <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onReport(podcast);
-                    }}
+                    onClick={handleDropdownItemClick(() => onReport(podcast))}
                     className="rounded-lg m-1"
                   >
                     <Flag className="h-4 w-4 mr-2" />

@@ -84,7 +84,7 @@ export const ReportPodcastDialog: React.FC<ReportPodcastDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-orange-500" />
@@ -102,14 +102,14 @@ export const ReportPodcastDialog: React.FC<ReportPodcastDialogProps> = ({
               {REPORT_REASONS.map((reason) => {
                 const Icon = reason.icon;
                 return (
-                  <div key={reason.value} className="flex items-center space-x-2">
-                    <RadioGroupItem value={reason.value} id={reason.value} />
+                  <div key={reason.value} className="flex items-start space-x-2 py-1">
+                    <RadioGroupItem value={reason.value} id={reason.value} className="mt-1" />
                     <Label
                       htmlFor={reason.value}
-                      className="flex items-center gap-2 cursor-pointer font-normal"
+                      className="flex items-center gap-2 cursor-pointer font-normal text-sm leading-relaxed"
                     >
-                      <Icon className="h-4 w-4" />
-                      {reason.label}
+                      <Icon className="h-4 w-4 flex-shrink-0" />
+                      <span className="break-words">{reason.label}</span>
                     </Label>
                   </div>
                 );
@@ -126,6 +126,7 @@ export const ReportPodcastDialog: React.FC<ReportPodcastDialogProps> = ({
               onChange={(e) => setDetails(e.target.value)}
               rows={4}
               maxLength={500}
+              className="resize-none"
             />
             <p className="text-xs text-muted-foreground text-right">
               {details.length}/500
@@ -142,18 +143,19 @@ export const ReportPodcastDialog: React.FC<ReportPodcastDialogProps> = ({
           </div>
         </div>
 
-        <div className="flex gap-2 justify-end">
+        <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
           <Button
             variant="outline"
             onClick={onClose}
             disabled={isSubmitting}
+            className="w-full sm:w-auto"
           >
             Cancel
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={isSubmitting}
-            className="bg-orange-500 hover:bg-orange-600"
+            className="bg-orange-500 hover:bg-orange-600 w-full sm:w-auto"
           >
             {isSubmitting ? 'Submitting...' : 'Submit Report'}
           </Button>
