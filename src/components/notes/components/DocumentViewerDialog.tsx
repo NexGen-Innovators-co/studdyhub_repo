@@ -3,7 +3,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '../../ui/button';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import rehypeRaw from 'rehype-raw';
+import rehypeKatex from 'rehype-katex';
 
 interface DocumentViewerDialogProps {
   isOpen: boolean;
@@ -53,8 +55,8 @@ export const DocumentViewerDialog: React.FC<DocumentViewerDialogProps> = ({
           {/* Display the extracted content as markdown */}
           <div className="mt-4 p-4 border border-slate-200 rounded-md bg-white w-full max-h-[40vh] overflow-y-auto">
             <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeRaw]}
+              remarkPlugins={[remarkGfm, remarkMath]}
+              rehypePlugins={[rehypeRaw, rehypeKatex]}
             // className="prose prose-sm max-w-none text-slate-700 leading-relaxed" // className is not a valid prop for ReactMarkdown
             >
               {content}
@@ -67,8 +69,8 @@ export const DocumentViewerDialog: React.FC<DocumentViewerDialogProps> = ({
       return (
         <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed overflow-y-auto max-h-[70vh] p-4 bg-slate-50 rounded-md">
           <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeRaw]}
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[rehypeRaw, rehypeKatex]}
           //className="prose prose-sm max-w-none text-slate-700 leading-relaxed"
           >
             {content}

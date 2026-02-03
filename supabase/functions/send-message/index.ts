@@ -88,7 +88,7 @@ serve(async (req) => {
       .single();
 
     if (messageError) {
-      console.error('Error creating message:', messageError);
+      // console.error('Error creating message:', messageError);
       return createErrorResponse('Failed to send message', 500);
     }
 
@@ -132,7 +132,7 @@ serve(async (req) => {
            });
         }
       } catch (e) {
-        console.error('Failed to notify chat participants:', e);
+        // console.error('Failed to notify chat participants:', e);
       }
     })();
 
@@ -148,7 +148,8 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('Error in send-message:', error);
+    // console.error('Error in send-message:', error);
     return createErrorResponse('Internal server error', 500);
   }
 });
+

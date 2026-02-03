@@ -554,7 +554,7 @@ box-sizing: border-box;
                 document.body.removeChild(a);
                 toast.success('PNG downloaded!');
               } catch (e) {
-                console.error('Canvas export failed:', e);
+                // console.error('Canvas export failed:', e);
                 toast.error('Failed to export PNG. Security restriction.');
               }
               URL.revokeObjectURL(url);
@@ -587,7 +587,7 @@ box-sizing: border-box;
       document.body.removeChild(a);
       toast.success('PNG downloaded!');
     } catch (error) {
-      console.error('Error generating PNG:', error);
+      // console.error('Error generating PNG:', error);
       toast.error('Failed to generate PNG.');
     }
   }, [currentTheme, effectiveDiagramType]);
@@ -674,7 +674,7 @@ box-sizing: border-box;
       pdf.save(`diagram-${effectiveDiagramType}.pdf`);
       toast.success('PDF exported successfully!');
     } catch (error) {
-      console.error('Error generating PDF:', error);
+      // console.error('Error generating PDF:', error);
       toast.error('Failed to generate PDF. Please try again.');
     }
   }, [effectiveDiagramType]);

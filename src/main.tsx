@@ -11,7 +11,7 @@ if ('serviceWorker' in navigator) {
         // Service Worker registered
       })
       .catch((error) => {
-        console.error('❌ Service Worker registration failed:', error);
+        // console.error('❌ Service Worker registration failed:', error);
       });
   });
 }

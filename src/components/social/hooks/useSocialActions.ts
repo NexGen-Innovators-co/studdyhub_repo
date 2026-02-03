@@ -493,17 +493,32 @@ export const useSocialActions = (
 
       if (!navigator.onLine) {
         // Optimistic update
-        setPosts(prev => prev.map(p => 
-          p.id === postId 
-            ? { ...p, is_liked: !isLiked, likes_count: p.likes_count + (isLiked ? -1 : 1) } 
-            : p
-        ));
+        setPosts(prev => prev.map(p => {
+          if (p.id === postId) {
+            const updatedPost = structuredClone(p);
+            updatedPost.is_liked = !isLiked;
+            updatedPost.likes_count = p.likes_count + (isLiked ? -1 : 1);
+            return updatedPost;
+          }
+          return p;
+        }));
 
         await offlineStorage.addPendingSync(isLiked ? 'delete' : 'create', 'social_likes', { post_id: postId, user_id: userId });
 
         toast.info(isLiked ? 'Unliked offline' : 'Liked offline');
         return;
       }
+
+      // Optimistic update first - create a deep copy to avoid reference issues
+      setPosts(prev => prev.map(post => {
+        if (post.id === postId) {
+          const updatedPost = structuredClone(post);
+          updatedPost.is_liked = !isLiked;
+          updatedPost.likes_count = isLiked ? post.likes_count - 1 : post.likes_count + 1;
+          return updatedPost;
+        }
+        return post;
+      }));
 
       if (isLiked) {
         const { error: deleteError } = await supabase
@@ -513,6 +528,16 @@ export const useSocialActions = (
           .eq('user_id', userId);
 
         if (deleteError) {
+          // Revert optimistic update on error
+          setPosts(prev => prev.map(post => {
+            if (post.id === postId) {
+              const revertedPost = structuredClone(post);
+              revertedPost.is_liked = isLiked;
+              revertedPost.likes_count = post.likes_count + 1;
+              return revertedPost;
+            }
+            return post;
+          }));
           toast.error('Failed to unlike post');
           return;
         }
@@ -525,6 +550,16 @@ export const useSocialActions = (
           .single();
         
         if (socialUserError || !socialUser) {
+          // Revert optimistic update on error
+          setPosts(prev => prev.map(post => {
+            if (post.id === postId) {
+              const revertedPost = structuredClone(post);
+              revertedPost.is_liked = isLiked;
+              revertedPost.likes_count = post.likes_count - 1;
+              return revertedPost;
+            }
+            return post;
+          }));
           toast.error('Please refresh the page');
           return;
         }
@@ -535,8 +570,17 @@ export const useSocialActions = (
           .select();
 
         if (insertError) {
+          // Revert optimistic update on error
+          setPosts(prev => prev.map(post => {
+            if (post.id === postId) {
+              const revertedPost = structuredClone(post);
+              revertedPost.is_liked = isLiked;
+              revertedPost.likes_count = post.likes_count - 1;
+              return revertedPost;
+            }
+            return post;
+          }));
           toast.error('Failed to like post');
-          console.error('Error liking post:', insertError);
           return;
         }
 
@@ -564,19 +608,18 @@ export const useSocialActions = (
           });
         }
       }
-
+    } catch (error) {
+      // console.error('Error toggling like:', error);
+      // Revert optimistic update on error
       setPosts(prev => prev.map(post => {
         if (post.id === postId) {
-          return {
-            ...post,
-            is_liked: !isLiked,
-            likes_count: isLiked ? post.likes_count - 1 : post.likes_count + 1
-          };
+          const revertedPost = structuredClone(post);
+          revertedPost.is_liked = isLiked;
+          revertedPost.likes_count = isLiked ? post.likes_count + 1 : post.likes_count - 1;
+          return revertedPost;
         }
         return post;
       }));
-    } catch (error) {
-      console.error('Error toggling like:', error);
       toast.error('Failed to update like');
     }
   };
@@ -590,11 +633,10 @@ export const useSocialActions = (
         // Optimistic update
         setPosts(prev => prev.map(post => {
           if (post.id === postId) {
-            return {
-              ...post,
-              bookmarks_count: isBookmarked ? post.bookmarks_count - 1 : post.bookmarks_count + 1,
-              is_bookmarked: !isBookmarked
-            };
+            const updatedPost = structuredClone(post);
+            updatedPost.bookmarks_count = isBookmarked ? post.bookmarks_count - 1 : post.bookmarks_count + 1;
+            updatedPost.is_bookmarked = !isBookmarked;
+            return updatedPost;
           }
           return post;
         }));
@@ -605,24 +647,70 @@ export const useSocialActions = (
         return;
       }
 
-      if (isBookmarked) {
-        await supabase.from('social_bookmarks').delete().eq('post_id', postId).eq('user_id', user.id);
-      } else {
-        await supabase.from('social_bookmarks').insert({ post_id: postId, user_id: user.id });
-      }
-
+      // Optimistic update first
       setPosts(prev => prev.map(post => {
         if (post.id === postId) {
-          return {
-            ...post,
-            bookmarks_count: isBookmarked ? post.bookmarks_count - 1 : post.bookmarks_count + 1,
-            is_bookmarked: !isBookmarked
-          };
+          const updatedPost = structuredClone(post);
+          updatedPost.bookmarks_count = isBookmarked ? post.bookmarks_count - 1 : post.bookmarks_count + 1;
+          updatedPost.is_bookmarked = !isBookmarked;
+          return updatedPost;
         }
         return post;
       }));
+
+      if (isBookmarked) {
+        const { error: deleteError } = await supabase
+          .from('social_bookmarks')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', user.id);
+        
+        if (deleteError) {
+          // Revert optimistic update on error
+          setPosts(prev => prev.map(post => {
+            if (post.id === postId) {
+              const revertedPost = structuredClone(post);
+              revertedPost.bookmarks_count = post.bookmarks_count + 1;
+              revertedPost.is_bookmarked = isBookmarked;
+              return revertedPost;
+            }
+            return post;
+          }));
+          toast.error('Failed to remove bookmark');
+          return;
+        }
+      } else {
+        const { error: insertError } = await supabase
+          .from('social_bookmarks')
+          .insert({ post_id: postId, user_id: user.id });
+        
+        if (insertError) {
+          // Revert optimistic update on error
+          setPosts(prev => prev.map(post => {
+            if (post.id === postId) {
+              const revertedPost = structuredClone(post);
+              revertedPost.bookmarks_count = post.bookmarks_count - 1;
+              revertedPost.is_bookmarked = isBookmarked;
+              return revertedPost;
+            }
+            return post;
+          }));
+          toast.error('Failed to bookmark post');
+          return;
+        }
+      }
     } catch (error) {
       ////console.error('Error toggling bookmark:', error);
+      // Revert optimistic update on error
+      setPosts(prev => prev.map(post => {
+        if (post.id === postId) {
+          const revertedPost = structuredClone(post);
+          revertedPost.bookmarks_count = isBookmarked ? post.bookmarks_count + 1 : post.bookmarks_count - 1;
+          revertedPost.is_bookmarked = isBookmarked;
+          return revertedPost;
+        }
+        return post;
+      }));
       toast.error('Failed to update bookmark');
     }
   };

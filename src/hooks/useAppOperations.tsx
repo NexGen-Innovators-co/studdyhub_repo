@@ -1226,6 +1226,43 @@ export const useAppOperations = ({
     }
   };
 
+  // Search notes from database
+  const searchNotesFromDB = useCallback(async (searchQuery: string): Promise<Note[]> => {
+    if (!userProfile?.id || !searchQuery.trim()) return [];
+
+    try {
+      const searchLower = searchQuery.toLowerCase();
+
+      // Query notes table with search on title and content
+      const { data, error } = await supabase
+        .from('notes')
+        .select('*')
+        .eq('user_id', userProfile.id)
+        .or(`title.ilike.%${searchLower}%,content.ilike.%${searchLower}%`)
+        .order('updated_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('Note search error:', error);
+        return [];
+      }
+
+      // Also filter by tags if needed (since ilike doesn't work on arrays)
+      const results = (data || []).filter((note: any) => {
+        const matchesSearch = 
+          note.title?.toLowerCase().includes(searchLower) ||
+          note.content?.toLowerCase().includes(searchLower) ||
+          note.tags?.some((tag: string) => tag.toLowerCase().includes(searchLower));
+        return matchesSearch;
+      });
+
+      return results as Note[];
+    } catch (error) {
+      console.error('Note search error:', error);
+      return [];
+    }
+  }, [userProfile?.id]);
+
   return {
     createNewNote,
     updateNote,
@@ -1247,5 +1284,6 @@ export const useAppOperations = ({
     deleteFolder,
     addDocumentToFolder,
     removeDocumentFromFolder,
+    searchNotesFromDB,
   };
 };

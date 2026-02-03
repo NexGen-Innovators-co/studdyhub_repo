@@ -6,7 +6,9 @@ import { Textarea } from '../../ui/textarea';
 import { Bar, Line, Pie, Doughnut, Radar, PolarArea } from 'react-chartjs-2';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import rehypeRaw from 'rehype-raw';
+import rehypeKatex from 'rehype-katex';
 import { CodeRenderer } from './CodeRenderer';
 import {
   Chart as ChartJS,
@@ -471,11 +473,11 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
     setShowSmartSuggestions(false);
     if (onClearError) onClearError();
     
-    console.log('[InlineAIEditor] Generating with:', {
-      actionType: currentActionType,
-      customInstruction: customInstruction || '(none)',
-      customInstructionLength: customInstruction.length
-    });
+    // console.log('[InlineAIEditor] Generating with:', {
+    //   actionType: currentActionType,
+    //   customInstruction: customInstruction || '(none)',
+    //   customInstructionLength: customInstruction.length
+    // });
     
     await onGenerate(selectedText, currentActionType, customInstruction);
   }, [isLoading, localLoading, onGenerate, selectedText, currentActionType, customInstruction, onClearError]);
@@ -684,8 +686,8 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
                   <DiagramPreview type={diagramInfo.type as 'mermaid' | 'chartjs' | 'dot'} code={diagramInfo.code} />
                 ) : (
                   <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeRaw]}
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[rehypeRaw, rehypeKatex]}
                     components={{
                       code: CodeRenderer,
                       p: ({ children }) => (

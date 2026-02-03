@@ -51,10 +51,10 @@ serve(async (req) => {
 
           if (resp.ok) return await resp.json();
           const txt = await resp.text();
-          console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
+          // console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
           if (resp.status === 429 || resp.status === 503) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
         } catch (err) {
-          console.error(`Error calling Gemini ${model}:`, err);
+          // console.error(`Error calling Gemini ${model}:`, err);
           if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
         }
       }
@@ -66,12 +66,12 @@ serve(async (req) => {
     // Helper function to get OAuth 2.0 access token from service account
     async function getAccessToken(): Promise<string | null> {
       if (!gcpServiceAccountJson) {
-        console.error("[OAuth] GCP_SERVICE_ACCOUNT_JSON not configured");
+        // console.error("[OAuth] GCP_SERVICE_ACCOUNT_JSON not configured");
         return null;
       }
 
       try {
-        console.log("[OAuth] Service account JSON length:", gcpServiceAccountJson.length);
+        // console.log("[OAuth] Service account JSON length:", gcpServiceAccountJson.length);
 
         let cleanedJson = gcpServiceAccountJson.trim();
         if (cleanedJson.startsWith('"') && cleanedJson.endsWith('"')) {
@@ -137,11 +137,11 @@ serve(async (req) => {
           const tokenData = await tokenResponse.json();
           return tokenData.access_token;
         } else {
-          console.error("[OAuth] Token fetch failed:", await tokenResponse.text());
+          // console.error("[OAuth] Token fetch failed:", await tokenResponse.text());
           return null;
         }
       } catch (error) {
-        console.error("[OAuth] Error getting access token:", error);
+        // console.error("[OAuth] Error getting access token:", error);
         return null;
       }
     }
@@ -163,7 +163,7 @@ serve(async (req) => {
     try {
       body = await req.json();
     } catch (e) {
-      console.error("[Podcast] JSON parse error:", e);
+      // console.error("[Podcast] JSON parse error:", e);
       throw new Error("Invalid request body - expected JSON");
     }
 
@@ -252,13 +252,13 @@ serve(async (req) => {
 
     // Validate Gemini response structure
     if (!geminiData || !geminiData.candidates || geminiData.candidates.length === 0) {
-      console.error("[Podcast] Invalid script generation response:", JSON.stringify(geminiData));
+      // console.error("[Podcast] Invalid script generation response:", JSON.stringify(geminiData));
       throw new Error("Failed to generate podcast script - invalid API response");
     }
 
     const candidate = geminiData.candidates[0];
     if (!candidate || !candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
-      console.error("[Podcast] Invalid script candidate structure:", JSON.stringify(candidate));
+      // console.error("[Podcast] Invalid script candidate structure:", JSON.stringify(candidate));
       throw new Error("Failed to generate podcast script - invalid response structure");
     }
 
@@ -287,13 +287,13 @@ Title:`;
         const generatedTitle = titleData.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
         if (generatedTitle && generatedTitle.length > 0 && generatedTitle.length <= 100) {
           podcastTitle = generatedTitle.replace(/^['"]|['"]$/g, '');
-          console.log(`[Podcast] Generated title: ${podcastTitle}`);
+          // console.log(`[Podcast] Generated title: ${podcastTitle}`);
         }
       } catch (titleError) {
-        console.error('[Podcast] Title generation error:', titleError);
+        // console.error('[Podcast] Title generation error:', titleError);
       }
     } catch (titleError) {
-      console.error("[Podcast] Title generation error:", titleError);
+      // console.error("[Podcast] Title generation error:", titleError);
       // Keep fallback title
     }
 
@@ -315,13 +315,13 @@ Title:`;
         if (voice && /^en-US-Neural2$/i.test(voice)) {
           const suffix = allowedVariants[hostIndex >= 0 ? (hostIndex % allowedVariants.length) : 0];
           voice = `en-US-Neural2-${suffix}`;
-          console.log(`[Podcast] Normalized host voice for ${hostDef?.name}: ${voice}`);
+          // console.log(`[Podcast] Normalized host voice for ${hostDef?.name}: ${voice}`);
         }
 
         // If provided voice is a Neural2 variant but not allowed (e.g. 'en-US-Neural2-B'), map to nearest allowed and warn
         if (voice && /^en-US-Neural2-[A-Z]$/i.test(voice) && !allowedVoices.has(voice)) {
           const fallbackSuffix = allowedVariants[hostIndex >= 0 ? (hostIndex % allowedVariants.length) : 0];
-          console.warn(`[Podcast] Requested voice '${voice}' not recognized/available. Falling back to en-US-Neural2-${fallbackSuffix}`);
+          // console.warn(`[Podcast] Requested voice '${voice}' not recognized/available. Falling back to en-US-Neural2-${fallbackSuffix}`);
           voice = `en-US-Neural2-${fallbackSuffix}`;
         }
 
@@ -367,7 +367,7 @@ Title:`;
 
         if (!ttsResponse.ok) {
           const errorText = await ttsResponse.text();
-          console.error(`[Podcast] TTS API error for segment ${index}:`, ttsResponse.status, errorText);
+          // console.error(`[Podcast] TTS API error for segment ${index}:`, ttsResponse.status, errorText);
           throw new Error(`TTS API failed: ${ttsResponse.status} - ${errorText}`);
         }
 
@@ -414,10 +414,10 @@ Title:`;
           const coverData = await coverRes.json();
           coverImageUrl = coverData.imageUrl;
         } else {
-          console.error('[Podcast] Cover image upload error:', await coverRes.text());
+          // console.error('[Podcast] Cover image upload error:', await coverRes.text());
         }
       } catch (coverError) {
-        console.error('[Podcast] Cover image generation exception:', coverError);
+        // console.error('[Podcast] Cover image generation exception:', coverError);
       }
 
       try {
@@ -449,8 +449,8 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
         const finishReason = candidate?.finishReason;
 
         if (finishReason === "MAX_TOKENS" || !candidate?.content?.parts?.[0]?.text) {
-          console.error("[Podcast] Concept extraction hit token limit or returned empty content:", JSON.stringify(conceptData));
-          console.log("[Podcast] Using fallback concepts due to API limitation");
+          // console.error("[Podcast] Concept extraction hit token limit or returned empty content:", JSON.stringify(conceptData));
+          // console.log("[Podcast] Using fallback concepts due to API limitation");
           // Use fallback - will be handled by the catch block below
           throw new Error("Failed to extract concepts - response truncated or empty");
         }
@@ -466,7 +466,7 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
             throw new Error("No JSON array found in response");
           }
         } catch (e) {
-          console.error("[Podcast] Failed to parse concepts:", e);
+          // console.error("[Podcast] Failed to parse concepts:", e);
           concepts = [{
             concept: "Main Topic",
             description: `A professional educational illustration about ${sources.join(", ")} , featuring modern design elements, clean typography, and vibrant colors`,
@@ -498,10 +498,10 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
               const imageData = await imageRes.json();
               imageUrl = imageData.imageUrl;
             } else {
-              console.error(`[Podcast] Image upload error:`, await imageRes.text());
+              // console.error(`[Podcast] Image upload error:`, await imageRes.text());
             }
           } catch (error) {
-            console.error(`[Podcast] Image upload exception:`, error);
+            // console.error(`[Podcast] Image upload exception:`, error);
           }
 
           visualAssets.push({
@@ -514,11 +514,11 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
           });
         }
 
-        console.log(`[Podcast] Generated ${visualAssets.length} visual assets`);
+        // console.log(`[Podcast] Generated ${visualAssets.length} visual assets`);
 
         // For video podcast type, generate video clips using Veo 3
         if (podcastType === 'video' && visualAssets.length > 0 && accessToken) {
-          console.log(`[Podcast] Generating video clips with Veo 3...`);
+          // console.log(`[Podcast] Generating video clips with Veo 3...`);
 
           try {
             // Generate maximum 2 videos to avoid timeout (each takes ~8-10 seconds)
@@ -552,11 +552,11 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
 
               if (veoResponse.ok) {
                 const veoData = await veoResponse.json();
-                console.log(`[Podcast] Veo response:`, JSON.stringify(veoData).substring(0, 200));
+                // console.log(`[Podcast] Veo response:`, JSON.stringify(veoData).substring(0, 200));
 
                 // Check if this is a long-running operation
                 if (veoData.name && veoData.name.includes('operations')) {
-                  console.log(`[Podcast] Veo returned operation ID: ${veoData.name} - skipping (long-running)`);
+                  // console.log(`[Podcast] Veo returned operation ID: ${veoData.name} - skipping (long-running)`);
                 } else if (veoData.predictions && veoData.predictions[0]) {
                   const prediction = veoData.predictions[0];
                   const videoBase64 = prediction.bytesBase64Encoded ||
@@ -571,23 +571,23 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
                       url: `data:video/mp4;base64,${videoBase64}`,
                       timestamp: Math.floor((i / Math.min(concepts.length, 2)) * estimateDuration(segments) * 60)
                     });
-                    console.log(`[Podcast] Generated video ${i + 1}`);
+                    // console.log(`[Podcast] Generated video ${i + 1}`);
                   } else {
-                    console.log(`[Podcast] No video bytes in prediction:`, Object.keys(prediction));
+                    // console.log(`[Podcast] No video bytes in prediction:`, Object.keys(prediction));
                   }
                 }
               } else {
                 const errorText = await veoResponse.text();
-                console.error(`[Podcast] Veo error (${veoResponse.status}):`, errorText);
+                // console.error(`[Podcast] Veo error (${veoResponse.status}):`, errorText);
               }
             }
           } catch (error) {
-            console.error("[Podcast] Video generation error:", error);
+            // console.error("[Podcast] Video generation error:", error);
           }
         }
 
       } catch (visualError) {
-        console.error("[Podcast] Visual asset generation error:", visualError);
+        // console.error("[Podcast] Visual asset generation error:", visualError);
       }
     }
 
@@ -662,8 +662,8 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
       throw insertError;
     }
 
-    console.log(`[Podcast] Saved podcast: ${podcast.id}`);
-    console.log(`[Podcast] Generated ${visualAssets.length} visual assets`);
+    // console.log(`[Podcast] Saved podcast: ${podcast.id}`);
+    // console.log(`[Podcast] Generated ${visualAssets.length} visual assets`);
 
     return new Response(
       JSON.stringify({
@@ -676,7 +676,7 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
     );
 
   } catch (error: any) {
-    console.error("[Podcast] Error:", error);
+    // console.error("[Podcast] Error:", error);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       {

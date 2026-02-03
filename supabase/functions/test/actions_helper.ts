@@ -43,7 +43,7 @@ export function getFriendlyActionLabel(actionType: string, params: any): string 
 
 // Helper function to execute a single action
 export async function runAction(actionsService: any, userId: string, sessionId: string, actionType: string, params: any): Promise<any> {
-    console.log(`[ActionExecution] running action helper: ${actionType}`);
+    // console.log(`[ActionExecution] running action helper: ${actionType}`);
     try {
         if (actionType === 'DB_ACTION') {
             const { table, operation, data, filters, order, limit } = params || {};
@@ -62,7 +62,7 @@ export async function runAction(actionsService: any, userId: string, sessionId: 
 
         return { success: false, error: `Unknown action type: ${actionType}` };
     } catch (err: any) {
-        console.error('[actions_helper][runAction] Error executing action:', actionType, err);
+        // console.error('[actions_helper][runAction] Error executing action:', actionType, err);
         return { success: false, error: err?.message || String(err) };
     }
 }
@@ -76,7 +76,7 @@ export async function executeParsedActions(
     onProgress?: (action: any, index: number, total: number) => void
 ): Promise<any[]> {
     const executedActions: any[] = [];
-    console.log(`[ActionExecution] Processing ${actions.length} parsed actions...`);
+    // console.log(`[ActionExecution] Processing ${actions.length} parsed actions...`);
 
     const AUTO_EXECUTE_ENABLED = true;
 
@@ -99,7 +99,7 @@ export async function executeParsedActions(
         }
 
         try {
-            console.log(`[ActionExecution] Executing action: ${action.type}`);
+            // console.log(`[ActionExecution] Executing action: ${action.type}`);
             const result = await runAction(actionsService, userId, sessionId, action.type, action.params);
 
             executedActions.push({
@@ -109,10 +109,10 @@ export async function executeParsedActions(
                 timestamp: new Date().toISOString()
             });
 
-            console.log(`[ActionExecution] ${action.type}: ${result?.success ? 'SUCCESS' : 'FAILED'}`);
+            // console.log(`[ActionExecution] ${action.type}: ${result?.success ? 'SUCCESS' : 'FAILED'}`);
 
         } catch (error: any) {
-            console.error(`[ActionExecution] Error executing action ${action.type}:`, error);
+            // console.error(`[ActionExecution] Error executing action ${action.type}:`, error);
             executedActions.push({
                 type: action.type,
                 success: false,
@@ -123,3 +123,4 @@ export async function executeParsedActions(
     }
     return executedActions;
 }
+

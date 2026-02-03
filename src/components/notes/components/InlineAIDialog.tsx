@@ -5,7 +5,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Loader2, Check, Copy, ChevronDown, ChevronUp } from 'lucide-react'; // Import Chevron icons
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import rehypeRaw from 'rehype-raw';
+import rehypeKatex from 'rehype-katex';
 import { useCopyToClipboard } from '../../../hooks/useCopyToClipboard';
 import { CodeRenderer } from './CodeRenderer'; // Assuming CodeRenderer is exported
 import { Textarea } from '../../ui/textarea'; // Import Textarea for custom instructions
@@ -123,8 +125,8 @@ export const InlineAIDialog: React.FC<InlineAIDialogProps> = ({
             ) : (
               <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed dark:text-gray-200">
                 <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeRaw]}
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeRaw, rehypeKatex]}
                   components={commonMarkdownComponents}
                 >
                   {String(generatedContent || 'Click "Generate with AI" to see content here.')}

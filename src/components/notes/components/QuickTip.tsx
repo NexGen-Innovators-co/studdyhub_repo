@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lightbulb, X, Settings } from 'lucide-react';
+import { Lightbulb, X, Settings, Sparkles, CheckCircle2 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { Button } from '../../ui/button';
 
@@ -11,27 +11,13 @@ interface QuickTipsProps {
 }
 
 export const QuickTips: React.FC<QuickTipsProps> = ({ userPreferences }) => {
-  const [isVisible, setIsVisible] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+  const [shouldShowTips, setShouldShowTips] = useState(() => 
+    userPreferences?.showTips ?? localStorage.getItem('showQuickTips') !== 'false'
+  );
   const location = useLocation();
-  
-  // Get user preference from localStorage or props
-  const shouldShowTips = userPreferences?.showTips ?? 
-    localStorage.getItem('showQuickTips') !== 'false';
 
-  useEffect(() => {
-    if (!shouldShowTips) {
-      setIsVisible(false);
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setIsVisible(false);
-    }, 30000);
-
-    return () => clearTimeout(timer);
-  }, [shouldShowTips]);
-
+  // Show/hide tips on route change if enabled
   useEffect(() => {
     if (shouldShowTips) {
       setIsVisible(true);
@@ -41,13 +27,23 @@ export const QuickTips: React.FC<QuickTipsProps> = ({ userPreferences }) => {
   const hidePermanently = () => {
     setIsVisible(false);
     localStorage.setItem('showQuickTips', 'false');
+    setShouldShowTips(false);
   };
 
-  const hideTemporarily = () => {
-    setIsVisible(false);
+  const toggleTips = () => {
+    setIsVisible(!isVisible);
   };
 
-  if (!isVisible || !shouldShowTips) return null;
+  // Expose toggleTips globally for other components
+  useEffect(() => {
+    (window as any).__toggleTips = toggleTips;
+    return () => {
+      delete (window as any).__toggleTips;
+    };
+  }, []);
+
+  // Return null only if tips should never show and nothing is visible
+  if (!shouldShowTips && !isVisible) return null;
 
   const routeTips = {
     '/dashboard': [
@@ -91,6 +87,23 @@ export const QuickTips: React.FC<QuickTipsProps> = ({ userPreferences }) => {
       "💡 Generate notes, summaries, or quizzes from your documents",
       "💡 Organize documents with tags and categories",
     ],
+    '/quizzes': [
+      "💡 Generate quizzes from recordings, notes, or use AI for custom topics",
+      "💡 Switch between tabs to access different quiz creation methods",
+      "💡 View your quiz history to track performance and review past attempts",
+      "💡 Higher difficulty levels yield more XP rewards",
+      "💡 Check daily limits in the right sidebar",
+      "💡 Join live quizzes to compete with others in real-time",
+    ],
+    '/quizzes/live': [
+      "💡 Host a quiz by selecting from your created quizzes",
+      "💡 Join a quiz using the 6-character join code",
+      "💡 Auto mode advances questions automatically for everyone",
+      "💡 Individual mode lets each player progress at their own pace",
+      "💡 Share the join code with friends to invite them",
+      "💡 View completed sessions in the History tab",
+      "💡 Your score and ranking are displayed at the end",
+    ],
     '/settings': [
       "💡 Customize your learning preferences for better AI assistance",
       "💡 Connect external services and integrations",
@@ -102,6 +115,18 @@ export const QuickTips: React.FC<QuickTipsProps> = ({ userPreferences }) => {
       "💡 Discover learning resources from other students",
       "💡 Join study groups for collaborative learning",
       "💡 Follow topics and users that match your interests",
+    ],
+    '/podcasts': [
+      "💡 Generate AI podcasts from your notes, recordings, or custom topics",
+      "💡 Create live audio or video sessions to stream in real-time",
+      "💡 Invite members to collaborate on private podcasts",
+      "💡 Share podcasts publicly to reach a wider audience",
+      "💡 Download podcasts for offline listening and review",
+      "💡 Generate AI cover images to make your podcasts stand out",
+      "💡 View transcripts and jump to specific segments instantly",
+      "💡 Track listener count and engagement on your podcasts",
+      "💡 Use filters to find trending, recent, or most popular content",
+      "💡 Join live streams and interact with hosts in real-time",
     ],
     '/admin': [
       "💡 Monitor system performance and usage statistics",
@@ -140,81 +165,69 @@ export const QuickTips: React.FC<QuickTipsProps> = ({ userPreferences }) => {
 
   return (
     <>
-      <div className="fixed bottom-4 right-4 bg-blue-50 dark:bg-blue-800/95 border border-blue-200 dark:border-blue-800 rounded-lg shadow-lg p-4 max-w-sm z-50 animate-in fade-in duration-500">
-        <div className="flex items-start justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <Lightbulb className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-            <span className="font-semibold text-blue-800 dark:text-blue-200 text-sm">
-              Quick Tips - {getRouteName(location.pathname)}
-            </span>
+      {/* Tips Panel - shows when isVisible is true (always can be shown via floating button) */}
+      {isVisible && (
+        <div className="fixed bottom-28 right-2 lg:bottom-20 lg:right-2 bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-blue-900/95 dark:via-slate-900/95 dark:to-purple-900/95 border-2 border-blue-300 dark:border-blue-700 rounded-2xl shadow-2xl p-5 max-w-md z-50 animate-in fade-in slide-in-from-bottom duration-500 backdrop-blur-sm">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 shadow-lg">
+              <Sparkles className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 text-base">
+                Quick Tips
+              </span>
+              <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">
+                {getRouteName(location.pathname)}
+              </p>
+            </div>
           </div>
           <div className="flex gap-1">
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setShowSettings(true)}
-              className="h-6 w-6 p-0 hover:bg-blue-100 dark:hover:bg-blue-800"
+              onClick={toggleTips}
+              className="h-8 w-8 p-0 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-lg transition-colors"
+              title="Close"
             >
-              <Settings className="w-3 h-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={hideTemporarily}
-              className="h-6 w-6 p-0 hover:bg-blue-100 dark:hover:bg-blue-800"
-            >
-              <X className="w-3 h-3" />
+              <X className="w-4 h-4 text-gray-600 dark:text-gray-400" />
             </Button>
           </div>
         </div>
-        <div className="space-y-1">
+        
+        <div className="space-y-2.5 mb-4 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
           {tips.map((tip, index) => (
-            <p key={index} className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
-              {tip}
-            </p>
+            <div 
+              key={index} 
+              className="flex gap-3 p-2.5 rounded-lg hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-all duration-200 group"
+            >
+              <CheckCircle2 className="w-4 h-4 text-blue-500 dark:text-blue-400 flex-shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+              <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                {tip.replace('💡 ', '')}
+              </p>
+            </div>
           ))}
         </div>
-        <div className="mt-2 pt-2 border-t border-blue-200 dark:border-blue-700 flex justify-between">
-          <button
-            onClick={hideTemporarily}
-            className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+        
+        <div className="pt-3 border-t-2 border-blue-200 dark:border-blue-800 flex justify-between items-center">
+          <Button
+            onClick={toggleTips}
+            size="sm"
+            variant="ghost"
+            className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 px-4 py-2 rounded-lg transition-all"
           >
-            Got it
-          </button>
-          <button
+            Got it!
+          </Button>
+          <Button
             onClick={hidePermanently}
-            className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+            size="sm"
+            variant="ghost"
+            className="text-sm text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 px-3 py-2 rounded-lg transition-all"
           >
             Don't show again
-          </button>
+          </Button>
         </div>
       </div>
-
-      {/* Settings Modal */}
-      {showSettings && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm mx-4">
-            <h3 className="font-semibold mb-4">Quick Tips Settings</h3>
-            <div className="space-y-3">
-              <label className="flex items-center gap-2">
-                <input 
-                  type="checkbox" 
-                  checked={shouldShowTips}
-                  onChange={(e) => {
-                    localStorage.setItem('showQuickTips', e.target.checked.toString());
-                    window.location.reload();
-                  }}
-                />
-                Show quick tips
-              </label>
-              <div className="flex justify-end gap-2 mt-4">
-                <Button variant="outline" onClick={() => setShowSettings(false)}>
-                  Close
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
     </>
   );
@@ -229,10 +242,16 @@ const getRouteName = (path: string): string => {
     '/schedule': 'Schedule',
     '/chat': 'AI Chat',
     '/documents': 'Documents',
+    '/quizzes': 'Quizzes',
     '/settings': 'Settings',
     '/social': 'Social Feed',
     '/admin': 'Admin',
   };
+
+  // Check for specific nested routes first
+  if (path.includes('/quizzes') && path.includes('live')) {
+    return 'Live Quiz';
+  }
 
   for (const [route, name] of Object.entries(routeMap)) {
     if (path.startsWith(route)) {

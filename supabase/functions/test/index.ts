@@ -85,7 +85,7 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
   const executedActions: any[] = [];
   let modifiedResponse = aiResponse;
 
-  console.log(`[ActionExecution] Processing AI response for actions...`);
+  // console.log(`[ActionExecution] Processing AI response for actions...`);
 
   // 1. Parse actions from the text
   const actionsRaw = actionsService.parseActionFromText(aiResponse);
@@ -94,7 +94,7 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
 
   // 2. Execute parsed action if found
   if (actionList.length > 0) {
-    console.log(`[ActionExecution] Found ${actionList.length} actions.`);
+    // console.log(`[ActionExecution] Found ${actionList.length} actions.`);
 
     // First pass: Cleanup text for ALL actions
     for (const action of actionList) {
@@ -111,7 +111,7 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
     // 3. Actually execute them using the standardized runAction helper
     for (const action of actionList) {
       try {
-        console.log(`[ActionExecution] Executing action: ${action.action}`);
+        // console.log(`[ActionExecution] Executing action: ${action.action}`);
         const result = await runAction(actionsService, userId, sessionId, action.action, action.params);
 
         executedActions.push({
@@ -121,9 +121,9 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
           timestamp: new Date().toISOString()
         });
 
-        console.log(`[ActionExecution] ${action.action}: ${result?.success ? 'SUCCESS' : 'FAILED'}`);
+        // console.log(`[ActionExecution] ${action.action}: ${result?.success ? 'SUCCESS' : 'FAILED'}`);
       } catch (err: any) {
-        console.error(`[ActionExecution] Error executing ${action.action}:`, err);
+        // console.error(`[ActionExecution] Error executing ${action.action}:`, err);
         executedActions.push({
           type: action.action,
           success: false,
@@ -144,7 +144,7 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
 async function updateSessionTokenCount(sessionId: string, userId: string, messageContent: string, operation = 'add'): Promise<{ success: boolean, tokenCount: number }> {
   try {
     const messageTokens = await calculateTokenCount(messageContent);
-    console.log(`[updateSessionTokenCount] Message tokens: ${messageTokens}`);
+    // console.log(`[updateSessionTokenCount] Message tokens: ${messageTokens}`);
 
     if (operation === 'add') {
       const { data: sessionData, error: fetchError } = await supabase
@@ -155,7 +155,7 @@ async function updateSessionTokenCount(sessionId: string, userId: string, messag
         .maybeSingle();
 
       if (fetchError && fetchError.code !== 'PGRST116') {
-        console.error('[updateSessionTokenCount] Error fetching current token count:', fetchError);
+        // console.error('[updateSessionTokenCount] Error fetching current token count:', fetchError);
         return {
           success: false,
           tokenCount: 0
@@ -163,7 +163,7 @@ async function updateSessionTokenCount(sessionId: string, userId: string, messag
       }
 
       if (!sessionData) {
-        console.log(`[updateSessionTokenCount] Session not found yet, creating session token_count: ${messageTokens}`);
+        // console.log(`[updateSessionTokenCount] Session not found yet, creating session token_count: ${messageTokens}`);
         try {
           const { error: insertError } = await supabase
             .from('chat_sessions')
@@ -176,13 +176,13 @@ async function updateSessionTokenCount(sessionId: string, userId: string, messag
             });
 
           if (insertError) {
-            console.error('[updateSessionTokenCount] Error inserting initial token count:', insertError);
+            // console.error('[updateSessionTokenCount] Error inserting initial token count:', insertError);
             return { success: false, tokenCount: messageTokens };
           }
 
           return { success: true, tokenCount: messageTokens };
         } catch (err) {
-          console.error('[updateSessionTokenCount] Exception inserting session token_count:', err);
+          // console.error('[updateSessionTokenCount] Exception inserting session token_count:', err);
           return { success: false, tokenCount: messageTokens };
         }
       }
@@ -200,14 +200,14 @@ async function updateSessionTokenCount(sessionId: string, userId: string, messag
         .eq('user_id', userId);
 
       if (updateError) {
-        console.error('[updateSessionTokenCount] Error updating token count:', updateError);
+        // console.error('[updateSessionTokenCount] Error updating token count:', updateError);
         return {
           success: false,
           tokenCount: currentTokenCount
         };
       }
 
-      console.log(`[updateSessionTokenCount] Updated token count: ${currentTokenCount} -> ${newTokenCount}`);
+      // console.log(`[updateSessionTokenCount] Updated token count: ${currentTokenCount} -> ${newTokenCount}`);
       return {
         success: true,
         tokenCount: newTokenCount
@@ -223,21 +223,21 @@ async function updateSessionTokenCount(sessionId: string, userId: string, messag
         .eq('user_id', userId);
 
       if (updateError) {
-        console.error('[updateSessionTokenCount] Error setting token count:', updateError);
+        // console.error('[updateSessionTokenCount] Error setting token count:', updateError);
         return {
           success: false,
           tokenCount: 0
         };
       }
 
-      console.log(`[updateSessionTokenCount] Set token count to: ${messageTokens}`);
+      // console.log(`[updateSessionTokenCount] Set token count to: ${messageTokens}`);
       return {
         success: true,
         tokenCount: messageTokens
       };
     }
   } catch (error) {
-    console.error('[updateSessionTokenCount] Exception:', error);
+    // console.error('[updateSessionTokenCount] Exception:', error);
     return {
       success: false,
       tokenCount: 0
@@ -255,20 +255,20 @@ async function getSessionTokenCount(sessionId: string, userId: string): Promise<
       .maybeSingle();
 
     if (error && error.code !== 'PGRST116') {
-      console.error('[getSessionTokenCount] Error fetching token count:', error);
+      // console.error('[getSessionTokenCount] Error fetching token count:', error);
       return 0;
     }
 
     if (!data) {
-      console.log(`[getSessionTokenCount] Session ${sessionId} not found yet`);
+      // console.log(`[getSessionTokenCount] Session ${sessionId} not found yet`);
       return 0;
     }
 
     const tokenCount = data?.token_count || 0;
-    console.log(`[getSessionTokenCount] Session ${sessionId} token count: ${tokenCount}`);
+    // console.log(`[getSessionTokenCount] Session ${sessionId} token count: ${tokenCount}`);
     return tokenCount;
   } catch (error) {
-    console.error('[getSessionTokenCount] Exception:', error);
+    // console.error('[getSessionTokenCount] Exception:', error);
     return 0;
   }
 }
@@ -310,11 +310,11 @@ async function updateConversationSummary(sessionId: string, userId: string, rece
         .eq('id', sessionId)
         .eq('user_id', userId);
 
-      console.log(`[updateConversationSummary] Updated summary for session ${sessionId}`);
+      // console.log(`[updateConversationSummary] Updated summary for session ${sessionId}`);
       return summary;
     }
   } catch (error) {
-    console.error('Error updating conversation summary:', error);
+    // console.error('Error updating conversation summary:', error);
   }
 
   return null;
@@ -337,7 +337,7 @@ async function buildIntelligentContext(
 }> {
   const logPrefix = `[buildIntelligentContext][Session:${sessionId}]`;
   const storedTokenCount = await getSessionTokenCount(sessionId, userId);
-  console.log(`${logPrefix} Retrieved stored token count: ${storedTokenCount}`);
+  // console.log(`${logPrefix} Retrieved stored token count: ${storedTokenCount}`);
 
   const conversationHistory = await getConversationHistory(userId, sessionId);
 
@@ -352,10 +352,10 @@ async function buildIntelligentContext(
 
     if (sessionData?.context_summary) {
       conversationSummary = `Session "${sessionData.title}" (last active: ${new Date(sessionData.last_message_at).toLocaleDateString()}): ${sessionData.context_summary}`;
-      console.log(`${logPrefix} Using enhanced summary with session info`);
+      // console.log(`${logPrefix} Using enhanced summary with session info`);
     }
   } catch (error) {
-    console.error(`${logPrefix} Error fetching summary:`, error);
+    // console.error(`${logPrefix} Error fetching summary:`, error);
   }
   const MAX_HISTORY_TOKENS = ENHANCED_PROCESSING_CONFIG.MAX_INPUT_TOKENS - 8192; // Leave 8192 buffer for system prompt/files
   let currentTokens = 0;
@@ -373,7 +373,7 @@ async function buildIntelligentContext(
     const msgTokens = estimateTokenCount(msg.content) + 20; // +20 for role/metadata overhead
 
     if (currentTokens + msgTokens > MAX_HISTORY_TOKENS) {
-      console.log(`${logPrefix} Reached token limit at message ${i} (${currentTokens} tokens)`);
+      // console.log(`${logPrefix} Reached token limit at message ${i} (${currentTokens} tokens)`);
       break;
     }
 
@@ -381,7 +381,7 @@ async function buildIntelligentContext(
     selectedMessages.unshift(msg);
   }
 
-  console.log(`${logPrefix} dynamic context: ${selectedMessages.length} messages selected (${currentTokens} estimated tokens)`);
+  // console.log(`${logPrefix} dynamic context: ${selectedMessages.length} messages selected (${currentTokens} estimated tokens)`);
 
   return {
     recentMessages: selectedMessages,
@@ -395,7 +395,7 @@ async function buildIntelligentContext(
 
 async function getConversationHistory(userId: string, sessionId: string, maxMessages = ENHANCED_PROCESSING_CONFIG.MAX_CONVERSATION_HISTORY): Promise<any[]> {
   try {
-    console.log(`Retrieving conversation history for session ${sessionId}`);
+    // console.log(`Retrieving conversation history for session ${sessionId}`);
 
     const { data: messages, error } = await supabase
       .from('chat_messages')
@@ -409,19 +409,19 @@ async function getConversationHistory(userId: string, sessionId: string, maxMess
       .limit(maxMessages);
 
     if (error) {
-      console.error('Error fetching conversation history:', error);
+      // console.error('Error fetching conversation history:', error);
       return [];
     }
 
     if (!messages || messages.length === 0) {
-      console.log('No conversation history found');
+      // console.log('No conversation history found');
       return [];
     }
 
-    console.log(`Retrieved ${messages.length} messages`);
+    // console.log(`Retrieved ${messages.length} messages`);
     return messages;
   } catch (error) {
-    console.error('Error in getConversationHistory:', error);
+    // console.error('Error in getConversationHistory:', error);
     return [];
   }
 }
@@ -438,7 +438,7 @@ async function buildAttachedContext(documentIds: string[], noteIds: string[], us
       .in('id', documentIds);
 
     if (error) {
-      console.error('Error fetching documents:', error);
+      // console.error('Error fetching documents:', error);
     } else if (documents) {
       context += 'DOCUMENTS:\n';
       for (const doc of documents) {
@@ -474,7 +474,7 @@ async function buildAttachedContext(documentIds: string[], noteIds: string[], us
       .in('id', noteIds);
 
     if (error) {
-      console.error('Error fetching notes:', error);
+      // console.error('Error fetching notes:', error);
     } else if (notes) {
       context += 'NOTES:\n';
       for (const note of notes) {
@@ -551,7 +551,7 @@ async function saveChatMessage({
       .single();
 
     if (error) {
-      console.error('Error saving chat message:', error);
+      // console.error('Error saving chat message:', error);
       return null;
     }
 
@@ -560,7 +560,7 @@ async function saveChatMessage({
       timestamp: data.timestamp
     };
   } catch (error) {
-    console.error('Database error when saving chat message:', error);
+    // console.error('Database error when saving chat message:', error);
     return null;
   }
 }
@@ -611,14 +611,14 @@ const generateChatTitle = async (sessionId: string, userId: string, initialMessa
         generatedTitle = generatedTitle.substring(0, 47) + '...';
       }
 
-      console.log(`📝 Generated title: "${generatedTitle}" (message count: ${messageCount})`);
+      // console.log(`📝 Generated title: "${generatedTitle}" (message count: ${messageCount})`);
       return generatedTitle;
     } else {
       const words = initialMessage.split(' ');
       return words.slice(0, 5).join(' ') + (words.length > 5 ? '...' : '');
     }
   } catch (error) {
-    console.error('Error generating chat title:', error);
+    // console.error('Error generating chat title:', error);
     const words = initialMessage.split(' ');
     return words.slice(0, 5).join(' ') + (words.length > 5 ? '...' : '');
   }
@@ -632,7 +632,7 @@ const maybeUpdateSessionTitle = async (sessionId: string, userId: string, messag
 
     if (!shouldUpdateTitle) return;
 
-    console.log(`🔄 Updating session title (message ${messageCount})...`);
+    // console.log(`🔄 Updating session title (message ${messageCount})...`);
 
     const newTitle = await generateChatTitle(sessionId, userId, latestMessage, messageCount);
 
@@ -643,12 +643,12 @@ const maybeUpdateSessionTitle = async (sessionId: string, userId: string, messag
       .eq('user_id', userId);
 
     if (error) {
-      console.error('❌ Error updating session title:', error);
+      // console.error('❌ Error updating session title:', error);
     } else {
-      console.log(`✅ Session title updated: "${newTitle}"`);
+      // console.log(`✅ Session title updated: "${newTitle}"`);
     }
   } catch (error) {
-    console.error('❌ Error in maybeUpdateSessionTitle:', error);
+    // console.error('❌ Error in maybeUpdateSessionTitle:', error);
   }
 };
 
@@ -662,7 +662,7 @@ async function ensureChatSession(userId: string, sessionId: string, newDocumentI
       .single();
 
     if (fetchError && fetchError.code !== 'PGRST116') {
-      console.error('Error fetching chat session:', fetchError);
+      // console.error('Error fetching chat session:', fetchError);
       return;
     }
 
@@ -690,13 +690,13 @@ async function ensureChatSession(userId: string, sessionId: string, newDocumentI
         .eq('id', sessionId);
 
       if (updateError) {
-        console.error('Error updating chat session:', updateError);
+        // console.error('Error updating chat session:', updateError);
       }
 
       // Update title if needed based on message count
       if (initialMessage) {
         maybeUpdateSessionTitle(sessionId, userId, newMessageCount, initialMessage).catch(err =>
-          console.error('Error updating title:', err)
+          // console.error('Error updating title:', err)
         );
       }
     } else {
@@ -717,13 +717,13 @@ async function ensureChatSession(userId: string, sessionId: string, newDocumentI
         .single();
 
       if (insertError) {
-        console.error('Error creating chat session:', insertError);
+        // console.error('Error creating chat session:', insertError);
       } else {
-        console.log(`✅ New session created with title: "${newTitle}"`);
+        // console.log(`✅ New session created with title: "${newTitle}"`);
       }
     }
   } catch (error) {
-    console.error('Database error when ensuring chat session:', error);
+    // console.error('Database error when ensuring chat session:', error);
   }
 }
 
@@ -744,9 +744,9 @@ async function updateSessionLastMessage(sessionId: string, contextSummary: strin
       .update(update)
       .eq('id', sessionId);
 
-    if (error) console.error('Error updating session last message time:', error);
+    if (error) // console.error('Error updating session last message time:', error);
   } catch (error) {
-    console.error('Database error when updating session:', error);
+    // console.error('Database error when updating session:', error);
   }
 }
 
@@ -909,7 +909,7 @@ async function buildEnhancedGeminiConversation(
   queryType: string;
 }> {
   const logPrefix = `[buildEnhancedGeminiConversation][Session:${sessionId}]`;
-  console.log(`${logPrefix} Starting enhanced conversation build`);
+  // console.log(`${logPrefix} Starting enhanced conversation build`);
 
   try {
     // Get comprehensive user context
@@ -1083,7 +1083,7 @@ ${actionableContextText}
       }
     }
 
-    console.log(`${logPrefix} Built enhanced conversation with ${geminiContents.length} parts`);
+    // console.log(`${logPrefix} Built enhanced conversation with ${geminiContents.length} parts`);
 
     return {
       contents: geminiContents,
@@ -1096,7 +1096,7 @@ ${actionableContextText}
       queryType: queryType
     };
   } catch (error) {
-    console.error(`${logPrefix} Error:`, error);
+    // console.error(`${logPrefix} Error:`, error);
     throw error;
   }
 }
@@ -1139,7 +1139,7 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string, conf
   // 2. Retry Loop with Model Switching
   for (let attempt = 0; attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS; attempt++) {
     const currentModel = MODEL_CHAIN[attempt % MODEL_CHAIN.length];
-    console.log(`[GeminiAPI] Attempt ${attempt + 1}/${ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS} using model: ${currentModel}`);
+    // console.log(`[GeminiAPI] Attempt ${attempt + 1}/${ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS} using model: ${currentModel}`);
 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${geminiApiKey}`;
 
@@ -1157,15 +1157,15 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string, conf
         if (extractedContent) {
           return { success: true, content: extractedContent };
         } else {
-          console.warn(`[GeminiAPI] Model ${currentModel} returned no content.`);
+          // console.warn(`[GeminiAPI] Model ${currentModel} returned no content.`);
         }
       } else {
         const errorText = await response.text();
         const status = response.status;
-        console.error(`[GeminiAPI] Error ${status} with ${currentModel}: ${errorText.substring(0, 200)}...`);
+        // console.error(`[GeminiAPI] Error ${status} with ${currentModel}: ${errorText.substring(0, 200)}...`);
 
         if (status === 429 || status === 503) {
-          console.warn(`[GeminiAPI] Quota/Load limit hit for ${currentModel}. Switching to next model...`);
+          // console.warn(`[GeminiAPI] Quota/Load limit hit for ${currentModel}. Switching to next model...`);
           if (attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
             await sleep(1000);
             continue;
@@ -1177,7 +1177,7 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string, conf
         }
       }
     } catch (error) {
-      console.error(`[GeminiAPI] Network error with ${currentModel}:`, error);
+      // console.error(`[GeminiAPI] Network error with ${currentModel}:`, error);
       if (attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
         await sleep(1000);
       }
@@ -1237,7 +1237,7 @@ async function extractUserFacts(userMessage: string, aiResponse: string, userId:
               confidence_score: 0.8,
               source_session_id: sessionId
             });
-            console.log(`[extractUserFacts] Matched fact from ${source}: type=${type}, key=${key}, value=${value}`);
+            // console.log(`[extractUserFacts] Matched fact from ${source}: type=${type}, key=${key}, value=${value}`);
           }
         }
       }
@@ -1253,7 +1253,7 @@ async function extractUserFacts(userMessage: string, aiResponse: string, userId:
             confidence_score: 0.7,
             source_session_id: sessionId
           });
-          console.log(`[extractUserFacts] Matched topic from ${source}: ${match.toLowerCase()}`);
+          // console.log(`[extractUserFacts] Matched topic from ${source}: ${match.toLowerCase()}`);
         }
       }
     }
@@ -1277,12 +1277,12 @@ async function extractUserFacts(userMessage: string, aiResponse: string, userId:
           confidence_score: 0.7,
           source_session_id: sessionId
         });
-        console.log(`[extractUserFacts] Matched topic: ${match.toLowerCase()}`);
+        // console.log(`[extractUserFacts] Matched topic: ${match.toLowerCase()}`);
       }
     }
   }
 
-  console.log(`[extractUserFacts] Extracted facts:`, facts);
+  // console.log(`[extractUserFacts] Extracted facts:`, facts);
 
   // If the AI response contains a section like "Here are the key 'learning facts' I know about you:", try to parse bullet points as facts
   const aiFactSectionMatch = aiResponse.match(/Here are the key ["']?learning facts["']?[^\n]*\n([\s\S]+?)(?:\n\n|$)/i);
@@ -1302,7 +1302,7 @@ async function extractUserFacts(userMessage: string, aiResponse: string, userId:
             confidence_score: 0.6,
             source_session_id: sessionId
           });
-          console.log(`[extractUserFacts] Inferred from AI summary: key=${key}, value=${value}`);
+          // console.log(`[extractUserFacts] Inferred from AI summary: key=${key}, value=${value}`);
         }
       }
     }
@@ -1332,7 +1332,7 @@ async function handleStreamingResponse(
   // Start async processing
   (async () => {
     try {
-      console.log('🚀 Starting streaming response for message:', message.substring(0, 50));
+      // console.log('🚀 Starting streaming response for message:', message.substring(0, 50));
 
       // Step 1: Understanding Phase
       handler.sendThinkingStep(
@@ -1341,19 +1341,19 @@ async function handleStreamingResponse(
         'Interpreting message intent and key entities...',
         'in-progress'
       );
-      console.log('✅ Sent understanding step (in-progress)');
+      // console.log('✅ Sent understanding step (in-progress)');
 
-      console.log('📚 Getting conversation history...');
+      // console.log('📚 Getting conversation history...');
       const conversationHistory = await getConversationHistory(userId, sessionId);
-      console.log('✅ Retrieved conversation history:', conversationHistory.length, 'messages');
+      // console.log('✅ Retrieved conversation history:', conversationHistory.length, 'messages');
 
       let userIntent: UserIntent;
       try {
-        console.log('🧠 Understanding query...');
+        // console.log('🧠 Understanding query...');
         userIntent = await agenticCore.understandQuery(message, userId, conversationHistory);
-        console.log('✅ Query understood:', userIntent.primary);
+        // console.log('✅ Query understood:', userIntent.primary);
       } catch (error: any) {
-        console.error('❌ Error in understandQuery:', error.message, error.stack);
+        // console.error('❌ Error in understandQuery:', error.message, error.stack);
         // Fallback intent if query understanding fails
         userIntent = {
           primary: 'general_query',
@@ -1364,10 +1364,10 @@ async function handleStreamingResponse(
           requiresAction: false,
           confidence: 0.5
         };
-        console.log('⚠️ Using fallback intent');
+        // console.log('⚠️ Using fallback intent');
       }
 
-      console.log('📤 Sending understanding complete step...');
+      // console.log('📤 Sending understanding complete step...');
       const entitiesPreview = (userIntent.entities || []).length > 0
         ? ` (Entities: ${(userIntent.entities || []).map(e => e.value).join(', ')})`
         : '';
@@ -1378,10 +1378,10 @@ async function handleStreamingResponse(
         'completed',
         { intent: userIntent.primary, entities: (userIntent.entities || []).map((e: EntityMention) => `${e.type}:${e.value}`) }
       );
-      console.log('✅ Understanding phase complete');
+      // console.log('✅ Understanding phase complete');
 
       // Step 2: Retrieval Phase
-      console.log('🔍 Starting retrieval phase...');
+      // console.log('🔍 Starting retrieval phase...');
       const retrievalDetail = userIntent.entities?.length > 0
         ? `Searching for relevant data about ${userIntent.entities.map(e => e.value).join(', ')}...`
         : 'Searching through your notes, documents, and past conversations...';
@@ -1395,15 +1395,15 @@ async function handleStreamingResponse(
 
       let relevantContext: any[] = [];
       try {
-        console.log('📥 Retrieving relevant context...');
+        // console.log('📥 Retrieving relevant context...');
         relevantContext = await agenticCore.retrieveRelevantContext(userIntent, userId, sessionId);
-        console.log('✅ Retrieved context:', relevantContext?.length || 0, 'items');
+        // console.log('✅ Retrieved context:', relevantContext?.length || 0, 'items');
       } catch (error: any) {
-        console.error('❌ Error in retrieveRelevantContext:', error.message, error.stack);
+        // console.error('❌ Error in retrieveRelevantContext:', error.message, error.stack);
         // Continue with empty context
       }
 
-      console.log('📤 Sending retrieval complete step...');
+      // console.log('📤 Sending retrieval complete step...');
       handler.sendThinkingStep(
         'retrieval',
         'Context retrieved',
@@ -1411,10 +1411,10 @@ async function handleStreamingResponse(
         'completed',
         { contextCount: relevantContext?.length || 0, topItems: (relevantContext || []).slice(0, 3).map(c => c.title) }
       );
-      console.log('✅ Retrieval phase complete');
+      // console.log('✅ Retrieval phase complete');
 
       // Step 3: Reasoning Phase
-      console.log('🤔 Starting reasoning phase...');
+      // console.log('🤔 Starting reasoning phase...');
       handler.sendThinkingStep(
         'reasoning',
         'Building reasoning chain',
@@ -1424,15 +1424,15 @@ async function handleStreamingResponse(
 
       let reasoningChain: string[] = [];
       try {
-        console.log('⚙️ Building reasoning chain...');
+        // console.log('⚙️ Building reasoning chain...');
         reasoningChain = await agenticCore.buildReasoningChain(userIntent, relevantContext, message);
-        console.log('✅ Built reasoning chain:', reasoningChain?.length || 0, 'steps');
+        // console.log('✅ Built reasoning chain:', reasoningChain?.length || 0, 'steps');
       } catch (error: any) {
-        console.error('❌ Error in buildReasoningChain:', error.message, error.stack);
+        // console.error('❌ Error in buildReasoningChain:', error.message, error.stack);
         // Continue with empty reasoning chain
       }
 
-      console.log('📤 Sending reasoning complete step...');
+      // console.log('📤 Sending reasoning complete step...');
       handler.sendThinkingStep(
         'reasoning',
         'Reasoning complete',
@@ -1440,10 +1440,10 @@ async function handleStreamingResponse(
         'completed',
         { reasoningSteps: reasoningChain || [] }
       );
-      console.log('✅ Reasoning phase complete');
+      // console.log('✅ Reasoning phase complete');
 
       // Step 4: Memory Loading Phase
-      console.log('🧠 Starting memory loading phase...');
+      // console.log('🧠 Starting memory loading phase...');
       handler.sendThinkingStep(
         'memory',
         'Loading memory systems',
@@ -1451,15 +1451,15 @@ async function handleStreamingResponse(
         'in-progress'
       );
 
-      console.log('💾 Loading memory systems...');
+      // console.log('💾 Loading memory systems...');
       const [workingMemory, longTermMemory, episodicMemory] = await Promise.all([
         agenticCore.getWorkingMemory(sessionId, userId),
         agenticCore.getLongTermMemory(userId),
         agenticCore.getEpisodicMemory(userId, message)
       ]);
-      console.log('✅ Memory systems loaded');
+      // console.log('✅ Memory systems loaded');
 
-      console.log('📤 Sending memory complete step...');
+      // console.log('📤 Sending memory complete step...');
       handler.sendThinkingStep(
         'memory',
         'Memory loaded',
@@ -1467,20 +1467,20 @@ async function handleStreamingResponse(
         'completed',
         { msgCount: workingMemory.recentMessages?.length || 0, factCount: longTermMemory.facts?.length || 0 }
       );
-      console.log('✅ Memory phase complete');
+      // console.log('✅ Memory phase complete');
 
       // Build context
-      console.log('📝 Building context...');
+      // console.log('📝 Building context...');
       let attachedContext = '';
       if (allDocumentIds.length > 0 || attachedNoteIds.length > 0) {
-        console.log('📎 Building attached context from', allDocumentIds.length, 'documents and', attachedNoteIds.length, 'notes');
+        // console.log('📎 Building attached context from', allDocumentIds.length, 'documents and', attachedNoteIds.length, 'notes');
         attachedContext = await buildAttachedContext(allDocumentIds, attachedNoteIds, userId);
-        console.log('✅ Attached context built:', attachedContext.length, 'characters');
+        // console.log('✅ Attached context built:', attachedContext.length, 'characters');
       }
 
       // Add semantically retrieved context
       if (relevantContext && relevantContext.length > 0) {
-        console.log('🔗 Adding semantic context...');
+        // console.log('🔗 Adding semantic context...');
         attachedContext += '\n\n=== SEMANTICALLY RELEVANT CONTEXT ===\n';
         relevantContext.slice(0, 10).forEach(ctx => {
           attachedContext += `\n[${ctx.type.toUpperCase()}] ${ctx.title} (Relevance: ${(ctx.relevanceScore * 100).toFixed(0)}%)\n`;
@@ -1489,30 +1489,30 @@ async function handleStreamingResponse(
             attachedContext += `${preview}${ctx.content.length > 500 ? '...' : ''}\n`;
           }
         });
-        console.log('✅ Semantic context added');
+        // console.log('✅ Semantic context added');
       }
 
       attachedContext += '\n\n=== REASONING CHAIN ===\n';
       attachedContext += (reasoningChain || []).join('\n');
 
       if (episodicMemory.relevantSessions?.length > 0) {
-        console.log('📋 Adding episodic memory...');
+        // console.log('📋 Adding episodic memory...');
         attachedContext += '\n\n=== RELEVANT PAST DISCUSSIONS ===\n';
         episodicMemory.relevantSessions.forEach((sess: any) => {
           attachedContext += `- ${sess.title}: ${sess.context_summary || 'No summary'}\n`;
         });
       }
 
-      console.log('🎯 Building enhanced prompt...');
+      // console.log('🎯 Building enhanced prompt...');
       const userContext = await contextService.getUserContext(userId);
       const systemPrompt = promptEngine.createEnhancedSystemPrompt(learningStyle, learningPreferences, userContext, 'light');
       const conversationData = await buildEnhancedGeminiConversation(userId, sessionId, message, [], attachedContext, systemPrompt);
-      console.log('✅ Prompt built with', conversationData.contents.length, 'conversation parts');
+      // console.log('✅ Prompt built with', conversationData.contents.length, 'conversation parts');
 
       // =========================================================================
       // STEP 5: ACTION PLANNING (JSON)
       // =========================================================================
-      console.log('⚙️ Starting Action Planning phase...');
+      // console.log('⚙️ Starting Action Planning phase...');
       handler.sendThinkingStep(
         'action',
         'Planning actions',
@@ -1542,7 +1542,7 @@ Note: The full DB action guidelines, scheduling guidance, and social-post guidan
         parts: [{ text: "Determine the actions to take. Return JSON only." }]
       });
 
-      console.log('🤖 Calling Gemini API for Action Plan...');
+      // console.log('🤖 Calling Gemini API for Action Plan...');
       const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
       if (!geminiApiKey) throw new Error('GEMINI_API_KEY not configured');
 
@@ -1557,7 +1557,7 @@ Note: The full DB action guidelines, scheduling guidance, and social-post guidan
 
         if (actionResponse.success && actionResponse.content) {
           try {
-            console.log('📥 Parsing Action Plan JSON:', actionResponse.content);
+            // console.log('📥 Parsing Action Plan JSON:', actionResponse.content);
             const parsed = JSON.parse(actionResponse.content);
 
             // Accept multiple plan shapes:
@@ -1601,7 +1601,7 @@ Note: The full DB action guidelines, scheduling guidance, and social-post guidan
                 'completed'
               );
             } else {
-              console.log('No actions planned.');
+              // console.log('No actions planned.');
               handler.sendThinkingStep(
                 'action',
                 'No actions needed',
@@ -1611,16 +1611,16 @@ Note: The full DB action guidelines, scheduling guidance, and social-post guidan
               );
             }
           } catch (parseError: any) {
-            console.error('Failed to parse action plan:', parseError);
+            // console.error('Failed to parse action plan:', parseError);
             handler.sendThinkingStep('action', 'Action Planning Warning', 'Could not parse action plan, continuing...', 'completed');
             // Continue to response generation even if action parsing fails
           }
         } else {
-          console.warn('Action planning API call failed or returned empty, continuing to response...');
+          // console.warn('Action planning API call failed or returned empty, continuing to response...');
           handler.sendThinkingStep('action', 'Action Planning Skipped', 'Proceeding to response generation...', 'completed');
         }
       } catch (actionError: any) {
-        console.error('Error during action planning:', actionError);
+        // console.error('Error during action planning:', actionError);
         // Don't fail the entire request - continue to response generation
         handler.sendThinkingStep('action', 'Action Planning Error', 'Continuing to response generation...', 'completed');
       }
@@ -1628,7 +1628,7 @@ Note: The full DB action guidelines, scheduling guidance, and social-post guidan
       // =========================================================================
       // STEP 6: FINAL RESPONSE GENERATION (Text)
       // =========================================================================
-      console.log('🏁 Generating Final Response...');
+      // console.log('🏁 Generating Final Response...');
 
       const finalContents = [...conversationData.contents];
       if (executedActions.length > 0) {
@@ -1646,7 +1646,7 @@ Note: The full DB action guidelines, scheduling guidance, and social-post guidan
         });
       }
 
-      console.log('🤖 Calling Gemini API for Final Response...');
+      // console.log('🤖 Calling Gemini API for Final Response...');
 
       const finalResponse = await callEnhancedGeminiAPI(finalContents, geminiApiKey, {
         systemInstruction: conversationData.systemInstruction
@@ -1657,16 +1657,16 @@ Note: The full DB action guidelines, scheduling guidance, and social-post guidan
       }
 
       let generatedText = finalResponse.content;
-      console.log('✅ Generated response:', generatedText.length, 'characters');
+      // console.log('✅ Generated response:', generatedText.length, 'characters');
 
       // ========== FALLBACK: LEGACY ACTION DETECTION ==========
       // Some models might revert to legacy ACTION: markers instead of using the JSON plan.
       // We check the final response for these markers and execute them as a fallback.
-      console.log('[ActionExecution] Checking for legacy ACTION: markers in final response...');
+      // console.log('[ActionExecution] Checking for legacy ACTION: markers in final response...');
       const fallbackResult = await executeAIActions(userId, sessionId, generatedText);
 
       if (fallbackResult.executedActions.length > 0) {
-        console.log(`[ActionExecution] Found and executed ${fallbackResult.executedActions.length} legacy actions.`);
+        // console.log(`[ActionExecution] Found and executed ${fallbackResult.executedActions.length} legacy actions.`);
 
         // Add to the main executed actions list
         executedActions = [...executedActions, ...fallbackResult.executedActions];
@@ -1688,12 +1688,12 @@ Note: The full DB action guidelines, scheduling guidance, and social-post guidan
         'Successfully generated response',
         'completed'
       );
-      console.log('✅ Action phase complete');
+      // console.log('✅ Action phase complete');
 
-      console.log('✅ Actions executed (summary):', executedActions.length, 'actions');
+      // console.log('✅ Actions executed (summary):', executedActions.length, 'actions');
 
       // Save AI message
-      console.log('💾 Saving AI message...');
+      // console.log('💾 Saving AI message...');
       const aiMessageData = {
         userId,
         sessionId,
@@ -1705,18 +1705,18 @@ Note: The full DB action guidelines, scheduling guidance, and social-post guidan
       };
 
       const savedAiMessage = await saveChatMessage(aiMessageData);
-      console.log('✅ AI message saved:', savedAiMessage?.id);
+      // console.log('✅ AI message saved:', savedAiMessage?.id);
 
       try {
         if (generatedText) {
           await updateSessionTokenCount(sessionId, userId, generatedText, 'add');
         }
       } catch (err) {
-        console.error('[Streaming] Failed to update token count after saving AI message:', err);
+        // console.error('[Streaming] Failed to update token count after saving AI message:', err);
       }
 
       // Send final response
-      console.log('🏁 Sending final response...');
+      // console.log('🏁 Sending final response...');
       // Extract any image metadata from executed actions so the client can render images immediately
       const images = (executedActions || [])
         .filter((a: any) => a?.type === 'GENERATE_IMAGE' && a?.data?.imageUrl)
@@ -1730,7 +1730,7 @@ Note: The full DB action guidelines, scheduling guidance, and social-post guidan
       const topLevelImageUrl = images.length > 0 ? images[0].url : undefined;
 
       try {
-        console.log('SENT_DONE_PAYLOAD', JSON.stringify({
+        // console.log('SENT_DONE_PAYLOAD', JSON.stringify({
           response: generatedText,
           aiMessageId: savedAiMessage?.id,
           aiMessageTimestamp: savedAiMessage?.timestamp,
@@ -1742,7 +1742,7 @@ Note: The full DB action guidelines, scheduling guidance, and social-post guidan
           images,
         }));
       } catch (err) {
-        console.error('Failed to serialize SENT_DONE_PAYLOAD', err);
+        // console.error('Failed to serialize SENT_DONE_PAYLOAD', err);
       }
 
       handler.sendDone({
@@ -1759,14 +1759,14 @@ Note: The full DB action guidelines, scheduling guidance, and social-post guidan
         imageUrl: topLevelImageUrl,
         files_metadata: images.length > 0 ? JSON.stringify(images) : undefined,
       });
-      console.log('✅ Final response sent, closing stream');
+      // console.log('✅ Final response sent, closing stream');
 
       handler.close();
-      console.log('✅✅✅ Streaming response completed successfully! ✅✅✅');
+      // console.log('✅✅✅ Streaming response completed successfully! ✅✅✅');
     } catch (error: any) {
-      console.error('❌ FATAL ERROR in streaming handler:', error.message);
-      console.error('❌ Stack trace:', error.stack);
-      console.error('❌ Full error:', JSON.stringify(error, null, 2));
+      // console.error('❌ FATAL ERROR in streaming handler:', error.message);
+      // console.error('❌ Stack trace:', error.stack);
+      // console.error('❌ Full error:', JSON.stringify(error, null, 2));
       handler.sendError(error.message || 'An error occurred');
       handler.close();
     }
@@ -1828,7 +1828,7 @@ serve(async (req) => {
       try {
         requestData = JSON.parse(responseBody);
       } catch (e) {
-        console.error("Failed to parse JSON", e);
+        // console.error("Failed to parse JSON", e);
         return new Response(JSON.stringify({
           error: 'Invalid JSON in request body'
         }), {
@@ -1978,7 +1978,7 @@ serve(async (req) => {
 
       if (!processorResponse.ok) {
         const errorBody = await processorResponse.text();
-        console.error(`Document processor error: ${processorResponse.status} - ${errorBody}`);
+        // console.error(`Document processor error: ${processorResponse.status} - ${errorBody}`);
 
         // ✅ Send user-friendly error message
         const errorMessage = {
@@ -2027,7 +2027,7 @@ serve(async (req) => {
 
       if (failedFiles.length > 0 && failedFiles.length < processedData.processingResults.length) {
         // Partial failure - some succeeded, some failed
-        console.warn(`Partial document processing failure: ${failedFiles.length}/${processedData.processingResults.length} files failed`);
+        // console.warn(`Partial document processing failure: ${failedFiles.length}/${processedData.processingResults.length} files failed`);
       } else if (failedFiles.length === processedData.processingResults.length) {
         // Total failure - all files failed
         const errorMessage = {
@@ -2088,13 +2088,13 @@ serve(async (req) => {
       if (savedUserMessage) {
         userMessageId = savedUserMessage.id;
         userMessageTimestamp = savedUserMessage.timestamp;
-        console.log('✅ User message saved for streaming:', userMessageId);
+        // console.log('✅ User message saved for streaming:', userMessageId);
         try {
           if (message) {
             await updateSessionTokenCount(sessionId, userId, message, 'add');
           }
         } catch (err) {
-          console.error('[Main] Failed to update token count after saving user message:', err);
+          // console.error('[Main] Failed to update token count after saving user message:', err);
         }
       }
     }
@@ -2120,23 +2120,23 @@ serve(async (req) => {
     }
 
     // ========== AGENTIC UNDERSTANDING PHASE ==========
-    console.log('[Agentic] Starting advanced query understanding...');
+    // console.log('[Agentic] Starting advanced query understanding...');
 
     // Get conversation history for context
     const conversationHistory = await getConversationHistory(userId, sessionId);
 
     // Step 1: Understand user intent deeply
     const userIntent = await agenticCore.understandQuery(message, userId, conversationHistory);
-    console.log(`[Agentic] Intent: ${userIntent.primary}, Complexity: ${userIntent.complexity}, Confidence: ${userIntent.confidence}`);
-    console.log(`[Agentic] Entities detected: ${userIntent.entities.map(e => `${e.type}:${e.value}`).join(', ')}`);
+    // console.log(`[Agentic] Intent: ${userIntent.primary}, Complexity: ${userIntent.complexity}, Confidence: ${userIntent.confidence}`);
+    // console.log(`[Agentic] Entities detected: ${userIntent.entities.map(e => `${e.type}:${e.value}`).join(', ')}`);
 
     // Step 2: Retrieve relevant context using semantic understanding
     const relevantContext = await agenticCore.retrieveRelevantContext(userIntent, userId, sessionId);
-    console.log(`[Agentic] Retrieved ${relevantContext.length} relevant context items`);
+    // console.log(`[Agentic] Retrieved ${relevantContext.length} relevant context items`);
 
     // Step 3: Build reasoning chain
     const reasoningChain = await agenticCore.buildReasoningChain(userIntent, relevantContext, message);
-    console.log(`[Agentic] Reasoning steps: ${reasoningChain.length}`);
+    // console.log(`[Agentic] Reasoning steps: ${reasoningChain.length}`);
 
     // Step 4: Get comprehensive memory
     const [workingMemory, longTermMemory, episodicMemory] = await Promise.all([
@@ -2144,12 +2144,12 @@ serve(async (req) => {
       agenticCore.getLongTermMemory(userId),
       agenticCore.getEpisodicMemory(userId, message)
     ]);
-    console.log(`[Agentic] Memory loaded - Working: ${workingMemory.recentMessages?.length || 0} msgs, LongTerm: ${longTermMemory.facts?.length || 0} facts`);
+    // console.log(`[Agentic] Memory loaded - Working: ${workingMemory.recentMessages?.length || 0} msgs, LongTerm: ${longTermMemory.facts?.length || 0} facts`);
 
     // Step 5: Select appropriate tools if needed
     const selectedTools = await agenticCore.selectTools(userIntent, relevantContext);
     if (selectedTools.length > 0) {
-      console.log(`[Agentic] Tools selected: ${selectedTools.join(', ')}`);
+      // console.log(`[Agentic] Tools selected: ${selectedTools.join(', ')}`);
     }
 
     // Build enhanced attached context from agentic retrieval
@@ -2182,7 +2182,7 @@ serve(async (req) => {
       });
     }
 
-    console.log('[Agentic] Context building complete');
+    // console.log('[Agentic] Context building complete');
 
     const userContext = await contextService.getUserContext(userId);
     const systemPrompt = promptEngine.createEnhancedSystemPrompt(learningStyle, learningPreferences, userContext, 'light');
@@ -2220,7 +2220,7 @@ serve(async (req) => {
     const MAX_SAFE_INPUT_TOKENS = ENHANCED_PROCESSING_CONFIG.MAX_INPUT_TOKENS * 0.9; // 90% of max for safety
 
     if (totalEstimatedTokens > MAX_SAFE_INPUT_TOKENS) {
-      console.error(`[TokenValidation] Estimated tokens (${totalEstimatedTokens}) exceeds safe limit (${MAX_SAFE_INPUT_TOKENS})`);
+      // console.error(`[TokenValidation] Estimated tokens (${totalEstimatedTokens}) exceeds safe limit (${MAX_SAFE_INPUT_TOKENS})`);
       return new Response(JSON.stringify({
         error: 'Content too large to process',
         details: `The total content (message + attachments + context) is too large. Estimated: ${totalEstimatedTokens} tokens, Maximum: ${Math.floor(MAX_SAFE_INPUT_TOKENS)} tokens. Please reduce the number of attachments or message length.`,
@@ -2235,7 +2235,7 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[TokenValidation] Estimated input tokens: ${totalEstimatedTokens} (within safe limit: ${MAX_SAFE_INPUT_TOKENS})`);
+    // console.log(`[TokenValidation] Estimated input tokens: ${totalEstimatedTokens} (within safe limit: ${MAX_SAFE_INPUT_TOKENS})`);
 
     if (message || hasFiles || attachedContext) {
       const userMessageData = {
@@ -2279,7 +2279,7 @@ serve(async (req) => {
         .eq('user_id', userId);
     }
 
-    console.log('🤖 Calling Gemini API for Final Response...');
+    // console.log('🤖 Calling Gemini API for Final Response...');
 
     const finalResponse = await callEnhancedGeminiAPI(conversationData.contents, geminiApiKey, {
       systemInstruction: conversationData.systemInstruction,
@@ -2304,12 +2304,12 @@ serve(async (req) => {
 
     // ========== AGENTIC VERIFICATION PHASE ==========
     if (apiCallSuccess && generatedText) {
-      console.log('[Agentic] Verifying response quality...');
+      // console.log('[Agentic] Verifying response quality...');
       const verification = await agenticCore.verifyResponse(generatedText, userIntent, relevantContext);
-      console.log(`[Agentic] Response confidence: ${(verification.confidence * 100).toFixed(1)}%`);
+      // console.log(`[Agentic] Response confidence: ${(verification.confidence * 100).toFixed(1)}%`);
 
       if (verification.issues.length > 0) {
-        console.warn(`[Agentic] Issues detected: ${verification.issues.join(', ')}`);
+        // console.warn(`[Agentic] Issues detected: ${verification.issues.join(', ')}`);
 
         // If confidence is too low, add clarification
         if (verification.confidence < 0.5) {
@@ -2324,7 +2324,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`[Main] Checking for actions in AI response...`);
+    // console.log(`[Main] Checking for actions in AI response...`);
     const actionResult = await executeAIActions(userId, sessionId, generatedText);
     generatedText = actionResult.modifiedResponse;
 
@@ -2336,7 +2336,7 @@ serve(async (req) => {
           await contextService.updateUserMemory(userId, extractedFacts);
         }
       } catch (factError) {
-        console.error('Error extracting user facts:', factError);
+        // console.error('Error extracting user facts:', factError);
       }
     }
 
@@ -2391,7 +2391,7 @@ serve(async (req) => {
       if (savedAiMessage) {
         aiMessageId = savedAiMessage.id;
         aiMessageTimestamp = savedAiMessage.timestamp;
-        console.log(`[gemini-chat] Saved AI message with ID: ${aiMessageId}`);
+        // console.log(`[gemini-chat] Saved AI message with ID: ${aiMessageId}`);
       }
     }
 
@@ -2405,7 +2405,7 @@ serve(async (req) => {
     if (conversationData.contextInfo?.recentMessages &&
       conversationData.contextInfo.recentMessages.length >= ENHANCED_PROCESSING_CONFIG.SUMMARY_THRESHOLD) {
       updateConversationSummary(sessionId, userId, conversationData.contextInfo.recentMessages)
-        .catch((err) => console.error('Summary update failed:', err));
+        .catch((err) => // console.error('Summary update failed:', err));
     }
 
     const processingTime = Date.now() - startTime;
@@ -2448,7 +2448,7 @@ serve(async (req) => {
   } catch (error: any) {
     const hasFiles = rawFiles.length > 0 || jsonFiles.length > 0;
     const processingTime = Date.now() - startTime;
-    console.error('Error in ai-chat function:', error);
+    // console.error('Error in ai-chat function:', error);
 
     let userFriendlyMessage = 'I apologize, but I encountered an unexpected error while processing your request. Please try again.';
 
@@ -2476,7 +2476,7 @@ serve(async (req) => {
           imageMimeType: userMessageImageMimeType || requestData.imageMimeType
         });
       } catch (dbError) {
-        console.error('Failed to save error message to database:', dbError);
+        // console.error('Failed to save error message to database:', dbError);
       }
     }
 

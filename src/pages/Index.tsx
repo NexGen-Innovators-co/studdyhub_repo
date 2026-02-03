@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useTransition } from 'react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Sidebar } from '../components/layout/Sidebar';
@@ -104,24 +104,21 @@ const Index = () => {
 
   // Notifications modal state and logic (now inside Index to access 'user')
 
-  // Network error display (top-level)
-  if (!isOnline) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-yellow-50">
-        <div className="p-6 bg-white border border-yellow-200 rounded-lg shadow-md flex flex-col items-center">
-          <span className="text-yellow-800 text-lg font-semibold mb-2">You're offline</span>
-          <span className="text-yellow-700 mb-4">Please check your internet connection to continue using StuddyHub.</span>
-          <Button
-            variant="outline"
-            className="text-yellow-800 border-yellow-300 hover:bg-yellow-100"
-            onClick={() => window.location.reload()}
-          >
-            Retry
-          </Button>
-        </div>
+  const offlineScreen = (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-yellow-50">
+      <div className="p-6 bg-white border border-yellow-200 rounded-lg shadow-md flex flex-col items-center">
+        <span className="text-yellow-800 text-lg font-semibold mb-2">You're offline</span>
+        <span className="text-yellow-700 mb-4">Please check your internet connection to continue using StuddyHub.</span>
+        <Button
+          variant="outline"
+          className="text-yellow-800 border-yellow-300 hover:bg-yellow-100"
+          onClick={() => window.location.reload()}
+        >
+          Retry
+        </Button>
       </div>
-    );
-  }
+    </div>
+  );
   const { preferences } = useNotifications();
   // Onboarding modal controls: unified flow to request notifications, mic, camera
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
@@ -152,7 +149,11 @@ const Index = () => {
     setRequestingPermission(true);
     try {
       // Notifications
-      try { await requestNotificationPermission(); } catch (e) { console.warn('Notification permission request failed', e); }
+      try {
+        await requestNotificationPermission();
+      } catch (e) {
+        // console.warn('Notification permission request failed', e);
+      }
 
       // Microphone
       try {
@@ -160,7 +161,7 @@ const Index = () => {
           await navigator.mediaDevices.getUserMedia({ audio: true });
         }
       } catch (e) {
-        // console.warn('Microphone permission request failed or denied', e);
+        // // console.warn('Microphone permission request failed or denied', e);
       }
 
       // Camera
@@ -302,6 +303,7 @@ const Index = () => {
   const isPodcastPage = location.pathname.startsWith('/podcast/') && !isLiveRoute;
   const podcastPageId = isPodcastPage ? params.id : null;
   const [podcastPageData, setPodcastPageData] = useState<any | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   // Load podcast data when visiting /podcast/:id. Use navigation state if available to avoid flash.
   useEffect(() => {
@@ -332,7 +334,7 @@ const Index = () => {
           setPodcastPageData(full);
         }
       } catch (e) {
-        // console.warn('Failed to load podcast page data', e);
+        // // console.warn('Failed to load podcast page data', e);
         // podcastPageData will remain null, so no stale data is shown
       }
     })();
@@ -622,6 +624,7 @@ const Index = () => {
     subscriptionTier,
     subscriptionLimits,
     checkSubscriptionAccess,
+    onSearchNotes: appOperations?.searchNotesFromDB,
   }), [
     currentActiveTab,
     activeSocialTab,
@@ -735,6 +738,8 @@ const Index = () => {
     );
   }
 
+  if (!isOnline) return offlineScreen;
+
   return (
 
     <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
@@ -834,7 +839,8 @@ const Index = () => {
                 ) : (
                   <PodcastPanel
                     podcast={podcastPageData}
-                    onClose={() => navigate('/podcasts')}
+                    onClose={() => startTransition(() => navigate('/podcasts'))}
+                    onPodcastSelect={(id) => startTransition(() => navigate(`/podcast/${id}`))}
                     isOpen={true}
                   />
                 )}

@@ -69,7 +69,7 @@ async function sendWebPush(
     return true
   } catch (error: any) {
     if (error.statusCode === 410 || error.statusCode === 404) {
-      console.log(`Subscription gone for ${subscription.id}`)
+      // console.log(`Subscription gone for ${subscription.id}`)
       return false
     }
     console.error(`Error sending push to ${subscription.id}:`, error)
@@ -203,7 +203,7 @@ serve(async (req) => {
 
         // Check if notification type is enabled (only if preferences exist)
         if (preferences && !isNotificationTypeEnabled(preferences, type)) {
-          console.log(`User ${userId} has disabled notifications of type ${type}`);
+          // console.log(`User ${userId} has disabled notifications of type ${type}`);
           results.skipped++;
           continue;
         }
@@ -334,3 +334,4 @@ serve(async (req) => {
     )
   }
 })
+

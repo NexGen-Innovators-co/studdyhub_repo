@@ -11,7 +11,7 @@ import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import {
   Search, RefreshCw, Bell, TrendingUp, Users, User, Home, Loader2, X, Plus, Sparkles, Settings, LogOut, ArrowUp, ExternalLink,
-  MessageCircle, Lock
+  MessageCircle, Lock, Lightbulb
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Card, CardContent } from '../ui/card';
@@ -24,6 +24,8 @@ import { SocialNotification, useSocialNotifications } from './hooks/useSocialNot
 import { useSocialPostViews } from './hooks/useSocialPostViews';
 import { useSocialData } from '../../hooks/useSocialData';
 import { useFeatureAccess } from '../../hooks/useFeatureAccess';
+import { useGlobalSearch } from '../../hooks/useGlobalSearch';
+import { SEARCH_CONFIGS } from '../../services/globalSearchService';
 
 // Import components
 import { PostCard } from './components/PostCard';
@@ -68,11 +70,35 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     const [activeTab, setActiveTab] = useState<'feed' | 'trending' | 'groups' | 'profile' | 'notifications' | 'userProfile'>(initialActiveTab as any || 'feed');
     const [internalSearch, setInternalSearch] = useState('');
     const [showPostDialog, setShowPostDialog] = useState(false);
+    const [userId, setUserId] = useState<string | null>(null);
+    const [hasSearched, setHasSearched] = useState(false);
 
     const effectiveSearch = externalSearchQuery ?? internalSearch;
 
+    // Initialize global search hook
+    const { search, results: searchResults, isSearching } = useGlobalSearch(
+      SEARCH_CONFIGS.posts,
+      userId,
+      { debounceMs: 500 }
+    );
+
+    // Get user ID on mount
+    useEffect(() => {
+      const getUser = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        setUserId(user?.id || null);
+      };
+      getUser();
+    }, []);
+
     const handleSearchChange = (value: string) => {
       setInternalSearch(value);
+      if (!value.trim()) {
+        setHasSearched(false);
+      } else {
+        setHasSearched(true);
+        search(value);
+      }
       onSearchChange?.(value);
     };
 
@@ -779,9 +805,9 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
         setLoadingIds(prev => ({ ...prev, [id]: true }));
         try {
           await toggleFollow(id);
-          toast.success('Followed');
+          toast.success('Connected');
         } catch {
-          toast.error('Failed to follow');
+          toast.error('Failed to connect');
         } finally {
           setLoadingIds(prev => ({ ...prev, [id]: false }));
         }
@@ -878,7 +904,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
                     onClick={() => handleFollow(u.id)}
                     disabled={!!loadingIds[u.id]}
                   >
-                    {loadingIds[u.id] ? '...' : 'Follow'}
+                    {loadingIds[u.id] ? '...' : 'Connect'}
                   </Button>
                   {/* CHANGED: Navigate instead of opening modal */}
                   <Button
@@ -1052,7 +1078,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
       switch (notif.type) {
         case 'like': return 'New Like';
         case 'comment': return 'New Comment';
-        case 'follow': return 'New Follower';
+        case 'follow': return 'New Connection';
         case 'mention': return 'You were mentioned';
         case 'share': return 'Post Shared';
         default: return 'Notification';
@@ -1064,7 +1090,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
       switch (notif.type) {
         case 'like': return `${actorName} liked your post`;
         case 'comment': return `${actorName} commented on your post`;
-        case 'follow': return `${actorName} started following you`;
+        case 'follow': return `${actorName} connected with you`;
         case 'mention': return `${actorName} mentioned you in a post`;
         case 'share': return `${actorName} shared your post`;
         default: return 'You have a new notification';
@@ -1157,7 +1183,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
                     </div>
                     <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
                       <div className="flex justify-between text-sm mb-2">
-                        <span className="text-slate-500">Followers</span>
+                        <span className="text-slate-500">Connections</span>
                         <span className="font-medium">{currentUser?.followers_count || 0}</span>
                       </div>
                       <div className="flex justify-between text-sm mb-4">
@@ -1239,7 +1265,14 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
               )}
 
               <div className="pb-10 p-0 space-y-6" ref={topRef}>
-                {routePostId && postToDisplay ? (
+                {routePostId && !postToDisplay ? (
+                  <div className="mb-6 flex items-center justify-center py-12">
+                    <div className="flex flex-col items-center gap-3">
+                      <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                      <p className="text-sm text-slate-500">Loading post...</p>
+                    </div>
+                  </div>
+                ) : routePostId && postToDisplay ? (
                   <div className="mb-6">
                     <Button variant="ghost" onClick={() => navigate('/social/feed')} className="mb-2 pl-0 hover:pl-2">← Back</Button>
                     <PostCard
@@ -1402,9 +1435,9 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
                           <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center mb-4">
                             <TrendingUp className="w-8 h-8 text-orange-600" />
                           </div>
-                          <h3 className="text-lg font-semibold text-slate-900 mb-2">No trending posts yet</h3>
+                          <h3 className="text-lg font-semibold text-slate-900 mb-2">No featured discussions yet</h3>
                           <p className="text-slate-600 mb-6 max-w-sm">
-                            Trending posts appear here based on engagement. Start creating and interacting with posts to see them trend!
+                            Featured discussions appear here based on engagement. Start creating and interacting with posts to see them featured!
                           </p>
                           <Button onClick={() => setShowPostDialog(true)} variant="outline" className="gap-2">
                             <Plus className="w-4 h-4" />
@@ -1651,7 +1684,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
                     {/* <div className="bg-gradient-to-br from-blue-50 to-pink-50 dark:from-slate-900 dark:to-slate-800 rounded-2xl shadow-sm border border-blue-100 dark:border-slate-700 overflow-hidden">
                     <div className="p-4">
                       <h3 className="font-bold text-lg mb-3 flex items-center gap-2 text-blue-900 dark:text-blue-100">
-                        <TrendingUp className="h-5 w-5" /> Trending Now
+                        <TrendingUp className="h-5 w-5" /> Featured Discussions
                       </h3>
                       <div className="space-y-3">
                         <div className="bg-white dark:bg-slate-800 rounded-lg p-3">
@@ -1732,7 +1765,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
                     {/* Popular Groups Widget */}
                     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
                       <div className="p-4 border-b border-slate-100 dark:border-slate-800">
-                        <h3 className="font-bold text-lg">Popular Groups</h3>
+                        <h3 className="font-bold text-lg">Active Study Groups</h3>
                       </div>
                       <div className="p-4 space-y-3">
                         {groups.slice(0, 5).map((group) => (
@@ -1820,10 +1853,25 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
             </div>
           </div>
 
-          {/* Floating Action Buttons: Refresh + Scroll-to-top */}
+          {/* Floating Action Buttons: Tips + Refresh + Scroll-to-top */}
 
           <div className="fixed bottom-16 right-2 flex flex-col gap-3 z-40 pointer-events-none">
             <div className="flex flex-col items-center gap-3 pointer-events-auto">
+              {/* Tips Button */}
+              {(window as any).__toggleTips && (
+                <button
+                  onClick={() => (window as any).__toggleTips?.()}
+                  className="h-11 w-11 rounded-full shadow-lg text-blue-500 dark:text-yellow-400 hover:text-yellow-600 dark:hover:text-yellow-300 transition-all duration-300 hover:scale-110 cursor-pointer bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 backdrop-blur-sm flex items-center justify-center"
+                  style={{
+                    filter: 'drop-shadow(0 0 8px rgba(36, 190, 251, 0.6))',
+                    animation: 'glow 2s ease-in-out infinite'
+                  }}
+                  title="Quick Tips"
+                >
+                  <Lightbulb className="w-6 h-6 fill-current" />
+                </button>
+              )}
+
               {/* New Posts Banner (Instagram-style) */}
               {hasNewPosts && (
                 <button

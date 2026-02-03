@@ -1,8 +1,10 @@
 import React, { memo, useCallback, useState, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
+import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
@@ -143,14 +145,21 @@ export const EnhancedMarkdownRenderer = memo(({
       )}
 
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[
           rehypeRaw,
+          rehypeKatex,
           [rehypeSanitize, {
-            allowedTags: ['iframe', 'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'strong', 'em', 'code', 'pre', 'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'a', 'br'],
+            allowedTags: [
+              'iframe', 'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li',
+              'strong', 'em', 'code', 'pre', 'blockquote', 'table', 'thead', 'tbody', 'tr', 'th',
+              'td', 'img', 'a', 'br',
+              'math', 'semantics', 'mrow', 'mi', 'mo', 'mn', 'msup', 'msub', 'mfrac', 'mroot',
+              'msqrt', 'mtable', 'mtr', 'mtd', 'annotation', 'annotation-xml'
+            ],
             allowedAttributes: {
-              '*': ['class', 'id', 'style'],
-              'a': ['href', 'title', 'target'],
+              '*': ['class', 'id', 'style', 'data-*'],
+              'a': ['href', 'title', 'target', 'rel'],
               'img': ['src', 'alt', 'title', 'width', 'height'],
               'iframe': ['src', 'width', 'height', 'frameborder', 'allowfullscreen']
             }

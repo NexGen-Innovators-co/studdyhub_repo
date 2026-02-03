@@ -287,7 +287,7 @@ const AIChat: React.FC<AIChatProps> = ({
           });
         }
       } catch (err) {
-        console.error("Failed to fetch missing documents", err);
+        // console.error("Failed to fetch missing documents", err);
       }
     };
 
@@ -866,7 +866,7 @@ const AIChat: React.FC<AIChatProps> = ({
         }
       })
       .catch(error => {
-        console.error('Error adding generated image:', error);
+        // console.error('Error adding generated image:', error);
         toast.error('Failed to add generated image to chat.');
       });
   }, []);
@@ -877,7 +877,7 @@ const AIChat: React.FC<AIChatProps> = ({
 
   const handleEditClick = useCallback((message: Message) => {
       // LOG: AiChat received message
-      console.log('[AiChat] handleEditClick message:', message);
+      // console.log('[AiChat] handleEditClick message:', message);
     if (message.role !== 'user') return;
 
     setInputMessage(message.content);

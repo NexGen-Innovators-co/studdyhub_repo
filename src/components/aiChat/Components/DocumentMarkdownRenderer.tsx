@@ -1,7 +1,9 @@
 import React, { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import rehypeRaw from 'rehype-raw';
+import rehypeKatex from 'rehype-katex';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
@@ -44,8 +46,8 @@ const DocumentMarkdownRenderer: React.FC<DocumentMarkdownRendererProps> = ({ con
     <div className={`w-full h-full overflow-auto p-4 ${className || ''}`}>
       <div className="prose prose-sm dark:prose-invert max-w-full">
         <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={[rehypeRaw]}
+          remarkPlugins={[remarkGfm, remarkMath]}
+          rehypePlugins={[rehypeRaw, rehypeKatex]}
           components={{
             code: CodeBlock,
             a: ({ href, children }) => (

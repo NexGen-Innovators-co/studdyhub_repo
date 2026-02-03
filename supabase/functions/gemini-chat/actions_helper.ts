@@ -43,7 +43,7 @@ export function getFriendlyActionLabel(actionType: string, params: any): string 
 
 // Helper function to execute a single action
 export async function runAction(actionsService: any, userId: string, sessionId: string, actionType: string, params: any): Promise<any> {
-    console.log(`[ActionExecution] running action helper: ${actionType}`);
+    // console.log(`[ActionExecution] running action helper: ${actionType}`);
     try {
         if (actionType === 'DB_ACTION') {
             const { table, operation, data, filters, order, limit } = params || {};
@@ -62,7 +62,7 @@ export async function runAction(actionsService: any, userId: string, sessionId: 
 
         return { success: false, error: `Unknown action type: ${actionType}` };
     } catch (err: any) {
-        console.error('[actions_helper][runAction] Error executing action:', actionType, err);
+        // console.error('[actions_helper][runAction] Error executing action:', actionType, err);
         return { success: false, error: err?.message || String(err) };
     }
 }
@@ -76,7 +76,7 @@ export async function executeParsedActions(
     onProgress?: (action: any, index: number, total: number) => void
 ): Promise<any[]> {
     const executedActions: any[] = [];
-    console.log(`[ActionExecution] Processing ${actions.length} parsed actions...`);
+    // console.log(`[ActionExecution] Processing ${actions.length} parsed actions...`);
 
     const AUTO_EXECUTE_ENABLED = true;
     // Track last inserted id for resolving placeholders like LAST_INSERT_ID
@@ -102,7 +102,7 @@ export async function executeParsedActions(
         }
 
         try {
-            console.log(`[ActionExecution] Executing action: ${action.type}`);
+            // console.log(`[ActionExecution] Executing action: ${action.type}`);
 
             // If this is a destructive DB action, perform a preflight SELECT to
             // fetch candidate row ids and require an explicit confirmation flag
@@ -121,7 +121,7 @@ export async function executeParsedActions(
                                 data: { preflightError: preflightRes.error },
                                 timestamp: new Date().toISOString()
                             });
-                            console.log(`[ActionExecution] Preflight SELECT failed for ${action.type}`);
+                            // console.log(`[ActionExecution] Preflight SELECT failed for ${action.type}`);
                             continue;
                         }
 
@@ -136,12 +136,12 @@ export async function executeParsedActions(
                                 data: { needsConfirmation: true, preflightIds: ids, rowCount: ids.length, params: action.params },
                                 timestamp: new Date().toISOString()
                             });
-                            console.log(`[ActionExecution] ${action.type} requires confirmation before proceeding`, { table, op, rowCount: ids.length });
+                            // console.log(`[ActionExecution] ${action.type} requires confirmation before proceeding`, { table, op, rowCount: ids.length });
                             continue;
                         }
                         // Otherwise, allow actual execution to proceed below
                     } catch (pfErr: any) {
-                        console.error('[ActionExecution] Preflight check error:', pfErr);
+                        // console.error('[ActionExecution] Preflight check error:', pfErr);
                         executedActions.push({
                             type: action.type,
                             success: false,
@@ -166,7 +166,7 @@ export async function executeParsedActions(
                     if (placeholders.includes(pid) || pid.toUpperCase().includes('LAST_INSERT_ID')) {
                         if (lastInsertId) {
                             action.params.data.post_id = lastInsertId;
-                            console.log('[ActionExecution] Resolved social_media.post_id to lastInsertId', lastInsertId);
+                            // console.log('[ActionExecution] Resolved social_media.post_id to lastInsertId', lastInsertId);
                         } else if (lastInsertedTable === 'social_posts') {
                             // If we previously inserted social_posts but did not capture id,
                             // attempt to extract it from the last executed action result.
@@ -179,7 +179,7 @@ export async function executeParsedActions(
                                     if (resolvedId) {
                                         action.params.data.post_id = resolvedId;
                                         lastInsertId = resolvedId;
-                                        console.log('[ActionExecution] Extracted post id from previous social_posts result', resolvedId);
+                                        // console.log('[ActionExecution] Extracted post id from previous social_posts result', resolvedId);
                                     }
                                 }
                             } catch (e) {
@@ -225,7 +225,7 @@ export async function executeParsedActions(
                         if (extractedId) {
                             lastInsertId = extractedId;
                             lastInsertedTable = 'social_posts';
-                            console.log('[ActionExecution] Captured lastInsertId from social_posts INSERT:', lastInsertId);
+                            // console.log('[ActionExecution] Captured lastInsertId from social_posts INSERT:', lastInsertId);
                         }
                     }
                 }
@@ -233,10 +233,10 @@ export async function executeParsedActions(
                 // non-fatal
             }
 
-            console.log(`[ActionExecution] ${action.type}: ${result?.success ? 'SUCCESS' : 'FAILED'}`);
+            // console.log(`[ActionExecution] ${action.type}: ${result?.success ? 'SUCCESS' : 'FAILED'}`);
 
         } catch (error: any) {
-            console.error(`[ActionExecution] Error executing action ${action.type}:`, error);
+            // console.error(`[ActionExecution] Error executing action ${action.type}:`, error);
             executedActions.push({
                 type: action.type,
                 success: false,
@@ -247,3 +247,4 @@ export async function executeParsedActions(
     }
     return executedActions;
 }
+

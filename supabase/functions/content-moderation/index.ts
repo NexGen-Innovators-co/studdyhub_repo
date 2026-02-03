@@ -228,7 +228,7 @@ Be encouraging but maintain quality standards. For borderline cases at medium st
     });
 
   } catch (error: any) {
-    console.error('Content moderation error:', error);
+    // console.error('Content moderation error:', error);
     return new Response(JSON.stringify({ 
       error: error.message,
       approved: false,
@@ -239,3 +239,4 @@ Be encouraging but maintain quality standards. For borderline cases at medium st
     });
   }
 });
+

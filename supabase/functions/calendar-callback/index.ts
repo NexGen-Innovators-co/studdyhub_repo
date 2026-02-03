@@ -195,7 +195,7 @@ serve(async (req) => {
       .single()
 
     if (dbError) {
-      console.error('Database error:', dbError)
+      // console.error('Database error:', dbError)
       return new Response(
         `
         <!DOCTYPE html>
@@ -298,7 +298,7 @@ serve(async (req) => {
       { headers: { 'Content-Type': 'text/html' } }
     )
   } catch (error) {
-    console.error('Error in calendar-callback function:', error)
+    // console.error('Error in calendar-callback function:', error)
     return new Response(
       `
       <!DOCTYPE html>
@@ -322,3 +322,4 @@ serve(async (req) => {
     )
   }
 })
+

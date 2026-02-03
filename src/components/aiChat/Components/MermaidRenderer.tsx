@@ -212,7 +212,7 @@ mermaid.initialize({
 
 // Custom error handling
 mermaid.parseError = function(err, hash) {
-    console.error('Mermaid parse error:', err);
+    // console.error('Mermaid parse error:', err);
     errorContainer.style.display = 'block';
     errorMessage.textContent = err.message || err;
     window.parent.postMessage({ 
@@ -439,7 +439,7 @@ async function renderDiagram() {
         setTimeout(fitToScreen, 100);
     } catch (err) {
         // Already handled by parseError usually, but just in case
-        console.error('Render error:', err);
+        // console.error('Render error:', err);
     }
 }
 

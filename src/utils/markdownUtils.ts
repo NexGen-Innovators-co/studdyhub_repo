@@ -9,14 +9,21 @@ import * as gfm from 'turndown-plugin-gfm';
 const mdProcessor = unified()
   .use(remarkParse)
   .use(remarkGfm)
-  .use(remarkRehype)
-  .use(rehypeStringify);
+  .use(remarkRehype, { allowDangerousHtml: true })
+  .use(rehypeStringify, { allowDangerousHtml: true });
 
 const turndown = new TurndownService({
   headingStyle: 'atx',
   codeBlockStyle: 'fenced'
 });
 turndown.use(gfm.gfm);
+
+const escapeHtmlAttr = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 
 // Add a specific rule for diagrams to ensure they are always fenced with the correct language
 turndown.addRule('fencedDiagrams', {
@@ -40,7 +47,20 @@ turndown.addRule('fencedDiagrams', {
 export const convertMarkdownToHtml = (markdown: string): string => {
   if (!markdown || !markdown.trim()) return '';
   try {
-    const html = mdProcessor.processSync(markdown).toString();
+    // Pre-process LaTeX: Convert $...$ and $$...$$ to custom markers
+    let processed = markdown;
+
+    // Handle display LaTeX ($$...$$) - allow multiline
+    processed = processed.replace(/\$\$([\s\S]+?)\$\$/g, (_match, latex) => {
+      return `<div data-latex="${escapeHtmlAttr(latex.trim())}" data-display-mode="true"></div>`;
+    });
+
+    // Handle inline LaTeX ($...$) - avoid $$ and line breaks
+    processed = processed.replace(/\$([^\$\n]+)\$(?!\$)/g, (_match, latex) => {
+      return `<span class="inline-latex" data-latex="${escapeHtmlAttr(latex.trim())}"></span>`;
+    });
+
+    const html = mdProcessor.processSync(processed).toString();
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = html;
 
@@ -152,6 +172,19 @@ export const convertHtmlToMarkdown = (html: string): string => {
       code.textContent = `/* height: ${height} */\n${codeContent}`;
       pre.appendChild(code);
       node.replaceWith(pre);
+    });
+
+    // Convert LaTeX divs back to markdown format
+    tempDiv.querySelectorAll('div[data-latex]').forEach(node => {
+      const latex = node.getAttribute('data-latex') || '';
+      const textNode = document.createTextNode(`$$${latex}$$`);
+      node.replaceWith(textNode);
+    });
+
+    tempDiv.querySelectorAll('span.inline-latex').forEach(node => {
+      const latex = node.getAttribute('data-latex') || '';
+      const textNode = document.createTextNode(`$${latex}$`);
+      node.replaceWith(textNode);
     });
 
     return turndown.turndown(tempDiv.innerHTML);

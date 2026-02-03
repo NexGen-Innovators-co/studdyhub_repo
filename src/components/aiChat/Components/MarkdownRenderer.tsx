@@ -3,7 +3,9 @@ import { AlertTriangle, Copy, Check, Loader2, Maximize2, X, RefreshCw, ChevronDo
 import { Button } from '../../ui/button';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import rehypeRaw from 'rehype-raw';
+import rehypeKatex from 'rehype-katex';
 import { useCopyToClipboard } from '../../../hooks/useCopyToClipboard';
 import { useTypingAnimation } from '../../../hooks/useTypingAnimation';
 import { MemoizedCodeBlock as CodeBlock, CodeBlockErrorBoundary } from './CodeBlock';
@@ -35,8 +37,8 @@ export const MemoizedReactMarkdown = memo(
   ({ content, components }: { content: string; components: any }) => {
     return (
       <ReactMarkdown
-        rehypePlugins={[rehypeRaw]}
-        remarkPlugins={[remarkGfm, remarkEmoji]}
+        rehypePlugins={[rehypeRaw, rehypeKatex]}
+        remarkPlugins={[remarkGfm, remarkMath, remarkEmoji]}
         components={components}
       >
         {content}

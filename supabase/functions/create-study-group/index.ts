@@ -103,7 +103,7 @@ serve(async (req) => {
       .single();
 
     if (groupError) {
-      console.error('Error creating group:', groupError);
+      // console.error('Error creating group:', groupError);
       return createErrorResponse('Failed to create group', 500);
     }
 
@@ -118,7 +118,7 @@ serve(async (req) => {
       });
 
     if (memberError) {
-      console.error('Error adding creator as member:', memberError);
+      // console.error('Error adding creator as member:', memberError);
       // Continue anyway - group is created
     }
 
@@ -134,7 +134,8 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('Error in create-study-group:', error);
+    // console.error('Error in create-study-group:', error);
     return createErrorResponse('Internal server error', 500);
   }
 });
+

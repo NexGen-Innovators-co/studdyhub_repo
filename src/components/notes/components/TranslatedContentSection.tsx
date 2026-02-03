@@ -2,7 +2,9 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import rehypeRaw from 'rehype-raw';
+import rehypeKatex from 'rehype-katex';
 import { FileText, ChevronUp } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { CodeRenderer } from './CodeRenderer'; // Assuming CodeRenderer is exported from NoteContentArea
@@ -56,8 +58,8 @@ export const TranslatedContentSection: React.FC<TranslatedContentSectionProps> =
       </div>
       <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed dark:text-gray-200">
         <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={[rehypeRaw]}
+          remarkPlugins={[remarkGfm, remarkMath]}
+          rehypePlugins={[rehypeRaw, rehypeKatex]}
           components={commonMarkdownComponents}
         >
           {String(translatedContent || '')}

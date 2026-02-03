@@ -9,7 +9,8 @@ import {
   Clock, BookOpen, FileText, Mic, Download, Trash2, Play, Pause,
   Upload, Plus, Headphones, Calendar, MoreHorizontal, Search,
   RefreshCw, Loader2, ChevronRight, Volume2, Sparkles, Clipboard,
-  CheckCircle2
+  CheckCircle2,
+  Lightbulb
 } from 'lucide-react';
 import { ClassRecording } from '../../types/Class';
 import { formatDate } from './utils/helpers';
@@ -21,6 +22,8 @@ import { toast } from 'sonner';
 import { useRealtimeSync } from './hooks/useRealTimeSync';
 import { supabase } from '../../integrations/supabase/client';
 import { UserStats } from '../../types/EnhancedClasses';
+import { useGlobalSearch } from '../../hooks/useGlobalSearch';
+import { SEARCH_CONFIGS } from '../../services/globalSearchService';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,14 +61,28 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'record' | 'upload'>('all');
   const [internalSearch, setInternalSearch] = useState('');
+  const [hasSearched, setHasSearched] = useState(false);
   const [activeContentTab, setActiveContentTab] = useState<'transcript' | 'summary'>('transcript');
   const [audioProgress, setAudioProgress] = useState(0);
   const [copySuccess, setCopySuccess] = useState(false);
 
   const effectiveSearch = externalSearchQuery ?? internalSearch;
 
+  // Initialize global search hook
+  const { search, results: searchResults, isSearching: isSearchingRecordings } = useGlobalSearch(
+    SEARCH_CONFIGS.recordings,
+    userId,
+    { debounceMs: 500 }
+  );
+
   const handleSearchChange = (value: string) => {
     setInternalSearch(value);
+    if (!value.trim()) {
+      setHasSearched(false);
+    } else {
+      setHasSearched(true);
+      search(value);
+    }
     onSearchChange?.(value);
   };
 
@@ -299,10 +316,10 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                 >
                   <Button
                     variant="outline"
-                    className="w-full justify-start bg-white dark:bg-slate-800"
+                    className="w-full justify-start bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors"
                     onClick={() => setActiveTab('record')}
                   >
-                    <Mic className="h-4 w-4 mr-2 text-blue-500" /> Record New
+                    <Mic className="h-4 w-4 mr-2 text-blue-500" /> Record Audio
                   </Button>
                 </SubscriptionGuard>
                 <SubscriptionGuard
@@ -312,10 +329,10 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                 >
                   <Button
                     variant="outline"
-                    className="w-full justify-start bg-white dark:bg-slate-800"
+                    className="w-full justify-start bg-white dark:bg-slate-800 hover:bg-green-50 dark:hover:bg-slate-700 transition-colors"
                     onClick={() => setActiveTab('upload')}
                   >
-                    <Mic className="h-4 w-4 mr-2 text-blue-500" /> Record New
+                    <Upload className="h-4 w-4 mr-2 text-green-500" /> Upload File
                   </Button>
                 </SubscriptionGuard>
 
@@ -373,14 +390,33 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
             </div>
           </div>
 
-          <Button
-            onClick={() => refreshData('recordings')}
-            disabled={dataLoading.recordings}
-            size="icon"
-            className="fixed bottom-24 right-6 lg:bottom-6 h-14 w-14 rounded-full shadow-xl z-50 bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300 hover:scale-105"
-          >
-            <RefreshCw className={`h-6 w-6 ${dataLoading.recordings ? 'animate-spin' : ''}`} />
-          </Button>
+          {/* Floating Action Buttons */}
+          <div className="fixed bottom-16 right-2 lg:bottom-4 lg:right-4 flex flex-col gap-3 z-50">
+            {/* Tips Button */}
+            {(window as any).__toggleTips && (
+              <button
+                onClick={() => (window as any).__toggleTips?.()}
+                className="h-11 w-11 rounded-full shadow-lg text-blue-500 dark:text-yellow-400 hover:text-yellow-600 dark:hover:text-yellow-300 transition-all duration-300 hover:scale-110 cursor-pointer bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 backdrop-blur-sm flex items-center justify-center"
+                style={{
+                  filter: 'drop-shadow(0 0 8px rgba(36, 190, 251, 0.6))',
+                  animation: 'glow 2s ease-in-out infinite'
+                }}
+                title="Quick Tips"
+              >
+                <Lightbulb className="w-6 h-6 fill-current" />
+              </button>
+            )}
+            
+            {/* Refresh Button */}
+            <Button
+              onClick={() => refreshData('recordings')}
+              disabled={dataLoading.recordings}
+              size="icon"
+              className="h-11 w-11 rounded-full shadow-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:shadow-xl transition-all duration-300 border border-slate-100 dark:border-slate-800 backdrop-blur-sm"
+            >
+              <RefreshCw className={`h-5 w-5 text-blue-600 ${dataLoading.recordings ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
 
           {/* Search Bar */}
           <div className="mb-4">

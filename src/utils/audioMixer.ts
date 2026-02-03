@@ -25,16 +25,16 @@ export class AudioMixer {
       this.merger.connect(this.destination);
       
       this.isInitialized = true;
-      console.log('[AudioMixer] Initialized successfully');
+      // console.log('[AudioMixer] Initialized successfully');
     } catch (error) {
-      console.error('[AudioMixer] Failed to initialize:', error);
+      // console.error('[AudioMixer] Failed to initialize:', error);
       this.isInitialized = false;
     }
   }
 
   addStream(userId: string, stream: MediaStream): void {
     if (!this.isInitialized || !this.audioContext || !this.merger) {
-      console.error('[AudioMixer] Not initialized');
+      // console.error('[AudioMixer] Not initialized');
       return;
     }
 
@@ -63,9 +63,9 @@ export class AudioMixer {
       this.gains.set(userId, gain);
       this.analysers.set(userId, analyser);
 
-      console.log(`[AudioMixer] Added stream for user: ${userId}`);
+      // console.log(`[AudioMixer] Added stream for user: ${userId}`);
     } catch (error) {
-      console.error(`[AudioMixer] Error adding stream for user ${userId}:`, error);
+      // console.error(`[AudioMixer] Error adding stream for user ${userId}:`, error);
     }
   }
 
@@ -95,7 +95,7 @@ export class AudioMixer {
       this.analysers.delete(userId);
     }
 
-    console.log(`[AudioMixer] Removed stream for user: ${userId}`);
+    // console.log(`[AudioMixer] Removed stream for user: ${userId}`);
   }
 
   setVolume(userId: string, volume: number): void {
@@ -103,7 +103,7 @@ export class AudioMixer {
     if (gain) {
       const normalizedVolume = Math.max(0, Math.min(1, volume));
       gain.gain.value = normalizedVolume;
-      console.log(`[AudioMixer] Set volume for ${userId} to: ${normalizedVolume}`);
+      // console.log(`[AudioMixer] Set volume for ${userId} to: ${normalizedVolume}`);
     }
   }
 
@@ -111,13 +111,13 @@ export class AudioMixer {
     const gain = this.gains.get(userId);
     if (gain) {
       gain.gain.value = muted ? 0 : 1;
-      console.log(`[AudioMixer] ${muted ? 'Muted' : 'Unmuted'} user: ${userId}`);
+      // console.log(`[AudioMixer] ${muted ? 'Muted' : 'Unmuted'} user: ${userId}`);
     }
   }
 
   getMixedStream(): MediaStream | null {
     if (!this.destination || !this.isInitialized) {
-      console.error('[AudioMixer] Not initialized, cannot get mixed stream');
+      // console.error('[AudioMixer] Not initialized, cannot get mixed stream');
       return null;
     }
     
@@ -143,7 +143,7 @@ export class AudioMixer {
       const normalized = Math.min(1, average / 128);
       return normalized;
     } catch (error) {
-      console.error(`[AudioMixer] Error getting audio level for ${userId}:`, error);
+      // console.error(`[AudioMixer] Error getting audio level for ${userId}:`, error);
       return 0;
     }
   }
@@ -165,14 +165,14 @@ export class AudioMixer {
   suspend(): void {
     if (this.audioContext && this.audioContext.state === 'running') {
       this.audioContext.suspend();
-      console.log('[AudioMixer] Suspended');
+      // console.log('[AudioMixer] Suspended');
     }
   }
 
   resume(): void {
     if (this.audioContext && this.audioContext.state === 'suspended') {
       this.audioContext.resume();
-      console.log('[AudioMixer] Resumed');
+      // console.log('[AudioMixer] Resumed');
     }
   }
 
@@ -181,7 +181,7 @@ export class AudioMixer {
   }
 
   close(): void {
-    console.log('[AudioMixer] Closing...');
+    // console.log('[AudioMixer] Closing...');
     
     // Disconnect all sources and nodes
     this.sources.forEach(source => {
@@ -210,7 +210,7 @@ export class AudioMixer {
     // Close audio context
     if (this.audioContext) {
       this.audioContext.close().catch(e => {
-        console.error('[AudioMixer] Error closing audio context:', e);
+        // console.error('[AudioMixer] Error closing audio context:', e);
       });
       this.audioContext = null;
     }
@@ -220,7 +220,7 @@ export class AudioMixer {
     this.destination = null;
     this.isInitialized = false;
     
-    console.log('[AudioMixer] Closed successfully');
+    // console.log('[AudioMixer] Closed successfully');
   }
 
   // Helper method to mix multiple streams into one

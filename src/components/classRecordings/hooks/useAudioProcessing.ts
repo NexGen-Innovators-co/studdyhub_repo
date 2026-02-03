@@ -39,7 +39,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
 
     if (invalidRecordings.length === 0) return;
 
-    // console.log(`Found ${invalidRecordings.length} recordings with invalid duration. Attempting fix...`);
+    // // console.log(`Found ${invalidRecordings.length} recordings with invalid duration. Attempting fix...`);
 
     for (const recording of invalidRecordings) {
       let newDuration = 0;

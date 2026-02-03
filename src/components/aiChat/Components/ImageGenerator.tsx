@@ -55,7 +55,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({
       setGeneratedImageUrl(result.imageUrl);
       toast.success('Image generated successfully!');
     } catch (error) {
-      console.error('Image generation error:', error);
+      // console.error('Image generation error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to generate image.');
     } finally {
       setIsGenerating(false);
@@ -78,7 +78,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({
       window.URL.revokeObjectURL(url);
       toast.success('Image downloaded!');
     } catch (error) {
-      console.error('Download error:', error);
+      // console.error('Download error:', error);
       toast.error('Failed to download image.');
     }
   };
@@ -92,7 +92,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({
       toast.success('Image URL copied to clipboard!');
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      console.error('Copy error:', error);
+      // console.error('Copy error:', error);
       toast.error('Failed to copy URL.');
     }
   };
@@ -316,3 +316,4 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({
     </AnimatePresence>
   );
 };
+

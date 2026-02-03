@@ -32,18 +32,18 @@ TASK: ${actionType}
 	
 	if (customInstruction && customInstruction.trim()) {
 		basePrompt += `\n\nCUSTOM USER INSTRUCTION (IMPORTANT - FOLLOW THIS CAREFULLY):\n${customInstruction}`;
-		console.log('[createPrompt] Custom instruction added to prompt');
+		// console.log('[createPrompt] Custom instruction added to prompt');
 		
 		if (diagramKeywords.test(customInstruction)) {
 			diagramRequested = true;
-			console.log('[createPrompt] Diagram requested via custom instruction');
+			// console.log('[createPrompt] Diagram requested via custom instruction');
 		}
 	}
 	
 	// Also check if the action type itself suggests visualization
 	if (actionType === 'visualize' || actionType === 'diagram') {
 		diagramRequested = true;
-		console.log('[createPrompt] Diagram requested via action type');
+		// console.log('[createPrompt] Diagram requested via action type');
 	}
 
 	if (attachedDocumentContent && attachedDocumentContent.trim()) {
@@ -158,7 +158,7 @@ async function generateInlineContentWithGemini(prompt: string): Promise<string> 
 			aiContent = aiContent.replace(/^```(?:markdown|md)\n/, '').replace(/```$/, '').trim();
 		}
 		// Keep the diagram code blocks intact
-		console.log('[generate-inline-content] Diagram detected, preserving code blocks');
+		// console.log('[generate-inline-content] Diagram detected, preserving code blocks');
 	} else {
 		// For regular text, remove any unnecessary markdown wrappers
 		// but preserve intentional code blocks (for actual code examples)
@@ -176,15 +176,15 @@ async function generateInlineContentWithGemini(prompt: string): Promise<string> 
 }
 
 serve(async (req) => {
-	console.log('[generate-inline-content] Incoming request:', req.method);
+	// console.log('[generate-inline-content] Incoming request:', req.method);
 
 	if (req.method === 'OPTIONS') {
-		console.log('[generate-inline-content] OPTIONS preflight');
+		// console.log('[generate-inline-content] OPTIONS preflight');
 		return new Response('ok', { headers: CORS_HEADERS });
 	}
 
 	if (req.method !== 'POST') {
-		console.warn('[generate-inline-content] Method not allowed:', req.method);
+		// console.warn('[generate-inline-content] Method not allowed:', req.method);
 		return new Response(JSON.stringify({ error: 'Method not allowed' }), {
 			status: 405,
 			headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
@@ -193,10 +193,10 @@ serve(async (req) => {
 
 	try {
 		const body = await req.json();
-		console.log('[generate-inline-content] Request body keys:', Object.keys(body));
-		console.log('[generate-inline-content] Action type:', body.actionType);
-		console.log('[generate-inline-content] Custom instruction:', body.customInstruction || '(none)');
-		console.log('[generate-inline-content] Custom instruction length:', (body.customInstruction || '').length);
+		// console.log('[generate-inline-content] Request body keys:', Object.keys(body));
+		// console.log('[generate-inline-content] Action type:', body.actionType);
+		// console.log('[generate-inline-content] Custom instruction:', body.customInstruction || '(none)');
+		// console.log('[generate-inline-content] Custom instruction length:', (body.customInstruction || '').length);
 
 		const { 
 			selectedText, 
@@ -209,22 +209,22 @@ serve(async (req) => {
 		} = body;
 
 		if (!selectedText || !selectedText.trim()) {
-			console.warn('[generate-inline-content] Missing selectedText');
+			// console.warn('[generate-inline-content] Missing selectedText');
 			return createErrorResponse('Selected text is required', 400);
 		}
 
 		if (!userProfile || !userProfile.id) {
-			console.warn('[generate-inline-content] Missing userProfile or userProfile.id');
+			// console.warn('[generate-inline-content] Missing userProfile or userProfile.id');
 			return createErrorResponse('User profile is required', 400);
 		}
 
 		// Validate AI message limit
 		const validator = createSubscriptionValidator();
 		const limitCheck = await validator.checkAiMessageLimit(userProfile.id);
-		console.log('[generate-inline-content] AI message limit check:', limitCheck);
+		// console.log('[generate-inline-content] AI message limit check:', limitCheck);
 
 		if (!limitCheck.allowed) {
-			console.warn('[generate-inline-content] AI message limit exceeded:', limitCheck.message);
+			// console.warn('[generate-inline-content] AI message limit exceeded:', limitCheck.message);
 			return createErrorResponse(limitCheck.message || 'AI generation limit exceeded', 403);
 		}
 
@@ -237,18 +237,18 @@ serve(async (req) => {
 			customInstruction || '', 
 			attachedDocumentContent || ''
 		);
-		console.log('[generate-inline-content] Generated prompt length:', prompt.length);
-		console.log('[generate-inline-content] Action type:', actionType);
-		console.log('[generate-inline-content] Custom instruction:', customInstruction);
+		// console.log('[generate-inline-content] Generated prompt length:', prompt.length);
+		// console.log('[generate-inline-content] Action type:', actionType);
+		// console.log('[generate-inline-content] Custom instruction:', customInstruction);
 
 		// Generate content
 		let generatedContent = '';
 		try {
 			generatedContent = await generateInlineContentWithGemini(prompt);
-			console.log('[generate-inline-content] AI generated content length:', generatedContent.length);
-			console.log('[generate-inline-content] Content preview:', generatedContent.slice(0, 200));
+			// console.log('[generate-inline-content] AI generated content length:', generatedContent.length);
+			// console.log('[generate-inline-content] Content preview:', generatedContent.slice(0, 200));
 		} catch (aiError) {
-			console.error('[generate-inline-content] AI generation failed:', aiError);
+			// console.error('[generate-inline-content] AI generation failed:', aiError);
 			return new Response(JSON.stringify({ 
 				error: 'AI generation failed', 
 				details: aiError instanceof Error ? aiError.message : 'Unknown error' 
@@ -260,12 +260,12 @@ serve(async (req) => {
 
 		// Validate the generated content
 		if (!generatedContent || !generatedContent.trim()) {
-			console.error('[generate-inline-content] Empty content generated');
+			// console.error('[generate-inline-content] Empty content generated');
 			return createErrorResponse('AI generated empty content', 500);
 		}
 
 		// Return result
-		console.log('[generate-inline-content] Returning result successfully');
+		// console.log('[generate-inline-content] Returning result successfully');
 		return new Response(JSON.stringify({ generatedContent }), {
 			status: 200,
 			headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
@@ -273,8 +273,8 @@ serve(async (req) => {
 
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-		console.error('[generate-inline-content] Unexpected error:', errorMessage);
-		console.error('[generate-inline-content] Error stack:', error instanceof Error ? error.stack : 'No stack');
+		// console.error('[generate-inline-content] Unexpected error:', errorMessage);
+		// console.error('[generate-inline-content] Error stack:', error instanceof Error ? error.stack : 'No stack');
 		
 		return new Response(JSON.stringify({ 
 			error: 'Failed to generate inline content', 

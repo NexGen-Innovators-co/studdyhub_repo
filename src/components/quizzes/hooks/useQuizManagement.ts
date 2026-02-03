@@ -2,7 +2,6 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '../../../integrations/supabase/client';
-import { generateId } from '../../classRecordings/utils/helpers';
 import { ClassRecording, Quiz, QuizQuestion } from '../../../types/Class';
 import { QuizAttempt } from '../../../types/EnhancedClasses';
 import { FunctionsHttpError } from '@supabase/supabase-js';
@@ -57,12 +56,12 @@ export const useQuizManagement = ({
         return;
       }
 
+      const notesClassId = crypto.randomUUID();
+
       const quiz: Quiz = {
-        id: generateId(),
-        classId: 'notes-generated',
         title: data.title || 'Notes Quiz',
         questions: data.questions,
-        userId: user.id,
+        user_id: user.id,
         created_at: new Date().toISOString(),
         source_type: 'notes'
       };
@@ -71,7 +70,7 @@ export const useQuizManagement = ({
         .from('quizzes')
         .insert({
           id: quiz.id,
-          class_id: quiz.classId,
+          class_id: quiz.class_id,
           title: quiz.title,
           questions: quiz.questions as any,
           user_id: user.id,
@@ -82,16 +81,17 @@ export const useQuizManagement = ({
       if (insertError) throw new Error(`Failed to save quiz: ${insertError.message}`);
 
       const notesRecording: ClassRecording = {
-        id: 'notes-generated',
+        id: notesClassId,
         title: 'Notes Quiz',
-        audioUrl: '',
+        audio_url: '',
         transcript: notesContent.substring(0, 200) + '...',
         summary: 'Generated from user notes',
         duration: 0,
         subject: 'Personal Notes',
         date: new Date().toISOString(),
         created_at: new Date().toISOString(),
-        userId: user.id
+        userId: user.id, // Keep for legacy if needed
+        user_id: user.id
       };
 
       onGenerateQuiz(notesRecording, quiz);
@@ -166,12 +166,12 @@ export const useQuizManagement = ({
         throw new Error('AI generated quiz has no valid questions');
       }
 
+      const aiClassId = crypto.randomUUID();
+
       const quiz: Quiz = {
-        id: generateId(),
-        classId: 'ai-generated',
         title: data.title || 'AI Smart Quiz',
         questions: data.questions,
-        userId: user.id,
+        user_id: user.id,
         created_at: new Date().toISOString(),
         source_type: 'ai'
       };
@@ -180,7 +180,6 @@ export const useQuizManagement = ({
         .from('quizzes')
         .insert({
           id: quiz.id,
-          class_id: quiz.classId,
           title: quiz.title,
           questions: quiz.questions as any,
           user_id: user.id,
@@ -193,16 +192,18 @@ export const useQuizManagement = ({
       }
 
       const aiRecording: ClassRecording = {
-        id: 'ai-generated',
+        id: aiClassId,
         title: 'AI Smart Quiz',
-        audioUrl: '',
+        audioUrl: '', // Keep for legacy if needed
+        audio_url: '',
         transcript: `AI-generated quiz focusing on: ${topics.join(', ')}`,
         summary: `Personalized quiz with focus on: ${focusAreas.join(', ')}`,
         duration: 0,
         subject: 'Multiple Topics',
         date: new Date().toISOString(),
         created_at: new Date().toISOString(),
-        userId: user.id
+        userId: user.id, // Keep for legacy if needed
+        user_id: user.id
       };
 
       onGenerateQuiz(aiRecording, quiz);
@@ -262,11 +263,10 @@ export const useQuizManagement = ({
       }
 
       const quiz: Quiz = {
-        id: generateId(),
-        classId: recording.id,
+        class_id: recording.id,
         title: data.title || recording.title,
         questions: data.questions,
-        userId: user.id,
+        user_id: user.id,
         created_at: new Date().toISOString(),
         source_type: 'recording'
       };
@@ -275,7 +275,7 @@ export const useQuizManagement = ({
         .from('quizzes')
         .insert({
           id: quiz.id,
-          class_id: quiz.classId,
+          class_id: quiz.class_id,
           title: quiz.title,
           questions: quiz.questions as any,
           user_id: user.id,
@@ -315,6 +315,14 @@ export const useQuizManagement = ({
       newAnswers[questionIndex] = optionIndex;
       return newAnswers;
     });
+  }, []);
+
+  const handleSelectQuizMode = useCallback((recording: ClassRecording, quiz: Quiz) => {
+    setQuizMode({ recording, quiz });
+    setUserAnswers(new Array(quiz.questions?.length || 0).fill(null));
+    setCurrentQuestionIndex(0);
+    setShowResults(false);
+    setQuizStartTime(Date.now());
   }, []);
 
   const handleNextQuestion = useCallback(() => {
@@ -439,6 +447,7 @@ export const useQuizManagement = ({
     handleGenerateQuizFromNotes,
     handleGenerateAIQuiz,
     handleAnswerSelect,
+    handleSelectQuizMode,
     handleNextQuestion,
     handlePreviousQuestion,
     handleExitQuizMode,

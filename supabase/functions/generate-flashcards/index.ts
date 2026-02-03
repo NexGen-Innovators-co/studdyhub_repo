@@ -102,15 +102,15 @@ async function generateFlashcardsWithRetry(prompt, maxRetries = 3, initialDelay 
   });
   for(let i = 0; i < maxRetries; i++){
     try {
-      console.log(`Generating flashcards (attempt ${i + 1}/${maxRetries}), delay: ${delay}ms`);
+      // console.log(`Generating flashcards (attempt ${i + 1}/${maxRetries}), delay: ${delay}ms`);
       const result = await model.generateContent(prompt);
-      console.log(`Flashcard generation successful on attempt ${i + 1}`);
+      // console.log(`Flashcard generation successful on attempt ${i + 1}`);
       return result;
     } catch (error) {
-      console.error(`Attempt ${i + 1} failed:`, error);
-      console.error('Full error object:', error);
+      // console.error(`Attempt ${i + 1} failed:`, error);
+      // console.error('Full error object:', error);
       if (error?.status === 429) {
-        console.warn(`Rate limit exceeded. Retrying in ${delay}ms (attempt ${i + 1}/${maxRetries})`);
+        // console.warn(`Rate limit exceeded. Retrying in ${delay}ms (attempt ${i + 1}/${maxRetries})`);
         await new Promise((resolve)=>setTimeout(resolve, Math.min(delay, maxDelay)));
         delay *= 2; // Exponential backoff
       } else {
@@ -205,7 +205,7 @@ serve(async (req)=>{
     }
     const cacheKey = `${noteId}-${user.id}-${numberOfCards}-${difficulty}-${focusAreas?.join(',') || ''}`;
     if (flashcardCache.has(cacheKey)) {
-      console.log('Returning flashcards from cache');
+      // console.log('Returning flashcards from cache');
       const cachedData = flashcardCache.get(cacheKey);
       return new Response(JSON.stringify({
         success: true,
@@ -224,7 +224,7 @@ serve(async (req)=>{
     // Generate flashcards with AI (using retry mechanism)
     try {
       const prompt = createFlashcardPrompt(noteContent, userProfile, numberOfCards, difficulty, focusAreas);
-      console.log(`Generating ${numberOfCards} flashcards for user ${user.id}`);
+      // console.log(`Generating ${numberOfCards} flashcards for user ${user.id}`);
       const result = await generateFlashcardsWithRetry(prompt);
       const response = await result.response;
       let aiContent = response.text();
@@ -235,8 +235,8 @@ serve(async (req)=>{
       try {
         flashcardsData = JSON.parse(aiContent);
       } catch (parseError) {
-        console.error('JSON parse error:', parseError);
-        console.error('AI Response:', aiContent.slice(0, 500));
+        // console.error('JSON parse error:', parseError);
+        // console.error('AI Response:', aiContent.slice(0, 500));
         return new Response(JSON.stringify({
           error: 'Failed to parse AI response',
           details: 'The AI generated invalid JSON. Please try again.'
@@ -287,13 +287,13 @@ serve(async (req)=>{
             }));
           const { error: dbError } = await supabaseClient.from('flashcards').insert(flashcardsToInsert);
           if (dbError) {
-            console.warn('Could not store flashcards in database:', dbError.message);
+            // console.warn('Could not store flashcards in database:', dbError.message);
           // Non-critical error - continue without storing
           } else {
-            console.log(`Successfully stored ${flashcardsWithIds.length} flashcards in database`);
+            // console.log(`Successfully stored ${flashcardsWithIds.length} flashcards in database`);
           }
         } catch (dbError) {
-          console.warn('Database error (non-critical):', dbError);
+          // console.warn('Database error (non-critical):', dbError);
         // Continue without storing
         }
       }
@@ -319,7 +319,7 @@ serve(async (req)=>{
         }
       });
     } catch (aiError) {
-      console.error('AI generation failed after retries:', aiError);
+      // console.error('AI generation failed after retries:', aiError);
       return new Response(JSON.stringify({
         error: 'AI generation failed',
         details: aiError.message,
@@ -334,7 +334,7 @@ serve(async (req)=>{
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Flashcard generation error:', error);
+    // console.error('Flashcard generation error:', error);
     return new Response(JSON.stringify({
       error: 'Failed to generate flashcards',
       details: errorMessage,
@@ -348,3 +348,4 @@ serve(async (req)=>{
     });
   }
 });
+

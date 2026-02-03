@@ -136,10 +136,10 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
           });
           if (resp.ok) return await resp.json();
           const txt = await resp.text();
-          console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
+          // console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
           if (resp.status === 429 || resp.status === 503) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
         } catch (err) {
-          console.error(`Error calling Gemini ${model}:`, err);
+          // console.error(`Error calling Gemini ${model}:`, err);
           if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
         }
       }
@@ -166,8 +166,8 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
         }
       });
     } catch (parseError) {
-      console.error('Failed to parse quiz JSON or validate structure:', parseError);
-      console.error('Raw content that failed parsing:', generatedContent);
+      // console.error('Failed to parse quiz JSON or validate structure:', parseError);
+      // console.error('Raw content that failed parsing:', generatedContent);
       // Fallback: create a simple quiz based on the content
       quizData = {
         title: `Quiz: ${name}`,
@@ -185,7 +185,7 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
           }
         ]
       };
-      console.warn('Falling back to default quiz due to parsing error.');
+      // console.warn('Falling back to default quiz due to parsing error.');
     }
     return new Response(JSON.stringify(quizData), {
       headers: {
@@ -194,7 +194,7 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
       }
     });
   } catch (error) {
-    console.error('Error in generate-quiz function:', error);
+    // console.error('Error in generate-quiz function:', error);
     return new Response(JSON.stringify({
       error: error.message,
       details: 'Failed to generate quiz. Please ensure the transcript contains sufficient educational content and a valid Gemini API key is configured.'
@@ -207,3 +207,4 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
     });
   }
 });
+

@@ -92,6 +92,8 @@ import TextStyle from '@tiptap/extension-text-style';
 import Color from '@tiptap/extension-color';
 import Highlight from '@tiptap/extension-highlight';
 import { FontSize } from '../extensions/FontSize';
+import { LaTeX, InlineLaTeX } from '../extensions/LaTeX';
+import 'katex/dist/katex.min.css';
 
 /* ---------- Syntax Highlighting ---------- */
 import { lowlight } from 'lowlight';
@@ -419,6 +421,8 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         ChartJsNode,
         MermaidNode,
         DotNode,
+        LaTeX,
+        InlineLaTeX,
       ],
       content: convertMarkdownToEditorHtml(content),
       onUpdate: ({ editor }) => {
@@ -459,7 +463,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     const handleSave = () => {
       if (editor) {
         const markdown = convertEditorHtmlToMarkdown(editor.getHTML());
-        console.log('--- SAVING NOTE CONTENT ---', markdown);
+        // console.log('--- SAVING NOTE CONTENT ---', markdown);
       }
       debugEditorState();
       onSave()
@@ -1056,6 +1060,21 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           data-tutorial="insert-table-button"
         >
           <TableIcon className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => {
+            const latex = prompt('Enter LaTeX code (e.g., E = mc^2):');
+            if (latex) {
+              editor?.chain().focus().insertLaTeX({ latex, displayMode: true }).run();
+            }
+          }}
+          className="p-2 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900 hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200"
+          title="Insert LaTeX Equation"
+          data-tutorial="insert-latex-button"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+          </svg>
         </button>
       </React.Fragment>,
 

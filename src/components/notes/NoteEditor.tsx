@@ -9,7 +9,7 @@ import { generateSpeech, playAudioContent } from '../../services/cloudTtsService
 import mermaid from 'mermaid';
 import { Chart, registerables } from 'chart.js';
 import { Button } from '../ui/button';
-import { Sparkles, RotateCw } from 'lucide-react';
+import { Sparkles, RotateCw, Lightbulb } from 'lucide-react';
 
 Chart.register(...registerables);
 
@@ -226,7 +226,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       ai_summary: note.ai_summary
     };
 
-    console.log('--- UPDATING NOTE IN DATABASE ---', updatedNote.content);
+    // console.log('--- UPDATING NOTE IN DATABASE ---', updatedNote.content);
 
     // Update local state to ensure synchronization
     if (markdownToSave !== content) {
@@ -290,7 +290,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         throw new Error("No summary returned from AI");
       }
     } catch (error: any) {
-      console.error("Error regenerating summary:", error);
+      // console.error("Error regenerating summary:", error);
       toast.error(error.message || "Failed to regenerate summary", { id: toastId });
     } finally {
       setIsGeneratingSummary(false);
@@ -933,7 +933,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             
             new Chart(canvas as any, pdfConfig);
           } catch (e) {
-            console.error('Chart.js rendering failed for PDF', e);
+            // console.error('Chart.js rendering failed for PDF', e);
             div.innerHTML = `<pre>Chart Error</pre>`;
           }
         }
@@ -998,14 +998,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               }
             }
             } catch (err) {
-              console.error('Mermaid rendering failed for PDF', err);
+              // console.error('Mermaid rendering failed for PDF', err);
               // Fallback to code block if rendering fails
               div.innerHTML = `<pre class="mermaid-error">${code}</pre>`;
             }
           }
         }));
       } catch (e) {
-        console.error('Error initializing mermaid for PDF', e);
+        // console.error('Error initializing mermaid for PDF', e);
       }
     }
 
@@ -1212,7 +1212,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
       if (recordingError) {
         // Non-critical error, continue
-        console.warn('Failed to create class recording entry:', recordingError);
+        // console.warn('Failed to create class recording entry:', recordingError);
       }
 
       setUploadedAudioDetails({
@@ -1462,15 +1462,34 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             />
           )}
 
+          {/* Floating Action Buttons */}
           {!isSummaryVisible && (
-            <Button
-              onClick={() => setIsSummaryVisible(true)}
-              size="icon"
-              className="fixed bottom-24 right-6 lg:bottom-6 h-14 w-14 rounded-full shadow-xl z-50 bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300 hover:scale-105"
-              title="Show AI Summary"
-            >
-              <Sparkles className="h-6 w-6" />
-            </Button>
+            <div className="fixed bottom-16 right-2 lg:bottom-4 lg:right-4 flex flex-col gap-3 z-50">
+              {/* Tips Button */}
+              {(window as any).__toggleTips && (
+                <button
+                  onClick={() => (window as any).__toggleTips?.()}
+                  className="h-11 w-11 rounded-full shadow-lg text-blue-500 dark:text-yellow-400 hover:text-yellow-600 dark:hover:text-yellow-300 transition-all duration-300 hover:scale-110 cursor-pointer bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 backdrop-blur-sm flex items-center justify-center"
+                  style={{
+                    filter: 'drop-shadow(0 0 8px rgba(36, 190, 251, 0.6))',
+                    animation: 'glow 2s ease-in-out infinite'
+                  }}
+                  title="Quick Tips"
+                >
+                  <Lightbulb className="w-6 h-6 fill-current" />
+                </button>
+              )}
+              
+              {/* AI Summary Button */}
+              <Button
+                onClick={() => setIsSummaryVisible(true)}
+                size="icon"
+                className="h-11 w-11 rounded-full shadow-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:shadow-xl transition-all duration-300 border border-slate-100 dark:border-slate-800 backdrop-blur-sm"
+                title="Show AI Summary"
+              >
+                <Sparkles className="h-5 w-5 text-blue-600" />
+              </Button>
+            </div>
           )}
 
 
@@ -1514,3 +1533,4 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     </div>
   );
 };
+

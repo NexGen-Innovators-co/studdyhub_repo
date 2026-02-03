@@ -63,7 +63,7 @@ export async function checkPodcastCreationEligibility(
         .eq('user_id', userId);
       badgeCount = count || 0;
     } catch (err: any) {
-      if (process.env.NODE_ENV !== 'production') console.debug('achievements query failed', err?.message || err);
+      if (process.env.NODE_ENV !== 'production') // console.debug('achievements query failed', err?.message || err);
       badgeCount = 0;
     }
 
@@ -94,7 +94,7 @@ export async function checkPodcastCreationEligibility(
         .maybeSingle();
       hasVerification = !!verification;
     } catch (err: any) {
-      if (process.env.NODE_ENV !== 'production') console.debug('achievements verification check failed', err?.message || err);
+      if (process.env.NODE_ENV !== 'production') // console.debug('achievements verification check failed', err?.message || err);
       hasVerification = false;
     }
 
@@ -179,3 +179,4 @@ export async function getPodcastPermissions(userId: string, podcastUserId: strin
     isOwner,
   };
 }
+

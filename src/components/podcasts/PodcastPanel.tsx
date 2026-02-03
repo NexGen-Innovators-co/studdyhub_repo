@@ -1,5 +1,5 @@
 // PodcastPanel.tsx - Complete fixed version
-import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -89,6 +89,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   const [listenersPage, setListenersPage] = useState(0);
   const [listenersLoading, setListenersLoading] = useState(false);
   const [listenersHasMore, setListenersHasMore] = useState(false);
+  const [displayListenCount, setDisplayListenCount] = useState<number | null>(null);
   const listenersSentinelRef = useRef<HTMLDivElement | null>(null);
   const listenersContainerRef = useRef<HTMLDivElement | null>(null);
   const relatedLoadingRef = useRef(false);
@@ -106,6 +107,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   const [showMoreInfo, setShowMoreInfo] = useState(false);
   const [isPodcastDataLoaded, setIsPodcastDataLoaded] = useState(false);
   const [isSegmentsLoaded, setIsSegmentsLoaded] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [currentImage, setCurrentImage] = useState<VisualAsset | null>(null);
   const [displayedVisualAsset, setDisplayedVisualAsset] = useState<VisualAsset | null>(null);
   const [prevVisualAsset, setPrevVisualAsset] = useState<VisualAsset | null>(null);
@@ -120,6 +122,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   const signedUrlCacheRef = useRef<Map<string, string>>(new Map());
   const [playbackSrc, setPlaybackSrc] = useState<string | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
+  const preloadedImagesRef = useRef<Set<string>>(new Set());
   const audioLoadTimeoutRef = useRef<number | null>(null);
   const videoAreaRef = useRef<HTMLDivElement>(null);
   const mainContainerRef = useRef<HTMLDivElement>(null);
@@ -287,10 +290,11 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     setFullAudioProgress(0);
     setReplay(false);
     setCurrentSegmentIndex(0);
-    // Clear visual assets immediately to avoid showing previous podcast images
-    setCurrentImage(null);
-    setDisplayedVisualAsset(null);
-    setPrevVisualAsset(null);
+    // Don't clear visual assets immediately - let the next useEffect set the new cover image
+    // This prevents flickering when switching podcasts
+    // setCurrentImage(null);
+    // setDisplayedVisualAsset(null);
+    // setPrevVisualAsset(null);
     setPlaybackSrc(null);
     // Mark that we are switching podcasts for a short window to suppress
     // transient error toasts that occur due to the old audio element being torn down.
@@ -342,7 +346,9 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   // Set initial image when podcast loads
   useEffect(() => {
     if (!isOpen) return;
-    if (podcast?.visual_assets && podcast.visual_assets.length > 0) {
+    if (!podcast) return; // Don't clear image if podcast is undefined/loading
+    
+    if (podcast.visual_assets && podcast.visual_assets.length > 0) {
       // Find first image for segment 0 (support both segmentIndex and segmentIndices)
       const firstImage = podcast.visual_assets.find(asset =>
         asset.type === 'image' && (
@@ -352,7 +358,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
       ) || podcast.visual_assets[0];
       setCurrentImage(firstImage);
       setDisplayedVisualAsset(firstImage);
-    } else if (podcast?.cover_image_url) {
+    } else if (podcast.cover_image_url) {
       setCurrentImage({
         type: 'image',
         url: podcast.cover_image_url,
@@ -360,7 +366,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
       });
       setDisplayedVisualAsset({ type: 'image', url: podcast.cover_image_url, concept: podcast.title });
     } else {
-      // Clear any previous image when podcast has no visuals
+      // Clear any previous image when podcast has no visuals at all
       setCurrentImage(null);
       setDisplayedVisualAsset(null);
       setPrevVisualAsset(null);
@@ -388,8 +394,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
           setDisplayedVisualAsset(matchingAsset);
           setCurrentImage(matchingAsset);
           setCurrentImageVisible(false);
-          // trigger fade-in on next tick
-          window.setTimeout(() => setCurrentImageVisible(true), 20);
+          setImageReady(false);
           // clear prev after transition completes
           window.setTimeout(() => setPrevVisualAsset(null), 650);
         }
@@ -400,28 +405,66 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   // Reset loading states when podcast changes, and clear audio if podcast data is missing
   useEffect(() => {
     if (!isOpen) return;
+    setIsClosing(false);
     if (podcast) {
       setIsPodcastDataLoaded(false);
       setIsSegmentsLoaded(false);
       setLoadingAudio(true);
+      setMediaLoading(false);
       // Simulate data loading
       const timer = setTimeout(() => {
         setIsPodcastDataLoaded(true);
-        // Consider segments loaded if we have parsed segments, or a derived full audio URL
-        const hasParsedSegments = podcast.audioSegments?.length > 0;
-        const hasDerivedFullAudio = !!derivedFullAudioUrl;
-        let hasRawSegmentsWithAudio = false;
-        if ((podcast as any).audio_segments) {
-          try {
-            const parsed = typeof (podcast as any).audio_segments === 'string'
-              ? JSON.parse((podcast as any).audio_segments)
-              : (podcast as any).audio_segments || [];
-            hasRawSegmentsWithAudio = Array.isArray(parsed) && parsed.length > 0 && !!parsed[0].audio_url;
-          } catch (e) {
-            hasRawSegmentsWithAudio = false;
+        
+        // Check if there's any audio content available
+        let hasAnyAudioContent = false;
+        
+        // Check for direct audio_url
+        if (podcast.audio_url) {
+          hasAnyAudioContent = true;
+        }
+        
+        // Check parsed audioSegments
+        if (!hasAnyAudioContent && podcast.audioSegments?.length > 0) {
+          // Verify segments actually have audioContent
+          const hasValidSegment = podcast.audioSegments.some(seg => 
+            seg.audioContent && seg.audioContent.length > 100
+          );
+          if (hasValidSegment) {
+            hasAnyAudioContent = true;
           }
         }
-        if (hasParsedSegments || hasDerivedFullAudio || hasRawSegmentsWithAudio) {
+        
+        // Check raw audio_segments field
+        if (!hasAnyAudioContent && (podcast as any).audio_segments) {
+          try {
+            const rawSegments = typeof (podcast as any).audio_segments === 'string'
+              ? JSON.parse((podcast as any).audio_segments)
+              : (podcast as any).audio_segments;
+            
+            if (Array.isArray(rawSegments) && rawSegments.length > 0) {
+              const hasValidRawSegment = rawSegments.some(seg => 
+                (seg.audioContent && seg.audioContent.length > 100) || seg.audio_url
+              );
+              if (hasValidRawSegment) {
+                hasAnyAudioContent = true;
+              }
+            }
+          } catch (e) {
+            // Invalid JSON, no audio content
+          }
+        }
+        
+        // If no audio content found, stop loading immediately
+        if (!hasAnyAudioContent) {
+          setIsSegmentsLoaded(false);
+          setLoadingAudio(false);
+          setMediaLoading(false);
+          return;
+        }
+        
+        // Audio content exists, mark as loaded
+        const hasDerivedFullAudio = !!derivedFullAudioUrl;
+        if (podcast.audioSegments?.length > 0 || hasDerivedFullAudio || podcast.audio_url) {
           setIsSegmentsLoaded(true);
         }
         setLoadingAudio(false);
@@ -565,6 +608,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   // Handle close with audio cleanup
   const handleClose = () => {
     try {
+      setIsClosing(true);
       // Pause and clear audio
       if (audioRef.current) {
         try { audioRef.current.pause(); } catch (e) {}
@@ -607,9 +651,11 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
       setLoadingAudio(false);
       setMediaLoading(false);
       setPlaybackSrc(null);
-      setDisplayedVisualAsset(null);
-      setPrevVisualAsset(null);
-      setCurrentImage(null);
+      preloadedImagesRef.current.clear();
+      // Don't clear visual assets on close to prevent flickering during navigation
+      // setDisplayedVisualAsset(null);
+      // setPrevVisualAsset(null);
+      // setCurrentImage(null);
       setRelatedPodcasts([]);
       setRelatedPage(0);
       setRelatedHasMore(false);
@@ -803,6 +849,29 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     setListenersPage(0);
     setListenersHasMore(true);
     fetchListenersPage(0);
+  }, [podcast?.id, isOpen, isOnline]);
+
+  // Fetch total listener count for display
+  useEffect(() => {
+    if (!isOpen || !isOnline || !podcast?.id) return;
+    
+    const fetchTotalListenerCount = async () => {
+      try {
+        const { count, error } = await supabase
+          .from('podcast_listeners')
+          .select('*', { count: 'exact', head: true })
+          .eq('podcast_id', podcast.id);
+        
+        if (error) throw error;
+        setDisplayListenCount(count || 0);
+      } catch (err) {
+        ////console.error('Error fetching total listener count:', err);
+        // Fallback to the podcast's listen_count if query fails
+        setDisplayListenCount(podcast.listen_count || 0);
+      }
+    };
+
+    fetchTotalListenerCount();
   }, [podcast?.id, isOpen, isOnline]);
 
   // IntersectionObserver to load more related podcasts when sentinel visible
@@ -1158,6 +1227,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
           setCurrentTime(vid.duration || 0);
           if (segmentIndex < (podcast.audioSegments?.length || 0) - 1) {
             autoAdvancingRef.current = true;
+            // Don't set isPlaying to false during auto-advance to prevent button flicker
             setTimeout(() => {
               setCurrentSegmentIndex(segmentIndex + 1);
               playSegment(segmentIndex + 1, { autoAdvance: true }).catch(console.error).finally(() => {
@@ -1773,11 +1843,60 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
 
   const tags = podcast.tags || [];
   const currentVisualAsset = displayedVisualAsset;
+  const hasSegmentImages = Array.isArray(podcast?.visual_assets)
+    ? podcast!.visual_assets.some(asset => asset?.type === 'image')
+    : false;
+  const hasParsedAudioSegments = Array.isArray(podcast?.audioSegments)
+    ? podcast!.audioSegments.some(seg => !!seg?.audio_url || (seg?.audioContent && seg.audioContent.length > 0))
+    : false;
+  const hasRawAudioSegments = useMemo(() => {
+    const raw = (podcast as any)?.audio_segments;
+    if (!raw) return false;
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return Array.isArray(parsed) && parsed.some((seg: any) => !!seg?.audio_url || (seg?.audioContent && seg.audioContent.length > 0));
+    } catch (e) {
+      return false;
+    }
+  }, [(podcast as any)?.audio_segments]);
+  const hasAudioSource = !!derivedFullAudioUrl || !!podcast?.audio_url || hasParsedAudioSegments || hasRawAudioSegments;
+
+  // Preload all visual images as soon as the podcast opens to avoid lag on segment transitions
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!podcast) return;
+
+    const imageUrls = Array.isArray(podcast.visual_assets)
+      ? podcast.visual_assets
+          .filter(asset => asset?.type === 'image' && !!asset?.url)
+          .map(asset => asset.url)
+      : [];
+
+    if (imageUrls.length === 0) return;
+
+    imageUrls.forEach((url) => {
+      if (preloadedImagesRef.current.has(url)) return;
+      const img = new Image();
+      img.onload = () => {
+        preloadedImagesRef.current.add(url);
+      };
+      img.onerror = () => {
+        // Do not retry endlessly; mark as attempted to avoid loops
+        preloadedImagesRef.current.add(url);
+      };
+      img.src = url;
+    });
+  }, [isOpen, podcast?.id, podcast?.visual_assets]);
 
   // Reset audio/image ready state on segment change
   useEffect(() => {
     setAudioReady(false);
-    setImageReady(false);
+    const url = currentVisualAsset?.url;
+    if (url && preloadedImagesRef.current.has(url)) {
+      setImageReady(true);
+    } else {
+      setImageReady(false);
+    }
   }, [currentSegmentIndex, currentVisualAsset?.url]);
 
   // Progressive play: only play when both audio and image are ready
@@ -1880,14 +1999,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
 
         {/* Video/Image Content */}
         <div className="w-full h-full flex items-center justify-center">
-          {!isPodcastDataLoaded ? (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="text-center">
-                <Loader2 className="h-12 w-12 animate-spin text-black dark:text-white mx-auto mb-4" />
-                <p className="text-gray-600 dark:text-gray-400 text-sm">Loading podcast...</p>
-              </div>
-            </div>
-          ) : currentVisualAsset ? (
+          {currentVisualAsset ? (
             <div className="w-full h-full relative">
               {currentVisualAsset.type === 'video' || podcast?.podcast_type === 'video' ? (
                 // If the overall podcast is a video podcast we render a controlled video
@@ -1911,7 +2023,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                   onPause={() => setIsPlaying(false)}
                 />
               ) : (
-                <div className="w-full h-full relative">
+                <div className="w-full h-full relative bg-black">
                   {prevVisualAsset && (
                     <img
                       src={prevVisualAsset.url}
@@ -1931,9 +2043,13 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                       loading="eager"
                       decoding="async"
                       className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-600 ease-out ${currentImageVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-105'}`}
-                      onLoad={() => setImageReady(true)}
+                      onLoad={() => {
+                        setImageReady(true);
+                        setCurrentImageVisible(true);
+                      }}
                       onError={(e) => {
                         setImageReady(true); // allow audio to play even if fallback
+                        setCurrentImageVisible(true);
                         (e.target as HTMLImageElement).src = `https://placehold.co/1792x1024/333/white?text=${encodeURIComponent(currentVisualAsset.concept)}`;
                         if (audioRef.current && !audioRef.current.paused) {
                           audioRef.current.pause();
@@ -1947,10 +2063,10 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                 </div>
               )}
             </div>
-            ) : podcast.cover_image_url ? (
+            ) : podcast?.cover_image_url ? (
               <img
                 src={podcast.cover_image_url}
-                alt={podcast.title}
+                alt={podcast.title || 'Podcast cover'}
                 loading="eager"
                 decoding="async"
                 className="w-full h-full object-contain"
@@ -1963,11 +2079,21 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
           )}
             {/* Unified loading / live overlay: show big overlay when podcast data or segments not yet available
                 If podcast is live but has no recorded segments, show a Live banner and Join control. */}
-            {!isPodcastDataLoaded && (
+            {!isPodcastDataLoaded && !isClosing && (
               <div className="absolute inset-0 flex items-center justify-center bg-white/70 dark:bg-black/70 z-20">
                 <div className="text-center">
                   <Loader2 className="h-12 w-12 md:h-16 md:w-16 animate-spin text-black dark:text-white mx-auto mb-4" />
                   <p className="text-black dark:text-white text-sm">Loading podcast...</p>
+                </div>
+              </div>
+            )}
+
+            {/* Loading overlay for segments/visuals */}
+            {isPodcastDataLoaded && !isClosing && (loadingAudio || mediaLoading || (hasAudioSource && !isSegmentsLoaded && !podcast?.is_live) || (hasSegmentImages && !!currentVisualAsset && !imageReady)) && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20">
+                <div className="text-center">
+                  <Loader2 className="h-10 w-10 md:h-12 md:w-12 animate-spin text-white mx-auto mb-2" />
+                  <p className="text-white text-sm">Loading segments...</p>
                 </div>
               </div>
             )}
@@ -1977,7 +2103,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 z-20 p-4">
                 <div className="bg-red-600 text-white px-3 py-1 rounded-full text-xs mb-3">LIVE</div>
                 <h3 className="text-white text-lg font-semibold mb-2">{podcast.title}</h3>
-                <p className="text-white/90 text-sm mb-4">This session is live but not being recorded. Listeners can join live, but no recording will be saved.</p>
+                <p className="text-white/90 text-sm mb-4">This session is live but not being recorded. Students can join live, but no recording will be saved.</p>
                 <div className="flex items-center gap-3">
                   <Button
                     className="bg-red-600"
@@ -1990,9 +2116,9 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                   >
                     Join Live
                   </Button>
-                  <Button variant="ghost" onClick={() => { /* refresh listeners or open chat */ }}>
+                  <Button variant="ghost" onClick={() => { /* refresh participants or open chat */ }}>
                     <Users className="h-4 w-4 mr-2 inline" />
-                    {((podcast as any)?.live_listeners ?? (podcast as any)?.member_count ?? podcast?.listen_count ?? 0)} listeners
+                    {((podcast as any)?.live_listeners ?? (podcast as any)?.member_count ?? podcast?.listen_count ?? 0)} participants
                   </Button>
                 </div>
               </div>
@@ -2130,7 +2256,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                 </Button>
 
                 <div className="text-white text-xs md:text-sm ml-1 md:ml-2">
-                  {isSegmentsLoaded ? `${currentSegmentIndex + 1} / ${audioSegments.length}` : 'Loading...'}
+                  {isSegmentsLoaded ? `${currentSegmentIndex + 1} / ${audioSegments.length}` : (loadingAudio ? 'Loading...' : '')}
                 </div>
               </div>
 
@@ -2196,8 +2322,8 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
             </div>
           )}
 
-          {/* Loading indicator for segments */}
-          {!isSegmentsLoaded && (
+          {/* Loading indicator for segments - only show when actively loading, not when no audio exists */}
+          {!isSegmentsLoaded && loadingAudio && (
             <div className="absolute top-3 left-3 bg-black/80 text-white px-2 py-1 rounded-full text-xs md:text-sm backdrop-blur-sm">
               <Loader2 className="h-3 w-3 inline mr-1 animate-spin" />
               Loading segments...
@@ -2234,7 +2360,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
             {isPodcastDataLoaded ? (
               <>
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="text-gray-600 dark:text-gray-400 text-sm">{podcast.listen_count || 0} listens</span>
+                  <span className="text-gray-600 dark:text-gray-400 text-sm">{displayListenCount !== null ? displayListenCount : podcast.listen_count || 0} listens</span>
                   <span className="text-gray-600 dark:text-gray-400">•</span>
                   <span className="text-gray-600 dark:text-gray-400 text-sm">{podcast.duration || 0}m</span>
                   <span className="text-gray-600 dark:text-gray-400">•</span>
@@ -2310,85 +2436,110 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                 size="sm"
                 onClick={() => setShowTranscript(!showTranscript)}
                 className="w-full justify-between text-black dark:text-white border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800"
-                disabled={!isSegmentsLoaded}
+                disabled={!isSegmentsLoaded && !loadingAudio}
               >
                 <span className="flex items-center gap-2">
-                  {!isSegmentsLoaded ? (
+                  {!isSegmentsLoaded && loadingAudio ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <MessageSquare className="h-4 w-4" />
                   )}
-                  {!isSegmentsLoaded ? 'Loading transcript...' : 'Transcript'}
+                  {!isSegmentsLoaded && loadingAudio ? 'Loading transcript...' : 'Transcript'}
                 </span>
                 {isSegmentsLoaded && (showTranscript ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />)}
               </Button>
               
-              {showTranscript && isSegmentsLoaded && (
+              {showTranscript && (
                 <div
                   ref={transcriptContainerRef}
                   className="mt-3 max-h-60 overflow-y-auto"
                 >
-                  {audioSegmentsNormalized.map((segment, index) => (
-                    <div
-                      key={index}
-                      ref={(el) => { segmentRefs.current[index] = el; }}
-                      className={`p-3 rounded-lg cursor-pointer transition-colors mb-2 ${index === currentSegmentIndex
-                        ? 'bg-gray-200 dark:bg-gray-800'
-                        : 'hover:bg-gray-100 dark:hover:bg-gray-900'
-                      }`}
-                      onClick={() => isSingleAudio ? handleSegmentProgressClick(index) : playSegment(index)}
-                    >
-                      <div className="flex items-start gap-2">
-                        <div className={`h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 ${index === currentSegmentIndex
-                          ? 'bg-red-500'
-                          : 'bg-gray-300 dark:bg-gray-700'
-                        }`}>
-                          <Play className="h-3 w-3 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-medium text-black dark:text-white">
-                              {segment.speaker}
-                            </span>
-                            <span className="text-xs text-gray-600 dark:text-gray-400">#{index + 1}</span>
-                          </div>
-                          <div>
-                            <p className="text-gray-700 dark:text-gray-300 text-sm">{segment.text}</p>
-                            {segment.transcript && segment.transcript !== segment.text && (
-                              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 italic">{segment.transcript}</p>
-                            )}
-                            {segment.summary && !segment.transcript && (
-                              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{segment.summary}</p>
-                            )}
-                            <div className="mt-2 flex items-center gap-2">
-                              {segment.audio_url && (
-                                <a href={segment.audio_url} target="_blank" rel="noreferrer" className="text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600">
-                                  <Download className="inline-block mr-1 h-4 w-4 align-middle" />
-                                  Download
-                                </a>
-                              )}
-                              {segment.transcript && (
-                                <button
-                                  className="text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600 flex items-center gap-1"
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    try {
-                                      await navigator.clipboard.writeText(segment.transcript || '');
-                                      toast.success('Transcript copied');
-                                    } catch (err) {
-                                      toast.error('Copy failed');
-                                    }
-                                  }}
-                                >
-                                  <MessageSquare className="h-4 w-4" /> Copy
-                                </button>
-                              )}
+                  {!isSegmentsLoaded && loadingAudio && (
+                    <div className="space-y-3">
+                      {Array.from({ length: 4 }).map((_, idx) => (
+                        <div key={idx} className="p-3 rounded-lg bg-gray-100 dark:bg-gray-900 animate-pulse">
+                          <div className="flex items-start gap-2">
+                            <div className="h-6 w-6 rounded-full bg-gray-300 dark:bg-gray-700" />
+                            <div className="flex-1 space-y-2">
+                              <div className="h-3 w-24 bg-gray-300 dark:bg-gray-700 rounded" />
+                              <div className="h-3 w-full bg-gray-300 dark:bg-gray-700 rounded" />
+                              <div className="h-3 w-5/6 bg-gray-300 dark:bg-gray-700 rounded" />
                             </div>
                           </div>
                         </div>
-                      </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
+
+                  {isSegmentsLoaded && (
+                    <>
+                      {audioSegmentsNormalized.map((segment, index) => (
+                        <div
+                          key={index}
+                          ref={(el) => { segmentRefs.current[index] = el; }}
+                          className={`p-3 rounded-lg cursor-pointer transition-colors mb-2 ${index === currentSegmentIndex
+                            ? 'bg-gray-200 dark:bg-gray-800'
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-900'
+                          }`}
+                          onClick={() => isSingleAudio ? handleSegmentProgressClick(index) : playSegment(index)}
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className={`h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 ${index === currentSegmentIndex
+                              ? 'bg-red-500'
+                              : 'bg-gray-300 dark:bg-gray-700'
+                            }`}>
+                              <Play className="h-3 w-3 text-white" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-medium text-black dark:text-white">
+                                  {segment.speaker}
+                                </span>
+                                <span className="text-xs text-gray-600 dark:text-gray-400">#{index + 1}</span>
+                              </div>
+                              <div>
+                                <p className="text-gray-700 dark:text-gray-300 text-sm">{segment.text}</p>
+                                {segment.transcript && segment.transcript !== segment.text && (
+                                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 italic">{segment.transcript}</p>
+                                )}
+                                {segment.summary && !segment.transcript && (
+                                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{segment.summary}</p>
+                                )}
+                                <div className="mt-2 flex items-center gap-2">
+                                  {segment.audio_url && (
+                                    <a href={segment.audio_url} target="_blank" rel="noreferrer" className="text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600">
+                                      <Download className="inline-block mr-1 h-4 w-4 align-middle" />
+                                      Download
+                                    </a>
+                                  )}
+                                  {segment.transcript && (
+                                    <button
+                                      className="text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600 flex items-center gap-1"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        try {
+                                          await navigator.clipboard.writeText(segment.transcript || '');
+                                          toast.success('Transcript copied');
+                                        } catch (err) {
+                                          toast.error('Copy failed');
+                                        }
+                                      }}
+                                    >
+                                      <MessageSquare className="h-4 w-4" /> Copy
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  {!isSegmentsLoaded && !loadingAudio && (
+                    <div className="text-sm text-gray-500">Transcript not available.</div>
+                  )}
                 </div>
               )}
             </div>
@@ -2420,7 +2571,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
           </div>
 
                 {/* Related Podcasts (infinite scroll) */}
-          <h3 className="text-black dark:text-white font-semibold mb-4 text-lg">More Podcasts</h3>
+          <h3 className="text-black dark:text-white font-semibold mb-4 text-lg">Related Content</h3>
           <div ref={relatedContainerRef} className="space-y-2 overflow-y-auto max-h-96 p-2">
             {relatedPodcasts.map((relatedPodcast) => (
               <div 
@@ -2448,14 +2599,14 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                   </h4>
                   <div className="flex items-center gap-2 mt-1 text-xs text-gray-600 dark:text-gray-400">
                     <Eye className="h-3 w-3" />
-                    <span>{relatedPodcast.listen_count || 0} listens</span>
+                    <span>{relatedPodcast.listen_count || 0} views</span>
                   </div>
                 </div>
               </div>
             ))}
 
             {relatedLoading && (
-              <div className="py-2 text-center text-sm text-gray-500">Loading more podcasts...</div>
+              <div className="py-2 text-center text-sm text-gray-500">Loading more content...</div>
             )}
             <div ref={relatedSentinelRef} />
           </div>
@@ -2474,7 +2625,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
             {isPodcastDataLoaded ? (
               <>
                 <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400 text-sm mb-3">
-                  <span>{podcast.listen_count || 0} listens</span>
+                  <span>{displayListenCount !== null ? displayListenCount : podcast.listen_count || 0} listens</span>
                   <span>•</span>
                   <span>{podcast.duration || 0}m</span>
                   <span>•</span>
@@ -2563,49 +2714,74 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                 variant="ghost"
                 className="w-full justify-between text-black dark:text-white px-0"
                 onClick={() => setShowTranscript(!showTranscript)}
-                disabled={!isSegmentsLoaded}
+                disabled={!isSegmentsLoaded && !loadingAudio}
               >
                 <span className="flex items-center gap-2 text-sm">
-                  {!isSegmentsLoaded ? (
+                  {!isSegmentsLoaded && loadingAudio ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <MessageSquare className="h-4 w-4" />
                   )}
-                  {!isSegmentsLoaded ? 'Loading transcript...' : 'Transcript'}
+                  {!isSegmentsLoaded && loadingAudio ? 'Loading transcript...' : 'Transcript'}
                 </span>
                 {isSegmentsLoaded && (showTranscript ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />)}
               </Button>
               
-              {showTranscript && isSegmentsLoaded && (
+              {showTranscript && (
                 <div className="mt-3 max-h-60 overflow-y-auto">
-                  {audioSegments.map((segment, index) => (
-                    <div
-                      key={index}
-                      className={`p-3 rounded-lg cursor-pointer transition-colors mb-2 ${index === currentSegmentIndex
-                        ? 'bg-gray-200 dark:bg-gray-800'
-                        : 'hover:bg-gray-100 dark:hover:bg-gray-900'
-                      }`}
-                      onClick={() => isSingleAudio ? handleSegmentProgressClick(index) : playSegment(index)}
-                    >
-                      <div className="flex items-start gap-2">
-                        <div className={`h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 ${index === currentSegmentIndex
-                          ? 'bg-red-500'
-                          : 'bg-gray-300 dark:bg-gray-700'
-                        }`}>
-                          <Play className="h-3 w-3 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-medium text-black dark:text-white">
-                              {segment.speaker}
-                            </span>
-                            <span className="text-xs text-gray-600 dark:text-gray-400">#{index + 1}</span>
+                  {!isSegmentsLoaded && loadingAudio && (
+                    <div className="space-y-3">
+                      {Array.from({ length: 4 }).map((_, idx) => (
+                        <div key={idx} className="p-3 rounded-lg bg-gray-100 dark:bg-gray-900 animate-pulse">
+                          <div className="flex items-start gap-2">
+                            <div className="h-6 w-6 rounded-full bg-gray-300 dark:bg-gray-700" />
+                            <div className="flex-1 space-y-2">
+                              <div className="h-3 w-24 bg-gray-300 dark:bg-gray-700 rounded" />
+                              <div className="h-3 w-full bg-gray-300 dark:bg-gray-700 rounded" />
+                              <div className="h-3 w-5/6 bg-gray-300 dark:bg-gray-700 rounded" />
+                            </div>
                           </div>
-                          <p className="text-gray-700 dark:text-gray-300 text-sm">{segment.text}</p>
                         </div>
-                      </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
+
+                  {isSegmentsLoaded && (
+                    <>
+                      {audioSegments.map((segment, index) => (
+                        <div
+                          key={index}
+                          className={`p-3 rounded-lg cursor-pointer transition-colors mb-2 ${index === currentSegmentIndex
+                            ? 'bg-gray-200 dark:bg-gray-800'
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-900'
+                          }`}
+                          onClick={() => isSingleAudio ? handleSegmentProgressClick(index) : playSegment(index)}
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className={`h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 ${index === currentSegmentIndex
+                              ? 'bg-red-500'
+                              : 'bg-gray-300 dark:bg-gray-700'
+                            }`}>
+                              <Play className="h-3 w-3 text-white" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-medium text-black dark:text-white">
+                                  {segment.speaker}
+                                </span>
+                                <span className="text-xs text-gray-600 dark:text-gray-400">#{index + 1}</span>
+                              </div>
+                              <p className="text-gray-700 dark:text-gray-300 text-sm">{segment.text}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  {!isSegmentsLoaded && !loadingAudio && (
+                    <div className="text-sm text-gray-500">Transcript not available.</div>
+                  )}
                 </div>
               )}
               <div className="mb-4 overflow-y-auto max-h-[500px]">
@@ -2655,7 +2831,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
               onClick={() => setShowMobileRelated(!showMobileRelated)}
               disabled={!isPodcastDataLoaded}
             >
-              <span className="flex items-center gap-2 text-sm">More Podcasts</span>
+              <span className="flex items-center gap-2 text-sm">Related Content</span>
               {showMobileRelated ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </Button>
 
@@ -2691,10 +2867,11 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                       </div>
                     </div>
                   </div>
-                ))}
+                ))
+}
 
                 {relatedLoading && (
-                  <div className="py-2 text-center text-sm text-gray-500">Loading more podcasts...</div>
+                  <div className="py-2 text-center text-sm text-gray-500">Loading more content...</div>
                 )}
                 <div ref={relatedSentinelRef} />
               </div>
@@ -2711,7 +2888,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
       <SheetContent side="right" className="w-full sm:w-96 bg-white dark:bg-black border-l border-gray-300 dark:border-gray-800 p-0">
         <div className="p-4">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-black dark:text-white font-semibold text-lg">More Podcasts</h3>
+            <h3 className="text-black dark:text-white font-semibold text-lg">Related Content</h3>
             <Button
               variant="ghost"
               size="icon"

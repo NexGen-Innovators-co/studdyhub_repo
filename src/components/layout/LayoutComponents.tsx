@@ -111,7 +111,7 @@ export const AppHeader: React.FC<{
         setTimeout(() => setShowInstallPrompt(true), 3000);
       }
     } catch (error) {
-      console.error('Error installing app:', error);
+      // console.error('Error installing app:', error);
       toast.error('Failed to install app. Please try manual installation.');
       showInstallInstructions();
       setTimeout(() => setShowInstallPrompt(true), 3000);

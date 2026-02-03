@@ -89,7 +89,15 @@ StuddyHub goes beyond traditional note-taking apps by providing an intelligent l
 - **Collaboration Features** - Invite co-hosts and manage podcast members
 - **Analytics Tracking** - Monitor listens, shares, and engagement
 
-### 🚀 Advanced Features
+
+### 🎮 Kahoot-Style Live Quiz (NEW)
+
+- **Real-Time Multiplayer Quizzes**: Compete with others in live quiz sessions, just like Kahoot!
+- **Live Leaderboard**: See your rank update instantly as you play.
+- **Edge Function Powered**: All backend logic runs on Supabase Edge Functions for low latency and security.
+- **Join via Code**: Enter a join code to participate in live sessions.
+- **Host Controls**: Start, advance, and manage sessions as the quiz host.
+- **Full Technical Plan**: See [docs/KAHOOT_LIVE_QUIZ_PLAN.md](docs/KAHOOT_LIVE_QUIZ_PLAN.md) for architecture and implementation details.
 
 - ✅ **Real-time Updates** - Live data synchronization without refresh
 - 📊 **Analytics Dashboard** - Comprehensive progress tracking

@@ -1,6 +1,6 @@
 // components/Schedule.tsx
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Calendar as CalendarIcon, Clock, MapPin, Edit2, Trash2, Loader2, RefreshCw, Sparkles, History, ChevronLeft, ChevronRight, Repeat } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, Clock, MapPin, Edit2, Trash2, Loader2, RefreshCw, Sparkles, History, ChevronLeft, ChevronRight, Repeat, Lightbulb } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
@@ -15,6 +15,9 @@ import { toast } from 'sonner';
 import { useAppContext } from '../../hooks/useAppContext';
 import { AppShell } from '../layout/AppShell';
 import { StickyRail } from '../layout/StickyRail';
+import { useGlobalSearch } from '../../hooks/useGlobalSearch';
+import { SEARCH_CONFIGS } from '../../services/globalSearchService';
+import { supabase } from '../../integrations/supabase/client';
 import { HeroHeader } from '../layout/HeroHeader';
 import { QuickActionsCard } from '../layout/QuickActionsCard';
 import { StatsCard } from '../layout/StatsCard';
@@ -73,10 +76,39 @@ export const Schedule: React.FC<ScheduleProps> = ({
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<ScheduleItem | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [scheduleUserId, setScheduleUserId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [hasSearched, setHasSearched] = useState(false);
+
+  // Initialize global search hook for schedule
+  const { search, results: searchResults, isSearching: isSearchingSchedule } = useGlobalSearch(
+    SEARCH_CONFIGS.schedule,
+    scheduleUserId,
+    { debounceMs: 500 }
+  );
+
+  // Get user ID on mount
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setScheduleUserId(user?.id || null);
+    };
+    getUser();
+  }, []);
   
   // Calendar State
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    if (!value.trim()) {
+      setHasSearched(false);
+    } else {
+      setHasSearched(true);
+      search(value);
+    }
+  };
 
   const [formData, setFormData] = useState<{
     title: string;
@@ -1058,15 +1090,34 @@ export const Schedule: React.FC<ScheduleProps> = ({
           )}
         </div>
       </div>
+      {/* Floating Action Buttons */}
       {handleRefresh && (
-        <Button
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          size="icon"
-          className="fixed bottom-24 right-6 lg:bottom-6 h-14 w-14 rounded-full shadow-xl z-50 bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300 hover:scale-105"
-        >
-          <RefreshCw className={`h-6 w-6 ${isRefreshing ? 'animate-spin' : ''}`} />
-        </Button>
+        <div className="fixed bottom-16 right-2 lg:bottom-4 lg:right-4 flex flex-col gap-3 z-50">
+          {/* Tips Button */}
+          {(window as any).__toggleTips && (
+            <button
+              onClick={() => (window as any).__toggleTips?.()}
+              className="h-11 w-11 rounded-full shadow-lg text-blue-500 dark:text-yellow-400 hover:text-yellow-600 dark:hover:text-yellow-300 transition-all duration-300 hover:scale-110 cursor-pointer bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 backdrop-blur-sm flex items-center justify-center"
+              style={{
+                filter: 'drop-shadow(0 0 8px rgba(36, 190, 251, 0.6))',
+                animation: 'glow 2s ease-in-out infinite'
+              }}
+              title="Quick Tips"
+            >
+              <Lightbulb className="w-6 h-6 fill-current" />
+            </button>
+          )}
+          
+          {/* Refresh Button */}
+          <Button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            size="icon"
+            className="h-11 w-11 rounded-full shadow-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:shadow-xl transition-all duration-300 border border-slate-100 dark:border-slate-800 backdrop-blur-sm"
+          >
+            <RefreshCw className={`h-5 w-5 text-blue-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
       )}
     </AppShell>
   );

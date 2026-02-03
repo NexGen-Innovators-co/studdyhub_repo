@@ -155,7 +155,7 @@ serve(async (req: Request) => {
         .eq("user_id", userId);
 
       if (deleteError) {
-        console.error("Error removing like:", deleteError);
+        // console.error("Error removing like:", deleteError);
         return createErrorResponse("Failed to unlike post", 500);
       }
 
@@ -175,7 +175,7 @@ serve(async (req: Request) => {
         .single();
 
       if (insertError) {
-        console.error("Error adding like:", insertError);
+        // console.error("Error adding like:", insertError);
         return createErrorResponse("Failed to like post", 500);
       }
 
@@ -218,7 +218,8 @@ serve(async (req: Request) => {
       );
     }
   } catch (error) {
-    console.error("Unexpected error:", error);
+    // console.error("Unexpected error:", error);
     return createErrorResponse("Internal server error", 500);
   }
 });
+

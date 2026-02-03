@@ -19,7 +19,7 @@ serve(async (req) => {
     // Verify webhook signature
     const secretKey = Deno.env.get('PAYSTACK_SECRET_KEY');
     if (!secretKey) {
-      console.error('PAYSTACK_SECRET_KEY not configured');
+      // console.error('PAYSTACK_SECRET_KEY not configured');
       return new Response('Server configuration error', { status: 500 });
     }
 
@@ -42,7 +42,7 @@ serve(async (req) => {
       .join('');
 
     if (signature !== computedSignature) {
-      console.error('Invalid webhook signature');
+      // console.error('Invalid webhook signature');
       return new Response('Invalid signature', { status: 401 });
     }
 
@@ -129,10 +129,11 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('Webhook error:', error);
+    // console.error('Webhook error:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
     });
   }
 });
+

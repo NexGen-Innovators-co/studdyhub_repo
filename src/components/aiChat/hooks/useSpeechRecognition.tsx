@@ -117,7 +117,7 @@ export const useSpeechRecognition = ({
                 return;
             }
             
-            console.error('Speech recognition error:', event.error);
+            // console.error('Speech recognition error:', event.error);
             // Only stop and show error for non-aborted errors
             if (event.error !== 'aborted') {
                 setIsRecognizing(false);
@@ -132,7 +132,7 @@ export const useSpeechRecognition = ({
                 try {
                     recognition.start();
                 } catch (err) {
-                    console.error('Failed to restart speech recognition:', err);
+                    // console.error('Failed to restart speech recognition:', err);
                     setIsRecognizing(false);
                     isRecognizingRef.current = false;
                 }
@@ -178,7 +178,7 @@ export const useSpeechRecognition = ({
             setIsRecognizing(true);
             toast.info('Listening... Click the mic button again to stop.');
         } catch (error: any) {
-            console.error('Start recognition error:', error);
+            // console.error('Start recognition error:', error);
             toast.error(`Failed to start speech recognition: ${error.message || 'Unknown error'}`);
             setIsRecognizing(false);
             isRecognizingRef.current = false;

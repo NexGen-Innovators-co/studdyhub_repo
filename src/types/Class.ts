@@ -18,9 +18,9 @@ export interface ClassRecording {
 
 // src/types/Class.ts - Update the Quiz interface
 export interface Quiz {
-  class_id: string | null
+  class_id?: string | null
   created_at: string | null
-  id: string
+  id?: string
   questions: any | null
   source_type: string | null
   title: string

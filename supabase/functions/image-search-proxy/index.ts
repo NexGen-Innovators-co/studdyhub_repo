@@ -60,7 +60,7 @@ serve(async (req) => {
 
     } catch (e: any) {
       searchError = `Image search failed: ${e.message}`;
-      console.error(searchError);
+      // console.error(searchError);
       // Fallback to a generic placeholder image on error
       imageUrl = `https://placehold.co/400x300/FF0000/FFFFFF?text=Search+Error`; 
     }
@@ -80,7 +80,7 @@ serve(async (req) => {
     }
 
   } catch (error: any) {
-    console.error('Edge function error in image-search-proxy:', error.message);
+    // console.error('Edge function error in image-search-proxy:', error.message);
     return new Response(JSON.stringify({
       error: error.message
     }), {
@@ -92,3 +92,4 @@ serve(async (req) => {
     });
   }
 });
+

@@ -237,7 +237,7 @@ export function useNotifications() {
   //     await pushNotificationService.sendTestNotification(user.id);
   //     toast.success('Test notification sent!');
   //   } catch (error) {
-  //     console.error('Error sending test notification:', error);
+  //     // console.error('Error sending test notification:', error);
   //     toast.error('Failed to send test notification');
   //   }
   // }, [user]);
@@ -364,3 +364,4 @@ export function useNotifications() {
     // sendTestNotification
   };
 }
+

@@ -235,7 +235,7 @@ const CourseManagement = () => {
               document_id: doc?.id || null
             });
 
-          //if (noteError) console.error('Failed to create note for module', mod.title, noteError);
+          //if (noteError) // console.error('Failed to create note for module', mod.title, noteError);
 
           // Create the course material linking to the generated document (document_id may be null)
           const { error: materialError } = await supabase
@@ -661,3 +661,4 @@ const CourseManagement = () => {
 };
 
 export default CourseManagement;
+

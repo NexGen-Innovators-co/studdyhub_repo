@@ -163,7 +163,7 @@ export const useStreamingChat = (): StreamingChatHook => {
       if (!contentType?.includes('text/event-stream')) {
         //console.warn('⚠️ [Streaming] Response is not SSE, falling back to regular mode');
         const data = await response.json();
-        try { console.debug('[useStreamingChat] non-SSE fallback payload:', data); } catch (e) {}
+        // console.debug('[useStreamingChat] non-SSE fallback payload:', data);
         if (data.response) {
           params.onContentChunk(data.response);
           params.onComplete(data);
@@ -252,7 +252,7 @@ export const useStreamingChat = (): StreamingChatHook => {
                 case 'done':
                   accumulatedDataRef.current.isDone = true;
                   // Log the final 'done' payload for debugging
-                  try { console.debug('[useStreamingChat] done payload:', data); } catch (e) {}
+                  // console.debug('[useStreamingChat] done payload:', data);
                   params.onComplete(data);
                   clearInterval(timeoutCheck);
                   stopStreaming();
@@ -313,3 +313,4 @@ export const useStreamingChat = (): StreamingChatHook => {
     accumulatedDataRef,
   };
 };
+
