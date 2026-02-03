@@ -1188,7 +1188,11 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
                                   <div
                                     key={podcast.id}
                                     className="flex items-center gap-3 p-3 rounded-xl bg-card border-b border-slate-200 dark:border-slate-700 sm:border-b-0 cursor-pointer"
-                                    onClick={() => {
+                                    onClick={(e) => {
+                                      // Prevent navigation if clicking dropdown menu or its trigger
+                                      if ((e.target as HTMLElement).closest('[role="menu"], button[aria-haspopup="menu"]')) {
+                                        return;
+                                      }
                                       handlePlayPodcast(podcast);
                                       navigate(`/podcast/${podcast.id}`);
                                     }}
@@ -1222,30 +1226,52 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
                                           <Button
                                             size="icon"
                                             variant="ghost"
-                                            onClick={(e) => e.stopPropagation()}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              e.preventDefault();
+                                            }}
                                           >
                                             <MoreVertical className="h-4 w-4" />
                                           </Button>
                                         </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end" className='bg-white dark:bg-slate-800 rounded-xl border-0 shadow-2xl'>
+                                        <DropdownMenuContent 
+                                          align="end" 
+                                          className='bg-white dark:bg-slate-800 rounded-xl border-0 shadow-2xl'
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                          }}
+                                        >
                                           {podcast.user_id === currentUser?.id && (
                                             <>
                                               <DropdownMenuItem
-                                                onClick={() => handleInviteCb(podcast)}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  e.preventDefault();
+                                                  handleInviteCb(podcast);
+                                                }}
                                                 className='hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer'
                                               >
                                                 <UserPlus className='h-4 w-4 mr-2' />
                                                 Invite Members
                                               </DropdownMenuItem>
                                               <DropdownMenuItem
-                                                onClick={() => handleManageMembersCb(podcast)}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  e.preventDefault();
+                                                  handleManageMembersCb(podcast);
+                                                }}
                                                 className='hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer'
                                               >
                                                 <Users className='h-4 w-4 mr-2' />
                                                 Manage Members
                                               </DropdownMenuItem>
                                               <DropdownMenuItem
-                                                onClick={() => handleTogglePublicCb(podcast)}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  e.preventDefault();
+                                                  handleTogglePublicCb(podcast);
+                                                }}
                                                 className='hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer'
                                               >
                                                 {podcast.is_public ? <Lock className='h-4 w-4 mr-2' /> : <Globe className='h-4 w-4 mr-2' />}
@@ -1253,7 +1279,11 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
                                               </DropdownMenuItem>
                                               <DropdownMenuSeparator className="bg-slate-100 dark:bg-slate-700" />
                                               <DropdownMenuItem
-                                                onClick={() => handleTriggerUpdateCover(podcast.id)}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  e.preventDefault();
+                                                  handleTriggerUpdateCover(podcast.id);
+                                                }}
                                                 className='hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer'
                                                 disabled={isUpdatingCover === podcast.id}
                                               >
@@ -1264,7 +1294,11 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
                                                 )}
                                               </DropdownMenuItem>
                                               <DropdownMenuItem
-                                                onClick={() => handleGenerateAiCoverForExistingCb(podcast)}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  e.preventDefault();
+                                                  handleGenerateAiCoverForExistingCb(podcast);
+                                                }}
                                                 className='hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer'
                                                 disabled={isGeneratingAiCover === podcast.id}
                                               >
@@ -1276,7 +1310,11 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
                                               </DropdownMenuItem>
                                               <DropdownMenuSeparator className="bg-slate-100 dark:bg-slate-700" />
                                               <DropdownMenuItem
-                                                onClick={() => handleDeleteCb(podcast)}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  e.preventDefault();
+                                                  handleDeleteCb(podcast);
+                                                }}
                                                 className='hover:bg-red-50 dark:hover:bg-red-950 text-red-600 dark:text-red-400 cursor-pointer'
                                               >
                                                 <Trash2 className='h-4 w-4 mr-2' />
@@ -1286,7 +1324,11 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
                                           )}
                                           {podcast.user_id !== currentUser?.id && (
                                             <DropdownMenuItem
-                                              onClick={() => handleReportCb(podcast)}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                e.preventDefault();
+                                                handleReportCb(podcast);
+                                              }}
                                               className='hover:bg-red-50 dark:hover:bg-red-950 text-red-600 dark:text-red-400 cursor-pointer'
                                             >
                                               <Flag className='h-4 w-4 mr-2' />
@@ -1340,7 +1382,11 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
                                         <div
                                           key={podcast.id}
                                           className="flex items-center gap-4 p-3 border-b border-slate-200 dark:border-slate-700 sm:border-b-0 cursor-pointer"
-                                          onClick={() => {
+                                          onClick={(e) => {
+                                            // Prevent navigation if clicking dropdown menu or its trigger
+                                            if ((e.target as HTMLElement).closest('[role="menu"], button[aria-haspopup="menu"]')) {
+                                              return;
+                                            }
                                             handlePlayPodcast(podcast);
                                             navigate(`/podcast/${podcast.id}`);
                                           }}
@@ -1372,14 +1418,36 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
                                               <Button
                                                 size="icon"
                                                 variant="ghost"
-                                                onClick={(e) => e.stopPropagation()}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  e.preventDefault();
+                                                }}
                                               >
                                                 <MoreVertical className="h-4 w-4" />
                                               </Button>
                                             </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className='bg-white dark:bg-slate-800 rounded-xl border-0 shadow-2xl'>
-                                              <DropdownMenuItem onClick={() => handleSharePodcastCb(podcast)}>Share</DropdownMenuItem>
-                                              <DropdownMenuItem onClick={() => handleInviteCb(podcast)}>Invite</DropdownMenuItem>
+                                            <DropdownMenuContent 
+                                              align="end" 
+                                              className='bg-white dark:bg-slate-800 rounded-xl border-0 shadow-2xl'
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                e.preventDefault();
+                                              }}
+                                            >
+                                              <DropdownMenuItem 
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  e.preventDefault();
+                                                  handleSharePodcastCb(podcast);
+                                                }}
+                                              >Share</DropdownMenuItem>
+                                              <DropdownMenuItem 
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  e.preventDefault();
+                                                  handleInviteCb(podcast);
+                                                }}
+                                              >Invite</DropdownMenuItem>
                                             </DropdownMenuContent>
                                           </DropdownMenu>
                                         </div>

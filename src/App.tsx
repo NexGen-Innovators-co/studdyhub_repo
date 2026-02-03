@@ -154,7 +154,7 @@ const AppWithSEO = () => {
 const App = () => (
   <HelmetProvider>
     <QueryClientProvider client={queryClient}>
-      {/* <Analytics /> */}
+      <Analytics />
       <TooltipProvider>
         <Toaster />
         <Sonner />
