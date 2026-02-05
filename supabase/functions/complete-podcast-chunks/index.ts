@@ -11,7 +11,9 @@ const corsHeaders = {
 };
 
 serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -45,24 +47,31 @@ serve(async (req: Request) => {
     // Attempt to assemble chunks by downloading each chunk and concatenating
     // WARNING: This approach buffers contents in memory and may not be suitable for very large files.
     const buffers: Uint8Array[] = [];
-    let detectedMime = 'audio/webm';
+    let detectedMime: string | null = null;
     for (const c of chunks) {
       try {
-        // get public url (storage path should be present)
-        const publicRes: any = supabase.storage.from('podcasts').getPublicUrl(c.storage_path) as any;
-        const publicUrl = publicRes?.data?.publicUrl || publicRes?.publicUrl || null;
-        if (!publicUrl) throw new Error('Failed to obtain public url for chunk ' + c.id);
-
-        const resp = await fetch(publicUrl);
-        if (!resp.ok) throw new Error('Failed to download chunk: ' + resp.statusText);
-        const ab = new Uint8Array(await resp.arrayBuffer());
+        console.log(`Downloading chunk ${c.chunk_index}: ${c.storage_path}`);
+        // Use download() instead of fetch(publicUrl) to avoid access issues and ensure we use the service role key permissions
+        const { data: fileBlob, error: downloadErr } = await supabase.storage.from('podcasts').download(c.storage_path);
+        
+        if (downloadErr) {
+             console.error(`Download error for ${c.storage_path}:`, downloadErr);
+             throw new Error(`Failed to download chunk ${c.chunk_index}: ${downloadErr.message}`);
+        }
+        
+        if (!fileBlob) throw new Error(`Empty file blob for ${c.storage_path}`);
+        
+        const ab = new Uint8Array(await fileBlob.arrayBuffer());
         buffers.push(ab);
         if (!detectedMime && c.mime_type) detectedMime = c.mime_type;
       } catch (e) {
-        // console.error('Failed to fetch chunk for assembly:', e);
+        console.error('Failed to fetch chunk for assembly:', e);
         throw e;
       }
     }
+    
+    // Default if not detected
+    if (!detectedMime) detectedMime = 'audio/webm';
 
     // Concatenate buffers
     let totalLen = 0;
@@ -76,8 +85,16 @@ serve(async (req: Request) => {
 
     const assembledBlob = new Blob([combined], { type: detectedMime || 'audio/webm' });
 
+    // Determine extension based on mime
+    let ext = 'webm';
+    if (detectedMime) {
+        if (detectedMime.includes('mp4')) ext = 'mp4';
+        else if (detectedMime.includes('mpeg')) ext = 'mp3';
+        else if (detectedMime.includes('wav')) ext = 'wav';
+    }
+
     // Determine final storage path
-    const finalPath = assemblePathProvided || `live-podcasts/${podcastId}/assembled_${uploadSessionId || Date.now()}.webm`;
+    const finalPath = assemblePathProvided || `live-podcasts/${podcastId}/assembled_${uploadSessionId || Date.now()}.${ext}`;
 
     // Upload assembled blob
     let { error: uploadErr } = await supabase.storage.from('podcasts').upload(finalPath, assembledBlob as any, { contentType: detectedMime || 'application/octet-stream', upsert: false });
@@ -108,29 +125,108 @@ serve(async (req: Request) => {
     const { data: segData, error: segErr } = await supabase.from('audio_segments').insert(segPayload).select().single();
     if (segErr) throw segErr;
 
+    // Sync to ai_podcasts JSON column (Backwards Compatibility)
+    try {
+        const { data: podcastRow, error: fetchErr } = await supabase.from('ai_podcasts').select('audio_segments').eq('id', podcastId).single();
+        if (!fetchErr && podcastRow) {
+            let jsonSegments: any[] = [];
+            try {
+                if (typeof podcastRow.audio_segments === 'string') {
+                    jsonSegments = JSON.parse(podcastRow.audio_segments);
+                } else if (Array.isArray(podcastRow.audio_segments)) {
+                    jsonSegments = podcastRow.audio_segments;
+                }
+            } catch (e) { /* ignore */ }
+            
+            // Construct JSON segment representation
+            const newJsonSeg = {
+                segment_index: nextIndex,
+                audio_url: finalPublicUrl,
+                audioContent: null, // No inline content for internal assembled files
+                transcript: null,
+                summary: null,
+                duration: null,
+                mime_type: detectedMime,
+                created_at: new Date().toISOString()
+            };
+            
+            jsonSegments.push(newJsonSeg);
+            
+            await supabase.from('ai_podcasts').update({ 
+                audio_segments: jsonSegments,
+                updated_at: new Date().toISOString()
+            }).eq('id', podcastId);
+        }
+    } catch (syncErr) {
+        console.warn('Failed to sync audio_segments JSON column:', syncErr);
+    }
+
     // Update podcast_recordings row
     try {
-      await supabase.from('podcast_recordings').update({ status: 'finalized', final_audio_url: finalPublicUrl, storage_path: finalPath, ended_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('upload_session_id', uploadSessionId).eq('podcast_id', podcastId);
-    } catch (e) { /* best-effort */ }
+      const { data: updatedRows, error: updateErr } = await supabase.from('podcast_recordings').update({ 
+            status: 'finalized', 
+            final_audio_url: finalPublicUrl, 
+            storage_path: finalPath, 
+            ended_at: new Date().toISOString(), 
+            updated_at: new Date().toISOString() 
+        })
+        .eq('session_id', uploadSessionId)
+        .eq('podcast_id', podcastId)
+        .select();
+
+      if (updateErr) {
+          console.error('Failed to update podcast_recordings status:', updateErr);
+      } else if (!updatedRows || updatedRows.length === 0) {
+          // Row missing? Create it now (fallback for missing session start)
+          console.warn('Podcast recording session not found. Creating finalized entry now.');
+          // Estimate start time as 1 minute ago per chunk roughly, or just now
+          const { error: insertErr } = await supabase.from('podcast_recordings').insert({
+              podcast_id: podcastId,
+              session_id: uploadSessionId,
+              status: 'finalized',
+              final_audio_url: finalPublicUrl,
+              storage_path: finalPath,
+              started_at: new Date().toISOString(), 
+              ended_at: new Date().toISOString(),
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+          });
+          if (insertErr) console.error('Failed to insert fallback podcast_recordings:', insertErr);
+      }
+
+    } catch (e) { 
+        console.error('Exception updating podcast_recordings:', e);
+    }
 
     // Optionally trigger transcription via process-audio
     let jobResp = null;
     if (triggerTranscription && finalPublicUrl) {
       try {
-        const { data: userInfo } = await supabase.auth.getUser();
-        const userId = userInfo?.user?.id || null;
-        const { data: procData, error: procErr } = await supabase.functions.invoke('process-audio', { body: { file_url: finalPublicUrl, user_id: userId } as any } as any);
-        if (procErr) // console.warn('process-audio invocation error', procErr);
+        // Note: getUser() with service role key returns no user unless context set.
+        // We accept that userId might be null.
+        let userId: string | null = null;
+        try {
+             // Try to parse user from authorization header if forwarded, but we are using empty client options
+             const authHeader = req.headers.get('Authorization');
+             if (authHeader) {
+                 const token = authHeader.replace('Bearer ', '');
+                 const { data: userData } = await supabase.auth.getUser(token);
+                 userId = userData.user?.id || null;
+             }
+        } catch (uErr) { /* ignore */ }
+        
+        const { data: procData, error: procErr } = await supabase.functions.invoke('process-audio', { body: { file_url: finalPublicUrl, user_id: userId, podcast_id: podcastId } as any } as any);
+        if (procErr) console.warn('process-audio invocation error', procErr);
         jobResp = procData || null;
       } catch (e) {
-        // console.warn('Failed to invoke process-audio', e);
+        console.warn('Failed to invoke process-audio', e);
       }
     }
 
     return new Response(JSON.stringify({ success: true, assembled_file_url: finalPublicUrl, segment: segData, job: jobResp }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (e: any) {
-    // console.error('complete-podcast-chunks error', e);
-    return new Response(JSON.stringify({ success: false, error: e?.message || String(e) }), { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+    console.error('complete-podcast-chunks error:', e);
+    return new Response(JSON.stringify({ success: false, error: e?.message || String(e), stack: e?.stack }), { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
   }
 });
 

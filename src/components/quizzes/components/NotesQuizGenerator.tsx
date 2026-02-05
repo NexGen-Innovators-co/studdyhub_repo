@@ -143,6 +143,13 @@ export const NotesQuizGenerator: React.FC<NotesQuizGeneratorProps> = ({
                 <SelectItem value="5">5 Questions</SelectItem>
                 <SelectItem value="10">10 Questions</SelectItem>
                 <SelectItem value="15">15 Questions</SelectItem>
+                <SelectItem value="20">20 Questions</SelectItem>
+                <SelectItem value="25">25 Questions</SelectItem>
+                <SelectItem value="30">30 Questions</SelectItem>
+                <SelectItem value="40">40 Questions</SelectItem>
+                <SelectItem value="50">50 Questions</SelectItem>
+                <SelectItem value="75">75 Questions</SelectItem>
+                <SelectItem value="100">100 Questions</SelectItem>
               </SelectContent>
             </Select>
           </div>

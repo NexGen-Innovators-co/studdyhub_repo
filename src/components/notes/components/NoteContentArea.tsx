@@ -1239,7 +1239,6 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           data-tutorial="flashcards-button"
         >
           <Brain className="w-4 h-4" />
-          <span className="hidden xl:inline">Flashcards</span>
           {savedCards.length > 0 && (
             <span className="px-1.5 py-0.5 bg-white/20 rounded-full text-xs font-semibold">{savedCards.length}</span>
           )}

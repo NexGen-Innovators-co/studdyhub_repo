@@ -43,6 +43,8 @@ serve(async (req: Request) => {
     let totalChunks: number | null = null;
     let fileBlob: Blob | null = null;
     let mimeType: string | null = null;
+    let explicitStoragePath: string | null = null;
+    let explicitFileSize: number | null = null;
 
     if (contentType.startsWith('multipart/form-data')) {
       const form = await req.formData();
@@ -56,14 +58,18 @@ serve(async (req: Request) => {
         mimeType = file.type || null;
       }
     } else {
-      // JSON body: expect base64 payload
+      // JSON body: expect base64 payload OR metadata only
       const body = await req.json().catch(() => ({}));
       podcastId = body.podcast_id || null;
       uploadSessionId = body.upload_session_id || null;
       chunkIndex = typeof body.chunk_index === 'number' ? body.chunk_index : (body.chunk_index ? Number(body.chunk_index) : null);
       totalChunks = typeof body.total_chunks === 'number' ? body.total_chunks : null;
-      const base64 = body.base64 || body.inline_base64 || null;
       mimeType = body.mime_type || 'audio/webm';
+      
+      explicitStoragePath = body.storage_path || null;
+      explicitFileSize = body.file_size ? Number(body.file_size) : null;
+
+      const base64 = body.base64 || body.inline_base64 || null;
       if (base64) {
         // strip data url prefix if present
         let cleaned = base64;
@@ -76,20 +82,35 @@ serve(async (req: Request) => {
       }
     }
 
-    if (!podcastId || !uploadSessionId || chunkIndex === null || !fileBlob) {
-      return new Response(JSON.stringify({ error: 'podcast_id, upload_session_id, chunk_index and file are required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    if (!podcastId || !uploadSessionId || chunkIndex === null) {
+      return new Response(JSON.stringify({ error: 'podcast_id, upload_session_id, and chunk_index are required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Build filename and upload to storage
-    const ext = (mimeType || 'audio/webm').split('/')[1]?.split(';')[0] || 'webm';
-    const filename = `live-podcasts/${podcastId}/${uploadSessionId}/chunk_${chunkIndex}_${Date.now()}.${ext}`;
+    // Determine filename
+    let filename: string;
+    let finalFileSize: number;
+    let finalMimeType = mimeType;
 
-    // Attempt upload and retry with application/octet-stream if mime rejected
-    let { error: uploadErr } = await supabase.storage.from('podcasts').upload(filename, fileBlob as any, { contentType: mimeType || 'application/octet-stream', upsert: false });
-    if (uploadErr && uploadErr.message && /mime type/i.test(uploadErr.message)) {
-      ({ error: uploadErr } = await supabase.storage.from('podcasts').upload(filename, fileBlob as any, { contentType: 'application/octet-stream', upsert: false }));
+    if (explicitStoragePath) {
+        // Mode 1: Metadata registration only (file already uploaded)
+        filename = explicitStoragePath;
+        finalFileSize = explicitFileSize || 0;
+    } else if (fileBlob) {
+        // Mode 2: Handle Upload
+         const ext = (mimeType || 'audio/webm').split('/')[1]?.split(';')[0] || 'webm';
+         filename = `live-podcasts/${podcastId}/${uploadSessionId}/chunk_${chunkIndex}_${Date.now()}.${ext}`;
+         
+         finalFileSize = fileBlob.size;
+         
+        // Attempt upload and retry with application/octet-stream if mime rejected
+        let { error: uploadErr } = await supabase.storage.from('podcasts').upload(filename, fileBlob as any, { contentType: mimeType || 'application/octet-stream', upsert: false });
+        if (uploadErr && uploadErr.message && /mime type/i.test(uploadErr.message)) {
+          ({ error: uploadErr } = await supabase.storage.from('podcasts').upload(filename, fileBlob as any, { contentType: 'application/octet-stream', upsert: false }));
+        }
+        if (uploadErr) throw uploadErr;
+    } else {
+         return new Response(JSON.stringify({ error: 'Either file or storage_path must be provided' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-    if (uploadErr) throw uploadErr;
 
     // get public url
     const publicRes: any = supabase.storage.from('podcasts').getPublicUrl(filename) as any;
@@ -102,8 +123,8 @@ serve(async (req: Request) => {
       chunk_index: chunkIndex,
       total_chunks: totalChunks,
       storage_path: filename,
-      file_size: (fileBlob as Blob).size,
-      mime_type: mimeType,
+      file_size: finalFileSize,
+      mime_type: finalMimeType,
       checksum: null,
       status: 'uploaded',
       uploader_user_id: uploaderUserId,

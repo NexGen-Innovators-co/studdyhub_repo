@@ -104,21 +104,6 @@ const Index = () => {
 
   // Notifications modal state and logic (now inside Index to access 'user')
 
-  const offlineScreen = (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-yellow-50">
-      <div className="p-6 bg-white border border-yellow-200 rounded-lg shadow-md flex flex-col items-center">
-        <span className="text-yellow-800 text-lg font-semibold mb-2">You're offline</span>
-        <span className="text-yellow-700 mb-4">Please check your internet connection to continue using StuddyHub.</span>
-        <Button
-          variant="outline"
-          className="text-yellow-800 border-yellow-300 hover:bg-yellow-100"
-          onClick={() => window.location.reload()}
-        >
-          Retry
-        </Button>
-      </div>
-    </div>
-  );
   const { preferences } = useNotifications();
   // Onboarding modal controls: unified flow to request notifications, mic, camera
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
@@ -705,40 +690,38 @@ const Index = () => {
 
   if (!user) return null;
 
-  // Show error screen if critical data failed to load
-  if (dataErrors?.profile) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-700">
-        <div className="text-center p-8 max-w-md">
-          <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-            Failed to Load Profile
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">
-            We couldn't load your user profile. This may be due to network issues.
-          </p>
-          <div className="space-y-3">
-            <Button
-              onClick={() => retryLoading('profile')}
-              className="w-full flex items-center justify-center gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Try Again
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => window.location.reload()}
-              className="w-full"
-            >
-              Refresh Page
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isOnline) return offlineScreen;
+  // // Show error screen if critical data failed to load
+  // if (dataErrors?.profile) {
+  //   return (
+  //     <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-700">
+  //       <div className="text-center p-8 max-w-md">
+  //         <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+  //         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+  //           Failed to Load Profile
+  //         </h2>
+  //         <p className="text-gray-600 dark:text-gray-400 mb-6">
+  //           We couldn't load your user profile. This may be due to network issues.
+  //         </p>
+  //         <div className="space-y-3">
+  //           <Button
+  //             onClick={() => retryLoading('profile')}
+  //             className="w-full flex items-center justify-center gap-2"
+  //           >
+  //             <RefreshCw className="w-4 h-4" />
+  //             Try Again
+  //           </Button>
+  //           <Button
+  //             variant="outline"
+  //             onClick={() => window.location.reload()}
+  //             className="w-full"
+  //           >
+  //             Refresh Page
+  //           </Button>
+  //         </div>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   return (
 

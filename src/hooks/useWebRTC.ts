@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { toast } from 'sonner';
 
 interface WebRTCConfig {
   podcastId: string;
@@ -81,6 +82,66 @@ export const useWebRTC = ({
       cleanup();
     };
   }, [podcastId, isHost, isCohost]);
+
+  // Load pending permission requests for host
+  useEffect(() => {
+    if (!isHost && !isCohostMode) return;
+
+    const fetchPendingRequests = async () => {
+      const { data } = await supabase
+        .from('podcast_participation_requests')
+        .select('*')
+        .eq('podcast_id', podcastId)
+        .eq('status', 'pending');
+
+      if (data) {
+        setPermissionRequests(prev => {
+           const existingIds = new Set(prev.map(p => p.userId));
+           const newRequests = data
+             .filter(r => !existingIds.has(r.user_id))
+             .map(r => ({
+               userId: r.user_id,
+               requestType: r.request_type as 'speak' | 'cohost',
+               timestamp: new Date(r.created_at).getTime()
+             }));
+           return [...prev, ...newRequests];
+        });
+      }
+    };
+    
+    fetchPendingRequests();
+  }, [podcastId, isHost, isCohostMode]);
+
+  // Listen for permission changes from DB (redundancy for broadcast)
+  useEffect(() => {
+    // If we are already a host/cohost, we don't need to listen for speaking permissions
+    if (isHost || isCohostMode || !currentUserIdRef.current) return;
+
+    const channel = supabase.channel(`permissions-db-${podcastId}`)
+      .on('postgres_changes', { 
+         event: 'UPDATE', 
+         schema: 'public', 
+         table: 'podcast_participation_requests',
+         filter: `podcast_id=eq.${podcastId}` 
+      }, (payload) => {
+         // Check if this approval is for us
+         if (payload.new.user_id === currentUserIdRef.current && 
+             payload.new.status === 'approved' &&
+             !localStreamRef.current // Only if not already broadcasting
+         ) {
+             const requestType = payload.new.request_type; 
+             log('Permission approved via DB update');
+             
+             if (requestType === 'cohost') setIsCohostMode(true);
+             onPermissionGranted?.(currentUserIdRef.current!, requestType);
+             
+             startBroadcasting();
+         }
+      })
+      .subscribe();
+      
+      return () => { supabase.removeChannel(channel); };
+  }, [podcastId, isHost, isCohostMode]);
 
   // Handle pending listeners when host stream becomes available
   useEffect(() => {
@@ -309,9 +370,12 @@ export const useWebRTC = ({
       setConnectionQuality('excellent');
 
       // Start recording the audio stream if host
-      if (isHost) {
-        startRecording(stream);
-      }
+      // Note: We used to call internal startRecording here, but we now use useChunkedRecording hook
+      // in LivePodcastHost for robust cloud recording. Disabling internal recording to prevent
+      // memory leaks and duplicate handling.
+      // if (isHost) {
+      //   startRecording(stream);
+      // }
 
       // Setup audio analysis for speaking detection
       if (isHost || isCohostMode) {
@@ -435,43 +499,7 @@ export const useWebRTC = ({
     }
   };
 
-  const addLocalVideo = useCallback(async () => {
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('getUserMedia not supported');
-      }
 
-      const videoConstraints: any = { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } };
-      const vs = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
-      const vtrack = vs.getVideoTracks()[0];
-      if (!vtrack) throw new Error('No video track obtained');
-
-      // If there is no existing local stream, create one containing the video track
-      if (!localStreamRef.current) {
-        const newStream = new MediaStream([vtrack]);
-        localStreamRef.current = newStream;
-        try { setLocalStream(newStream); } catch (e) {}
-      } else {
-        try { localStreamRef.current.addTrack(vtrack); } catch (e) {}
-        try { setLocalStream(localStreamRef.current); } catch (e) {}
-      }
-
-      // Add the video track to all existing peer connections
-      peerConnectionsRef.current.forEach(({ connection }) => {
-        try {
-          connection.addTrack(vtrack, localStreamRef.current as MediaStream);
-        } catch (e) {
-          // best-effort
-        }
-      });
-
-      return true;
-    } catch (err) {
-      log('addLocalVideo failed', err);
-      setError((err as any)?.message || 'Failed to enable video');
-      return false;
-    }
-  }, []);
 
   const stopRecording = async (): Promise<Blob | null> => {
     return new Promise((resolve) => {
@@ -680,6 +708,50 @@ export const useWebRTC = ({
       log('Error creating offer:', err);
     }
   };
+
+  const addLocalVideo = useCallback(async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('getUserMedia not supported');
+      }
+
+      const videoConstraints: any = { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } };
+      const vs = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
+      const vtrack = vs.getVideoTracks()[0];
+      if (!vtrack) throw new Error('No video track obtained');
+
+      // If there is no existing local stream, create one containing the video track
+      if (!localStreamRef.current) {
+        const newStream = new MediaStream([vtrack]);
+        localStreamRef.current = newStream;
+        try { setLocalStream(newStream); } catch (e) {}
+      } else {
+        try { localStreamRef.current.addTrack(vtrack); } catch (e) {}
+        try { setLocalStream(localStreamRef.current); } catch (e) {}
+      }
+
+      // Add the video track to all existing peer connections
+      peerConnectionsRef.current.forEach(({ connection }, peerId) => {
+        try {
+          const senders = connection.getSenders();
+          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+          if (videoSender) {
+            videoSender.replaceTrack(vtrack);
+          } else {
+            connection.addTrack(vtrack, localStreamRef.current!);
+          }
+           // IMPORTANT: Re-negotiate connection to signal new track
+           createOfferForListener(peerId);
+        } catch (e) {
+          log('Error adding video track to peer:', peerId, e);
+        }
+      });
+
+    } catch (e) {
+      log('Error accessing local video:', e);
+      toast.error('Failed to enable camera');
+    }
+  }, []);
 
   const handleOffer = async (payload: any) => {
     try {

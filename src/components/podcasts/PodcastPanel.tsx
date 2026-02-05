@@ -173,6 +173,16 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
 
   const derivedFullAudioUrl = deriveFullAudioUrl();
 
+  useEffect(() => {
+    if (podcast) {
+      const hasSegments = podcast.audioSegments && podcast.audioSegments.length > 0;
+      const hasUrl = !!derivedFullAudioUrl;
+      if (hasUrl && (!hasSegments || (hasSegments && podcast.audioSegments.length === 1))) {
+          setIsSingleAudio(true);
+      }
+    }
+  }, [podcast, derivedFullAudioUrl]);
+
   // Expose audioRef to parent
   useImperativeHandle(ref, () => ({
     audioRef
@@ -934,7 +944,10 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
           const cached = signedUrlCacheRef.current.get(path);
           if (cached) return cached;
           const { data, error } = await supabase.storage.from('podcasts').createSignedUrl(path, 3600);
-          if (error) throw error;
+          if (error) {
+            console.error('[Podcast] Signed URL generation failed:', error);
+            throw error;
+          }
           const signed = (data && (data.signedUrl || (data as any).signedURL || (data as any).signed_url));
           if (signed) {
             signedUrlCacheRef.current.set(path, signed);
@@ -1000,7 +1013,11 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
         };
 
         vid.onerror = (e) => {
-          if (!switchingPodcastRef.current.active) toast.error('Video unavailable – contact support');
+          console.error('[PodcastVideo] Video playback error:', vid.error, 'src:', vid.src);
+          if (!switchingPodcastRef.current.active) {
+             const code = vid.error?.code || 'unknown';
+             toast.error(`Video unavailable (Error ${code}) – contact support`);
+          }
           setLoadingAudio(false);
           setMediaLoading(false);
           setIsPlaying(false);
@@ -1188,7 +1205,10 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
           const cached = signedUrlCacheRef.current.get(path);
           if (cached) return cached;
           const { data, error } = await supabase.storage.from('podcasts').createSignedUrl(path, 3600);
-          if (error) throw error;
+          if (error) {
+            console.error('[Podcast] Signed URL generation failed for segment:', error);
+            throw error;
+          }
           const signed = (data && (data.signedUrl || (data as any).signedURL || (data as any).signed_url));
           if (signed) {
             signedUrlCacheRef.current.set(path, signed);
@@ -1242,7 +1262,8 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
         };
 
         vid.onerror = (e) => {
-          if (!switchingPodcastRef.current.active) toast.error('Video unavailable – contact support');
+          console.error('[PodcastVideo] Segment playback error:', vid.error, 'src:', vid.src);
+          if (!switchingPodcastRef.current.active) toast.error(`Video unavailable (Error ${vid.error?.code || '?'}) – contact support`);
           setLoadingAudio(false);
           setIsPlaying(false);
         };
@@ -1999,18 +2020,18 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
 
         {/* Video/Image Content */}
         <div className="w-full h-full flex items-center justify-center">
-          {currentVisualAsset ? (
+          {(currentVisualAsset || podcast?.podcast_type === 'video') ? (
             <div className="w-full h-full relative">
-              {currentVisualAsset.type === 'video' || podcast?.podcast_type === 'video' ? (
+              {(currentVisualAsset?.type === 'video' || podcast?.podcast_type === 'video') ? (
                 // If the overall podcast is a video podcast we render a controlled video
                 <video
                   ref={videoRef}
-                  src={podcast?.podcast_type === 'video' ? (playbackSrc || currentVisualAsset.url) : currentVisualAsset.url}
+                  src={podcast?.podcast_type === 'video' ? (playbackSrc || (currentVisualAsset?.type === 'video' ? currentVisualAsset.url : '')) : currentVisualAsset?.url}
                   className="w-full h-full object-contain"
                   loop={podcast?.podcast_type !== 'video'}
                   muted={isMuted}
                   playsInline
-                  key={(podcast?.podcast_type === 'video' ? (playbackSrc || currentVisualAsset.url) : currentVisualAsset.url) || 'video'}
+                  key={(podcast?.podcast_type === 'video' ? (playbackSrc || (currentVisualAsset?.type === 'video' ? currentVisualAsset.url : '')) : currentVisualAsset?.url) || 'video'}
                   // Only play when ready
                   autoPlay={false}
                   onCanPlay={() => {

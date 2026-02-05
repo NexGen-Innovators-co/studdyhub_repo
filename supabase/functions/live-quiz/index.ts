@@ -282,28 +282,95 @@ serve(async (req) => {
         leaderboard
       }), { status: 200, headers: corsHeaders });
     } else if (action === 'submit-answer-individual') {
-      // IMPLEMENTATION: Update player_question_progress for a player/question with submitted answer
-      const { session_id, player_id, question_id, selected_option, is_correct, points_awarded, time_spent } = body;
-      if (!session_id || !player_id || !question_id || typeof selected_option !== 'number') {
-        return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400, headers: corsHeaders });
+      try {
+        // IMPLEMENTATION: Validate answer, calculate score, update progress
+        const { session_id, player_id, question_id, selected_option, time_spent } = body;
+        
+        if (!session_id || !player_id || !question_id || typeof selected_option !== 'number') {
+          return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400, headers: corsHeaders });
+        }
+
+        // 1. Fetch Question. We use select('*') to avoid errors if time_limit column is missing
+        const { data: question, error: qError } = await supabase
+          .from('live_quiz_questions')
+          .select('*') 
+          .eq('id', question_id)
+          .single();
+          
+        if (qError || !question) {
+             console.error('Question fetch error:', qError);
+             return new Response(JSON.stringify({ error: 'Question not found', details: qError }), { status: 404, headers: corsHeaders });
+        }
+
+        // 2. Score Calculation
+        const is_correct = question.correct_answer === selected_option;
+        let points_awarded = 0;
+        let safeSpent = 0;
+
+        // Ensure time_spent is a valid integer for Postgres
+        try {
+           safeSpent = Math.round(Math.max(0, parseFloat(String(time_spent || 0))));
+        } catch (e) {
+           safeSpent = 0; 
+        }
+        
+        if (is_correct) {
+            const basePoints = 1000;
+            // Handle possibility of missing time_limit column
+            const limit = question.time_limit || 30;
+            
+            let multiplier = 1;
+            if (limit > 0) {
+                const ratio = safeSpent / limit;
+                multiplier = Math.max(0.5, 1 - (ratio * 0.5));
+            }
+            points_awarded = Math.round(basePoints * multiplier);
+        }
+
+        // 3. Update Progress
+        const { error: updateError } = await supabase
+          .from('player_question_progress')
+          .update({
+            selected_option,
+            is_correct,
+            points_awarded,
+            time_spent: safeSpent, // Use the sanitized integer
+            status: 'answered',
+            answered_at: new Date().toISOString()
+          })
+          .eq('session_id', session_id)
+          .eq('player_id', player_id)
+          .eq('question_id', question_id);
+
+        if (updateError) {
+          console.error('Progress update error:', updateError);
+          return new Response(JSON.stringify({ error: 'Failed to update answer', details: updateError }), { status: 500, headers: corsHeaders });
+        }
+
+        // 4. Update Overall Player Score
+        // We accumulate the points for this player in this session
+        // Note: This is an efficient way but if concurrency is high might need a function.
+        // For now, fetching total and updating is acceptable for individual mode.
+        
+        const { data: allProgress } = await supabase
+          .from('player_question_progress')
+          .select('points_awarded')
+          .eq('session_id', session_id)
+          .eq('player_id', player_id);
+          
+        const totalScore = (allProgress || []).reduce((sum: number, r: any) => sum + (r.points_awarded || 0), 0);
+
+        await supabase
+          .from('live_quiz_players')
+          .update({ score: totalScore, last_answered_at: new Date().toISOString() })
+          .eq('session_id', session_id)
+          .eq('user_id', player_id);
+
+        return new Response(JSON.stringify({ success: true, is_correct, points_awarded }), { status: 200, headers: corsHeaders });
+      } catch (err: any) {
+        console.error('submit-answer-individual Exception:', err);
+        return new Response(JSON.stringify({ error: 'Internal Server Error', message: err.message }), { status: 500, headers: corsHeaders });
       }
-      // Update progress row
-      const { error: updateError } = await supabase
-        .from('player_question_progress')
-        .update({
-          selected_option,
-          is_correct: !!is_correct,
-          points_awarded: points_awarded || 0,
-          time_spent: time_spent || 0,
-          status: 'answered',
-        })
-        .eq('session_id', session_id)
-        .eq('player_id', player_id)
-        .eq('question_id', question_id);
-      if (updateError) {
-        return new Response(JSON.stringify({ error: 'Failed to update answer' }), { status: 500, headers: corsHeaders });
-      }
-      return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders });
     } else if (action === 'advance-individual') {
       // IMPLEMENTATION: Manually advance player to next question
       const { session_id, player_id, current_question_id } = body;
@@ -416,7 +483,7 @@ serve(async (req) => {
 
     // Route based on action
     if (action === 'create-session') {
-      const { quiz_id, questions, host_role, advance_mode, question_time_limit } = body;
+      const { quiz_id, questions, host_role, advance_mode, question_time_limit, scheduled_start_time, allow_late_join } = body;
 
       if (!quiz_id && !questions) {
         return new Response(
@@ -429,6 +496,7 @@ serve(async (req) => {
       const finalHostRole = host_role || 'participant';
       const finalAdvanceMode = advance_mode || 'auto';
       const finalTimeLimit = question_time_limit || 30;
+      const finalAllowLateJoin = allow_late_join !== undefined ? allow_late_join : true;
 
       // Generate join code
       const joinCode = generateJoinCode();
@@ -475,6 +543,8 @@ serve(async (req) => {
           host_role: finalHostRole,
           advance_mode: finalAdvanceMode,
           quiz_mode: body.quiz_mode || 'synchronized',
+          scheduled_start_time: scheduled_start_time || null,
+          allow_late_join: finalAllowLateJoin,
           config: {
             question_time_limit: finalTimeLimit,
             auto_advance: finalAdvanceMode === 'auto',
@@ -671,13 +741,28 @@ serve(async (req) => {
         .from('live_quiz_sessions')
         .select('*')
         .eq('join_code', join_code.toUpperCase())
-        .in('status', ['waiting', 'in_progress'])
         .single();
 
       if (sessionError || !session) {
         return new Response(
-          JSON.stringify({ error: 'Session not found or not joinable' }),
-          { status: 404, headers: corsHeaders }
+          JSON.stringify({ error: 'Session not found. Please check the code.' }),
+          { status: 200, headers: corsHeaders }
+        );
+      }
+
+      // Check if session is active
+      if (!['waiting', 'in_progress'].includes(session.status)) {
+        return new Response(
+          JSON.stringify({ error: 'This quiz session has ended.' }),
+          { status: 200, headers: corsHeaders }
+        );
+      }
+
+      // Check allow_late_join policy
+      if (session.status === 'in_progress' && session.allow_late_join === false) {
+        return new Response(
+          JSON.stringify({ error: 'The quiz has already started. Late entries are not allowed.' }),
+          { status: 200, headers: corsHeaders }
         );
       }
 
@@ -1594,9 +1679,63 @@ serve(async (req) => {
     .eq('session_id', session_id)
     .order('question_index');
 
+  // Get all answers
+  const { data: answersRaw } = await supabase
+    .from('live_quiz_answers')
+    .select('*')
+    .eq('session_id', session_id);
+    
+  const answers = (answersRaw || []).map((a: any) => ({
+    ...a,
+    selected_option: a.answer_index
+  }));
+
+  const now = new Date();
+
+  // Check for Scheduled Auto-Start
+  if (session.status === 'waiting' && session.scheduled_start_time) {
+    const scheduledTime = new Date(session.scheduled_start_time);
+    if (now >= scheduledTime) {
+      // Auto-start the session
+      const { error: startError } = await supabase
+        .from('live_quiz_sessions')
+        .update({
+          status: 'in_progress',
+          start_time: now.toISOString(),
+        })
+        .eq('id', session_id)
+        .eq('status', 'waiting'); // Atomic check
+      
+      if (!startError) {
+         session.status = 'in_progress';
+         session.start_time = now.toISOString();
+
+         // Start first question immediately
+         const firstQuestion = questions?.find(q => q.question_index === 0);
+         if (firstQuestion) {
+            const timeLimit = firstQuestion.time_limit || 30;
+            const endTime = new Date(now.getTime() + timeLimit * 1000);
+            
+            await supabase
+              .from('live_quiz_questions')
+              .update({
+                start_time: now.toISOString(),
+                end_time: endTime.toISOString(),
+                status: 'active'
+              })
+              .eq('id', firstQuestion.id);
+            
+            // Update local state so it returns properly below
+            firstQuestion.start_time = now.toISOString();
+            firstQuestion.end_time = endTime.toISOString();
+            firstQuestion.status = 'active';
+         }
+      }
+    }
+  }
+
   // Check for auto-advance if session is in progress
   let currentQuestion = null;
-  const now = new Date();
   
   if (session.status === 'in_progress') {
     // Find active question
@@ -1699,6 +1838,7 @@ serve(async (req) => {
       players: playersWithAvatars,
       questions: questions || [],
       current_question: currentQuestion,
+      answers: answers || [],
     }),
     { status: 200, headers: corsHeaders }
   );}else if (action === 'test') {

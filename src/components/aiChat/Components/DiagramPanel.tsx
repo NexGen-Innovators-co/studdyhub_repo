@@ -98,38 +98,22 @@ export const DiagramPanel = memo(({
   const [threeJsScene, setThreeJsScene] = useState<THREE.Scene | null>(null);
   const [threeJsRenderer, setThreeJsRenderer] = useState<THREE.WebGLRenderer | null>(null);
   const [threeJsCleanup, setThreeJsCleanup] = useState<(() => void) | null>(null);
-  const [mermaidError, setMermaidError] = useState<string | null>(null);
+  const [diagramError, setDiagramError] = useState<string | null>(null);
   const [faultyCode, setFaultyCode] = useState<string | null>(null);
 
   const renderContent = useMemo(() => liveContent || diagramContent, [liveContent, diagramContent]);
 
   // Reset errors when content changes
   useEffect(() => {
-    setMermaidError(null);
+    setDiagramError(null);
     setFaultyCode(null);
   }, [renderContent, diagramType]);
 
-  const handleMermaidError = useCallback((error: string, code: string) => {
-    setMermaidError(error);
+  const handleDiagramError = useCallback((code: string | null, errorMessage: string) => {
+    setDiagramError(errorMessage);
     setFaultyCode(code);
     toast.error('Diagram rendering error detected.');
   }, []);
-
-  const handleFixDiagram = useCallback(() => {
-    if (!mermaidError || !faultyCode) return;
-
-    const repairPrompt = `The Mermaid diagram you generated has a syntax error: "${mermaidError}". 
-    
-    Faulty code:
-    \`\`\`mermaid
-    ${faultyCode}
-    \`\`\`
-    
-    Please fix the syntax error and provide the corrected Mermaid diagram code within a mermaid code block.`;
-
-    onSuggestAiCorrection(repairPrompt);
-    toast.info('Sending repair request to AI...');
-  }, [mermaidError, faultyCode, onSuggestAiCorrection]);
 
   const effectiveDiagramType = useMemo(() => {
     if (diagramType === 'code' && renderContent) {
@@ -144,6 +128,46 @@ export const DiagramPanel = memo(({
     }
     return diagramType;
   }, [diagramType, renderContent]);
+
+  const handleFixDiagram = useCallback(() => {
+    if (!diagramError || !faultyCode) return;
+
+    let repairPrompt = '';
+    const codeBlockType = effectiveDiagramType === 'chartjs' ? 'json' : effectiveDiagramType;
+
+    if (effectiveDiagramType === 'mermaid') {
+      repairPrompt = `The Mermaid diagram you generated has a syntax error: "${diagramError}". 
+    
+    Faulty code:
+    \`\`\`mermaid
+    ${faultyCode}
+    \`\`\`
+    
+    Please fix the syntax error and provide the corrected Mermaid diagram code within a mermaid code block.`;
+    } else if (effectiveDiagramType === 'chartjs') {
+       repairPrompt = `The Chart.js configuration you generated has an error: "${diagramError}".
+        
+    Faulty configuration:
+    \`\`\`json
+    ${faultyCode}
+    \`\`\`
+    
+    Please fix the error and provide the corrected Chart.js configuration within a chartjs code block. ensure it is valid JSON.`;
+    } else {
+        // Generic fallback
+         repairPrompt = `The ${effectiveDiagramType} code you generated has an error: "${diagramError}".
+        
+    Faulty code:
+    \`\`\`${codeBlockType}
+    ${faultyCode}
+    \`\`\`
+    
+    Please fix the error and provide the corrected code within a ${effectiveDiagramType} code block.`;
+    }
+
+    onSuggestAiCorrection(repairPrompt);
+    toast.info('Sending repair request to AI...');
+  }, [diagramError, faultyCode, onSuggestAiCorrection, effectiveDiagramType]);
 
   const isInteractiveContent = useMemo(() => {
     return ['mermaid', 'dot', 'chartjs', 'image'].includes(effectiveDiagramType);
@@ -713,7 +737,7 @@ ${isResizing ? 'cursor-ew-resize' : ''} panel-transition`}
 
       <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-gray-50 dark:bg-gray-800">
         <div className="flex items-center gap-2">
-          {mermaidError && (
+          {diagramError && (
             <Button
               variant="outline"
               size="sm"
@@ -721,7 +745,7 @@ ${isResizing ? 'cursor-ew-resize' : ''} panel-transition`}
               className="h-8 gap-1.5 border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
             >
               <FileCode className="h-3.5 w-3.5" />
-              Fix with AI
+              Fix {effectiveDiagramType} with AI
             </Button>
           )}
           <Eye className="h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -837,7 +861,7 @@ ${isInteractiveContent ? 'cursor-grab' : ''}
                 mermaidContent={renderContent}
                 handleNodeClick={handleNodeClick}
                 iframeRef={mermaidIframeRef}
-                onMermaidError={handleMermaidError}
+                onMermaidError={(error, code) => handleDiagramError(code, error)}
               />
             )}
             {effectiveDiagramType === 'slides' && (
@@ -850,20 +874,23 @@ ${isInteractiveContent ? 'cursor-grab' : ''}
             {effectiveDiagramType === 'threejs' && (
               <div className="w-full h-full">
                 <canvas ref={threeJsCanvasRef} style={{ width: '100%', height: '100%', backgroundColor: '#282c34' }} />
-                {threeJsError && <div className="text-red-500 dark:text-red-400">{threeJsError}</div>}
+                {diagramError && <div className="text-red-500 dark:text-red-400 p-4">{diagramError}</div>}
                 <ThreeJsRenderer
                   codeContent={renderContent}
                   canvasRef={threeJsCanvasRef}
-                  onInvalidCode={setThreeJsError}
+                  onInvalidCode={(msg: string | null) => {
+                      if (msg) handleDiagramError(renderContent, msg);
+                      else setDiagramError(null);
+                  }}
                   onSceneReady={onSceneReady}
                 />
               </div>
             )}
             {effectiveDiagramType === 'dot' && (
-              <DotRenderer dotContent={renderContent} onMermaidError={onMermaidError} />
+              <DotRenderer dotContent={renderContent} onMermaidError={(code, type, detail) => handleDiagramError(code, detail || `Graphviz Error: ${type}`)} />
             )}
             {effectiveDiagramType === 'chartjs' && (
-              <ChartJsRenderer chartJsContent={renderContent} onMermaidError={onMermaidError} isInteractiveContent={isInteractiveContent} />
+              <ChartJsRenderer chartJsContent={renderContent} onMermaidError={(code, type, detail) => handleDiagramError(code, detail || `Chart.js Error: ${type}`)} isInteractiveContent={isInteractiveContent} />
             )}
             {effectiveDiagramType === 'code' && (
               <CodeRenderer codeContent={renderContent} language={language} />

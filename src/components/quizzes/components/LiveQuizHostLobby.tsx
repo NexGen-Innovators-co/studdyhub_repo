@@ -17,7 +17,12 @@ import {
   Settings,
   UserCog,
   Clock,
+  Maximize2,
+  Minimize2,
+  X,
+  QrCode,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { LiveQuizSession, LiveQuizPlayer, startLiveQuizSession } from '@/services/liveQuizService';
 
 interface LiveQuizHostLobbyProps {
@@ -35,6 +40,7 @@ interface LiveQuizHostLobbyProps {
   toast: any;
 }
 
+
 const LiveQuizHostLobby: React.FC<LiveQuizHostLobbyProps> = ({
   session,
   players,
@@ -49,6 +55,74 @@ const LiveQuizHostLobby: React.FC<LiveQuizHostLobbyProps> = ({
   resetView,
   toast,
 }) => {
+  const [isFullScreen, setIsFullScreen] = React.useState(true);
+  // Lobby audio refs
+  const bgRef = React.useRef<HTMLAudioElement | null>(null);
+  const startRef = React.useRef<HTMLAudioElement | null>(null);
+  const bgOrigVol = React.useRef<number>(0.3);
+  const scheduledTime = session?.scheduled_start_time ? new Date(session.scheduled_start_time) : null;
+  const [countdown, setCountdown] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!scheduledTime) return;
+    const updateCountdown = () => {
+      const now = new Date();
+      const diff = scheduledTime.getTime() - now.getTime();
+      if (diff <= 0) {
+        setCountdown("Starting...");
+      } else {
+        const min = Math.floor(diff / 60000);
+        const sec = Math.floor((diff % 60000) / 1000);
+        setCountdown(`${min}:${sec < 10 ? '0' : ''}${sec}`);
+      }
+    };
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [scheduledTime]);
+
+  // initialize lobby audio
+  React.useEffect(() => {
+    const bgUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/sonican-informational-quiz-loop-397409.mp3';
+    const startUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/mixkit-correct-answer-tone-2870.wav';
+
+    bgRef.current = new Audio(bgUrl);
+    bgRef.current.loop = true;
+    bgRef.current.volume = 0.25;
+    bgOrigVol.current = bgRef.current.volume;
+
+    startRef.current = new Audio(startUrl);
+
+    const play = async () => {
+      try { if (bgRef.current) await bgRef.current.play(); } catch (e) {}
+      try {
+        if (startRef.current) {
+          if (bgRef.current) bgRef.current.volume = Math.max(0.05, bgOrigVol.current * 0.25);
+          startRef.current.currentTime = 0;
+          startRef.current.play().catch(() => {});
+          try { (window as any).__quizStartPlayedAt = Date.now(); } catch(e) {}
+          startRef.current.addEventListener('ended', () => {
+            try { if (bgRef.current) bgRef.current.volume = bgOrigVol.current; } catch (e) {}
+          });
+        }
+      } catch (e) {}
+    };
+
+    play();
+
+    return () => {
+      try { if (bgRef.current) { bgRef.current.pause(); bgRef.current = null; } } catch (e) {}
+      try { if (startRef.current) { startRef.current.pause(); startRef.current = null; } } catch (e) {}
+    };
+  }, []);
+
+  const stopAllAudio = () => {
+    try {
+      if (bgRef.current) { bgRef.current.pause(); try { bgRef.current.currentTime = 0; } catch (e) {} }
+      if (startRef.current) { startRef.current.pause(); try { startRef.current.currentTime = 0; } catch (e) {} }
+    } catch (e) {}
+  };
+
   const copyJoinCode = () => {
     if (session?.join_code) {
       navigator.clipboard.writeText(session.join_code);
@@ -61,11 +135,25 @@ const LiveQuizHostLobby: React.FC<LiveQuizHostLobbyProps> = ({
     setIsLoading(true);
 
     try {
+      // play start chime and duck lobby bg
+      try {
+        if (startRef.current) {
+          if (bgRef.current) bgRef.current.volume = Math.max(0.05, bgOrigVol.current * 0.25);
+          startRef.current.currentTime = 0;
+          startRef.current.play().catch(() => {});
+          startRef.current.addEventListener('ended', () => {
+            try { if (bgRef.current) bgRef.current.volume = bgOrigVol.current; } catch (e) {}
+          });
+        }
+      } catch (e) {}
+
       const result = await startLiveQuizSession(session.id, session.quiz_mode || session.config?.quiz_mode);
       if (result.error) throw new Error(result.error);
 
       toast({ title: 'Quiz Started!', description: 'Good luck everyone!' });
       await refreshSessionState();
+      // stop lobby audio to prevent overlap with active quiz audio
+      stopAllAudio();
     } catch (err: any) {
       toast({ title: 'Error', description: err.message || 'Failed to start quiz', variant: 'destructive' });
     } finally {
@@ -76,6 +164,165 @@ const LiveQuizHostLobby: React.FC<LiveQuizHostLobbyProps> = ({
   if (!session) return null;
 
   const isMediatorMode = session.host_role === 'mediator';
+
+  // --- Fullscreen Immersive View ---
+  if (isFullScreen) {
+    return (
+      <div className="fixed inset-0 z-50 bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-white overflow-hidden flex flex-col transition-colors duration-300">
+        {/* Background */}
+        <div className="absolute inset-0 z-0 opacity-40">
+           <div 
+             className="absolute inset-0 bg-cover bg-center"
+             style={{ backgroundImage: "url('/herobackgroundimg.png')" }}
+           />
+           <div className="absolute inset-0 bg-white/30 dark:bg-slate-950/80 backdrop-blur-sm" />
+        </div>
+
+        {/* Top Bar */}
+        <div className="relative z-10 flex items-center justify-between px-4 py-3 md:px-6 md:py-4 bg-blue-600/90 dark:bg-black/20 backdrop-blur-md border-b border-blue-500/20 dark:border-white/10 shadow-lg dark:shadow-none">
+          <div className="flex items-center gap-3">
+             <div className="p-2 bg-white/20 rounded-lg shadow-inner border border-white/10">
+                <Crown className="h-6 w-6 text-white dark:text-yellow-500" />
+             </div>
+             <div>
+               <h1 className="font-bold text-lg md:text-xl leading-none text-white dark:text-white">
+                 <span className="hidden md:inline">VisioQuiz Host</span>
+                 <span className="md:hidden inline">Host</span>
+               </h1>
+               <div className="flex items-center gap-2 text-sm text-blue-100 dark:text-white/50">
+                  <Badge variant="outline" className="border-white/30 dark:border-white/20 text-white dark:text-white/70 h-5 px-1.5 bg-white/10 dark:bg-transparent text-[10px] md:text-xs">
+                    <Users className="h-3 w-3 mr-1 md:hidden" />
+                    <span className="hidden md:inline">{players.length} Players Ready</span>
+                    <span className="md:hidden inline">{players.length}</span>
+                  </Badge>
+                  {isMediatorMode && <Badge variant="secondary" className="bg-blue-900/40 text-blue-100 dark:bg-blue-500/20 dark:text-blue-300 border border-white/10 text-[10px] md:text-xs">Mediator</Badge>}
+               </div>
+             </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button 
+               variant="ghost" 
+               size="icon" 
+               onClick={() => setIsFullScreen(false)}
+               className="hover:bg-white/20 dark:hover:bg-white/10 text-white/80 dark:text-white/70 hover:text-white dark:hover:text-white"
+            >
+               <Minimize2 className="h-5 w-5" />
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={resetView} 
+              className="bg-red-500/80 dark:bg-red-500/20 hover:bg-red-600 dark:hover:bg-red-500/40 text-white dark:text-red-300 border border-white/20 dark:border-red-500/30 shadow-sm px-2 md:px-4"
+            >
+              <LogOut className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">End</span>
+            </Button>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="relative z-10 flex-1 flex flex-col lg:flex-row items-center justify-center p-4 md:p-8 gap-6 md:gap-10 lg:gap-12 overflow-y-auto">
+           {/* Left: Join Info */}
+           <motion.div 
+             initial={{ opacity: 0, x: -50 }}
+             animate={{ opacity: 1, x: 0 }}
+             className="flex flex-col items-center gap-6 md:gap-8 w-full lg:w-auto"
+           >
+              <div className="text-center space-y-2">
+                 <h2 className="text-xl md:text-2xl font-light text-blue-900/60 dark:text-white/60 uppercase tracking-[0.2em] flex items-center justify-center gap-2">
+                    Join Code
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-full text-blue-900/40 hover:text-blue-900 dark:text-white/30 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10"
+                        onClick={() => {
+                            navigator.clipboard.writeText(session.join_code);
+                            toast({ title: 'Copied!', description: 'Join code copied to clipboard' });
+                        }}
+                    >
+                        <Copy className="h-5 w-5" />
+                    </Button>
+                 </h2>
+                 <button 
+                    onClick={() => {
+                        navigator.clipboard.writeText(session.join_code);
+                        toast({ title: 'Copied!', description: 'Join code copied to clipboard' });
+                    }}
+                    className="text-6xl md:text-8xl lg:text-9xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-400 dark:from-white dark:via-blue-100 dark:to-white/50 drop-shadow-xl dark:drop-shadow-2xl font-mono hover:scale-105 transition-transform cursor-pointer outline-none focus:scale-105"
+                    title="Click to copy"
+                 >
+                    {session.join_code}
+                 </button>
+                 <p className="text-lg md:text-xl text-gray-500 dark:text-white/40">Enter this code to join</p>
+              </div>
+
+              {scheduledTime && countdown && (
+                  <div className="bg-white/50 dark:bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4 md:p-6 text-center backdrop-blur-md w-full max-w-sm md:max-w-md animate-pulse shadow-xl dark:shadow-none">
+                      <div className="text-xs md:text-sm font-bold text-blue-600 dark:text-blue-300 uppercase tracking-widest mb-1">Auto-Start In</div>
+                      <div className="text-4xl md:text-5xl font-mono font-bold text-blue-900 dark:text-white">{countdown}</div>
+                  </div>
+              )}
+              
+              <div className="flex gap-4 w-full justify-center">
+                 <Button 
+                   size="lg" 
+                   onClick={handleStartQuiz}
+                   disabled={isLoading}
+                   className="h-14 md:h-16 px-8 md:px-12 text-xl md:text-2xl font-bold bg-blue-600 text-white hover:bg-blue-700 dark:bg-white dark:text-slate-900 dark:hover:bg-blue-50 shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] dark:shadow-[0_0_30px_rgba(255,255,255,0.3)] transition-all hover:scale-105 rounded-2xl w-full md:w-auto"
+                 > 
+                    {isLoading ? <Loader2 className="h-6 w-6 animate-spin mr-3" /> : <Play className="h-6 w-6 mr-3 fill-current" />}
+                    Start Quiz
+                 </Button>
+              </div>
+           </motion.div>
+
+           {/* Right: Player Grid */}
+           <div className="flex-1 w-full max-w-2xl bg-white/60 dark:bg-black/20 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-white/5 p-4 md:p-6 h-[350px] md:h-[500px] flex flex-col shadow-xl dark:shadow-none">
+              <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200 dark:border-white/10">
+                 <h3 className="text-xl font-semibold flex items-center gap-2 text-gray-900 dark:text-white">
+                    <Users className="h-5 w-5 text-blue-600 dark:text-white" /> Participants
+                 </h3>
+                 <Button variant="ghost" size="sm" onClick={refreshSessionState} disabled={isLoading} className="hover:bg-black/5 dark:hover:bg-white/5 text-gray-500 dark:text-white/70">
+                   <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                 </Button>
+              </div>
+              
+              {players.length === 0 ? (
+                 <div className="flex-1 flex flex-col items-center justify-center text-gray-400 dark:text-white/30 gap-4">
+                    <div className="w-20 h-20 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center animate-pulse">
+                       <Loader2 className="h-10 w-10 animate-spin" />
+                    </div>
+                    <p className="text-lg">Waiting for players to join...</p>
+                 </div>
+              ) : (
+                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 overflow-y-auto pr-2 custom-scrollbar content-start">
+                    <AnimatePresence>
+                      {players.map((player) => (
+                        <motion.div
+                          key={player.id}
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0, opacity: 0 }}
+                          className="flex items-center gap-3 p-3 bg-white dark:bg-white/10 rounded-xl border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none"
+                        >
+                          <Avatar className="h-10 w-10 border-2 border-gray-100 dark:border-white/20">
+                            <AvatarImage src={player.avatar_url || undefined} />
+                            <AvatarFallback className="bg-slate-200 dark:bg-slate-700 text-gray-700 dark:text-white">{(player.display_name || 'U')[0]}</AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                             <div className="font-medium truncate text-gray-900 dark:text-white">{player.display_name}</div>
+                             {player.is_host && <span className="text-xs text-yellow-600 dark:text-yellow-400 font-bold">Host</span>}
+                          </div>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                 </div>
+              )}
+           </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -91,9 +338,14 @@ const LiveQuizHostLobby: React.FC<LiveQuizHostLobbyProps> = ({
                 </Badge>
               )}
             </CardTitle>
-            <Button variant="ghost" size="sm" onClick={resetView} className="text-gray-500 hover:text-gray-700">
-              <LogOut className="h-4 w-4 mr-1.5" /> Leave
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setIsFullScreen(true)}>
+                <Maximize2 className="h-4 w-4 mr-2" /> Fullscreen
+              </Button>
+              <Button variant="ghost" size="sm" onClick={resetView} className="text-gray-500 hover:text-gray-700">
+                <LogOut className="h-4 w-4 mr-1.5" /> Leave
+              </Button>
+            </div>
           </div>
         </CardHeader>
 
@@ -124,6 +376,14 @@ const LiveQuizHostLobby: React.FC<LiveQuizHostLobbyProps> = ({
             {/* Session settings summary */}
             <div className="bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-2.5">
               <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Settings</p>
+              
+              {scheduledTime && countdown && (
+                 <div className="mb-2 p-2 bg-blue-100 dark:bg-blue-900/30 rounded text-center">
+                    <div className="text-xs text-blue-600 dark:text-blue-300 font-bold mb-1">SCHEDULED START</div>
+                    <div className="text-xl font-mono font-bold text-blue-800 dark:text-blue-200">{countdown}</div>
+                 </div>
+              )}
+
               <div className="flex items-center gap-2 text-sm">
                 <Users className="h-4 w-4 text-gray-400" />
                 <span className="text-gray-600 dark:text-gray-300">Role:</span>
@@ -138,6 +398,13 @@ const LiveQuizHostLobby: React.FC<LiveQuizHostLobbyProps> = ({
                 <Clock className="h-4 w-4 text-gray-400" />
                 <span className="text-gray-600 dark:text-gray-300">Time limit:</span>
                 <span className="font-semibold">{session.config?.question_time_limit || 30}s</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                {session.allow_late_join === false ? (
+                    <Badge variant="destructive" className="text-xs">Door Closes on Start</Badge>
+                ) : (
+                    <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">Late Join Allowed</Badge>
+                )}
               </div>
             </div>
           </div>

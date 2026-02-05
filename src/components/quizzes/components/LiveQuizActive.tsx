@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { Alert, AlertDescription } from '../../ui/alert';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Clock,
   CheckCircle,
@@ -13,20 +14,29 @@ import {
   AlertCircle,
   RefreshCw,
   UserCog,
+  Maximize2,
+  Minimize2,
+  Zap,
+  Trophy,
+  Target,
+  Sparkles,
 } from 'lucide-react';
 import {
   LiveQuizSession,
   LiveQuizPlayer,
   LiveQuizQuestion,
+  LiveQuizAnswer,
   submitAnswer,
   advanceToNextQuestion,
   endQuizSession,
   advanceQuestionFallback,
 } from '@/services/liveQuizService';
+import LiveQuizActiveFullscreen from './LiveQuizActiveFullscreen';
 
 interface LiveQuizActiveProps {
   session: LiveQuizSession | null;
   players: LiveQuizPlayer[];
+  answers: LiveQuizAnswer[];
   currentQuestion: LiveQuizQuestion | null;
   allQuestions: LiveQuizQuestion[];
   selectedAnswer: number | null;
@@ -91,6 +101,7 @@ const TimerRing: React.FC<{ timeRemaining: number; timeLimit: number }> = ({ tim
 
 const LiveQuizActive: React.FC<LiveQuizActiveProps> = ({
   session,
+  answers,
   players,
   currentQuestion,
   allQuestions,
@@ -113,6 +124,9 @@ const LiveQuizActive: React.FC<LiveQuizActiveProps> = ({
   // Track whether we already fired the timeout submission for this question
   // so we don't double-submit on re-renders.
   const timeoutFiredRef = useRef<string | null>(null);
+  const [isFullScreen, setIsFullScreen] = useState(true);
+  const [showCorrectAnswer, setShowCorrectAnswer] = useState(false);
+  const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number }>>([]);
 
   // FIX: submit a "timeout" answer to the backend when time runs out and the
   // player hasn't answered yet. Do NOT mark an answer as selected locally.
@@ -142,7 +156,27 @@ const LiveQuizActive: React.FC<LiveQuizActiveProps> = ({
   // Reset the timeout-fired guard whenever the question changes
   useEffect(() => {
     timeoutFiredRef.current = null;
+    setShowCorrectAnswer(false);
+    setParticles([]);
   }, [currentQuestion?.id]);
+
+  // Show correct answer after submission
+  useEffect(() => {
+    if (hasAnswered && !isHost) {
+      setTimeout(() => setShowCorrectAnswer(true), 800);
+    }
+  }, [hasAnswered, isHost]);
+
+  // Create celebration particles
+  const createParticles = () => {
+    const newParticles = Array.from({ length: 20 }, (_, i) => ({
+      id: Date.now() + i,
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+    }));
+    setParticles(newParticles);
+    setTimeout(() => setParticles([]), 2000);
+  };
 
   // --- Handlers ---
   const handleSubmitAnswer = async () => {
@@ -168,6 +202,11 @@ const LiveQuizActive: React.FC<LiveQuizActiveProps> = ({
           throw new Error(result.error);
         }
       setHasAnswered(true);
+
+      // Create celebration particles for correct answers
+      if (result.isCorrect) {
+        createParticles();
+      }
 
       toast({
         title: result.isCorrect ? '✅ Correct!' : '❌ Incorrect',
@@ -268,6 +307,35 @@ const LiveQuizActive: React.FC<LiveQuizActiveProps> = ({
     p => p.last_answered_at && new Date(p.last_answered_at) >= new Date(currentQuestion.start_time || 0) && p.is_playing
   ).length;
 
+  // If fullscreen mode, render the fullscreen component
+  if (isFullScreen) {
+    return (
+      <LiveQuizActiveFullscreen
+        answers={answers}
+        session={session}
+        players={players}
+        currentQuestion={currentQuestion}
+        allQuestions={allQuestions}
+        selectedAnswer={selectedAnswer}
+        setSelectedAnswer={setSelectedAnswer}
+        hasAnswered={hasAnswered}
+        setHasAnswered={setHasAnswered}
+        timeRemaining={timeRemaining}
+        isLoading={isLoading}
+        error={error}
+        setError={setError}
+        isHost={isHost}
+        userId={userId}
+        isPlayer={isPlayer}
+        refreshSessionState={refreshSessionState}
+        setIsLoading={setIsLoading}
+        resetView={resetView}
+        toast={toast}
+        onExitFullscreen={() => setIsFullScreen(false)}
+      />
+    );
+  }
+
   return (
       <Card className="rounded-2xl border-2 shadow-lg">
         <CardHeader>
@@ -279,13 +347,24 @@ const LiveQuizActive: React.FC<LiveQuizActiveProps> = ({
             />
           </div>
 
-          {/* Header row: badge + timer */}
+          {/* Header row: badge + timer + fullscreen button */}
           <div className="flex items-start justify-between">
-            <div>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsFullScreen(true)}
+                className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                title="Enter Fullscreen"
+              >
+                <Maximize2 className="h-5 w-5" />
+              </Button>
+              <div>
               <Badge variant="secondary" className="text-sm mb-2">
                 Question {questionNumber} of {totalQuestions}
               </Badge>
               <CardTitle className="text-xl mt-1">{currentQuestion.question_text}</CardTitle>
+            </div>
             </div>
             <div className="flex items-center gap-3">
               <Button

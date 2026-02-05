@@ -5,7 +5,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Mail, Lock, User, Eye, EyeOff, Loader2, CheckCircle2, XCircle, RefreshCw, Clock } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, Loader2, CheckCircle2, XCircle, RefreshCw, Clock, Ticket } from 'lucide-react';
 import { supabase } from '../integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -226,6 +226,7 @@ const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState('');
   const [nameError, setNameError] = useState('');
+  const [promoCode, setPromoCode] = useState('');
   const [isCheckingName, setIsCheckingName] = useState(false);
   const [showResendVerification, setShowResendVerification] = useState(false);
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState('');
@@ -333,6 +334,7 @@ const Auth = () => {
     setEmail('');
     setPassword('');
     setFullName('');
+    setPromoCode('');
     setEmailError('');
     setNameError('');
     setShowPassword(false);
@@ -374,6 +376,7 @@ const Auth = () => {
           data: {
             full_name: fullName.trim(),
             referral_code_used: referralCode || null,
+            promo_code: promoCode ? promoCode.trim().toUpperCase() : null,
           }
         }
       });
@@ -401,6 +404,12 @@ const Auth = () => {
             //console.log('Referral processing will complete after email verification');
           }
         }
+
+        // Process Code Night Promo (Handled by DB trigger on signup)
+        if (promoCode && promoCode.trim().toUpperCase() === 'CODENIGHT2026') {
+             toast.success('Code Night Offer Applied! You will have 1 month of Free Premium access after verification.');
+        }
+
         toast.success('Account created! Please check your email for a confirmation link.');
         setPendingVerificationEmail(email.toLowerCase().trim());
         setShowResendVerification(true);
@@ -424,7 +433,7 @@ const Auth = () => {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: email.toLowerCase().trim(),
         password,
       });
@@ -440,7 +449,21 @@ const Auth = () => {
           toast.error(error.message);
         }
       } else {
-
+        // Process Code Night Promo
+        if (promoCode && data.user) {
+           try {
+              const { error: promoError } = await supabase.rpc('apply_code_night_promo', {
+                p_user_id: data.user.id,
+                p_promo_code: promoCode.trim()
+              });
+              
+              if (!promoError) {
+                toast.success('Code Night Offer Applied! You have 1 month of Free Premium access.');
+              }
+           } catch (err) {
+             console.error('Error applying promo:', err);
+           }
+        }
         // toast.success('Welcome back!');
         navigate('/dashboard', { replace: true });
       }
@@ -640,6 +663,21 @@ const Auth = () => {
                       </div>
                     </div>
 
+                    <div className="space-y-2">
+                        <Label htmlFor="signin-promo" className="text-sm font-medium text-gray-300">Promo Code (Optional)</Label>
+                        <div className="relative">
+                          <Ticket className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+                          <Input
+                            id="signin-promo"
+                            type="text"
+                            placeholder="e.g. CODENIGHT2026"
+                            value={promoCode}
+                            onChange={(e) => setPromoCode(e.target.value)}
+                            className="pl-10 h-12 rounded-lg border border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50 bg-gray-800/50 backdrop-blur-sm text-gray-100 transition-all duration-200"
+                          />
+                        </div>
+                    </div>
+
                     <LoadingButton
                       type="submit"
                       isLoading={isLoading}
@@ -775,6 +813,21 @@ const Auth = () => {
                         </button>
                       </div>
                       <PasswordStrength password={password} />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-promo" className="text-sm font-medium text-gray-300">Promo Code (Optional)</Label>
+                      <div className="relative">
+                        <Ticket className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+                        <Input
+                          id="signup-promo"
+                          type="text"
+                          placeholder="e.g. CODENIGHT2026"
+                          value={promoCode}
+                          onChange={(e) => setPromoCode(e.target.value)}
+                          className="pl-10 h-12 rounded-lg border border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50 bg-gray-800/50 backdrop-blur-sm text-gray-100 transition-all duration-200"
+                        />
+                      </div>
                     </div>
 
                     <LoadingButton
