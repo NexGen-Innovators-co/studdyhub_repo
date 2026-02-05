@@ -7,7 +7,8 @@ import { Avatar, AvatarFallback } from '../ui/avatar';
 import { 
   Mic, MicOff, X, Headphones, MessageCircle, Heart, 
   ThumbsUp, Send, Clock, Volume2, VolumeX, Share2,
-  HelpCircle, Sparkles, Radio, Wifi, Video as VideoIcon, Loader2
+  HelpCircle, Sparkles, Radio, Wifi, Video as VideoIcon, Loader2,
+  MoreVertical, PhoneOff, Users, MessageSquare, Hand, Smile, Settings
 } from 'lucide-react';
 import { useWebRTC } from '@/hooks/useWebRTC';
 import { toast } from 'sonner';
@@ -16,6 +17,7 @@ import { addPodcastListener, removePodcastListener, createParticipationRequest }
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'; // Import Tabs
 
 interface LivePodcastViewerProps {
   podcastId: string;
@@ -25,6 +27,7 @@ interface LivePodcastViewerProps {
 const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClose }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
   
   const [isRequesting, setIsRequesting] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -37,6 +40,8 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
   const [enableVideo, setEnableVideo] = useState(false);
   const [keyPoints, setKeyPoints] = useState<string[]>([]);
   const [showReactionEffect, setShowReactionEffect] = useState(false);
+  const [showSidePanel, setShowSidePanel] = useState(false); // New state for side panel
+  const [activeTab, setActiveTab] = useState('chat'); // New state for side panel tab
   const captionsChannelRef = useRef<any>(null);
 
   // Mobile detection
@@ -108,50 +113,49 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
   } = useWebRTC({
     podcastId,
     isHost: false,
-    enableVideo,
+    enableVideo: false, // Viewer should not send video by default, but receive it if offered
     onRemoteStream: (stream: MediaStream) => {
-      // console.log('Received remote stream:', stream.id, 'video tracks:', stream.getVideoTracks().length, 'audio tracks:', stream.getAudioTracks().length);
+      // Store reference to stream for when UI becomes ready
+      remoteStreamRef.current = stream;
       
       const hasVideo = stream.getVideoTracks().length > 0;
       
+      // If we receive video tracks, ensure UI is in video mode
+      if (hasVideo && !enableVideo) {
+         setEnableVideo(true);
+      }
+      
       if (hasVideo && videoRef.current) {
-        // console.log('Setting video stream');
         videoRef.current.srcObject = stream;
         setIsStreamLoaded(true);
-        
-        // Force video to play
-        const attemptPlay = () => {
-          if (!videoRef.current) return;
-          
-          videoRef.current.play()
-            .then(() => {
-              // console.log('Video autoplay succeeded');
-            })
-            .catch(e => {
-              // console.warn('Video autoplay failed, user interaction may be required:', e);
-              // Try with muted first
-              if (videoRef.current) {
-                videoRef.current.muted = true;
-                videoRef.current.play().catch(err => console.error('Muted play also failed:', err));
-              }
-            });
-        };
-
-        // Try immediate play
-        if (videoRef.current.readyState >= 2) {
-          attemptPlay();
-        } else {
-          // Wait for loadeddata event
-          videoRef.current.addEventListener('loadeddata', attemptPlay, { once: true });
-        }
+        videoRef.current.play().catch(e => {
+            if (videoRef.current) {
+               videoRef.current.muted = true;
+               videoRef.current.play().catch(e2 => {});
+            }
+        });
       } else if (audioRef.current) {
-        // console.log('Setting audio stream');
-        audioRef.current.srcObject = stream;
-        setIsStreamLoaded(true);
-        audioRef.current.play().catch(e => console.warn('Audio play failed:', e));
+        if (!hasVideo && audioRef.current.srcObject !== stream) {
+           audioRef.current.srcObject = stream;
+           setIsStreamLoaded(true);
+           audioRef.current.play().catch(e => {});
+        }
       }
     }
   });
+
+  // Ensure video is attached when mode switches to video
+  useEffect(() => {
+    if (enableVideo && videoRef.current && remoteStreamRef.current) {
+       videoRef.current.srcObject = remoteStreamRef.current;
+       videoRef.current.play().catch(e => {
+           if (videoRef.current) {
+               videoRef.current.muted = true;
+               videoRef.current.play().catch(e2 => {});
+           }
+       });
+    }
+  }, [enableVideo]);
 
   // Subscribe to captions
   useEffect(() => {
@@ -201,8 +205,7 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
     setIsRequesting(true);
     try {
       requestPermission('speak');
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) await createParticipationRequest(podcastId, user.id, 'speak');
+      // Request is handled by useWebRTC internally (broadcast + db insert)
       toast.success('Request sent to host');
     } catch (e) {
       toast.error('Request failed');
@@ -243,347 +246,365 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
       });
     } catch (e) {}
   };
+  
+  const toggleSidePanel = (tab: string) => {
+    if (showSidePanel && activeTab === tab) {
+      setShowSidePanel(false);
+    } else {
+      setActiveTab(tab);
+      setShowSidePanel(true);
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-50 bg-gradient-to-br from-background via-background to-muted/20 backdrop-blur-sm">
-      <Card className="h-full w-full border-0 rounded-none shadow-none bg-transparent overflow-hidden">
-        <div className="h-full flex flex-col">
-          {/* Enhanced Header */}
-          <motion.div 
-            initial={{ y: -20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            className="relative border-b bg-card/95 backdrop-blur-xl shadow-lg z-10"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-red-500/5 via-transparent to-red-500/5" />
-            <div className="relative px-3 sm:px-4 md:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-              <div className="flex items-center gap-2 sm:gap-3 md:gap-4 flex-wrap">
-                <motion.div
-                  animate={{ scale: [1, 1.1, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                >
-                  <Badge variant="destructive" className="gap-1.5 sm:gap-2 px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold shadow-lg shadow-red-500/20">
-                    <motion.div 
-                      className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full bg-white"
-                      animate={{ opacity: [1, 0.3, 1] }}
-                      transition={{ duration: 1.5, repeat: Infinity }}
-                    />
-                    LIVE
-                  </Badge>
-                </motion.div>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-muted/50">
-                      <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                      <span className="font-mono font-semibold text-xs sm:text-sm">{formatTime(streamDuration)}</span>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>Stream Duration</TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className={cn(
-                      "flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-muted/50",
-                      connectionQuality === 'excellent' ? "text-green-500" : connectionQuality === 'good' ? "text-yellow-500" : connectionQuality === 'poor' ? "text-orange-500" : "text-red-500"
-                    )}>
-                      <Wifi className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                      <span className="font-semibold text-xs sm:text-sm capitalize hidden sm:inline">{connectionQuality}</span>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>Connection Quality</TooltipContent>
-                </Tooltip>
-              </div>
-
-              <div className="flex items-center gap-1.5 sm:gap-2 ml-auto sm:ml-0">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size={isMobile ? "sm" : "default"}
-                      variant={isMuted ? "destructive" : "outline"}
-                      onClick={() => { setIsMuted(!isMuted); toggleMute(); }}
-                      className="shadow-md h-8 sm:h-9 md:h-10"
-                    >
-                      {isMuted ? <VolumeX className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <Headphones className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
-                      <span className="ml-1.5 sm:ml-2 hidden md:inline text-sm">{isMuted ? 'Unmute' : 'Mute'}</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>{isMuted ? 'Unmute Audio' : 'Mute Audio'}</TooltipContent>
-                </Tooltip>
-
-                <Button 
-                  size={isMobile ? "sm" : "default"}
-                  variant="outline" 
-                  onClick={onClose}
-                  className="shadow-md h-8 sm:h-9 md:h-10"
-                >
-                  <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  <span className="ml-1.5 sm:ml-2 hidden md:inline text-sm">Close</span>
-                </Button>
-              </div>
+    <div className="fixed inset-0 z-50 bg-[#202124] text-white flex flex-col overflow-hidden font-sans">
+      
+      {/* 1. Top Bar */}
+      <div className="flex-none h-14 px-4 flex items-center justify-between z-10 bg-gradient-to-b from-black/50 to-transparent">
+        <div className="flex items-center gap-3">
+           <Badge variant="destructive" className="animate-pulse bg-red-600 hover:bg-red-700 text-white border-none gap-1.5 px-2 py-0.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-white block" />
+              LIVE
+           </Badge>
+           <div className="h-4 w-px bg-white/20" />
+           <span className="text-white/90 text-sm font-medium tracking-wide">{formatTime(streamDuration)}</span>
+        </div>
+        
+        <div className="flex items-center gap-2">
+            <div className={cn(
+              "flex items-center gap-1.5 px-2 py-1 rounded bg-[#3c4043]/80 backdrop-blur-sm text-xs",
+              connectionQuality === 'excellent' ? "text-green-400" : connectionQuality === 'good' ? "text-yellow-400" : "text-red-400"
+            )}>
+              <Wifi className="h-3 w-3" />
+              <span className="hidden sm:inline capitalize">{connectionQuality}</span>
             </div>
-          </motion.div>
+            <Avatar className="h-8 w-8 border border-white/10 hidden sm:block">
+               <AvatarFallback className="bg-purple-600 text-xs">AI</AvatarFallback>
+            </Avatar>
+        </div>
+      </div>
 
-          {/* Main Content Area */}
-          <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-            {/* Media Panel */}
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.1 }}
-              className="flex-1 relative bg-gradient-to-br from-muted/30 to-background p-4 md:p-6"
-            >
-              <div className="h-full rounded-2xl overflow-hidden shadow-2xl border bg-black/90 relative">
-                {enableVideo ? (
-                  <>
-                    <video 
-                      ref={videoRef} 
-                      className="w-full h-full object-contain" 
-                      autoPlay
-                      muted={false}
-                      controls
-                      playsInline
-                      style={{ display: 'block', backgroundColor: '#000' }}
-                      // onLoadStart={() => console.log('Video load started')}
-                      // // onLoadedMetadata={() => console.log('Video metadata loaded')}
-                      // onLoadedData={() => console.log('Video data loaded')}
-                      // onCanPlay={() => console.log('Video can play')}
-                      // onPlaying={() => console.log('Video is playing')}
-                      // onWaiting={() => console.log('Video is waiting')}
-                      // onError={(e) => console.error('Video error:', e)}
-                    />
-                    {!isStreamLoaded && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/80">
-                        <div className="text-center">
-                          <Loader2 className="h-12 w-12 animate-spin text-white mb-4 mx-auto" />
-                          <p className="text-white/80">Connecting to live stream...</p>
+      {/* 2. Main Staging Area */}
+      <div className="flex-1 flex overflow-hidden relative">
+        <div className="flex-1 flex items-center justify-center relative p-4 bg-[#202124]">
+           <div className="relative w-full h-full max-w-6xl max-h-[calc(100vh-8rem)] rounded-xl overflow-hidden bg-[#3c4043] shadow-2xl flex items-center justify-center border border-white/5">
+              {enableVideo ? (
+                <>
+                  <video 
+                    ref={videoRef} 
+                    className="w-full h-full object-contain bg-black" 
+                    autoPlay
+                    muted={false}
+                    controls
+                    playsInline
+                  />
+                   {!isStreamLoaded && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#202124] text-center p-6">
+                      <div className="bg-blue-500/10 p-4 rounded-full mb-4">
+                         <Loader2 className="h-10 w-10 animate-spin text-blue-400" />
+                      </div>
+                      <h3 className="text-xl font-medium text-white mb-2">Connecting...</h3>
+                      <p className="text-gray-400 text-sm">Getting the best quality stream for you</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                 <div className="flex flex-col items-center justify-center p-8 text-center">
+                    <div className="relative mb-8">
+                       <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full" />
+                       <Avatar className="h-32 w-32 border-4 border-[#3c4043] shadow-xl z-10">
+                          <AvatarFallback className="bg-gradient-to-br from-blue-600 to-purple-600 text-4xl font-bold">P</AvatarFallback>
+                       </Avatar>
+                       {/* Audio Wave Animation */}
+                       <div className="absolute inset-0 flex items-center justify-center">
+                          {[1, 2, 3].map((i) => (
+                             <motion.div
+                               key={i}
+                               className="absolute border border-blue-500/30 rounded-full" // Use Tailwind class for shape
+                               initial={{ width: '100%', height: '100%', opacity: 0.8 }}
+                               animate={{ width: `${100 + i * 20}%`, height: `${100 + i * 20}%`, opacity: 0 }}
+                               transition={{ duration: 2, repeat: Infinity, delay: i * 0.4 }}
+                             />
+                          ))}
                         </div>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center p-8 text-white">
-                    <motion.div
-                      animate={{ 
-                        scale: [1, 1.05, 1],
-                        rotate: [0, 5, -5, 0]
-                      }}
-                      transition={{ duration: 4, repeat: Infinity }}
-                      className="relative mb-8"
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-pink-500/20 blur-3xl rounded-full" />
-                      <div className="relative bg-gradient-to-br from-purple-500/10 to-pink-500/10 p-12 rounded-full border border-white/10">
-                        <Headphones className="h-24 w-24 text-purple-500" />
-                      </div>
-                    </motion.div>
-                    <h3 className="text-3xl font-bold mb-3 bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
-                      Audio Stream
-                    </h3>
-                    <p className="text-white/60 text-center max-w-md mb-6">
-                      Tune in and enjoy the live conversation
-                    </p>
-                    <audio ref={audioRef} controls className="w-full max-w-md" />
-                  </div>
-                )}
+                    </div>
+                    <h2 className="text-2xl font-google-sans text-white mb-2">Audio Stream Active</h2>
+                    <p className="text-gray-400 max-w-md">Listen to the conversation live. Use the controls below to interact.</p>
+                    <audio ref={audioRef} className="hidden" />
+                 </div>
+              )}
 
-                {/* Captions Overlay */}
-                <AnimatePresence>
-                  {captions.length > 0 && (
-                    <motion.div
-                      key={captions[captions.length - 1].timestamp}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 max-w-4xl w-11/12"
-                    >
-                      <div className="bg-black/80 backdrop-blur-md text-white px-6 py-4 rounded-2xl text-center shadow-2xl border border-white/10">
-                        <p className="text-lg leading-relaxed">
-                          {captions[captions.length - 1].text}
-                        </p>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </motion.div>
-
-            {/* Interaction Panel */}
-            <motion.div 
-              initial={{ x: 50, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="w-full md:w-96 border-t md:border-t-0 md:border-l bg-card/50 backdrop-blur-sm p-3 sm:p-4 md:p-6 overflow-y-auto space-y-4 sm:space-y-6"
-            >
-              {/* Request to Speak */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="p-4 sm:p-5 md:p-6 rounded-xl sm:rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20"
-              >
-                <div className="flex items-start gap-3 sm:gap-4 mb-3 sm:mb-4">
-                  <div className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl bg-primary/10">
-                    <Mic className="h-5 w-5 sm:h-5.5 sm:w-5.5 md:h-6 md:w-6 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-base sm:text-lg mb-1">Want to speak?</h3>
-                    <p className="text-xs sm:text-sm text-muted-foreground">
-                      Request permission from the host to join the conversation
-                    </p>
-                  </div>
-                </div>
-                <Button 
-                  className="w-full gap-1.5 sm:gap-2 shadow-lg shadow-primary/20 h-10 sm:h-11 md:h-12 text-sm sm:text-base" 
-                  onClick={handleRequestToSpeak} 
-                  disabled={isRequesting}
-                >
-                  {isRequesting ? (
-                    <>
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                      >
-                        <Sparkles className="h-4 w-4 sm:h-5 sm:w-5" />
-                      </motion.div>
-                      Requesting...
-                    </>
-                  ) : (
-                    <>
-                      <Mic className="h-4 w-4 sm:h-5 sm:w-5" />
-                      Request to Speak
-                    </>
-                  )}
-                </Button>
-              </motion.div>
-
-              {/* Reactions */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-              >
-                <h3 className="font-semibold text-base sm:text-lg mb-3 sm:mb-4 flex items-center gap-1.5 sm:gap-2">
-                  <Heart className="h-4 w-4 sm:h-5 sm:w-5 text-pink-500" />
-                  Send Reactions
-                </h3>
-                <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                  {(['clap', 'like', 'heart'] as const).map((type, idx) => (
-                    <motion.button
-                      key={type}
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: 0.5 + idx * 0.1 }}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 1.2 }}
-                      onClick={() => sendReaction(type)}
-                      className="relative border-2 rounded-lg sm:rounded-xl p-3 sm:p-4 md:p-6 flex flex-col items-center gap-1.5 sm:gap-2 hover:bg-accent transition-all group"
-                    >
-                      <div className="relative">
-                        {type === 'clap' ? (
-                          <span className="text-2xl sm:text-3xl md:text-4xl group-hover:scale-110 transition-transform">👏</span>
-                        ) : type === 'like' ? (
-                          <ThumbsUp className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-blue-500 group-hover:scale-110 transition-transform" />
-                        ) : (
-                          <Heart className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-pink-500 group-hover:scale-110 transition-transform group-hover:fill-pink-500" />
-                        )}
-                      </div>
-                      <span className="text-xs font-medium capitalize">{type}</span>
-                      {reactions[type] > 0 && (
-                        <Badge variant="secondary" className="absolute -top-2 -right-2 text-xs">
-                          {reactions[type]}
-                        </Badge>
-                      )}
-                    </motion.button>
-                  ))}
-                </div>
-              </motion.div>
-
-              {/* Questions */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
-                className="p-4 sm:p-5 md:p-6 rounded-xl sm:rounded-2xl border bg-card"
-              >
-                <h3 className="font-semibold text-base sm:text-lg mb-3 sm:mb-4 flex items-center gap-1.5 sm:gap-2">
-                  <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-                  Ask a Question
-                </h3>
-                <textarea
-                  value={question}
-                  onChange={e => setQuestion(e.target.value)}
-                  placeholder="What's on your mind?"
-                  className="w-full h-24 sm:h-28 md:h-32 p-3 sm:p-4 rounded-lg sm:rounded-xl border bg-background resize-none mb-2 sm:mb-3 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm sm:text-base"
-                />
-                <div className="flex justify-end gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setQuestion('')}
-                    disabled={!question.trim()}
-                  >
-                    Clear
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    onClick={postQuestion} 
-                    disabled={!question.trim()}
-                    className="gap-2"
-                  >
-                    <Send className="h-4 w-4" />
-                    Send
-                  </Button>
-                </div>
-              </motion.div>
-
-              {/* Key Learning Points */}
+              {/* Captions Overlay - Google Meet Style */}
               <AnimatePresence>
-                {keyPoints.length > 0 && (
+                {captions.length > 0 && (
                   <motion.div
-                    initial={{ opacity: 0, y: 20 }}
+                    initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    className="p-4 sm:p-5 md:p-6 rounded-xl sm:rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-500/5 border border-blue-500/20"
+                    exit={{ opacity: 0 }}
+                    className="absolute bottom-8 left-0 right-0 flex justify-center z-20 pointer-events-none"
                   >
-                    <h4 className="font-semibold text-base sm:text-lg mb-3 sm:mb-4 flex items-center gap-1.5 sm:gap-2">
-                      <HelpCircle className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />
-                      Key Learning Points
-                    </h4>
-                    <ul className="space-y-2 sm:space-y-3">
-                      {keyPoints.map((point, i) => (
-                        <motion.li 
-                          key={i}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: i * 0.1 }}
-                          className="flex items-start gap-2 sm:gap-3 text-xs sm:text-sm"
-                        >
-                          <div className="h-5 w-5 sm:h-6 sm:w-6 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <span className="text-xs font-bold text-blue-500">{i + 1}</span>
-                          </div>
-                          <p className="flex-1">{point}</p>
-                        </motion.li>
-                      ))}
-                    </ul>
+                    <div className="bg-black/60 backdrop-blur-sm text-white px-6 py-3 rounded-lg max-w-3xl text-center text-lg md:text-xl font-medium shadow-lg">
+                      {captions[captions.length - 1].text}
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
-            </motion.div>
-          </div>
+           </div>
         </div>
-      </Card>
 
-      {/* Reaction Effect */}
+        {/* 3. Side Panel (Drawer) */}
+        <AnimatePresence>
+          {showSidePanel && (
+            <motion.div
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: isMobile ? '100%' : 360, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              className="bg-white dark:bg-[#202124] border-l border-white/10 flex flex-col h-full absolute right-0 top-0 z-20 md:relative shadow-2xl"
+            >
+               <div className="flex items-center justify-between p-4 border-b border-white/10 bg-[#202124]">
+                  <h3 className="text-lg font-medium text-white">
+                    {activeTab === 'chat' ? 'In-call messages' : activeTab === 'people' ? 'People' : 'Activities'}
+                  </h3>
+                  <Button variant="ghost" size="icon" onClick={() => setShowSidePanel(false)} className="text-gray-400 hover:text-white hover:bg-white/10 rounded-full h-8 w-8">
+                     <X className="h-5 w-5" />
+                  </Button>
+               </div>
+
+               <div className="flex-1 overflow-y-auto bg-[#202124] p-4 space-y-4">
+                  {/* Chat Section */}
+                  {activeTab === 'chat' && (
+                     <>
+                        <div className="bg-[#3c4043]/50 rounded-lg p-3 text-sm text-gray-300 text-center mb-4">
+                           Messages can only be seen by people in the call and are deleted when the call ends.
+                        </div>
+                        
+                        {/* Question Input */}
+                         <div className="space-y-3">
+                           {/* Only showing input for "questions" as chat is simplified here */}
+                            <label className="text-sm font-medium text-gray-300 ml-1">Ask a question</label>
+                            <div className="relative">
+                              <textarea
+                                value={question}
+                                onChange={e => setQuestion(e.target.value)}
+                                placeholder="Send a message to everyone"
+                                className="w-full h-24 bg-[#3c4043] border border-transparent focus:border-blue-400 rounded-lg p-3 text-white placeholder:text-gray-500 resize-none text-sm outline-none transition-colors"
+                              />
+                               <Button 
+                                  size="icon" 
+                                  className="absolute bottom-2 right-2 h-8 w-8 bg-blue-600 hover:bg-blue-500 rounded-full"
+                                  disabled={!question.trim()}
+                                  onClick={postQuestion}
+                                >
+                                  <Send className="h-4 w-4 text-white" />
+                               </Button>
+                            </div>
+                         </div>
+                     </>
+                  )}
+
+                  {/* People Section (Reactions/Requests) */}
+                  {activeTab === 'people' && (
+                     <div className="space-y-6">
+                        {/* Request Card */}
+                        <div className="bg-[#3c4043] rounded-xl p-4 space-y-3">
+                           <div className="flex items-center gap-3 mb-2">
+                             <div className="bg-blue-600/20 p-2 rounded-full">
+                                <Mic className="h-5 w-5 text-blue-400" />
+                             </div>
+                             <div>
+                               <h4 className="text-white font-medium text-sm">Join the stage</h4>
+                               <p className="text-gray-400 text-xs">Request to speak via audio</p>
+                             </div>
+                           </div>
+                           <Button 
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-full h-9" 
+                            onClick={handleRequestToSpeak}
+                            disabled={isRequesting}
+                          >
+                             {isRequesting ? 'Requesting...' : 'Request to speak'}
+                          </Button>
+                        </div>
+                     </div>
+                  )}
+
+                  {/* Activities Section (Reactions/Keys) */}
+                  {activeTab === 'activities' && (
+                    <div className="space-y-6">
+                       <div className="space-y-3">
+                          <h4 className="text-gray-300 text-sm font-medium px-1">Reactions</h4>
+                          <div className="grid grid-cols-3 gap-3">
+                             {(['clap', 'like', 'heart'] as const).map(type => (
+                                <button
+                                  key={type}
+                                  onClick={() => sendReaction(type)}
+                                  className="flex flex-col items-center justify-center p-3 bg-[#3c4043] hover:bg-[#4a4e51] rounded-xl transition-colors gap-2 group border border-transparent hover:border-gray-500"
+                                >
+                                    <div className="text-2xl group-hover:scale-110 transition-transform">
+                                      {type === 'clap' ? '👏' : type === 'like' ? '👍' : '❤️'}
+                                    </div>
+                                    <span className="text-xs text-gray-400 capitalize">{type}</span>
+                                </button>
+                             ))}
+                          </div>
+                       </div>
+                       
+                       {keyPoints.length > 0 && (
+                          <div className="space-y-3 pt-4 border-t border-white/10">
+                              <h4 className="text-gray-300 text-sm font-medium px-1 flex items-center gap-2">
+                                <Sparkles className="h-4 w-4 text-yellow-400" />
+                                Key Highlights
+                              </h4>
+                              <div className="space-y-2">
+                                {keyPoints.map((point, i) => (
+                                  <div key={i} className="bg-[#3c4043]/50 p-3 rounded-lg border border-white/5 text-sm text-gray-300 leading-relaxed">
+                                    • {point}
+                                  </div>
+                                ))}
+                              </div>
+                          </div>
+                       )}
+                    </div>
+                  )}
+               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* 4. Bottom Control Bar */}
+      <div className="flex-none h-20 bg-[#202124] flex items-center justify-between px-4 sm:px-8 space-x-4 z-20 border-t border-white/5">
+         
+         {/* Left Info (Desktop) */}
+         <div className="hidden md:flex items-center min-w-[200px] text-white select-none">
+            <div className="flex flex-col">
+               <span className="font-medium text-base truncate max-w-[200px]">Live Podcast Session</span>
+               <span className="text-xs text-gray-400">Join via studdyhub.com</span>
+            </div>
+         </div>
+
+         {/* Center Controls */}
+         <div className="flex items-center justify-center gap-2 sm:gap-4 flex-1">
+            <Tooltip>
+               <TooltipTrigger asChild>
+                  <button 
+                    onClick={() => { setIsMuted(!isMuted); toggleMute(); }}
+                    className={cn(
+                      "h-12 w-12 rounded-full flex items-center justify-center transition-all duration-200",
+                      isMuted ? "bg-red-600 hover:bg-red-700 text-white" : "bg-[#3c4043] hover:bg-[#434649] text-white border border-transparent hover:border-gray-500"
+                    )}
+                  >
+                     {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                  </button>
+               </TooltipTrigger>
+               <TooltipContent className="bg-gray-800 text-white border-0">{isMuted ? 'Turn on microphone' : 'Turn off microphone'}</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+               <TooltipTrigger asChild>
+                  <button 
+                    disabled={!enableVideo} // Usually Viewers cannot turn on camera unless they are speakers, keeping disabled for now
+                    className="h-12 w-12 rounded-full flex items-center justify-center bg-[#3c4043] hover:bg-[#434649] text-white/50 cursor-not-allowed border border-transparent"
+                  >
+                     <VideoIcon className="h-5 w-5" />
+                  </button>
+               </TooltipTrigger>
+               <TooltipContent className="bg-gray-800 text-white border-0">Camera unavailable for listeners</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+               <TooltipTrigger asChild>
+                  <button 
+                    onClick={() => toggleSidePanel('people')}
+                    className={cn(
+                      "h-12 w-12 rounded-full flex items-center justify-center transition-all duration-200",
+                      isRequesting ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-[#3c4043] hover:bg-[#434649] text-white border border-transparent hover:border-gray-500"
+                    )}
+                  >
+                     <Hand className="h-5 w-5" />
+                  </button>
+               </TooltipTrigger>
+               <TooltipContent className="bg-gray-800 text-white border-0">Raise hand</TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+               <TooltipTrigger asChild>
+                  <button 
+                    onClick={() => toggleSidePanel('activities')}
+                    className="h-12 w-12 rounded-full flex items-center justify-center bg-[#3c4043] hover:bg-[#434649] text-white border border-transparent hover:border-gray-500 transition-all duration-200"
+                  >
+                     <Smile className="h-5 w-5" />
+                  </button>
+               </TooltipTrigger>
+               <TooltipContent className="bg-gray-800 text-white border-0">Send reaction</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+               <TooltipTrigger asChild>
+                  <button 
+                    onClick={onClose}
+                    className="h-12 w-16 rounded-full flex items-center justify-center bg-red-600 hover:bg-red-700 text-white shadow-lg transition-all duration-200 ml-2"
+                  >
+                     <PhoneOff className="h-6 w-6 fill-current" />
+                  </button>
+               </TooltipTrigger>
+               <TooltipContent className="bg-gray-800 text-white border-0">Leave call</TooltipContent>
+            </Tooltip>
+         </div>
+
+         {/* Right Controls */}
+         <div className="flex items-center justify-end min-w-[200px] gap-3">
+             <Tooltip>
+               <TooltipTrigger asChild>
+                  <button 
+                     onClick={() => toggleSidePanel('activities')} 
+                     className={cn("hidden sm:flex h-10 w-10 items-center justify-center rounded-full hover:bg-[#3c4043] text-white transition-colors", activeTab === 'activities' && showSidePanel && "bg-[#8ab4f8]/30 text-[#8ab4f8]")}
+                  >
+                     <Sparkles className="h-5 w-5" />
+                  </button>
+               </TooltipTrigger>
+               <TooltipContent className="bg-gray-800 text-white border-0">Activities</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+               <TooltipTrigger asChild>
+                  <button 
+                     onClick={() => toggleSidePanel('people')} 
+                     className={cn("hidden sm:flex h-10 w-10 items-center justify-center rounded-full hover:bg-[#3c4043] text-white transition-colors", activeTab === 'people' && showSidePanel && "bg-[#8ab4f8]/30 text-[#8ab4f8]")}
+                  >
+                     <Users className="h-5 w-5" />
+                  </button>
+               </TooltipTrigger>
+               <TooltipContent className="bg-gray-800 text-white border-0">Show everyone</TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+               <TooltipTrigger asChild>
+                  <button 
+                     onClick={() => toggleSidePanel('chat')} 
+                     className={cn("h-10 w-10 flex items-center justify-center rounded-full hover:bg-[#3c4043] text-white transition-colors", activeTab === 'chat' && showSidePanel && "bg-[#8ab4f8]/30 text-[#8ab4f8]")}
+                  >
+                     <MessageSquare className="h-5 w-5" />
+                  </button>
+               </TooltipTrigger>
+               <TooltipContent className="bg-gray-800 text-white border-0">Chat with everyone</TooltipContent>
+            </Tooltip>
+         </div>
+      </div>
+
+      {/* Floating Reaction Animations */}
       <AnimatePresence>
         {showReactionEffect && (
           <motion.div
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: [0, 1.5, 1], opacity: [0, 1, 0] }}
+            initial={{ scale: 0, opacity: 0, y: 0 }}
+            animate={{ scale: [0, 1.2, 1], opacity: [0, 1, 0], y: -100 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 1 }}
-            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none"
+            transition={{ duration: 1.5, ease: "easeOut" }}
+            className="fixed bottom-24 left-10 md:left-1/3 z-50 pointer-events-none"
           >
-            <div className="text-8xl">❤️</div>
+            <div className="text-6xl filter drop-shadow-lg">
+               {Object.entries(reactions).sort(([,a], [,b]) => b - a)[0]?.[0] === 'like' ? '👍' : 
+                Object.entries(reactions).sort(([,a], [,b]) => b - a)[0]?.[0] === 'clap' ? '👏' : '❤️'}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

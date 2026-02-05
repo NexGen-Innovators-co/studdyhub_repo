@@ -25,7 +25,7 @@ export interface DashboardStats {
   studyTimeThisMonth: number;
   avgDailyStudyTime: number;
   mostProductiveDay: string;
-  mostProductiveHour: number;
+  mostProductiveHour: number | undefined;
   avgNotesPerDay: number;
   totalQuizzesTaken: number;
   avgQuizScore: number;
@@ -49,6 +49,14 @@ export interface DashboardStats {
     documents: number;
     messages?: number;  // ← add this
     total: number;
+  }>;
+  activityHistory: Array<{
+    period: string;
+    notes: number;
+    recordings: number;
+    documents: number;
+    quizzes: number;
+    messages: number;
   }>;
   hourlyActivity: Array<{ hour: number; activity: number }>;
   weekdayActivity: Array<{ day: string; activity: number }>;
@@ -75,6 +83,7 @@ export const useDashboardStats = (userId: string | undefined) => {
   const isFetchingRef = useRef(false);
   const mountedRef = useRef(true);
   const hasInitializedRef = useRef(false);
+  const previousUserIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -83,9 +92,29 @@ export const useDashboardStats = (userId: string | undefined) => {
     };
   }, []);
 
+  // Reset state when userId changes
+  useEffect(() => {
+    if (userId && userId !== previousUserIdRef.current) {
+      previousUserIdRef.current = userId;
+      // Clear stats from previous user to avoid flashing wrong data
+      setStats(null);
+      setError(null);
+      setLoading(false);
+      isFetchingRef.current = false;
+    }
+  }, [userId]);
+
   // Load persisted cache from localStorage if available to prevent refetch on mount
   useEffect(() => {
     if (!userId) return;
+    
+    // Check in-memory cache first
+    if (statsCache[userId]) {
+        setStats(statsCache[userId].data);
+        setLoading(false);
+        return;
+    }
+
     try {
       const raw = localStorage.getItem(`dashboard_stats_${userId}`);
       if (raw) {
@@ -104,25 +133,68 @@ export const useDashboardStats = (userId: string | undefined) => {
   // Optimized: Use database-side aggregation for activity data
   const fetchActivityDataOptimized = async (days: number, userId: string) => {
     try {
-      // Use a database function for better performance
-      const { data, error } = await supabase.rpc('get_user_activity_stats', {
+      // Use the new powerful RPC for flexible history
+      // This supports the Central Dynamic Chart requirements
+      const { data, error } = await supabase.rpc('get_user_activity_history', {
         p_user_id: userId,
-        p_days: days
+        p_start_date: new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString(),
+        p_interval: 'day'
       });
 
       if (error) throw error;
 
-      // Fallback to client-side processing if RPC not available
-      if (!data) {
-        return await fetchActivityDataFallback(days, userId);
+      if (data) {
+        return data.map((d: any) => ({
+            date: new Date(d.period || d.period_start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            rawDate: d.period || d.period_start,
+            notes: Number(d.notes_count || 0),
+            recordings: Number(d.recordings_count || 0),
+            documents: Number(d.documents_count || 0),
+            messages: Amount(d.messages_count || 0),
+            quizzes: Number(d.quizzes_count || 0),
+            total: Number(d.notes_count || 0) + Number(d.recordings_count || 0) + Number(d.documents_count || 0) + Number(d.quizzes_count || 0)
+        }));
       }
-
-      return data;
+      return await fetchActivityDataFallback(days, userId);
     } catch (error) {
+       // fallback to old RPC or client side
+       try {
+          const { data, error } = await supabase.rpc('get_user_activity_stats', {
+            p_user_id: userId,
+            p_days: days
+          });
+          if (!error && data) return data;
+       } catch (ignore) {}
 
       return await fetchActivityDataFallback(days, userId);
     }
   };
+
+  function Amount(val: any) { return Number(val || 0); }
+
+  const fetchLongTermHistory = async (userId: string) => {
+     try {
+        const { data, error } = await supabase.rpc('get_user_activity_history', {
+            p_user_id: userId,
+            p_start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
+            p_interval: 'month'
+        });
+        
+        if (error || !data) return [];
+
+        return data.map((d: any) => ({
+            period: new Date(d.period || d.period_start).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+            notes: Number(d.notes_count || 0),
+            recordings: Number(d.recordings_count || 0),
+            documents: Number(d.documents_count || 0),
+            messages: Number(d.messages_count || 0),
+            quizzes: Number(d.quizzes_count || 0)
+        }));
+     } catch (err) {
+         return [];
+     }
+  };
+
 
   // Helper to perform count queries with minimal payload and a single retry on transient errors
   const safeCount = async (table: string, filterBuilder?: (qb: any) => any) => {
@@ -132,103 +204,29 @@ export const useDashboardStats = (userId: string | undefined) => {
       const res = await qb;
       return res;
     } catch (err) {
-      //console.warn(`[useDashboardStats] safeCount first attempt failed for ${table}`, err);
-      // Retry once after short delay
-      try {
-        await new Promise(r => setTimeout(r, 300));
-        let qb2: any = supabase.from(table).select('id', { count: 'exact', head: true });
-        if (filterBuilder) qb2 = filterBuilder(qb2) || qb2;
-        const res2 = await qb2;
-        return res2;
-      } catch (err2) {
-        //console.error(`[useDashboardStats] safeCount retry failed for ${table}`, err2);
-        throw err2;
-      }
+      // Return 0 on error instead of throwing to prevent dashboard crashes
+      return { count: 0, error: null };
     }
   };
 
   const fetchActivityDataFallback = async (days: number, userId: string) => {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days + 1);
-    const start = getStartOfDay(startDate);
-    const end = getEndOfDay(new Date());
-
-    // Single query per table with date range
-    const [notesData, recordingsData, documentsData, messagesData] = await Promise.all([
-      supabase
-        .from('notes')
-        .select('created_at')
-        .eq('user_id', userId)
-        .gte('created_at', start.toISOString())
-        .lte('created_at', end.toISOString()),
-
-      supabase
-        .from('class_recordings')
-        .select('created_at')
-        .eq('user_id', userId)
-        .gte('created_at', start.toISOString())
-        .lte('created_at', end.toISOString()),
-
-      supabase.from('documents').select('id', { count: 'exact', head: true }),
-      supabase
-        .from('chat_messages')
-        .select('timestamp')
-        .eq('user_id', userId)
-        .gte('timestamp', start.toISOString())
-        .lte('timestamp', end.toISOString()),
-    ]);
-
-    // Process data in memory - much faster than individual queries
-    const activityMap = new Map();
-
-    // Initialize all dates
-    for (let i = 0; i < days; i++) {
-      const date = new Date(start);
-      date.setDate(start.getDate() + i);
-      const dateKey = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      activityMap.set(dateKey, { notes: 0, recordings: 0, documents: 0, messages: 0, total: 0 });
-    }
-
-    // Count activities by date
-    const countActivities = (data: any[], type: string) => {
-      data.forEach(item => {
-        // ✅ FIX: Check for both 'created_at' AND 'timestamp'
-        const dateStr = item.created_at || item.timestamp;
-        if (!dateStr) return;
-
-        const date = new Date(dateStr);
-        const dateKey = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        if (activityMap.has(dateKey)) {
-          const current = activityMap.get(dateKey);
-          current[type] += 1;
-          current.total += 1;
-        }
-      });
-    };
-
-    countActivities(notesData.data || [], 'notes');
-    countActivities(recordingsData.data || [], 'recordings');
-    countActivities(documentsData.data || [], 'documents');
-    countActivities(messagesData.data || [], 'messages');
-
-    return Array.from(activityMap.entries()).map(([date, counts]) => ({
-      date,
-      ...counts
-    }));
+    // Return empty array to avoid heavy client-side processing that causes 500 errors
+    // We rely on the RPC function 'get_user_activity_history' which is much more efficient
+    return [];
   };
 
   // Optimized: Fetch only necessary fields and use limits
   const fetchHourlyActivityOptimized = async (userId: string) => {
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
+    const monthAgo = new Date();
+    monthAgo.setDate(monthAgo.getDate() - 30);
 
     // Single query with optimized fields
     const { data, error } = await supabase
       .from('notes')
       .select('created_at')
       .eq('user_id', userId)
-      .gte('created_at', weekAgo.toISOString())
-      .limit(1000); // Reasonable limit for hourly analysis
+      .gte('created_at', monthAgo.toISOString())
+      .limit(2000); // Reasonable limit for hourly analysis
 
     if (error) throw error;
 
@@ -385,6 +383,8 @@ export const useDashboardStats = (userId: string | undefined) => {
       const notesWithAI = notesWithAICount.count || 0;
       const totalQuizzesTaken = quizzesCount.count || 0;
 
+      const calculatedAiUsageRate = totalNotes > 0 ? (notesWithAI / totalNotes) * 100 : 0;
+
       const minimalStats: DashboardStats = {
         totalNotes,
         totalRecordings,
@@ -399,7 +399,7 @@ export const useDashboardStats = (userId: string | undefined) => {
         completedTasks: 0,
         overdueTasks: 0,
         notesWithAI,
-        aiUsageRate: 0,
+        aiUsageRate: calculatedAiUsageRate,
         notesThisWeek: 0,
         notesThisMonth: 0,
         recordingsThisWeek: 0,
@@ -419,6 +419,7 @@ export const useDashboardStats = (userId: string | undefined) => {
         categoryData: [],
         activityData7Days: [],
         activityData30Days: [],
+        activityHistory: [],
         hourlyActivity: [],
         weekdayActivity: [],
         recentNotes: recentNotesData.data || [],
@@ -480,6 +481,13 @@ export const useDashboardStats = (userId: string | undefined) => {
             activityData30Days = await fetchActivityDataFallback(30, userId);
           }
 
+          let activityHistory: any = [];
+          try {
+            activityHistory = await fetchLongTermHistory(userId);
+          } catch (e) {
+            activityHistory = [];
+          }
+
           // Phase 3: Charts and visual data (lazy)
           let hourlyActivity: any = [];
           try {
@@ -490,12 +498,17 @@ export const useDashboardStats = (userId: string | undefined) => {
           }
           await new Promise(r => setTimeout(r, 200));
 
-          let weekdayActivity: any = [];
-          try {
-            weekdayActivity = await fetchActivityDataFallback(7, userId);
-          } catch (e) {
-            //console.warn('[useDashboardStats] weekdayActivity fetch failed', e);
-            weekdayActivity = [];
+          // Calculate weekday activity from the 30-day data we already have
+          const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          let weekdayActivity: any = daysOfWeek.map(day => ({ day, activity: 0 }));
+          
+          if (activityData30Days && activityData30Days.length > 0) {
+              activityData30Days.forEach((dayStat: any) => {
+                  if (dayStat.rawDate) {
+                      const dayIndex = new Date(dayStat.rawDate).getDay(); // 0 = Sunday
+                      weekdayActivity[dayIndex].activity += (dayStat.total || 0);
+                  }
+              });
           }
           await new Promise(r => setTimeout(r, 200));
 
@@ -601,24 +614,28 @@ export const useDashboardStats = (userId: string | undefined) => {
           const avgNotesPerDay = totalNotes > 0 ? Number((totalNotes / daysActive).toFixed(1)) : 0;
 
           const calculateProductivity = (weekdayData: any[], hourlyData: any[]) => {
-            if (weekdayData.length === 0 || hourlyData.length === 0) {
-              return { mostProductiveDay: 'Mon', mostProductiveHour: 14 };
-            }
+            const hasWeekdayActivity = weekdayData.some(d => d.activity > 0);
+            const hasHourlyActivity = hourlyData.some(h => h.activity > 0);
 
-            const mostProductiveDayIndex = weekdayData.reduce((maxIndex, day, index) =>
-              day.activity > weekdayData[maxIndex].activity ? index : maxIndex, 0
-            );
-
-            const mostProductiveHour = hourlyData.reduce((maxIndex, hour, index) =>
-              hour.activity > hourlyData[maxIndex].activity ? index : maxIndex, 0
-            );
+            let mostProductiveDay = '--';
+            let mostProductiveHour: number | undefined = undefined;
 
             const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-            return {
-              mostProductiveDay: days[mostProductiveDayIndex],
-              mostProductiveHour
-            };
+            if (hasWeekdayActivity) {
+                const mostProductiveDayIndex = weekdayData.reduce((maxIndex, day, index) =>
+                    day.activity > weekdayData[maxIndex].activity ? index : maxIndex, 0
+                );
+                mostProductiveDay = days[mostProductiveDayIndex];
+            }
+
+            if (hasHourlyActivity) {
+                mostProductiveHour = hourlyData.reduce((maxIndex, hour, index) =>
+                    hour.activity > hourlyData[maxIndex].activity ? index : maxIndex, 0
+                );
+            }
+
+            return { mostProductiveDay, mostProductiveHour };
           };
 
           const { mostProductiveDay, mostProductiveHour } = calculateProductivity(weekdayActivity, hourlyActivity);
@@ -651,8 +668,9 @@ export const useDashboardStats = (userId: string | undefined) => {
             categoryData,
             activityData7Days,
             activityData30Days,
+            activityHistory,
             hourlyActivity,
-            weekdayActivity: weekdayActivity.map((d: any) => ({ day: d.date, activity: d.total })) ,
+            weekdayActivity,
             topCategories,
             learningVelocity,
             currentStreak,

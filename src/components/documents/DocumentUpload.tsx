@@ -10,6 +10,7 @@ import {
   FileSpreadsheet, File, Zap, Clock, Users, Folder, Plus, CheckSquare, Square, Lock
 } from 'lucide-react';
 import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { toast } from 'sonner';
@@ -28,6 +29,21 @@ import { PodcastButton } from '../dashboard/PodcastButton';
 import { Checkbox } from '../ui/checkbox';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { a } from 'node_modules/framer-motion/dist/types.d-Cjd591yU';
+import { DocumentCardItem } from './DocumentCardItem';
+import { DocumentFilters } from './DocumentFilters';
+import { DocumentGridSkeleton, DocumentListSkeleton, FolderTreeSkeleton } from './DocumentSkeletons';
+import { useDocumentFiltering } from '../../hooks/documents/useDocumentFiltering';
+import { useDocumentOperations } from '../../hooks/documents/useDocumentOperations';
+import { useDocumentUpload } from '../../hooks/documents/useDocumentUpload';
+import { 
+  formatFileSize,  
+  formatDate, 
+  getFileCategory, 
+  getCategoryIcon, 
+  getCategoryColor, 
+  getStatusColor, 
+  getStatusIcon 
+} from './documentUtils';
 
 interface DocumentUploadProps {
   documents: Document[];
@@ -52,61 +68,7 @@ const LazyFolderSelector = lazy(() =>
   import('./FolderSelector').then((m) => ({ default: m.FolderSelector }))
 );
 
-/* -------------------------------------------------------------------------- */
-/* Skeletons (shown while lazy chunks load) */
-/* -------------------------------------------------------------------------- */
-const DocumentCardSkeleton = () => (
-  <Card className="animate-pulse">
-    <CardHeader className="pb-3">
-      <div className="flex items-center justify-between">
-        <Skeleton className="h-5 w-3/4" />
-        <Skeleton className="h-6 w-6 rounded-full" />
-      </div>
-    </CardHeader>
-    <CardContent className="space-y-3">
-      <Skeleton className="h-4 w-1/2" />
-      <Skeleton className="h-4 w-1/3" />
-      <div className="flex gap-2">
-        <Skeleton className="h-8 w-20" />
-        <Skeleton className="h-8 w-20" />
-      </div>
-    </CardContent>
-  </Card>
-);
-
-const FolderTreeSkeleton = () => (
-  <Card>
-    <CardHeader>
-      <Skeleton className="h-6 w-32" />
-    </CardHeader>
-    <CardContent>
-      <div className="space-y-3">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="flex items-center gap-2 pl-4">
-            <Skeleton className="h-4 w-4" />
-            <Skeleton className="h-4 w-48" />
-          </div>
-        ))}
-      </div>
-    </CardContent>
-  </Card>
-);
-
-const DocumentGridSkeleton = () => (
-  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-    {[...Array(6)].map((_, i) => (
-      <DocumentCardSkeleton key={i} />
-    ))}
-  </div>
-);
-
-const DocumentListSkeleton = () => (
-  <div className="space-y-4">
-    {[...Array(6)].map((_, i) => (
-      <DocumentCardSkeleton key={i} />
-    ))}
-  </div>
-);
+// Skeletons moved to ./DocumentSkeletons.tsx
 
 export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   documents,
@@ -120,21 +82,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const navigate = useNavigate();
   const { subscriptionLimits, forceRefreshDocuments } = useAppContext();
   const { canUploadDocuments } = useFeatureAccess();
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [dragActive, setDragActive] = useState(false);
-  const [dragLocked, setDragLocked] = useState(false); // Lock drag when not allowed
-  const [processingDocuments, setProcessingDocuments] = useState<Set<string>>(new Set());
 
-  // Enhanced UI State
-  const [internalSearch, setInternalSearch] = useState('');
-  const [hasSearched, setHasSearched] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedStatus, setSelectedStatus] = useState('all');
-  const [sortBy, setSortBy] = useState('date');
-  const [sortOrder, setSortOrder] = useState('desc');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [docUserId, setDocUserId] = useState<string | null>(null);
@@ -156,18 +104,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [showSelection, setShowSelection] = useState(false);
 
-  const effectiveSearch = externalSearchQuery ?? internalSearch;
 
-  const handleSearchChange = (value: string) => {
-    setInternalSearch(value);
-    if (!value.trim()) {
-      setHasSearched(false);
-    } else {
-      setHasSearched(true);
-      search(value);
-    }
-    onSearchChange?.(value);
-  };
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -185,6 +122,80 @@ const {
 const isLoading = dataLoading?.documents || false; 
 // Create a merged source of truth. Prefer Context, fallback to props.
 const allDocuments = contextDocuments || documents;
+
+    // Folder state
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false);
+  const [renameFolderDialogOpen, setRenameFolderDialogOpen] = useState(false);
+  const [folderToRename, setFolderToRename] = useState<DocumentFolder | null>(null);
+  const [parentFolderForNew, setParentFolderForNew] = useState<string | null>(null);
+  const [uploadFolderSelectorOpen, setUploadFolderSelectorOpen] = useState(false);
+  const [uploadTargetFolderId, setUploadTargetFolderId] = useState<string | null>(null);
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Hook Integration
+  const {
+    selectedFile, setSelectedFile,
+    isUploading, uploadProgress,
+    dragActive, dragLocked,
+    fileInputRef, processingDocuments,
+    handleDrag, handleDrop, handleFileChange, handleUpload, triggerAnalysis
+  } = useDocumentUpload({
+    user,
+    documents,
+    subscriptionLimits,
+    canUploadDocuments,
+    appOperations,
+    forceRefreshDocuments: forceRefreshDocuments as () => Promise<void>,
+    onDocumentUpdated,
+    uploadTargetFolderId,
+    setUploadTargetFolderId
+  });
+
+  const {
+    internalSearch, hasSearched, effectiveSearch: hookEffectiveSearch,
+    selectedCategory, setSelectedCategory,
+    selectedStatus, setSelectedStatus,
+    sortBy, setSortBy,
+    sortOrder, setSortOrder,
+    viewMode, setViewMode,
+    handleSearchChange,
+    documentStats,
+    filteredAndSortedDocuments
+  } = useDocumentFiltering({
+    documents: allDocuments,
+    searchResults: searchResults as Document[],
+    externalSearchQuery,
+    onSearchChange,
+    search
+  });
+
+  const {
+    moveDocumentDialogOpen, setMoveDocumentDialogOpen,
+    documentToMove, setDocumentToMove,
+    moveFolderDialogOpen, setMoveFolderDialogOpen,
+    folderToMove, setFolderToMove,
+    handleMoveDocument,
+    handleMoveDocumentSubmit,
+    handleAddDocumentToFolder,
+    handleRemoveDocumentFromFolder,
+    handleMoveFolder,
+    handleMoveFolderSubmit,
+    handleDeleteDocument
+  } = useDocumentOperations({
+    user,
+    documents,
+    folders,
+    onDocumentUpdated,
+    onDocumentDeleted,
+    loadDataIfNeeded,
+    processingDocuments
+  });
+  
+  const effectiveSearch = hookEffectiveSearch;
+
   const handleClosePreview = useCallback(() => {
     setPreviewOpen(false);
     const searchParams = new URLSearchParams(location.search);
@@ -228,22 +239,68 @@ const allDocuments = contextDocuments || documents;
       }
     }
   }, [location.search, documents]);
-// Utility to override .ts file MIME type to text/typescript (fixes browser misclassification)
-function overrideTsMimeType(file: File): File {
-  if (file && file.name.toLowerCase().endsWith('.ts') && file.type === 'video/vnd.dlna.mpeg-tts') {
-    try {
-      // Use a Blob to create a new File with the correct MIME type
-      const blob = file.slice(0, file.size, 'text/typescript');
-      return new (window.File as { new(fileBits: BlobPart[], fileName: string, options?: FilePropertyBag): File })([blob], file.name, { type: 'text/typescript', lastModified: file.lastModified });
-    } catch {
-      // If File constructor fails, fallback to original file
-      return file;
-    }
-  }
-  return file;
-}
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
+
+
+  const handleDownload = async (doc: Document) => {
+    try {
+      if (doc.file_url) {
+        // Attempt to fetch blob for a proper download 
+        const response = await fetch(doc.file_url);
+        if (!response.ok) throw new Error('Network response was not ok');
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        // Prefer file_name if available, preserving extension
+        a.download = doc.file_name || doc.title || 'download';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        toast.success(`Downloading ${doc.title}...`);
+      } else if (doc.content_extracted) {
+        // Use the original file mimetype if known, otherwise plain text
+        const mimeType = doc.file_type || 'text/plain';
+        const blob = new Blob([doc.content_extracted], { type: mimeType });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        // Smart filename: respect file_name (which usually has extension) or title
+        let filename = doc.file_name || doc.title || 'document';
+        
+        // If filename lacks extension, attempt to add one based on mimetype
+        if (!filename.includes('.')) {
+             if (mimeType.includes('json')) filename += '.json';
+             else if (mimeType.includes('javascript') || mimeType.includes('js')) filename += '.js';
+             else if (mimeType.includes('typescript') || mimeType.includes('ts')) filename += '.ts';
+             else if (mimeType.includes('markdown')) filename += '.md';
+             else if (mimeType.includes('html')) filename += '.html';
+             else if (mimeType.includes('css')) filename += '.css';
+             else if (mimeType.includes('csv')) filename += '.csv';
+             else filename += '.txt';
+        }
+
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        toast.success(`Downloading content as ${filename}...`);
+      } else {
+        toast.error("No file URL or extracted content available for download");
+      }
+    } catch (e) {
+      console.error("Download failed, falling back to window.open", e);
+      if (doc.file_url) {
+        window.open(doc.file_url, '_blank');
+      } else {
+        toast.error("Failed to download document");
+      }
+    }
+  };
 
   const handleManualRefresh = useCallback(async () => {
     if (isRefreshing || !user?.id) return;
@@ -276,15 +333,7 @@ function overrideTsMimeType(file: File): File {
     return () => window.removeEventListener('trigger-document-upload', handleTriggerUpload);
   }, []);
 
-  // Folder state
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
-  const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false);
-  const [renameFolderDialogOpen, setRenameFolderDialogOpen] = useState(false);
-  const [folderToRename, setFolderToRename] = useState<DocumentFolder | null>(null);
-  const [parentFolderForNew, setParentFolderForNew] = useState<string | null>(null);
-  const [uploadFolderSelectorOpen, setUploadFolderSelectorOpen] = useState(false);
-  const [uploadTargetFolderId, setUploadTargetFolderId] = useState<string | null>(null);
+
 
   // 2. Lazy load folder dialogs
   const LazyMoveDocumentDialog = lazy(() =>
@@ -294,724 +343,18 @@ function overrideTsMimeType(file: File): File {
   const LazyMoveFolderDialog = lazy(() =>
     import('./MoveFolderDialog').then((m) => ({ default: m.MoveFolderDialog }))
   );
-
-  // 3. Add state for move operations in DocumentUpload component:
-  const [moveDocumentDialogOpen, setMoveDocumentDialogOpen] = useState(false);
-  const [documentToMove, setDocumentToMove] = useState<Document | null>(null);
-  const [moveFolderDialogOpen, setMoveFolderDialogOpen] = useState(false);
-  const [folderToMove, setFolderToMove] = useState<DocumentFolder | null>(null);
   
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  // 4. Add handler to open move dialog for documents:
-  const handleMoveDocument = useCallback((document: Document) => {
-    setDocumentToMove(document);
-    setMoveDocumentDialogOpen(true);
-  }, []);
 
-  // 5. Add handler to move document to folder:
-  const handleMoveDocumentSubmit = useCallback(async (documentId: string, targetFolderId: string | null) => {
-    try {
-      if (!user?.id) return;
+  
 
-      // Get current folder_ids
-      const document = documents.find(d => d.id === documentId);
-      if (!document) return;
 
-      let newFolderIds: string[] = [];
 
-      if (targetFolderId) {
-        // Moving to a folder - replace all folder associations with just this one
-        newFolderIds = [targetFolderId];
-      } else {
-        // Moving to root - clear all folder associations
-        newFolderIds = [];
-      }
 
-      // Insert new folder relationship
-      if (targetFolderId) {
-        const { error } = await supabase.from('document_folder_items').insert([
-          { folder_id: targetFolderId, document_id: documentId, }
-        ]);
-        if (error) {
-          toast.error('Failed to move document');
-          return;
-        }
-      }
 
-      // Update local state
-      const updatedDocument = { ...document, folder_ids: newFolderIds };
-      onDocumentUpdated(updatedDocument);
 
-      toast.success('Document moved successfully!');
-    } catch (error: any) {
-      toast.error(`Failed to move document: ${error.message}`);
-    }
-  }, [documents, user, onDocumentUpdated, loadDataIfNeeded]);
 
-  // 6. Add handler to add document to folder (without removing from others):
-  const handleAddDocumentToFolder = useCallback(async (documentId: string, folderId: string) => {
-    try {
-      if (!user?.id) return;
 
-      const document = documents.find(d => d.id === documentId);
-      if (!document) return;
 
-      const currentFolderIds = document.folder_ids || [];
-
-      // Check if already in folder
-      if (currentFolderIds.includes(folderId)) {
-        toast.info('Document is already in this folder');
-        return;
-      }
-
-      // Add folder to existing folders
-      const newFolderIds = [...currentFolderIds, folderId];
-
-      const { error } = await supabase
-        .from('documents')
-        .update({ folder_ids: newFolderIds })
-        .eq('id', documentId)
-        .eq('user_id', user.id);
-
-      if (error) {
-        toast.error('Failed to add document to folder');
-        return;
-      }
-
-      const updatedDocument = { ...document, folder_ids: newFolderIds };
-      onDocumentUpdated(updatedDocument);
-
-      await loadDataIfNeeded('documents');
-
-      toast.success('Document added to folder!');
-    } catch (error: any) {
-      toast.error(`Failed to add document to folder: ${error.message}`);
-    }
-  }, [documents, user, onDocumentUpdated, loadDataIfNeeded]);
-
-  // 7. Add handler to remove document from folder:
-  const handleRemoveDocumentFromFolder = useCallback(async (documentId: string, folderId: string) => {
-    try {
-      if (!user?.id) return;
-
-      const document = documents.find(d => d.id === documentId);
-      if (!document) return;
-
-      const currentFolderIds = document.folder_ids || [];
-      const newFolderIds = currentFolderIds.filter(id => id !== folderId);
-
-      const { error } = await supabase
-        .from('documents')
-        .update({ folder_ids: newFolderIds })
-        .eq('id', documentId)
-        .eq('user_id', user.id);
-
-      if (error) {
-        toast.error('Failed to remove document from folder');
-        return;
-      }
-
-      const updatedDocument = { ...document, folder_ids: newFolderIds };
-      onDocumentUpdated(updatedDocument);
-
-      await loadDataIfNeeded('documents');
-
-      toast.success('Document removed from folder!');
-    } catch (error: any) {
-      toast.error(`Failed to remove document from folder: ${error.message}`);
-    }
-  }, [documents, user, onDocumentUpdated, loadDataIfNeeded]);
-
-  // 8. Update handleMoveFolder implementation:
-  const handleMoveFolder = useCallback((folderId: string) => {
-    const folder = folders.find(f => f.id === folderId);
-    if (folder) {
-      setFolderToMove(folder);
-      setMoveFolderDialogOpen(true);
-    }
-  }, [folders]);
-
-  // 9. Add handler to move folder to another folder:
-  const handleMoveFolderSubmit = useCallback(async (folderId: string, targetParentId: string | null) => {
-    try {
-      if (!user?.id) return;
-
-      const folder = folders.find(f => f.id === folderId);
-      if (!folder) return;
-
-      // Prevent moving folder into itself or its descendants
-      const isDescendant = (checkId: string, ancestorId: string): boolean => {
-        const descendants = folders.filter(f => f.parent_folder_id === ancestorId);
-        if (descendants.some(d => d.id === checkId)) return true;
-        return descendants.some(d => isDescendant(checkId, d.id));
-      };
-
-      if (targetParentId && (targetParentId === folderId || isDescendant(targetParentId, folderId))) {
-        toast.error('Cannot move folder into itself or its descendants');
-        return;
-      }
-
-      // Update database
-      const { error } = await supabase
-        .from('document_folders')
-        .update({ parent_folder_id: targetParentId })
-        .eq('id', folderId)
-        .eq('user_id', user.id);
-
-      if (error) {
-        toast.error('Failed to move folder');
-        return;
-      }
-
-      // Refresh folders
-      await loadDataIfNeeded('folders');
-
-      toast.success('Folder moved successfully!');
-    } catch (error: any) {
-      toast.error(`Failed to move folder: ${error.message}`);
-    }
-  }, [folders, user, loadDataIfNeeded]);
-
-  // Utility functions
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const getFileCategory = (fileType: string): string => {
-    if (fileType.startsWith('image/')) return 'image';
-    if (fileType.startsWith('video/')) return 'video';
-    if (fileType.startsWith('audio/')) return 'audio';
-    if (fileType.includes('pdf') || fileType.includes('document') || fileType.includes('word') || fileType.includes('text') || fileType.includes('slides')) return 'document';
-    if (fileType.includes('spreadsheet') || fileType.includes('excel')) return 'spreadsheet';
-    if (fileType.includes('presentation') || fileType.includes('powerpoint')) return 'presentation';
-    if (fileType.includes('zip') || fileType.includes('rar') || fileType.includes('tar') || fileType.includes('gz')) return 'archive';
-    if (fileType.includes('javascript') || fileType.includes('python') || fileType.includes('java') || fileType.includes('css')) return 'code';
-    return 'other';
-  };
-
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'image': return Image;
-      case 'video': return FileVideo;
-      case 'audio': return FileAudio;
-      case 'document': return FileText;
-      case 'spreadsheet': return FileBarChart;
-      case 'presentation': return FileBarChart;
-      case 'archive': return Archive;
-      case 'code': return Code;
-      default: return File;
-    }
-  };
-
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'image': return 'text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-500/20 border-green-200 dark:border-green-500/20';
-      case 'video': return 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-500/20 border-blue-200 dark:border-blue-500/20';
-      case 'audio': return 'text-pink-600 bg-pink-100 dark:text-pink-400 dark:bg-pink-500/20 border-pink-200 dark:border-pink-500/20';
-      case 'document': return 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-500/20 border-blue-200 dark:border-blue-500/20';
-      case 'spreadsheet': return 'text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-500/20 border-emerald-200 dark:border-emerald-500/20';
-      case 'presentation': return 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-500/20 border-orange-200 dark:border-orange-500/20';
-      case 'archive': return 'text-yellow-600 bg-yellow-100 dark:text-yellow-400 dark:bg-yellow-500/20 border-yellow-200 dark:border-yellow-500/20';
-      case 'code': return 'text-indigo-600 bg-indigo-100 dark:text-indigo-400 dark:bg-indigo-500/20 border-indigo-200 dark:border-indigo-500/20';
-      default: return 'text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-gray-500/20 border-gray-200 dark:border-gray-500/20';
-    }
-  };
-
-  // Document statistics
-  const documentStats = useMemo(() => {
-    const stats = {
-      all: allDocuments.length,
-      image: 0,
-      video: 0,
-      audio: 0,
-      document: 0,
-      spreadsheet: 0,
-      presentation: 0,
-      archive: 0,
-      code: 0,
-      other: 0,
-      completed: 0,
-      pending: 0,
-      failed: 0
-    };
-
-    allDocuments.forEach(doc => { 
-    const category = getFileCategory(doc.file_type);
-    stats[category as keyof typeof stats]++;
-    stats[doc.processing_status as keyof typeof stats]++;
-  });
-
-    return stats;
-  }, [allDocuments]);
-
-  // Filter and sort documents - use global search when hasSearched, otherwise use local filter
-  const filteredAndSortedDocuments = useMemo(() => {
-     let filtered = (hasSearched && effectiveSearch.trim()) ? (searchResults as Document[]) : allDocuments.filter(doc => {
-    const matchesSearch = doc.title.toLowerCase().includes(effectiveSearch.toLowerCase()) ||
-      doc.content_extracted?.toLowerCase().includes(effectiveSearch.toLowerCase());
-
-    const matchesCategory = selectedCategory === 'all' || getFileCategory(doc.file_type) === selectedCategory;
-    const matchesStatus = selectedStatus === 'all' || doc.processing_status === selectedStatus;
-
-    return matchesSearch && matchesCategory && matchesStatus;
-  });
-
-    // Sort documents
-    filtered.sort((a, b) => {
-      let aValue: any, bValue: any;
-
-      switch (sortBy) {
-        case 'name':
-          aValue = a.title.toLowerCase();
-          bValue = b.title.toLowerCase();
-          break;
-        case 'size':
-          aValue = a.file_size;
-          bValue = b.file_size;
-          break;
-        case 'type':
-          aValue = a.file_type;
-          bValue = b.file_type;
-          break;
-        case 'date':
-        default:
-          aValue = a.created_at;
-          bValue = b.created_at;
-          break;
-      }
-
-      if (sortOrder === 'asc') {
-        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
-      } else {
-        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
-      }
-    });
-
-    return filtered;
-  }, [allDocuments, effectiveSearch, selectedCategory, selectedStatus, sortBy, sortOrder, hasSearched, searchResults]);
-
-  const handleFileSelection = useCallback((file: File) => {
-    // Fix .ts files being misclassified as video
-    file = overrideTsMimeType(file);
-    const MAX_FILE_SIZE_MB = 200;
-    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-      toast.error(`File size exceeds ${MAX_FILE_SIZE_MB}MB limit.`);
-      setSelectedFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-
-    // Block only clearly unsafe types (executables, scripts, etc.)
-    const forbiddenExtensions = [
-      '.exe', '.bat', '.cmd', '.sh', '.msi', '.apk', '.com', '.scr', '.pif', '.cpl', '.jar', '.vb', '.vbs', '.wsf', '.ps1', '.gadget', '.reg', '.dll', '.sys', '.drv', '.asp', '.aspx', '.cgi', '.pl', '.php', '.pyc', '.pyo', '.so', '.dylib', '.bin', '.run', '.app', '.deb', '.rpm', '.pkg', '.service', '.lnk', '.inf', '.hta', '.msc', '.msp', '.mst', '.ocx', '.sct', '.shb', '.shs', '.url', '.js', '.jse', '.ws', '.wsf', '.wsh', '.hta', '.msu', '.msh', '.msh1', '.msh2', '.mshxml', '.msh1xml', '.msh2xml', '.scf', '.lnk', '.iso', '.img', '.vhd', '.vhdx', '.vmdk', '.ova', '.ovf', '.vdi', '.vbox', '.qcow', '.qcow2', '.vhd', '.vhdx', '.vmdk', '.ova', '.ovf', '.vdi', '.vbox', '.qcow', '.qcow2'
-    ];
-    const fileName = file.name.toLowerCase();
-    if (forbiddenExtensions.some(ext => fileName.endsWith(ext))) {
-      toast.error('This file type is not allowed for security reasons.');
-      setSelectedFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-
-    // Optionally, block files with MIME types that are known to be dangerous
-    const forbiddenMimeTypes = [
-      'application/x-msdownload',
-      'application/x-msdos-program',
-      'application/x-msinstaller',
-      'application/x-executable',
-      'application/x-sh',
-      'application/x-bat',
-      'application/x-cmd',
-      'application/x-dosexec',
-      'application/x-shellscript',
-      'application/x-elf',
-      'application/x-dosexec',
-      'application/x-msi',
-      'application/x-ms-shortcut',
-      'application/x-msdownload',
-      'application/x-msdos-program',
-      'application/x-msinstaller',
-      'application/x-executable',
-      'application/x-sh',
-      'application/x-bat',
-      'application/x-cmd',
-      'application/x-dosexec',
-      'application/x-shellscript',
-      'application/x-elf',
-      'application/x-msi',
-      'application/x-ms-shortcut',
-      'application/x-msdownload',
-      'application/x-msdos-program',
-      'application/x-msinstaller',
-      'application/x-executable',
-      'application/x-sh',
-      'application/x-bat',
-      'application/x-cmd',
-      'application/x-dosexec',
-      'application/x-shellscript',
-      'application/x-elf',
-      'application/x-msi',
-      'application/x-ms-shortcut',
-    ];
-    if (forbiddenMimeTypes.includes(file.type)) {
-      toast.error('This file type is not allowed for security reasons.');
-      setSelectedFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-
-    // Allow all other files; backend will handle unsupported types
-    setSelectedFile(file);
-  }, []);
-
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Use subscription gating for drag/drop
-    const isDocumentLimitReached = subscriptionLimits.maxDocUploads !== -1 && documents.length >= subscriptionLimits.maxDocUploads;
-    const canUpload = canUploadDocuments() && !isDocumentLimitReached && !isUploading;
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(canUpload);
-      setDragLocked(!canUpload); // Lock if cannot upload
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-      setDragLocked(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    setDragLocked(false);
-    // Check if user has permission to upload
-    const isDocumentLimitReached = subscriptionLimits.maxDocUploads !== -1 && documents.length >= subscriptionLimits.maxDocUploads;
-    if (!canUploadDocuments() || isDocumentLimitReached) {
-      toast.error('Document upload is locked. Upgrade your plan to upload more documents.');
-      return;
-    }
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileSelection(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      handleFileSelection(file);
-    } else {
-      setSelectedFile(null);
-    }
-  };
-
-  const getBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve((reader.result as string).split(',')[1]);
-      reader.onerror = (error) => reject(error);
-    });
-  };
-
-  const handleUpload = async () => {
-    if (!selectedFile || !user?.id) {
-      toast.error('Please select a file and ensure you are logged in.');
-      return;
-    }
-
-    if (isUploading) {
-      toast.warning('Upload already in progress. Please wait...');
-      return;
-    }
-
-    setIsUploading(true);
-    setUploadProgress(0);
-
-    const progressInterval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 90) return prev;
-        return prev + Math.random() * 10;
-      });
-    }, 200);
-
-    const functionUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/document-processor';
-
-    try {
-      toast.info(`Uploading and processing "${selectedFile.name}"...`, {
-        duration: 5000,
-      });
-
-      const base64Data = await getBase64(selectedFile);
-      setUploadProgress(30);
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error('No valid authentication token found');
-      }
-
-      const payload = {
-        userId: user.id,
-        files: [{
-          name: selectedFile.name,
-          mimeType: selectedFile.type,
-          data: base64Data,
-          size: selectedFile.size
-        }]
-      };
-
-      setUploadProgress(60);
-
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify(payload),
-      });
-
-      setUploadProgress(90);
-
-      if (!response.ok) {
-        const errorBody = await response.json();
-        throw new Error(`Processing failed: ${errorBody.error || 'Unknown error'}`);
-      }
-
-      const result = await response.json();
-      setUploadProgress(100);
-
-      if (result.documents && result.documents.length > 0) {
-        const uploadedDoc = result.documents[0];
-
-        // Add document to folder if selected
-        if (uploadTargetFolderId) {
-          await appOperations.addDocumentToFolder(uploadedDoc.id, uploadTargetFolderId);
-        }
-
-        // IMPORTANT: Refresh documents to get the latest data with folder_ids
-        // This ensures the document count is updated correctly
-
-        if (user?.id && forceRefreshDocuments) {
-          await forceRefreshDocuments();
-        }
-
-        toast.success(
-          uploadTargetFolderId
-            ? `Document uploaded and added to folder!`
-            : `Successfully uploaded and processed "${selectedFile.name}"!`
-        );
-
-        // Reset upload target folder
-        setUploadTargetFolderId(null);
-      } else {
-        toast.warning('File processed but no documents were returned.');
-      }
-
-      // Reset form
-      setSelectedFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-
-    } catch (error: any) {
-      toast.error(`Failed to process file: ${error.message}`);
-    } finally {
-      clearInterval(progressInterval);
-      setIsUploading(false);
-      setUploadProgress(0);
-    }
-  };
-
-  const triggerAnalysis = async (doc: Document): Promise<void> => {
-    if (!user?.id) {
-      toast.error('User not authenticated.');
-      return;
-    }
-
-    if (processingDocuments.has(doc.id) || (doc.processing_status as string) === 'pending') {
-      toast.warning('Analysis is already in progress for this document.');
-      return;
-    }
-
-    setProcessingDocuments(prev => new Set(prev).add(doc.id));
-    onDocumentUpdated({ ...doc, processing_status: 'pending', processing_error: null });
-
-    const functionUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/document-processor';
-
-    try {
-      toast.info(`${doc.processing_status === 'failed' ? 'Retrying' : 'Starting'} analysis for "${doc.file_name}"...`);
-
-      let base64Data: string | null = null;
-      try {
-        const response = await fetch(doc.file_url);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch file from URL: ${doc.file_url}`);
-        }
-        const arrayBuffer = await response.arrayBuffer();
-        const binary = String.fromCharCode(...new Uint8Array(arrayBuffer));
-        base64Data = btoa(binary);
-      } catch (fetchError: any) {
-        throw new Error(`Error fetching file for re-analysis: ${fetchError.message}`);
-      }
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error('No valid authentication token found');
-      }
-
-      const payload = {
-        userId: user.id,
-        files: [{
-          name: doc.file_name,
-          mimeType: doc.file_type,
-          data: base64Data,
-          size: doc.file_size,
-          idToUpdate: doc.id
-        }]
-      };
-
-      const fetchResponse = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!fetchResponse.ok) {
-        const errorBody = await fetchResponse.json();
-        throw new Error(`Analysis failed: ${errorBody.error || fetchResponse.statusText}`);
-      }
-
-      const result = await fetchResponse.json();
-      if (result.documents && result.documents.length > 0) {
-        const updatedDoc = result.documents.find((d: Document) => d.id === doc.id) || result.documents[0];
-        onDocumentUpdated(updatedDoc);
-        toast.success('Document analysis completed successfully!');
-      } else {
-        toast.warning('Analysis request sent, but no updated document data received.');
-      }
-
-    } catch (error: any) {
-      toast.error(`Failed to initiate analysis: ${error.message}`);
-      onDocumentUpdated({
-        ...doc,
-        processing_status: 'failed',
-        processing_error: error.message
-      });
-    } finally {
-      setProcessingDocuments(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(doc.id);
-        return newSet;
-      });
-    }
-  };
-
-  const handleDeleteDocument = async (documentId: string, fileUrl: string) => {
-    if (processingDocuments.has(documentId)) {
-      toast.error('Cannot delete document while analysis is in progress.');
-      return;
-    }
-
-    toast.info('Deleting document...', {
-      action: {
-        label: 'Confirm Delete',
-        onClick: async () => {
-          try {
-            let storagePath: string | null = null;
-            try {
-              const url = new URL(fileUrl);
-              const pathSegments = url.pathname.split('/chat-documents/');
-              if (pathSegments.length > 1) {
-                storagePath = pathSegments[1];
-              } else {
-                const oldPathSegments = url.pathname.split('/documents/');
-                if (oldPathSegments.length > 1) {
-                  storagePath = oldPathSegments[1];
-                } else {
-                  const match = fileUrl.match(/\/user_uploads\/[^/]+\/[^/]+$/);
-                  if (match) {
-                    storagePath = `user_uploads${match[0].split('/user_uploads')[1]}`;
-                  }
-                }
-              }
-            } catch (urlError) {
-
-            }
-
-            if (storagePath) {
-              const { error: storageError } = await supabase.storage
-                .from('chat-documents')
-                .remove([storagePath]);
-
-              if (storageError) {
-                toast.warning(`File might not have been removed from storage. Error: ${storageError.message}`);
-              }
-            } else {
-              toast.warning('Could not derive storage path from file URL. File will not be deleted from storage.');
-            }
-
-            const { error: dbError } = await supabase
-              .from('documents')
-              .delete()
-              .eq('id', documentId);
-
-            if (dbError) {
-              throw new Error(`Database deletion failed: ${dbError.message}`);
-            }
-
-            toast.success('Document deleted successfully!');
-            onDocumentDeleted(documentId);
-          } catch (error: any) {
-            toast.error(`Failed to delete document: ${error.message}`);
-          }
-        }
-      },
-      duration: 5000,
-    });
-  };
-
-  const getStatusColor = (status: string | null) => {
-    const s = status as string;
-    switch (s) {
-      case 'completed':
-        return 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10';
-      case 'pending':
-        return 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10';
-      case 'failed':
-        return 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10';
-      default:
-        return 'text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-500/10';
-    }
-  };
-
-  const getStatusIcon = (status: string | null) => {
-    const s = status as string;
-    switch (s) {
-      case 'completed':
-        return <Check className="h-4 w-4" />;
-      case 'pending':
-        return <Loader2 className="h-4 w-4 animate-spin" />;
-      case 'failed':
-        return <AlertTriangle className="h-4 w-4" />;
-      default:
-        return null;
-    }
-  };
 
   const isDocumentProcessing = (docId: string) => {
     const doc = documents.find(d => d.id === docId);
@@ -1386,55 +729,72 @@ const lastDocumentElementRef = useCallback(
                           <p className="text-sm text-slate-500 dark:text-slate-400">{Math.round(uploadProgress)}% complete</p>
                         </div>
                       ) : selectedFile ? (
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-center gap-3 text-green-700 dark:text-green-300">
-                            {React.createElement(getCategoryIcon(getFileCategory(selectedFile.type)), {
-                              className: "h-6 w-6"
-                            })}
-                            <span className="text-lg font-semibold">{selectedFile.name}</span>
-                          </div>
-                          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(selectedFile.type))}`}>
-                            {getFileCategory(selectedFile.type).toUpperCase()}
-                          </div>
-                          <div className="flex items-center justify-center gap-4 text-sm text-slate-600 dark:text-slate-400">
-                            <span className="flex items-center gap-1">
-                              <HardDrive className="h-4 w-4" />
-                              {formatFileSize(selectedFile.size)}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <FileText className="h-4 w-4" />
-                              {selectedFile.type.split('/')[1]?.toUpperCase()}
-                            </span>
-                          </div>
-                          <div className="flex gap-3 justify-center mt-4">
-                            <Button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleUpload();
-                              }}
-                              disabled={isUploading}
-                              className="bg-blue-600 hover:bg-blue-700 text-white min-w-[120px]"
-                            >
-                              {isUploading ? (
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              ) : (
-                                <UploadCloud className="h-4 w-4 mr-2" />
-                              )}
-                              Upload
-                            </Button>
-                            <Button
-                              variant="outline"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedFile(null);
-                                if (fileInputRef.current) fileInputRef.current.value = '';
-                              }}
-                              disabled={isUploading}
-                              className="text-slate-600 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 hover:border-red-300"
-                            >
-                              <XCircle className="h-4 w-4 mr-2" />
-                              Cancel
-                            </Button>
+                        <div className="w-full max-w-md mx-auto animate-in fade-in zoom-in-95 duration-200">
+                          <div className="bg-white/50 dark:bg-slate-800/50 rounded-xl p-6 shadow-sm border border-slate-200/50 dark:border-slate-700/50 backdrop-blur-sm">
+                            <div className="flex flex-col items-center text-center">
+                              {/* Icon Preview */}
+                              <div className={`h-20 w-20 rounded-2xl flex items-center justify-center mb-4 transition-transform hover:scale-105 shadow-sm border border-slate-200 dark:border-slate-700 ${
+                                getFileCategory(selectedFile.type) === 'image'
+                                  ? 'bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-300'
+                                  : 'bg-white text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                              }`}>
+                                {React.createElement(getCategoryIcon(getFileCategory(selectedFile.type)), {
+                                  className: "h-10 w-10"
+                                })}
+                              </div>
+
+                              {/* Filename */}
+                              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2 break-all line-clamp-2 px-2">
+                                {selectedFile.name}
+                              </h3>
+
+                              {/* Details Badges */}
+                              <div className="flex items-center justify-center gap-3 mb-6 text-sm text-slate-500 dark:text-slate-400">
+                                <span className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-700/50 px-2.5 py-1 rounded-md font-medium text-xs">
+                                  <HardDrive className="h-3.5 w-3.5" />
+                                  {formatFileSize(selectedFile.size)}
+                                </span>
+                                <span className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-700/50 px-2.5 py-1 rounded-md font-medium text-xs uppercase">
+                                  <FileText className="h-3.5 w-3.5" />
+                                  {selectedFile.type.split('/')[1] || 'FILE'}
+                                </span>
+                              </div>
+
+                              {/* Actions */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleUpload();
+                                  }}
+                                  disabled={isUploading}
+                                  className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all"
+                                  size="lg"
+                                >
+                                  {isUploading ? (
+                                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                                  ) : (
+                                    <UploadCloud className="h-5 w-5 mr-2" />
+                                  )}
+                                  Upload
+                                </Button>
+
+                                <Button
+                                  variant="outline"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedFile(null);
+                                    if (fileInputRef.current) fileInputRef.current.value = '';
+                                  }}
+                                  disabled={isUploading}
+                                  className="w-full border-slate-200 dark:border-slate-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:hover:bg-red-900/10 dark:hover:text-red-400 transition-colors"
+                                  size="lg"
+                                >
+                                  <XCircle className="h-5 w-5 mr-2" />
+                                  Remove
+                                </Button>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       ) : (
@@ -1496,88 +856,25 @@ const lastDocumentElementRef = useCallback(
             </SubscriptionGuard>
 
             {/* Enhanced Controls and Filters */}
-            <div className="mb-8">
-              <Card className="border-0 shadow-lg bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm">
-                <CardContent className="p-6">
-                  <div className="flex flex-col lg:flex-row gap-4">
-                    {/* Search */}
-                    <div className="flex-1 relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <Input
-                        type="text"
-                        placeholder="Search files by name or content..."
-                        value={effectiveSearch}
-                        onChange={(e) => handleSearchChange(e.target.value)}
-                        className="pl-10 bg-white dark:bg-slate-700"
-                      />
-                    </div>
-
-                    {/* Refresh Button */}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleManualRefresh}
-                      disabled={isRefreshing}
-                      className="gap-2"
-                      title="Refresh documents"
-                    >
-                      <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                      {isRefreshing ? 'Refreshing...' : 'Refresh'}
-                    </Button>
-
-                    {/* Filters */}
-                    <div className="flex flex-wrap gap-2">
-                      <select
-                        value={selectedCategory}
-                        onChange={(e) => setSelectedCategory(e.target.value)}
-                        className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-sm"
-                      >
-                        <option value="all">All Types</option>
-                        <option value="image">Images ({documentStats.image})</option>
-                        <option value="document">Documents ({documentStats.document})</option>
-                        <option value="video">Videos ({documentStats.video})</option>
-                        <option value="audio">Audio ({documentStats.audio})</option>
-                        <option value="code">Code ({documentStats.code})</option>
-                        <option value="archive">Archives ({documentStats.archive})</option>
-                      </select>
-
-                      <select
-                        value={selectedStatus}
-                        onChange={(e) => setSelectedStatus(e.target.value)}
-                        className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-sm"
-                      >
-                        <option value="all">All Status</option>
-                        <option value="completed">Completed ({documentStats.completed})</option>
-                        <option value="pending">Pending ({documentStats.pending})</option>
-                        <option value="failed">Failed ({documentStats.failed})</option>
-                      </select>
-
-                      <select
-                        value={`${sortBy}-${sortOrder}`}
-                        onChange={(e) => {
-                          const [newSortBy, newSortOrder] = e.target.value.split('-');
-                          setSortBy(newSortBy);
-                          setSortOrder(newSortOrder);
-                        }}
-                        className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-sm"
-                      >
-                        <option value="date-desc">Latest First</option>
-                        <option value="date-asc">Oldest First</option>
-                        <option value="name-asc">Name A-Z</option>
-                        <option value="name-desc">Name Z-A</option>
-                        <option value="size-desc">Largest First</option>
-                        <option value="size-asc">Smallest First</option>
-                      </select>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                        className="px-3"
-                      >
-                        {viewMode === 'grid' ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
-                      </Button>
-                      
+            <DocumentFilters
+              searchQuery={effectiveSearch}
+              onSearchChange={handleSearchChange}
+              onRefresh={handleManualRefresh}
+              isRefreshing={isRefreshing}
+              selectedCategory={selectedCategory}
+              onCategoryChange={setSelectedCategory}
+              selectedStatus={selectedStatus}
+              onStatusChange={setSelectedStatus}
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSortChange={(sb, so) => {
+                setSortBy(sb);
+                setSortOrder(so);
+              }}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              documentStats={documentStats}
+            >
                       {/* Selection toggle */}
                       <Button
                         variant={showSelection ? "default" : "outline"}
@@ -1602,11 +899,7 @@ const lastDocumentElementRef = useCallback(
                           size="sm"
                         />
                       )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            </DocumentFilters>
 
             {/* Documents Display */}
             <div ref={scrollContainerRef} className="space-y-6 max-h-[80vh] overflow-auto pb-8">
@@ -1677,275 +970,33 @@ const lastDocumentElementRef = useCallback(
                   >
                     {filteredDocumentsByFolder.map((doc, idx) => {
                       const isLast = idx === filteredDocumentsByFolder.length - 1;
-                      // Create a unique key that includes the index to prevent duplicates
                       const uniqueKey = `${doc.id}-${idx}`;
+                      const isProcessing = isDocumentProcessing(doc.id);
+                      
                       return (
-                        <Card
+                        <DocumentCardItem
                           key={uniqueKey}
                           ref={isLast ? lastDocumentElementRef : null}
-                          className={`group overflow-hidden hover:shadow-2xl transition-all duration-300 border-blue-200/50 dark:border-blue-900/50 h-full flex flex-col relative rounded-2xl cursor-pointer animate-in slide-in-from-top-2 fade-in duration-500 ${viewMode === 'list' ? 'flex' : ''}`}
-                        >
-                          <CardContent className="p-0">
-                            {viewMode === 'grid' ? (
-                              <div className="relative aspect-[3/4] sm:aspect-[4/5] overflow-hidden">
-                                {/* Document Preview or Icon */}
-
-                                <div
-                                  className="absolute inset-0 bg-slate-200 dark:bg-slate-800 text-slate-900 flex items-center justify-center"
-                                  style={{
-                                    backgroundImage: getFileCategory(doc.file_type) === 'image' && doc.file_url ? `url(${doc.file_url})` : undefined,
-                                    backgroundSize: 'cover',
-                                    backgroundPosition: 'center'
-                                  }}
-                                >
-                                  {getFileCategory(doc.file_type) !== 'image' && (
-                                    <div className="w-full h-full flex items-center justify-center">
-                                      {React.createElement(getCategoryIcon(getFileCategory(doc.file_type)), {
-                                        className: "h-16 w-16 text-blue-600 dark:text-blue-300 opacity-70"
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-                                {/* Gradient Overlay */}
-                                <div className="absolute border inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/50 to-transparent dark:from-slate-900/90 dark:via-slate-900/60 dark:to-transparent" />
-
-                               
-
-                                {/* Selection checkbox */}
-                                {showSelection && (
-                                  <div 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedDocumentIds(prev => 
-                                        prev.includes(doc.id) 
-                                          ? prev.filter(id => id !== doc.id)
-                                          : [...prev, doc.id]
-                                      );
-                                    }}
-                                    className="absolute top-12 left-2 bg-white dark:bg-slate-800 rounded-md p-1.5 shadow-md cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 z-10"
-                                  >
-                                    <Checkbox 
-                                      checked={selectedDocumentIds.includes(doc.id)}
-                                      onCheckedChange={() => {
-                                        setSelectedDocumentIds(prev => 
-                                          prev.includes(doc.id) 
-                                            ? prev.filter(id => id !== doc.id)
-                                            : [...prev, doc.id]
-                                        );
-                                      }}
-                                      className="h-5 w-5"
-                                    />
-                                  </div>
-                                )}
-
-                                {/* Processing Overlay */}
-                                {isDocumentProcessing(doc.id) && (
-                                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                    <div className="bg-white dark:bg-slate-800 rounded-lg p-3 flex items-center gap-2">
-                                      <Loader2 className="h-4 w-4 mr-2 animate-spin text-blue-600" />
-                                      <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                                        Processing...
-                                      </span>
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Bottom Overlay: Title, Author, Stats, Actions */}
-                                <div className="absolute inset-x-0 bottom-0 flex flex-col justify-end p-3 sm:p-4">
-                                  {/* Title & Author */}
-                                  <div className="space-y-1.5 sm:space-y-2 mb-2">
-                                    <h3 className="text-white dark:text-slate-100 font-bold text-sm sm:text-base line-clamp-2 leading-tight">
-                                      {doc.title}
-                                    </h3>
-                                    <div className="flex items-center gap-1.5 sm:gap-2">
-                                      <Folder className="h-5 w-5 sm:h-6 sm:w-6 ring-2 ring-white/20 dark:ring-slate-700/40" />
-                                      <span className="text-white/90 dark:text-slate-200 text-xs sm:text-sm font-medium truncate">
-                                        {folders.find(f => f.id === doc.folder_ids?.[0])?.name || 'No Folder'}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  {/* Stats */}
-                                  <div className="flex items-center gap-2 sm:gap-3 text-xs text-white/80 dark:text-slate-300 mb-2">
-                                    <div className="flex items-center gap-1">
-                                      <Calendar className="h-3 w-3" />
-                                      <span>{doc.created_at ? (new Date(doc.created_at)).toLocaleDateString() : 'Unknown Date'}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      <HardDrive className="h-3 w-3" />
-                                      <span>{formatFileSize(doc.file_size)}</span>
-                                    </div>
-                                  </div>
-                                  {/* Action Buttons - hover/focus overlay */}
-                                  <div className={`transition-all duration-300 flex gap-1.5 sm:gap-2 ${isDocumentProcessing(doc.id) ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}> 
-                                    {doc.processing_status === 'failed' && (
-                                      <Button
-                                        variant="outline"
-                                        size="icon"
-                                        onClick={(e) => { e.stopPropagation(); triggerAnalysis(doc); }}
-                                        disabled={isUploading || isDocumentProcessing(doc.id)}
-                                        className="border-white/30 dark:border-slate-700/40 bg-white/10 dark:bg-slate-900/30 hover:bg-white/20 dark:hover:bg-slate-900/50 text-blue-600 dark:text-blue-400 font-semibold text-xs sm:text-sm h-8 w-8 sm:h-9 sm:w-9 backdrop-blur-sm"
-                                        title="Retry"
-                                      >
-                                        {isDocumentProcessing(doc.id) ? (
-                                          <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                          <RefreshCw className="h-4 w-4" />
-                                        )}
-                                      </Button>
-                                    )}
-                                    <Button
-                                      variant="outline"
-                                      size="icon"
-                                      onClick={(e) => { e.stopPropagation(); openPreview(doc); }}
-                                      className="border-white/30 dark:border-slate-700/40 bg-white/10 dark:bg-slate-900/30 hover:bg-white/20 dark:hover:bg-slate-900/50 text-white dark:text-slate-200 backdrop-blur-sm h-8 w-8 sm:h-9 sm:w-9"
-                                      title="Preview"
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="icon"
-                                      onClick={(e) => { e.stopPropagation(); handleDeleteDocument(doc.id, doc.file_url); }}
-                                      disabled={isUploading}
-                                      className="border-white/30 dark:border-slate-700/40 bg-white/10 dark:bg-slate-900/30 hover:bg-white/20 dark:hover:bg-slate-900/50 text-red-400 dark:text-red-300 backdrop-blur-sm h-8 w-8 sm:h-9 sm:w-9"
-                                      title="Delete"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="icon"
-                                      onClick={(e) => { e.stopPropagation(); handleMoveDocument(doc); }}
-                                      className="border-white/30 dark:border-slate-700/40 bg-white/10 dark:bg-slate-900/30 hover:bg-white/20 dark:hover:bg-slate-900/50 text-white dark:text-slate-200 backdrop-blur-sm h-8 w-8 sm:h-9 sm:w-9"
-                                      title="Move"
-                                    >
-                                      <Folder className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <>
-                                {/* List View */}
-                                <div className="flex items-center p-6 gap-4">
-                                  <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 rounded-lg flex items-center justify-center relative">
-                                    {getFileCategory(doc.file_type) === 'image' && doc.file_url ? (
-                                      <img
-                                        src={doc.file_url}
-                                        alt={doc.title}
-                                        className="w-full h-full object-cover rounded-lg"
-                                        onError={(e) => {
-                                          e.currentTarget.style.display = 'none';
-                                        }}
-                                      />
-                                    ) : (
-                                      React.createElement(getCategoryIcon(getFileCategory(doc.file_type)), {
-                                        className: "h-8 w-8 text-slate-400 dark:text-slate-500"
-                                      })
-                                    )}
-                                  </div>
-
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-start justify-between">
-                                      <div className="flex-1 min-w-0">
-                                        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 truncate">
-                                          {doc.title}
-                                        </h3>
-                                        <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400 mt-1">
-                                          <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(doc.file_type))}`}>
-                                            {getFileCategory(doc.file_type).toUpperCase()}
-                                          </div>
-                                          <span className="flex items-center gap-1">
-                                            <Calendar className="h-3 w-3" />
-                                            {formatDate(new Date(doc.created_at).toLocaleDateString() || 'Unknown Date')}
-                                          </span>
-                                          <span className="flex items-center gap-1">
-                                            <HardDrive className="h-3 w-3" />
-                                            {formatFileSize(doc.file_size)}
-                                          </span>
-                                        </div>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 line-clamp-2">
-                                          {doc.content_extracted || 'No content extracted yet...'}
-                                        </p>
-                                      </div>
-
-                                      <div className="flex items-center gap-2 ml-4">
-                                        <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(doc.processing_status as string)}`}>
-                                          {getStatusIcon(doc.processing_status as string)}
-                                          <span className="capitalize">{(doc.processing_status as string) || 'unknown'}</span>
-                                        </div>
-
-                                        <div className="flex gap-1">
-                                          {doc.processing_status === 'failed' && (
-                                            <Button
-                                              variant="outline"
-                                              size="sm"
-                                              onClick={() => triggerAnalysis(doc)}
-                                              disabled={isUploading || isDocumentProcessing(doc.id)}
-                                              className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10"
-                                            >
-                                              <RefreshCw className="h-4 w-4" />
-                                            </Button>
-                                          )}
-
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => openPreview(doc)}
-                                            className="text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
-                                          >
-                                            <Eye className="h-4 w-4" />
-                                          </Button>
-
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
-                                            disabled={isUploading || isDocumentProcessing(doc.id)}
-                                            className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
-                                          >
-                                            <Trash2 className="h-4 w-4" />
-                                          </Button>
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleMoveDocument(doc)}
-                                            className="text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
-                                          >
-                                            <Folder className="h-4 w-4 mr-2" />
-                                            Move
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </>
-                            )}
-
-                            {/* Add this in the document info section */}
-                            {doc.folder_ids && doc.folder_ids.length > 0 && (
-                              <div className="px-6 pb-4">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-xs text-slate-500 dark:text-slate-400">In:</span>
-                                  {doc.folder_ids.map(folderId => {
-                                    const folder = folders.find(f => f.id === folderId);
-                                    return folder ? (
-                                      <div
-                                        key={folderId}
-                                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-slate-100 dark:bg-slate-700 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600"
-                                        onClick={() => setSelectedFolderId(folderId)}
-                                      >
-                                        <Folder className="h-3 w-3" style={{ color: folder.color }} />
-                                        {folder.name}
-                                      </div>
-                                    ) : null;
-                                  })}
-                                </div>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
+                          doc={doc}
+                          viewMode={viewMode}
+                          isSelected={selectedDocumentIds.includes(doc.id)}
+                          isProcessing={isProcessing}
+                          isUploading={isUploading}
+                          showSelection={showSelection}
+                          onToggleSelect = {(id) => {
+                              setSelectedDocumentIds(prev => 
+                                prev.includes(id) 
+                                  ? prev.filter(i => i !== id)
+                                  : [...prev, id]
+                              );
+                          }}
+                          onPreview={openPreview}
+                          onDelete={handleDeleteDocument}
+                          onMove={handleMoveDocument}
+                          onRetry={triggerAnalysis}
+                          onSelectFolder={setSelectedFolderId}
+                          folders={folders}
+                        />
                       );
                     })}
                   </div>
@@ -2049,188 +1100,262 @@ const lastDocumentElementRef = useCallback(
         {/* Enhanced Preview Dialog */}
         {previewOpen && selectedDocument && (
           <Suspense fallback={null}>
-            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-0">
-              <div className="bg-white dark:bg-slate-900 w-screen h-screen flex flex-col overflow-hidden">
-                {/* Modal Header */}
-                <div className="flex items-center justify-between px-8 py-6 border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80">
-                  <div className="flex items-center gap-5">
-                    {getFileCategory(selectedDocument.file_type) === 'image' && selectedDocument.file_url ? (
-                      <img src={selectedDocument.file_url} alt={selectedDocument.title} className="w-16 h-16 object-cover rounded-lg border border-slate-200 dark:border-slate-700" />
-                    ) : (
-                      React.createElement(getCategoryIcon(getFileCategory(selectedDocument.file_type)), {
-                        className: "h-14 w-14 text-blue-600 dark:text-blue-300"
-                      })
-                    )}
-                    <div>
-                      <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 line-clamp-2">{selectedDocument.title}</h2>
-                      <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-slate-500 dark:text-slate-400">
-                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full font-medium border ${getCategoryColor(getFileCategory(selectedDocument.file_type))}`}>
-                          {getFileCategory(selectedDocument.file_type).toUpperCase()}
+            <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4 md:p-6 animate-in fade-in duration-200">
+              <div className="bg-white dark:bg-slate-900 w-full h-full sm:h-[90vh] sm:max-w-6xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 dark:border-slate-800">
+                
+                {/* Modern Header */}
+                <div className="flex-none px-4 py-3 md:px-6 md:py-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className={`flex-none h-10 w-10 md:h-12 md:w-12 rounded-xl flex items-center justify-center border shadow-sm transition-colors ${
+                      getFileCategory(selectedDocument.file_type) === 'image'
+                        ? 'bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400 border-purple-100 dark:border-purple-500/20'
+                        : 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 border-blue-100 dark:border-blue-500/20'
+                    }`}>
+                      {getFileCategory(selectedDocument.file_type) === 'image' && selectedDocument.file_url ? (
+                        <img src={selectedDocument.file_url} alt="" className="w-full h-full object-cover rounded-xl" />
+                      ) : (
+                        React.createElement(getCategoryIcon(getFileCategory(selectedDocument.file_type)), {
+                          className: "h-5 w-5 md:h-6 md:w-6"
+                        })
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="text-base md:text-lg font-bold text-slate-900 dark:text-slate-100 truncate pr-4">
+                        {selectedDocument.title}
+                      </h2>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <span className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                          <HardDrive className="h-3 w-3" />
+                          {formatFileSize(selectedDocument.file_size)}
                         </span>
-                        <span className="flex items-center gap-1"><HardDrive className="h-4 w-4" />{formatFileSize(selectedDocument.file_size)}</span>
-                        <span className="flex items-center gap-1"><Calendar className="h-4 w-4" />{formatDate(new Date(selectedDocument.created_at).toISOString() || 'Unknown Date')}</span>
-                        <span className={`px-3 py-1 rounded-full flex items-center gap-1 font-medium ${getStatusColor(selectedDocument.processing_status as string)}`}>
-                          {getStatusIcon(selectedDocument.processing_status as string)}
-                          <span className="capitalize">{(selectedDocument.processing_status as string)}</span>
+                        <span className="hidden sm:flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                          <Calendar className="h-3 w-3" />
+                          {formatDate(selectedDocument.created_at)}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-md flex items-center gap-1 font-medium text-[10px] uppercase tracking-wider border ${
+                          getStatusColor(selectedDocument.processing_status as string)
+                        }`}>
+                          {selectedDocument.processing_status}
                         </span>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => window.open(selectedDocument.file_url, '_blank')}
-                      className="min-w-[100px]"
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        if (navigator.share) {
-                          navigator.share({
-                            title: selectedDocument.title,
-                            url: selectedDocument.file_url
-                          });
-                        } else {
-                          copyToClipboard(selectedDocument.file_url);
-                        }
-                      }}
-                      className="min-w-[100px]"
-                    >
-                      <Share className="h-4 w-4 mr-2" />
-                      Share
-                    </Button>
-                    {selectedDocument.content_extracted && (
+
+                  <div className="flex items-center gap-1 md:gap-2">
+                    {/* Desktop Actions */}
+                    <div className="hidden md:flex items-center gap-2 mr-2">
                       <Button
-                        variant="outline"
-                        onClick={() => copyToClipboard(selectedDocument.content_extracted!)}
-                        className="min-w-[100px]"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDownload(selectedDocument)}
+                        className="text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        title="Download"
                       >
-                        <Copy className="h-4 w-4 mr-2" />
-                        Copy Content
+                        <Download className="h-4 w-4" />
                       </Button>
-                    )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (selectedDocument.content_extracted) {
+                           copyToClipboard(selectedDocument.content_extracted);
+                          } else {
+                           toast.error("No content to copy");
+                          }
+                        }}
+                        className="text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                         title="Copy Content"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                      <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (confirm('Are you sure you want to delete this document?')) {
+                            handleClosePreview();
+                            handleDeleteDocument(selectedDocument.id, selectedDocument.file_url);
+                          }
+                        }}
+                        disabled={isUploading || isDocumentProcessing(selectedDocument.id)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/10"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+
                     <Button
-                      variant="outline"
-                      onClick={() => {
-                        handleClosePreview();
-                        handleDeleteDocument(selectedDocument.id, selectedDocument.file_url);
-                      }}
-                      disabled={isUploading || isDocumentProcessing(selectedDocument.id)}
-                      className="min-w-[100px] text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-200 dark:border-red-500/20"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete
-                    </Button>
-                    <Button
-                      variant="outline"
+                      variant="ghost"
                       size="icon"
                       onClick={handleClosePreview}
-                      className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-full border-2 border-slate-200 dark:border-slate-700 ml-2"
+                      className="rounded-full h-9 w-9 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800"
                     >
-                      <X className="h-6 w-6" />
+                      <X className="h-5 w-5" />
                     </Button>
                   </div>
                 </div>
 
-                {/* Main Content: Two-column layout on desktop */}
-                <div className="flex-1 flex flex-col md:flex-row gap-0 overflow-hidden">
-                  {/* Left: File Preview */}
-                  <div className="md:w-1/2 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-800 p-8 overflow-auto border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-700">
-                    <div className="max-w-full w-full">
-                      <div className="flex items-center gap-3 mb-4">
-                        <Eye className="h-5 w-5 text-blue-500" />
-                        <span className="font-semibold text-slate-800 dark:text-slate-200 text-lg">File Preview</span>
-                      </div>
-                      <div className="aspect-video bg-white dark:bg-slate-700 rounded-xl flex items-center justify-center overflow-hidden border border-slate-200 dark:border-slate-700 shadow-md">
-                        {getFileCategory(selectedDocument.file_type) === 'image' && selectedDocument.file_url ? (
-                          <img
-                            src={selectedDocument.file_url}
-                            alt={selectedDocument.title}
-                            className="max-w-full max-h-full object-contain rounded-xl"
-                          />
-                        ) : (
-                          <div className="text-center space-y-2">
-                            {React.createElement(getCategoryIcon(getFileCategory(selectedDocument.file_type)), {
-                              className: "h-20 w-20 mx-auto text-slate-400 dark:text-slate-500"
-                            })}
-                            <div>
-                              <p className="text-lg font-medium text-slate-600 dark:text-slate-400">
-                                {selectedDocument.title}
-                              </p>
-                              <p className="text-sm text-slate-500 dark:text-slate-500">
-                                Preview not available for this file type
-                              </p>
-                            </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => window.open(selectedDocument.file_url, '_blank')}
-                              className="mt-2"
-                            >
-                              <Download className="h-4 w-4 mr-2" />
-                              Open File
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right: AI Content, Error, Actions */}
-                  <div className="md:w-1/2 flex flex-col justify-between bg-white dark:bg-slate-900 p-0 overflow-auto">
-                    <div className="flex-1 flex flex-col gap-6">
-                      {/* AI-Extracted Content Section */}
-                      <div>
-                        <div className="flex items-center gap-2 mb-3">
-                          <Zap className="h-5 w-5 text-yellow-500" />
-                          <span className="font-semibold text-slate-800 dark:text-slate-200 text-lg">AI-Extracted Content</span>
-                        </div>
-                        <div className="bg-slate-50 dark:bg-slate-800 rounded-none p-6 min-h-[120px] max-h-[70vh] overflow-y-auto border-0">
-                          {selectedDocument.content_extracted ? (
-                            (/^(#{1,6}\s)|(^```)|(^-\s)|(^\*\s)|(^>\s)/m.test(selectedDocument.content_extracted)) ? (
-                              <DocumentMarkdownRenderer content={selectedDocument.content_extracted} />
-                            ) : (
-                              <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-                                {selectedDocument.content_extracted}
-                              </p>
-                            )
+                {/* Responsive Content Area */}
+                <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-slate-50/50 dark:bg-slate-950/50">
+                  
+                  {/* Left Panel: Preview */}
+                  <div className="flex-none lg:flex-1 lg:basis-[45%] lg:max-h-full min-h-[250px] lg:min-h-0 relative flex flex-col border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-black/20">
+                     <div className="absolute inset-4 md:inset-8 flex items-center justify-center">
+                        <div className="w-full h-full bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex items-center justify-center relative group">
+                          {getFileCategory(selectedDocument.file_type) === 'image' && selectedDocument.file_url ? (
+                            <>
+                              <img
+                                src={selectedDocument.file_url}
+                                alt={selectedDocument.title}
+                                className="max-w-full max-h-full object-contain p-2"
+                              />
+                              <a 
+                                href={selectedDocument.file_url} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 hover:bg-black/70 text-white p-2 rounded-lg backdrop-blur-sm"
+                              >
+                                <Maximize2 className="h-4 w-4" />
+                              </a>
+                            </>
                           ) : (
-                            <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">No content has been extracted from this file yet.</p>
+                            <div className="flex flex-col items-center justify-center gap-4 p-8 text-center">
+                              <div className="h-24 w-24 rounded-full bg-slate-50 dark:bg-slate-700/50 flex items-center justify-center">
+                                {React.createElement(getCategoryIcon(getFileCategory(selectedDocument.file_type)), {
+                                  className: "h-10 w-10 text-slate-400"
+                                })}
+                              </div>
+                              <div>
+                                <h3 className="text-sm font-medium text-slate-900 dark:text-slate-200 mb-1">
+                                  Preview Unavailable
+                                </h3>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-[200px]">
+                                  This file type cannot be previewed directly in the browser.
+                                </p>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDownload(selectedDocument)}
+                                className="bg-white dark:bg-slate-800"
+                              >
+                                <Download className="h-4 w-4 mr-2" />
+                                Download File
+                              </Button>
+                            </div>
                           )}
                         </div>
-                      </div>
+                     </div>
+                  </div>
 
-                      {/* Error Information Section */}
-                      {selectedDocument.processing_status === 'failed' && selectedDocument.processing_error && (
-                        <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg p-5 flex flex-col gap-3 mt-2">
-                          <div className="flex items-center gap-2 mb-1">
-                            <AlertTriangle className="h-5 w-5 text-red-500" />
-                            <span className="font-semibold text-red-800 dark:text-red-200">Processing Error</span>
-                          </div>
-                          <p className="text-sm text-red-700 dark:text-red-300 mb-2">
-                            {selectedDocument.processing_error as string}
-                          </p>
-                          <Button
+                  {/* Right Panel: Content & Metadata */}
+                  <div className="flex-1 lg:basis-[55%] flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
+                    {/* Panel Title */}
+                    <div className="flex-none px-6 py-3 border-b border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-md bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                          <Zap className="h-4 w-4" />
+                        </div>
+                        <span className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Extracted Content</span>
+                      </div>
+                      <Badge variant="secondary" className="text-xs font-normal">
+                         AI Analysis
+                      </Badge>
+                    </div>
+
+                    {/* Scrollable Text Content */}
+                    <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+                       {selectedDocument.processing_status === 'failed' && (
+                        <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex flex-col gap-3">
+                           <div className="flex items-start gap-3">
+                              <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                              <div className="flex-1">
+                                <h4 className="text-sm font-semibold text-red-900 dark:text-red-200">Processing Failed</h4>
+                                <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                                  {selectedDocument.processing_error || 'An unknown error occurred during AI processing.'}
+                                </p>
+                              </div>
+                           </div>
+                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => {
                               handleClosePreview();
                               triggerAnalysis(selectedDocument);
                             }}
-                            disabled={isDocumentProcessing(selectedDocument.id)}
-                            className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-300"
+                            className="bg-white dark:bg-transparent border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 w-fit ml-auto"
                           >
-                            <RefreshCw className="h-4 w-4 mr-2" />
-                            Retry Analysis
+                            <RefreshCw className="h-3.5 w-3.5 mr-2" />
+                            Retry
                           </Button>
                         </div>
-                      )}
+                       )}
+
+                       {selectedDocument.content_extracted ? (
+                         <div className="prose prose-sm dark:prose-invert max-w-none prose-slate">
+                            {/* Simple markdown check and render */}
+                            {/^(#{1,6}\s)|(^```)|(^-\s)|(^\*\s)|(^>\s)/m.test(selectedDocument.content_extracted) ? (
+                              <DocumentMarkdownRenderer content={selectedDocument.content_extracted} />
+                            ) : (
+                              <p className="whitespace-pre-wrap text-slate-700 dark:text-slate-300 leading-relaxed font-sans text-sm">
+                                {selectedDocument.content_extracted}
+                              </p>
+                            )}
+                         </div>
+                       ) : (
+                         <div className="flex flex-col items-center justify-center py-12 text-slate-400 dark:text-slate-600">
+                            {selectedDocument.processing_status === 'processing' ? (
+                                <>
+                                  <Loader2 className="h-8 w-8 animate-spin mb-3 text-blue-500" />
+                                  <p className="text-sm">AI is analyzing this document...</p>
+                                </>
+                            ) : (
+                                <>
+                                  <FileText className="h-10 w-10 mb-3 opacity-20" />
+                                  <p className="text-sm">No content extracted yet.</p>
+                                </>
+                            )}
+                         </div>
+                       )}
+                    </div>
+
+                    {/* Mobile Only Sticky Actions Footer */}
+                    <div className="md:hidden flex-none p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 grid grid-cols-2 gap-3 shadow-lg z-20">
+                      <Button variant="outline" size="sm" onClick={() => handleDownload(selectedDocument)}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Download
+                      </Button>
+                      <Button 
+                         variant="outline"
+                         size="sm" 
+                         onClick={() => {
+                          if (selectedDocument.content_extracted) copyToClipboard(selectedDocument.content_extracted);
+                         }}
+                         disabled={!selectedDocument.content_extracted}
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copy
+                      </Button>
+                      <Button 
+                        variant="destructive" 
+                        size="sm"
+                        className="col-span-2"
+                        onClick={() => {
+                          if (confirm('Delete this document?')) {
+                            handleClosePreview();
+                            handleDeleteDocument(selectedDocument.id, selectedDocument.file_url);
+                          }
+                        }}
+                      >
+                         <Trash2 className="h-4 w-4 mr-2" />
+                         Delete Document
+                      </Button>
                     </div>
                   </div>
                 </div>
+
               </div>
             </div>
           </Suspense>

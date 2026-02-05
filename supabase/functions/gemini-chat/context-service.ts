@@ -63,7 +63,7 @@ export class UserContextService {
                 courses: coursesResult.data || []
             };
         } catch (error) {
-            // console.error('[ContextService] Error getting actionable context:', error);
+            console.error('[ContextService] Error getting actionable context:', error);
             return this.getFallbackActionableContext();
         }
     }
@@ -465,7 +465,7 @@ async analyzeLearningPatterns(userId) {
 
             return crossSessionContext;
         } catch (error) {
-            // console.error('Error getting cross-session context:', error);
+            console.error('Error getting cross-session context:', error);
             return null;
         }
     }
@@ -473,7 +473,7 @@ async analyzeLearningPatterns(userId) {
     async updateUserMemory(userId, facts) {
         try {
             for (const fact of facts) {
-                // console.log(`[updateUserMemory] Processing fact:`, fact);
+                console.log(`[updateUserMemory] Processing fact:`, fact);
                 const { data: existing, error: selectError } = await this.supabase
                     .from('ai_user_memory')
                     .select('id, confidence_score, referenced_count')
@@ -483,7 +483,7 @@ async analyzeLearningPatterns(userId) {
                     .eq('fact_value', fact.fact_value)
                     .maybeSingle();
                 if (selectError) {
-                    // console.error('[updateUserMemory] Error selecting existing fact:', selectError);
+                    console.error('[updateUserMemory] Error selecting existing fact:', selectError);
                 }
 
                 if (existing) {
@@ -496,9 +496,9 @@ async analyzeLearningPatterns(userId) {
                         })
                         .eq('id', existing.id);
                     if (updateError) {
-                        // console.error('[updateUserMemory] Error updating fact:', updateError);
+                        console.error('[updateUserMemory] Error updating fact:', updateError);
                     } else {
-                        // console.log(`[updateUserMemory] Updated existing fact:`, existing.id);
+                        console.log(`[updateUserMemory] Updated existing fact:`, existing.id);
                     }
                 } else {
                     const { error: insertError } = await this.supabase
@@ -514,14 +514,14 @@ async analyzeLearningPatterns(userId) {
                             referenced_count: 1
                         });
                     if (insertError) {
-                        // console.error('[updateUserMemory] Error inserting new fact:', insertError);
+                        console.error('[updateUserMemory] Error inserting new fact:', insertError);
                     } else {
-                        // console.log(`[updateUserMemory] Inserted new fact for user:`, userId);
+                        console.log(`[updateUserMemory] Inserted new fact for user:`, userId);
                     }
                 }
             }
         } catch (error) {
-            // console.error('Error updating user memory:', error);
+            console.error('Error updating user memory:', error);
         }
     }
 
@@ -537,7 +537,7 @@ async analyzeLearningPatterns(userId) {
                     connection_strength: strength
                 });
         } catch (error) {
-            // console.error('Error recording topic connection:', error);
+            console.error('Error recording topic connection:', error);
         }
     }
 
@@ -662,7 +662,8 @@ async getUserContext(userId: string): Promise<any> {
             socialProfile,
             recentRecordings,
             documentFolders,
-            recentQuizzes
+            recentQuizzes,
+            subscription
         ] = await Promise.all([
             // Notes
             this.supabase.from('notes')
@@ -739,7 +740,13 @@ async getUserContext(userId: string): Promise<any> {
                 .select('*, quizzes(*)')
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false })
-                .limit(10)
+                .limit(10),
+
+            // Subscription status
+            this.supabase.from('subscriptions')
+                .select('*')
+                .eq('user_id', userId)
+                .maybeSingle()
         ]);
 
         // Analyze learning patterns
@@ -783,6 +790,7 @@ async getUserContext(userId: string): Promise<any> {
             socialProfile: socialProfile.data || null,
             recentRecordings: recentRecordings.data || [],
             documentFolders: documentFolders.data || [],
+            subscription: subscription.data || null,
             noteTitleIndex,
             documentTitleIndex,
             learningPatterns,
@@ -791,7 +799,7 @@ async getUserContext(userId: string): Promise<any> {
             totalCounts
         };
     } catch (error) {
-        // console.error('[ContextService] Error getting user context:', error);
+        console.error('[ContextService] Error getting user context:', error);
         return this.getFallbackContext(userId);
     }
 }

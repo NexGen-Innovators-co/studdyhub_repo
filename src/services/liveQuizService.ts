@@ -185,6 +185,8 @@ export interface LiveQuizSession {
   status: 'waiting' | 'in_progress' | 'completed' | 'cancelled';
   start_time?: string;
   end_time?: string;
+  scheduled_start_time?: string;
+  allow_late_join?: boolean;
   created_at: string;
   updated_at?: string;
   host_role: 'participant' | 'mediator';
@@ -255,7 +257,9 @@ export async function createLiveQuizSession(
   hostRole: 'participant' | 'mediator' = 'participant',
   advanceMode: 'auto' | 'manual' = 'auto',
   questionTimeLimit: number = 30,
-  quizMode: 'synchronized' | 'individual_auto' = 'synchronized'
+  quizMode: 'synchronized' | 'individual_auto' = 'synchronized',
+  scheduledStart: Date | null = null,
+  allowLateJoin: boolean = true
 ): Promise<{ session: LiveQuizSession | null; joinCode?: string; error?: string }> {
   try {
     const payload: any = { 
@@ -263,7 +267,9 @@ export async function createLiveQuizSession(
       host_role: hostRole,
       advance_mode: advanceMode,
       question_time_limit: questionTimeLimit,
-      quiz_mode: quizMode
+      quiz_mode: quizMode,
+      scheduled_start_time: scheduledStart?.toISOString(),
+      allow_late_join: allowLateJoin
     };
     
     if (customQuestions && customQuestions.length > 0) {
@@ -1081,5 +1087,39 @@ export async function getSessionResultsById(
       quiz: null,
       userAnswers: []
     };
+  }
+}
+
+/**
+ * Fetch available public sessions that are in 'waiting' state
+ */
+export async function getAvailableSessions(): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from('live_quiz_sessions')
+      .select(`
+        id,
+        status,
+        created_at,
+        host_user_id,
+        quiz_id,
+        quizzes (
+          title
+        )
+      `)
+      .eq('status', 'waiting')
+      .eq('allow_late_join', true)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (error) {
+       console.error('Error fetching available sessions:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (err) {
+     console.error('Exception fetching available sessions:', err);
+    return [];
   }
 }

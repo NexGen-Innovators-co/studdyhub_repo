@@ -188,3 +188,29 @@ export const generateCourseStructure = async (
     throw new Error(error.message || 'Failed to generate course');
   }
 };
+
+export interface RawInsight {
+  title: string;
+  message: string;
+  type: string;
+  iconName: string;
+  action?: string;
+}
+
+export const generateDashboardInsights = async (stats: any, userProfile?: any): Promise<RawInsight[]> => {
+  try {
+    const { data, error } = await supabase.functions.invoke('generate-dashboard-insights', {
+      body: { stats, userProfile }
+    });
+
+    if (error) {
+        console.error("Supabase Function Error:", error);
+        throw error;
+    }
+    
+    return data.insights || [];
+  } catch (error) {
+    console.error('Error fetching AI insights:', error);
+    return []; 
+  }
+};

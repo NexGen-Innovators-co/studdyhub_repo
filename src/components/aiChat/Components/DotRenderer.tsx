@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from 'react';
 
 interface DotRendererProps {
     dotContent: string;
-    onMermaidError: (code: string | null, errorType: 'rendering') => void;
+    onMermaidError: (code: string | null, errorType: 'rendering', errorDetail?: string) => void;
 }
 
 export const DotRenderer: React.FC<DotRendererProps> = ({ dotContent, onMermaidError }) => {
@@ -20,8 +20,8 @@ export const DotRenderer: React.FC<DotRendererProps> = ({ dotContent, onMermaidE
                 container.innerHTML = svg;
             } catch (error: any) {
                 //console.error('Graphviz rendering error:', error);
-                container.innerHTML = `<div class="text-red-500 dark:text-red-400">DOT render error.</div>`;
-                onMermaidError(dotContent, 'rendering');
+                container.innerHTML = `<div class="text-red-500 dark:text-red-400">DOT render error: ${error.message}</div>`;
+                onMermaidError(dotContent, 'rendering', error.message || 'Unknown Graphviz error');
             }
         };
 

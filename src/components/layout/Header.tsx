@@ -760,9 +760,24 @@ export const Header: React.FC<HeaderProps> = ({
               <InstallAppButton />
             </div>
             
-            {/* Subscription Badge - Hidden on mobile */}
+            {/* Subscription Badge - Always visible on larger screens, handled via mobile menu or icon on small */}
             <div className="hidden sm:block">
               <SubscriptionBadge />
+            </div>
+
+            {/* Mobile Subscription Indicator - Small Icon */}
+            <div className="sm:hidden">
+               <button
+                  onClick={onNavigateToSubscription}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold transition-colors ${
+                      subscriptionTier === 'genius' ? 'bg-amber-100 text-amber-800 border-amber-200' :
+                      subscriptionTier === 'scholar' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                      'bg-gray-100 text-gray-800 border-gray-200'
+                  }`}
+                  title="Subscription Plan"
+                >
+                  {subscriptionTier === 'genius' ? 'G' : subscriptionTier === 'scholar' ? 'S' : 'F'}
+                </button>
             </div>
 
             {/* Offline Indicator in Header */}
@@ -792,7 +807,11 @@ export const Header: React.FC<HeaderProps> = ({
               <div ref={avatarRef} className="relative">
                 <button
                   onClick={() => setIsAvatarMenuOpen(!isAvatarMenuOpen)}
-                  className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm hover:ring-4 hover:ring-blue-300 dark:hover:ring-blue-800 transition-all overflow-hidden shadow-lg flex-shrink-0"
+                  className={`w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm hover:ring-4 transition-all overflow-hidden shadow-lg flex-shrink-0 ${
+                    subscriptionTier === 'genius' ? 'ring-2 ring-amber-400 dark:ring-amber-500' :
+                    subscriptionTier === 'scholar' ? 'ring-2 ring-blue-400 dark:ring-blue-500' :
+                    'hover:ring-blue-300 dark:hover:ring-blue-800'
+                  }`}
                 >
                   {avatarUrl ? (
                     <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />

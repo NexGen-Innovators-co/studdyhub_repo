@@ -296,6 +296,20 @@ export const saveRecordingAsSegment = async (podcastId: string, blob: Blob) => {
 
 export const createRecordingSession = async (podcastId: string, userId?: string | null) => {
   try {
+    // Attempt to invoke Edge Function for secure session creation
+    try {
+      const { data, error } = await supabase.functions.invoke('start-recording-session', {
+        body: { podcast_id: podcastId, user_id: userId }
+      });
+      if (!error && data && !data.error) {
+        return data;
+      }
+      if (error) console.warn('start-recording-session invoke error', error);
+    } catch (edgeErr) {
+       console.warn('start-recording-session skipped', edgeErr);
+    }
+
+    // Fallback (Client-side insert)
     const now = new Date().toISOString();
     const payload: any = { podcast_id: podcastId, status: 'in_progress', started_at: now };
     if (userId) payload.user_id = userId;
@@ -311,7 +325,14 @@ export const createRecordingSession = async (podcastId: string, userId?: string 
 export const uploadChunk = async (podcastId: string, uploadSessionId: string, chunkIndex: number, blob: Blob, options?: { mimeType?: string }) => {
     try {
       const mimeType = options?.mimeType || (blob && (blob as any).type) || 'audio/webm';
-      const filename = `live-podcasts/${podcastId}/${uploadSessionId}/${chunkIndex}_${Date.now()}.webm`;
+      
+      // Determine extension from mimeType
+      let ext = 'webm';
+      if (mimeType.includes('mp4')) ext = 'mp4';
+      else if (mimeType.includes('wav')) ext = 'wav';
+      else if (mimeType.includes('ogg')) ext = 'ogg';
+      
+      const filename = `live-podcasts/${podcastId}/${uploadSessionId}/${chunkIndex}_${Date.now()}.${ext}`;
       // upload to storage
       let { error: uploadErr } = await supabase.storage.from('podcasts').upload(filename, blob as any, { contentType: mimeType, upsert: false });
       if (uploadErr && uploadErr.message && /mime type/i.test(uploadErr.message)) {
@@ -323,23 +344,31 @@ export const uploadChunk = async (podcastId: string, uploadSessionId: string, ch
       const res = supabase.storage.from('podcasts').getPublicUrl(filename) as any;
       const publicUrl = res?.data?.publicUrl || res?.publicUrl || null;
 
-      // insert metadata row into podcast_chunks
-      const { data, error } = await supabase.from('podcast_chunks').insert({
-        podcast_id: podcastId,
-        upload_session_id: uploadSessionId,
-        chunk_index: chunkIndex,
-        total_chunks: null,
-        storage_path: filename,
-        file_size: blob.size,
-        mime_type: mimeType,
-        status: 'uploaded',
-        created_at: new Date().toISOString()
-      }).select().single();
-      if (error) throw error;
+      // Register chunk via Edge Function (to bypass RLS on podcast_chunks table)
+      const { data, error } = await supabase.functions.invoke('upload-podcast-chunk', {
+        body: {
+            podcast_id: podcastId,
+            upload_session_id: uploadSessionId,
+            chunk_index: chunkIndex,
+            storage_path: filename,
+            file_size: blob.size,
+            mime_type: mimeType
+        }
+      });
 
-      return { chunk: data, publicUrl };
+      if (error) {
+         console.error('upload-podcast-chunk invoke error:', error);
+         throw error;
+      }
+      
+      // Edge function returns { success: true, chunk: ... }
+      if (!data?.success) {
+         throw new Error(data?.error || 'Unknown error registering chunk');
+      }
+
+      return { chunk: data.chunk, publicUrl };
     } catch (e) {
-      // console.warn('uploadChunk failed', e);
+      console.warn('uploadChunk failed', e);
       throw e;
     }
 };
@@ -356,11 +385,16 @@ export const finalizeRecording = async (podcastId: string, uploadSessionId: stri
     if (assemblePath) payload.assemble_path = assemblePath;
     if (triggerTranscription !== undefined) payload.trigger_transcription = triggerTranscription;
 
+    console.log('finalizeRecording payload:', payload);
+
     const { data, error } = await supabase.functions.invoke('complete-podcast-chunks', { body: payload } as any);
-    if (error) throw error;
+    if (error) {
+        console.error('complete-podcast-chunks invoke error details:', error);
+        throw error;
+    }
     return data;
   } catch (e) {
-    // console.warn('finalizeRecording failed', e);
+    console.warn('finalizeRecording exception:', e);
     throw e;
   }
 };

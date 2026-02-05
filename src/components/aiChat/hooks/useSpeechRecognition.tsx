@@ -64,12 +64,11 @@ export const useSpeechRecognition = ({
         });
     }, [checkMicrophonePermission]);
 
-    const throttledSetSpeechInput = useCallback(
-        throttle((newMessage: string) => {
-            setInputMessage(newMessage);
+    const resizeTextareaThrottled = useCallback(
+        throttle(() => {
             resizeTextarea();
         }, 200),
-        [setInputMessage, resizeTextarea]
+        [resizeTextarea]
     );
 
     useEffect(() => {
@@ -98,17 +97,41 @@ export const useSpeechRecognition = ({
             }
 
             const currentInput = inputMessageRef.current;
-            const baseMessage = currentInput.replace(lastInterimTranscriptRef.current, '').trim();
+            let baseMessage = currentInput;
+            const lastInterim = lastInterimTranscriptRef.current;
+            
+            // Robust stripping: Check endsWith with and without trimming to handle whitespace edge cases
+            if (lastInterim) {
+                 if (baseMessage.endsWith(lastInterim)) {
+                     baseMessage = baseMessage.slice(0, -lastInterim.length);
+                 } else if (baseMessage.trimEnd().endsWith(lastInterim.trimEnd())) {
+                     // Fallback: try ignoring trailing spaces mismatch
+                     const lastInterimTrimmed = lastInterim.trimEnd();
+                     const baseTrimmed = baseMessage.trimEnd();
+                     // We need to keep the part BEFORE the match
+                     // Calculate the index of the match
+                     const matchIndex = baseMessage.lastIndexOf(lastInterimTrimmed);
+                      if (matchIndex !== -1 && matchIndex + lastInterimTrimmed.length === baseTrimmed.length) {
+                           baseMessage = baseMessage.substring(0, matchIndex);
+                      }
+                 }
+            }
+            
+            baseMessage = baseMessage.trimEnd();
             
             if (finalTranscript) {
                 const newMessage = baseMessage + (baseMessage ? ' ' : '') + finalTranscript.trim();
                 lastInterimTranscriptRef.current = '';
+                // Immediate update for final results to ensure consistency
                 setInputMessage(newMessage);
-                resizeTextarea();
+                resizeTextareaThrottled();
             } else if (interimTranscript) {
                 const newMessage = baseMessage + (baseMessage ? ' ' : '') + interimTranscript;
                 lastInterimTranscriptRef.current = interimTranscript;
-                throttledSetSpeechInput(newMessage);
+                // Immediate update for interim too, to prevent ref staleness causing duplication
+                // We only throttle the resize which is the expensive DOM operation
+                setInputMessage(newMessage);
+                resizeTextareaThrottled();
             }
         };
 
@@ -148,7 +171,7 @@ export const useSpeechRecognition = ({
             isRecognizingRef.current = false;
             recognition.stop();
         };
-    }, [throttledSetSpeechInput, resizeTextarea, setInputMessage]);
+    }, [resizeTextareaThrottled, resizeTextarea, setInputMessage]);
 
     const startRecognition = useCallback(async () => {
         if (!recognitionRef.current) {

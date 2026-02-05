@@ -5,6 +5,7 @@ import {
   LiveQuizSession,
   LiveQuizPlayer,
   LiveQuizQuestion,
+  LiveQuizAnswer,
   getSessionState,
   getActiveSessions,
   subscribeToSession,
@@ -37,6 +38,7 @@ export const LiveQuiz: React.FC<LiveQuizProps> = ({ userId, userName, quizzes, o
   const [players, setPlayers] = useState<LiveQuizPlayer[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<LiveQuizQuestion | null>(null);
   const [allQuestions, setAllQuestions] = useState<LiveQuizQuestion[]>([]);
+  const [answers, setAnswers] = useState<LiveQuizAnswer[]>([]);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [hasAnswered, setHasAnswered] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState<number>(30);
@@ -113,6 +115,7 @@ export const LiveQuiz: React.FC<LiveQuizProps> = ({ userId, userName, quizzes, o
 
       // --- Commit state updates ---
       setSession(sessionState.session);
+      setAnswers(sessionState.answers || []);
       setPlayers(sessionState.players || []);
       setCurrentQuestion(effectiveCurrentQuestion || null);
       setAllQuestions(sessionState.questions || []);
@@ -337,6 +340,7 @@ export const LiveQuiz: React.FC<LiveQuizProps> = ({ userId, userName, quizzes, o
       return (
         <LiveQuizActive
             session={session}
+            answers={answers}
             players={players}
             currentQuestion={currentQuestion}
             allQuestions={allQuestions}

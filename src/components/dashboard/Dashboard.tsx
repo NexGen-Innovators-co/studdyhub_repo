@@ -20,9 +20,14 @@ import {
     Info, Lightbulb, FolderOpen, LayoutDashboard
 } from 'lucide-react';
 import { useDashboardStats } from './hooks/useDashboardStats';
+import { CentralDynamicChart } from './CentralDynamicChart';
+import { KnowledgeRadar } from './KnowledgeRadar';
+import { StudyPatterns } from './StudyPatterns';
 import BookPagesAnimation from '../ui/bookloader';
 import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 import { RecentPodcasts } from './RecentPodcasts';
+import { RecentActivityFeed } from './RecentActivityFeed';
+import { AIInsights } from './AIInsights';
 
 const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
 const GRADIENT_ID = 'engagementGradient';
@@ -188,72 +193,52 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
 
     return (
         <div className="min-h-screen max-w-5xl pb-8 mx-auto px-4 sm:px-6 lg:px-8">
-            {/* Hero Header */}
-            <div className="relative overflow-hidden rounded-2xl my-4 p-6 sm:p-8 bg-gradient-to-r from-blue-600 to-blue-600 text-white shadow-2xl">
-                <div className="absolute inset-0 bg-black opacity-20"></div>
-                <div className="relative z-10">
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-bold mb-2">
-                                Welcome back, {userProfile?.full_name?.split(' ')[0] || 'Learner'}!
-                            </h1>
-                            <p className="text-base sm:text-xl opacity-90">
-                                {hasData ? "Your mind is growing stronger every day" : "Let's start building your mind palace"}
-                            </p>
-                        </div>
-                        <Button
-                            variant="ghost" 
-                            size="icon"
-                            onClick={refresh}
-                            className="text-white hover:bg-white/20"
-                            title="Refresh Data"
-                        >
-                            <RefreshCw className="h-5 w-5" />
-                        </Button>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row items-center gap-4 mt-6">
-                        <div className="flex items-center gap-3">
-                            <div className="relative">
-                                <Flame className={`h-6 w-6 sm:h-8 sm:w-8 ${stats.currentStreak >= 3 ? 'text-orange-400 animate-pulse' : 'text-gray-400'}`} />
-                                {stats.currentStreak >= 7 && (
-                                    <div className="absolute -inset-2 bg-orange-500 rounded-full animate-ping opacity-20"></div>
-                                )}
-                            </div>
-                            <div>
-                                <p className="text-2xl sm:text-3xl font-bold">{stats.currentStreak || 0}</p>
-                                <p className="text-xs sm:text-sm opacity-80">day streak (Max: {stats.maxStreak || 0})</p>
-                            </div>
-                        </div>
-
-                        <div className="w-24 h-24 sm:w-32 sm:h-32">
-                            {stats.engagementScore > 0 ? (
-                                <CircularProgressbar
-                                    value={stats.engagementScore}
-                                    text={`${stats.engagementScore}`}
-                                    styles={buildStyles({
-                                        textSize: '20px',
-                                        pathColor: engagementColor,
-                                        textColor: '#fff',
-                                        trailColor: 'rgba(255,255,255,0.2)',
-                                        pathTransitionDuration: 1.5,
-                                    })}
-                                />
-                            ) : (
-                                <div className="h-full flex items-center justify-center">
-                                    <div className="text-center">
-                                        <Brain className="h-8 w-8 mx-auto mb-2 opacity-75" />
-                                        <p className="text-sm">Start learning!</p>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+            
+             {/* Dashboard Header */}
+             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pt-8 pb-6">
+                <div className="space-y-1">
+                    <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 dark:text-gray-100 bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400">
+                        Welcome back, {userProfile?.full_name?.split(' ')[0] || 'Learner'}!
+                    </h1>
+                    <p className="text-gray-500 dark:text-gray-400 text-lg font-medium">
+                        Here's what's happening with your learning today.
+                    </p>
+                </div>
+                <div className="mt-4 sm:mt-0">
+                    <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        onClick={() => refresh()} 
+                        disabled={loading} 
+                        className="rounded-full shadow-sm hover:shadow transition-all duration-200 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200"
+                    >
+                        <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : 'text-indigo-500'}`} />
+                        {loading ? 'Refreshing...' : 'Refresh Data'}
+                    </Button>
                 </div>
             </div>
 
+            {/* AI Insights Banner */}
+            <div className="mb-8">
+                <AIInsights 
+                    stats={stats} 
+                    userName={userProfile?.full_name} 
+                    onRefresh={refresh}
+                    onAction={(action) => {
+                        const lowerAction = action.toLowerCase();
+                        if (lowerAction.includes('schedule')) return onCreateNew('schedule');
+                        if (lowerAction.includes('note') || lowerAction.includes('write')) return onCreateNew('note');
+                        if (lowerAction.includes('recording')) return onCreateNew('recording');
+                        if (lowerAction.includes('document') || lowerAction.includes('upload')) return onCreateNew('document');
+                        if (lowerAction.includes('review') || lowerAction.includes('read')) return onNavigateToTab('notes');
+                        if (lowerAction.includes('quiz') || lowerAction.includes('test')) return onNavigateToTab('quizzes');
+                        onNavigateToTab('dashboard');
+                    }}
+                />
+            </div>
+
             {/* Quick Stats Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8 mt-4">
                 {[
                     { title: "Notes", value: stats.totalNotes || 0, icon: BookOpen, color: "from-blue-500 to-cyan-500", bg: "bg-blue-100 dark:bg-blue-900", type: 'note' as const },
                     { title: "Recordings", value: formatTime(stats.totalStudyTime || 0), icon: Play, color: "from-green-500 to-emerald-500", bg: "bg-green-100 dark:bg-green-900", type: 'recording' as const },
@@ -369,7 +354,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
             ) : (
                 <>
                     {/* Tabs */}
-                    {/* <div className="flex gap-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur rounded-2xl p-2 shadow-xl mb-8">
+                    <div className="flex gap-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur rounded-2xl p-2 shadow-xl mb-8">
                         {(['overview', 'analytics', 'activity'] as const).map(tab => (
                             <Button
                                 key={tab}
@@ -384,193 +369,29 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                                     tab === 'analytics' ? 'Analytics' : 'Activity'}
                             </Button>
                         ))}
-                    </div> */}
+                    </div>
 
                     {/* Overview Tab */}
                     {activeTab === 'overview' && (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Central Dynamic Chart */}
+                            <div className="col-span-1 lg:col-span-2">
+                                <CentralDynamicChart stats={stats} />
+                            </div>
+
                             {/* Recent AI Podcasts */}
                             <RecentPodcasts />
-                            
-                            {/* Weekly Activity */}
-                            <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <Activity className="h-6 w-6 text-blue-600" />
-                                        Weekly Activity
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    {hasChartData(stats.activityData7Days) ? (
-                                        <ResponsiveContainer width="100%" height={300}>
-                                            <AreaChart data={stats.activityData7Days}>
-                                                <defs>
-                                                    <linearGradient id="notes" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8} />
-                                                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
-                                                    </linearGradient>
-                                                </defs>
-                                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                                <XAxis dataKey="date" />
-                                                <YAxis />
-                                                <Tooltip />
-                                                <Area type="monotone" dataKey="total" stroke="#8b5cf6" fillOpacity={1} fill="url(#notes)" />
-                                            </AreaChart>
-                                        </ResponsiveContainer>
-                                    ) : (
-                                        <EmptyChartState message="No activity data for this week" icon={BarChart3} />
-                                    )}
-                                </CardContent>
-                            </Card>
-
-                            {/* Monthly Activity */}
-                            <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <TrendingUp className="h-6 w-6 text-green-600" />
-                                        Monthly Activity
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    {hasChartData(stats.activityData30Days) ? (
-                                        <ResponsiveContainer width="100%" height={300}>
-                                            <LineChart data={stats.activityData30Days}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                                <XAxis dataKey="date" />
-                                                <YAxis />
-                                                <Tooltip />
-                                                <Legend />
-                                                <Line type="monotone" dataKey="notes" stroke="#8b5cf6" />
-                                                <Line type="monotone" dataKey="recordings" stroke="#10b981" />
-                                                <Line type="monotone" dataKey="documents" stroke="#f59e0b" />
-                                                <Line type="monotone" dataKey="messages" stroke="#ef4444" />
-                                            </LineChart>
-                                        </ResponsiveContainer>
-                                    ) : (
-                                        <EmptyChartState message="No monthly activity data yet" icon={Calendar} />
-                                    )}
-                                </CardContent>
-                            </Card>
 
                             {/* Note Categories */}
-                            <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <PieIcon className="h-6 w-6 text-blue-600" />
-                                        Note Categories
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    {stats.categoryData && stats.categoryData.length > 0 && hasChartData(stats.categoryData) ? (
-                                        <ResponsiveContainer width="100%" height={300}>
-                                            <PieChart>
-                                                <Pie
-                                                    data={stats.categoryData}
-                                                    cx="50%"
-                                                    cy="50%"
-                                                    innerRadius={60}
-                                                    outerRadius={100}
-                                                    paddingAngle={5}
-                                                    dataKey="value"
-                                                >
-                                                    {stats.categoryData.map((_, index) => (
-                                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                                    ))}
-                                                </Pie>
-                                                <Tooltip />
-                                            </PieChart>
-                                        </ResponsiveContainer>
-                                    ) : (
-                                        <EmptyChartState
-                                            message="No note categories yet. Create some notes to see them categorized."
-                                            icon={FolderOpen}
-                                        />
-                                    )}
-                                </CardContent>
-                            </Card>
-
-                            {/* Hourly Activity */}
-                            <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <ClockIcon className="h-6 w-6 text-yellow-600" />
-                                        Hourly Activity
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    {hasChartData(stats.hourlyActivity) ? (
-                                        <ResponsiveContainer width="100%" height={300}>
-                                            <BarChart data={stats.hourlyActivity}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                                <XAxis dataKey="hour" />
-                                                <YAxis />
-                                                <Tooltip />
-                                                <Bar dataKey="activity" fill="#3b82f6" />
-                                            </BarChart>
-                                        </ResponsiveContainer>
-                                    ) : (
-                                        <EmptyChartState message="No hourly activity data recorded" icon={Clock} />
-                                    )}
-                                </CardContent>
-                            </Card>
+                            <KnowledgeRadar stats={stats} />
                         </div>
                     )}
 
                     {/* Analytics Tab */}
                     {activeTab === 'analytics' && (
                         <div className="space-y-6">
-                            {/* Weekday Activity */}
-                            <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <BarChart2 className="h-6 w-6 text-orange-600" />
-                                        Weekday Activity
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    {hasChartData(stats.weekdayActivity) ? (
-                                        <ResponsiveContainer width="100%" height={300}>
-                                            <BarChart data={stats.weekdayActivity}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                                <XAxis dataKey="day" />
-                                                <YAxis />
-                                                <Tooltip />
-                                                <Bar dataKey="activity" fill="#10b981" />
-                                            </BarChart>
-                                        </ResponsiveContainer>
-                                    ) : (
-                                        <EmptyChartState message="No weekday activity pattern detected" icon={BarChart2} />
-                                    )}
-                                </CardContent>
-                            </Card>
-
-                            {/* Learning Velocity */}
-                            <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <LineIcon className="h-6 w-6 text-red-600" />
-                                        Learning Velocity
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    {hasChartData(stats.learningVelocity) ? (
-                                        <ResponsiveContainer width="100%" height={300}>
-                                            <LineChart data={stats.learningVelocity}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                                <XAxis dataKey="week" />
-                                                <YAxis />
-                                                <Tooltip />
-                                                <Line type="monotone" dataKey="items" stroke="#ef4444" />
-                                            </LineChart>
-                                        </ResponsiveContainer>
-                                    ) : (
-                                        <EmptyChartState
-                                            message="Track your learning progress over time"
-                                            icon={TrendingUp}
-                                        />
-                                    )}
-                                </CardContent>
-                            </Card>
+                            {/* Study Patterns (Hourly & Weekday) */}
+                            <StudyPatterns stats={stats} />
 
                             {/* Productivity Metrics */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -581,7 +402,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                                 </Card>
                                 <Card className="text-center p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
                                     <Clock className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-4 text-blue-500" />
-                                    <p className="text-xl sm:text-3xl font-bold">{stats.mostProductiveHour || '--'}:00</p>
+                                    <p className="text-xl sm:text-3xl font-bold">
+                                        {stats.mostProductiveHour !== undefined ? `${stats.mostProductiveHour}:00` : '--:--'}
+                                    </p>
                                     <p className="text-gray-600 dark:text-gray-400">Peak Focus Hour</p>
                                 </Card>
                                 <Card className="text-center p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
@@ -601,6 +424,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                     {/* Activity Tab */}
                     {activeTab === 'activity' && (
                         <div className="space-y-6">
+                            {/* Streak Banner */}
                             {stats.currentStreak > 0 ? (
                                 <Card className="bg-gradient-to-r from-blue-600 to-blue-600 text-white border-0 shadow-2xl">
                                     <CardContent className="p-6 sm:p-8 text-center">
@@ -617,221 +441,108 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                                 </Card>
                             )}
 
-                            {/* This Week / Month Stats */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-                                <Card className="p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
-                                    <CardHeader className="p-0">
-                                        <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                                            <BookOpen className="h-5 w-5 text-blue-600" />
-                                            This Week
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="p-0 mt-2">
-                                        <p>Notes: {stats.notesThisWeek || 0}</p>
-                                        <p>Recordings: {stats.recordingsThisWeek || 0}</p>
-                                        <p>Study Time: {formatTime(stats.studyTimeThisWeek || 0)}</p>
-                                    </CardContent>
-                                </Card>
-                                <Card className="p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
-                                    <CardHeader className="p-0">
-                                        <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                                            <BookOpen className="h-5 w-5 text-blue-600" />
-                                            This Month
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="p-0 mt-2">
-                                        <p>Notes: {stats.notesThisMonth || 0}</p>
-                                        <p>Recordings: {stats.recordingsThisMonth || 0}</p>
-                                        <p>Study Time: {formatTime(stats.studyTimeThisMonth || 0)}</p>
-                                    </CardContent>
-                                </Card>
-                                <Card className="p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
-                                    <CardHeader className="p-0">
-                                        <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                                            <Bot className="h-5 w-5 text-indigo-600" />
-                                            AI Usage
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="p-0 mt-2">
-                                        <p>Notes with AI: {stats.notesWithAI || 0}</p>
-                                        <p>Usage Rate: {(stats.aiUsageRate || 0).toFixed(1)}%</p>
-                                        <Progress value={stats.aiUsageRate || 0} className="mt-2" />
-                                    </CardContent>
-                                </Card>
-                                <Card className="p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
-                                    <CardHeader className="p-0">
-                                        <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                                            <Star className="h-5 w-5 text-yellow-600" />
-                                            Quizzes
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="p-0 mt-2">
-                                        <p>Taken: {stats.totalQuizzesTaken || 0}</p>
-                                        <p>Avg Score: {(stats.avgQuizScore || 0).toFixed(1)}%</p>
-                                    </CardContent>
-                                </Card>
-                            </div>
-
-                            {/* Tasks and Documents */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                                <Card className="p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
-                                    <CardHeader className="p-0">
-                                        <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                                            <Calendar className="h-5 w-5 text-green-600" />
-                                            Tasks
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="p-0 mt-2">
-                                        <p>Today: {stats.todayTasks || 0}</p>
-                                        <p>Upcoming: {stats.upcomingTasks || 0}</p>
-                                        <p>Completed: {stats.completedTasks || 0}</p>
-                                        <p>Overdue: {stats.overdueTasks || 0}</p>
-                                    </CardContent>
-                                </Card>
-                                <Card className="p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
-                                    <CardHeader className="p-0">
-                                        <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                                            <FileText className="h-5 w-5 text-orange-600" />
-                                            Documents
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="p-0 mt-2">
-                                        <p className="flex items-center gap-2"><FileCheck className="h-4 w-4 text-green-500" /> Processed: {stats.documentsProcessed || 0}</p>
-                                        <p className="flex items-center gap-2"><FileWarning className="h-4 w-4 text-yellow-500" /> Pending: {stats.documentsPending || 0}</p>
-                                        <p className="flex items-center gap-2"><FileX className="h-4 w-4 text-red-500" /> Failed: {stats.documentsFailed || 0}</p>
-                                        <p>Total Size: {formatFileSize(stats.totalDocumentSize || 0)}</p>
-                                    </CardContent>
-                                </Card>
-                            </div>
-
-                            {/* Top Categories */}
-                            {stats.topCategories && stats.topCategories.length > 0 ? (
-                                <Card className="p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
-                                    <CardHeader className="p-0">
-                                        <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                                            <Filter className="h-5 w-5 text-pink-600" />
-                                            Top Categories
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="p-0 mt-2">
-                                        <ul className="space-y-2">
-                                            {stats.topCategories.map((cat, i) => (
-                                                <li key={i} className="flex justify-between">
-                                                    <span>{cat.category}</span>
-                                                    <Badge variant="secondary">{cat.count}</Badge>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </CardContent>
-                                </Card>
-                            ) : (
-                                <Card className="p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
-                                    <CardHeader className="p-0">
-                                        <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                                            <Filter className="h-5 w-5 text-pink-600" />
-                                            Top Categories
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="p-0 mt-2">
-                                        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                                            <Info className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                                            <p>No categories yet. Add tags to your notes to see them here.</p>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            )}
-
-                            {/* Recent Content */}
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                {/* Recent Notes */}
-                                <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <BookOpen className="h-6 w-6 text-blue-600" />
-                                            Recent Notes
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        {stats.recentNotes && stats.recentNotes.length > 0 ? (
-                                            <ul className="space-y-4">
-                                                {stats.recentNotes.map(note => (
-                                                    <li key={note.id} className="border-b pb-2">
-                                                        <p className="font-semibold">{note.title}</p>
-                                                        <p className="text-sm text-gray-600 dark:text-gray-400">{note.category} - {formatDate(note.created_at)}</p>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        ) : (
-                                            <EmptyStateCard
-                                                title="No notes yet"
-                                                description="Start capturing your thoughts and ideas"
-                                                icon={BookOpen}
-                                                onCreate={() => onCreateNew('note')}
-                                                type="note"
-                                            />
-                                        )}
-                                    </CardContent>
-                                </Card>
+                                {/* Left Column: Activity Feed */}
+                                <div className="lg:col-span-2">
+                                     <RecentActivityFeed stats={stats} onCreateNew={onCreateNew} />
+                                </div>
 
-                                {/* Recent Recordings */}
-                                <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <Play className="h-6 w-6 text-green-600" />
-                                            Recent Recordings
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        {stats.recentRecordings && stats.recentRecordings.length > 0 ? (
-                                            <ul className="space-y-4">
-                                                {stats.recentRecordings.map(rec => (
-                                                    <li key={rec.id} className="border-b pb-2">
-                                                        <p className="font-semibold">{rec.title}</p>
-                                                        <p className="text-sm text-gray-600 dark:text-gray-400">Duration: {formatTime(rec.duration)} - {formatDate(rec.created_at)}</p>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        ) : (
-                                            <EmptyStateCard
-                                                title="No recordings yet"
-                                                description="Record your thoughts, lectures, or meetings"
-                                                icon={Play}
-                                                onCreate={() => onCreateNew('recording')}
-                                                type="recording"
-                                            />
-                                        )}
-                                    </CardContent>
-                                </Card>
+                                {/* Right Column: Stats Summary */}
+                                <div className="space-y-6">
+                                    {/* Weekly Summary */}
+                                    <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur">
+                                        <CardHeader>
+                                            <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                                                <TrendingUp className="h-5 w-5 text-blue-600" />
+                                                Weekly Summary
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-2">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm text-gray-500">Notes Created</span>
+                                                <span className="font-bold">{stats.notesThisWeek || 0}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm text-gray-500">Recordings</span>
+                                                <span className="font-bold">{stats.recordingsThisWeek || 0}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm text-gray-500">Study Time</span>
+                                                <span className="font-bold">{formatTime(stats.studyTimeThisWeek || 0)}</span>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
 
-                                {/* Recent Documents */}
-                                <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <FileText className="h-6 w-6 text-yellow-600" />
-                                            Recent Documents
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        {stats.recentDocuments && stats.recentDocuments.length > 0 ? (
-                                            <ul className="space-y-4">
-                                                {stats.recentDocuments.map(doc => (
-                                                    <li key={doc.id} className="border-b pb-2">
-                                                        <p className="font-semibold">{doc.title}</p>
-                                                        <p className="text-sm text-gray-600 dark:text-gray-400">{doc.type} - {doc.processing_status} - {formatDate(doc.created_at)}</p>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        ) : (
-                                            <EmptyStateCard
-                                                title="No documents yet"
-                                                description="Upload PDFs, images, or text files"
-                                                icon={FileText}
-                                                onCreate={() => onCreateNew('document')}
-                                                type="document"
-                                            />
-                                        )}
-                                    </CardContent>
-                                </Card>
+                                    {/* Monthly Summary */}
+                                    <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur">
+                                        <CardHeader>
+                                            <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                                                <Calendar className="h-5 w-5 text-green-600" />
+                                                Monthly Summary
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-2">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm text-gray-500">Total Notes</span>
+                                                <span className="font-bold">{stats.notesThisMonth || 0}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm text-gray-500">Total Recordings</span>
+                                                <span className="font-bold">{stats.recordingsThisMonth || 0}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm text-gray-500">Total Study Time</span>
+                                                <span className="font-bold">{formatTime(stats.studyTimeThisMonth || 0)}</span>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* Categories */}
+                                    <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur">
+                                        <CardHeader>
+                                            <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                                                <Filter className="h-5 w-5 text-pink-600" />
+                                                Top Categories
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            {stats.topCategories && stats.topCategories.length > 0 ? (
+                                                <ul className="space-y-3">
+                                                    {stats.topCategories.map((cat, i) => (
+                                                        <li key={i} className="flex justify-between items-center">
+                                                            <span className="text-sm font-medium">{cat.category}</span>
+                                                            <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">{cat.count}</Badge>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            ) : (
+                                                <div className="text-center py-4 text-gray-500 text-sm">
+                                                    No categories yet
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* AI Usage */}
+                                    <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur">
+                                        <CardHeader>
+                                            <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                                                <Bot className="h-5 w-5 text-indigo-600" />
+                                                AI Assistant Usage
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="mb-2 flex justify-between text-sm">
+                                                <span>AI Usage Rate</span>
+                                                <span className="font-bold">{(stats.aiUsageRate || 0).toFixed(0)}%</span>
+                                            </div>
+                                            <Progress value={stats.aiUsageRate || 0} className="h-2" />
+                                            <p className="text-xs text-gray-500 mt-2">
+                                                {stats.notesWithAI || 0} notes enhanced with AI
+                                            </p>
+                                        </CardContent>
+                                    </Card>
+                                </div>
                             </div>
                         </div>
                     )}

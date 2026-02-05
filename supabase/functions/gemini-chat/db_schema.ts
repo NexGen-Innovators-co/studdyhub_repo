@@ -750,6 +750,107 @@ You may perform INSERT, UPDATE, DELETE, and SELECT operations on the following t
     - updated_at: timestamp
     - weak_areas: text[]
 
+69. audio_segments
+   - id: uuid (pk)
+   - podcast_id: uuid (fk -> ai_podcasts)
+   - segment_index: integer
+   - transcript: text
+   - summary: text
+   - duration_seconds: double precision
+   - audio_url: text
+   - created_at: timestamp
+
+70. live_quiz_answers
+   - id: uuid (pk)
+   - session_id: uuid (fk -> live_quiz_sessions)
+   - user_id: uuid
+   - question_id: uuid (fk -> live_quiz_questions)
+   - selected_option: integer
+   - is_correct: boolean
+   - time_taken: double precision
+   - points_awarded: integer
+   - answered_at: timestamp
+
+71. live_quiz_players
+   - id: uuid (pk)
+   - session_id: uuid (fk -> live_quiz_sessions)
+   - user_id: uuid
+   - display_name: text
+   - score: integer
+   - status: text
+   - is_host: boolean
+   - join_time: timestamp
+   - last_answered_at: timestamp
+
+72. live_quiz_questions
+   - id: uuid (pk)
+   - session_id: uuid (fk -> live_quiz_sessions)
+   - question_text: text
+   - options: jsonb
+   - correct_answer: integer
+   - time_limit: integer
+   - question_index: integer
+   - status: text
+
+73. live_quiz_sessions
+   - id: uuid (pk)
+   - quiz_id: uuid (fk -> quizzes)
+   - host_user_id: uuid
+   - join_code: text
+   - status: text
+   - current_question_index: integer
+   - start_time: timestamp
+   - end_time: timestamp
+   - created_at: timestamp
+
+74. player_question_progress
+   - id: uuid (pk)
+   - session_id: uuid
+   - user_id: uuid
+   - question_idx: integer
+   - status: text
+   - time_spent: double precision
+   - started_at: timestamp
+   - completed_at: timestamp
+
+75. podcast_chunks
+   - id: uuid (pk)
+   - podcast_id: uuid (fk -> ai_podcasts)
+   - chunk_index: integer
+   - status: text
+   - storage_path: text
+   - created_at: timestamp
+
+76. podcast_cohosts
+   - id: uuid (pk)
+   - podcast_id: uuid (fk -> ai_podcasts)
+   - user_id: uuid
+   - is_active: boolean
+   - permissions: text[]
+   - created_at: timestamp
+
+77. podcast_participation_requests
+   - id: uuid (pk)
+   - podcast_id: uuid
+   - user_id: uuid
+   - request_type: text
+   - status: text
+   - responder_id: uuid
+   - responded_at: timestamp
+   - created_at: timestamp
+
+78. podcast_recordings
+   - id: uuid (pk)
+   - podcast_id: uuid
+   - session_id: uuid
+   - user_id: uuid
+   - status: text
+   - started_at: timestamp
+   - ended_at: timestamp
+   - duration_seconds: double precision
+   - storage_path: text
+   - final_audio_url: text
+
 GUIDELINES:
 - Always use the correct UUIDs when linking tables.
 - For 'user_id', the system will automatically inject the authenticated user's ID, but you can include it if you have it.

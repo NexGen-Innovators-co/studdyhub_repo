@@ -8,6 +8,7 @@ interface RequestBody {
   target_language?: string; // Optional target language for translation
   user_id: string; // Added user_id to the request body interface
   document_id?: string; // Added document_id to the request body interface
+  podcast_id?: string; // Optional podcast_id to link transcript back to podcast
 }
 
 // Initialize Supabase client
@@ -120,13 +121,18 @@ async function processAudioInBackground(file_url: string, target_language: strin
     const arrayBuffer = await audioBlob.arrayBuffer();
     const base64Audio = bufferToBase64(arrayBuffer);
 
-    // 3. Transcribe Audio using Gemini
+    // 3. Transcribe using Gemini (supports Audio and Video)
+    const isVideo = audioBlob.type.startsWith('video/');
+    const promptText = isVideo 
+      ? "Analyze this video. Provide a transcript of the speech, and if there are significant visual elements (like text on screen or important actions), describe them briefly in brackets [like this]."
+      : "Transcribe the following audio into text.";
+
     const transcriptionPayload = {
       contents: [
         {
           role: "user",
           parts: [
-            { text: "Transcribe the following audio into text." },
+            { text: promptText },
             {
               inlineData: {
                 mimeType: audioBlob.type,
@@ -264,7 +270,7 @@ serve(async (req) => {
 
   try {
     // Destructure user_id and document_id from the request body
-    const { file_url, target_language = 'en', user_id, document_id }: RequestBody = await req.json();
+    const { file_url, target_language = 'en', user_id, document_id, podcast_id }: RequestBody = await req.json();
 
     if (!file_url || !user_id) { // Ensure user_id is present
       return new Response(JSON.stringify({ error: 'file_url and user_id are required' }), {
@@ -318,6 +324,52 @@ serve(async (req) => {
               updated_at: new Date().toISOString()
             })
             .eq('id', jobId);
+          
+          // Propagate results to audio_segments if podcast_id is provided
+          if (podcast_id) {
+             try {
+                // Update audio_segments table (Live Podcast)
+                await supabase.from('audio_segments')
+                  .update({ 
+                    transcript: results.transcript, 
+                    summary: results.summary 
+                  })
+                  .eq('podcast_id', podcast_id)
+                  .eq('audio_url', file_url);
+                  
+                // Update ai_podcasts JSON column (Backwards Compatibility)
+                const { data: podcastRow } = await supabase.from('ai_podcasts').select('audio_segments').eq('id', podcast_id).single();
+                if (podcastRow) {
+                    let jsonSegments: any[] = [];
+                    try {
+                        jsonSegments = typeof podcastRow.audio_segments === 'string' 
+                            ? JSON.parse(podcastRow.audio_segments) 
+                            : (Array.isArray(podcastRow.audio_segments) ? podcastRow.audio_segments : []);
+                    } catch (e) { }
+
+                    let updated = false;
+                    for (let i = 0; i < jsonSegments.length; i++) {
+                        if (jsonSegments[i].audio_url === file_url) {
+                            jsonSegments[i].transcript = results.transcript;
+                            jsonSegments[i].summary = results.summary;
+                            updated = true;
+                            break;
+                        }
+                    }
+
+                    if (updated) {
+                         await supabase.from('ai_podcasts').update({ 
+                            audio_segments: jsonSegments,
+                            updated_at: new Date().toISOString()
+                        }).eq('id', podcast_id);
+                    }
+                }
+
+             } catch (postProcessErr) {
+                console.error('Failed to propagate transcript to podcast tables:', postProcessErr);
+             }
+          }
+
         } else {
           await supabase
             .from('audio_processing_results')
