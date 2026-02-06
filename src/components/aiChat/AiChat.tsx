@@ -1027,14 +1027,14 @@ const AIChat: React.FC<AIChatProps> = ({
       {/* Main Chat Container */}
       <div
         ref={dropZoneRef}
-        className={`flex h-[90vh] lg:h-screen pt-2 lg:pt-0 border-none relative bg-transparent dark:bg-transparent overflow-hidden font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+        className={`flex h-[100dvh] lg:h-screen pt-0 lg:pt-0 border-none relative bg-transparent dark:bg-transparent overflow-hidden font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
       >
         <DragOverlay isDragging={isDragging} />
 
         {/* Chat Panel */}
         <div
-          className={`flex flex-col h-full rounded-lg panel-transition bg-transparent dark:bg-transparent transition-all duration-300 relative ${isDiagramPanelOpen ? 'flex-shrink-0' : 'flex-1'} ${isPhone() ? 'fixed inset-0 z-30 rounded-none h-screen w-screen pt-16' : ''} ${(!isDiagramPanelOpen && !activePodcast && !isPhone()) ? 'max-w-3xl mx-auto' : ''}`}
-          style={isDiagramPanelOpen && !isPhone() ? { width: `calc(${100 - panelWidth}% - 1px)` } : isPhone() ? { width: '100vw', height: '100vh', left: 0, top: 0 } : { flex: 1 }}
+          className={`flex flex-col h-full rounded-lg panel-transition bg-transparent dark:bg-transparent transition-all duration-300 relative ${isDiagramPanelOpen ? 'flex-shrink-0' : 'flex-1'} ${isPhone() ? 'fixed inset-0 z-30 rounded-none h-[100dvh] w-screen ' : ''} ${(!isDiagramPanelOpen && !activePodcast && !isPhone()) ? 'max-w-3xl mx-auto' : ''}`}
+          style={isDiagramPanelOpen && !isPhone() ? { width: `calc(${100 - panelWidth}% - 1px)` } : isPhone() ? { width: '100vw', height: '100dvh', left: 0, top: 0 } : { flex: 1 }}
         >
           {/* Enhanced Loading States */}
           {isLoadingSessionMessages && messages.length === 0 ? (
@@ -1050,16 +1050,11 @@ const AIChat: React.FC<AIChatProps> = ({
               </div>
             </div>
           ) : activeChatSessionId && messages.length === 0 && !isCurrentlySending && !isSubmittingUserMessage && !isLoadingSessionMessages && !streamingState?.isStreaming && !isCurrentlySendingRef.current && !messages.some(m => m.id?.startsWith?.('optimistic-')) ? (
-            <div className="text-center text-gray-500 dark:text-gray-400 mt-20 font-claude">
+            <div className="text-center text-gray-500 dark:text-gray-400 mt-10 md:mt-20 font-claude">
               <BookPagesAnimation className="mx-auto mb-4 h-16 w-16 text-pink-500" showText={false} />
               <p className="text-lg md:text-xl">Start the conversation by sending a message!</p>
             </div>
           ) : null}
-
-          {/* Show skeleton only when loading first messages */}
-          {isLoadingSessionMessages && messages.length === 0 && (
-            <MessageSkeleton />
-          )}
 
           {/* Messages */}
           <div
@@ -1067,6 +1062,10 @@ const AIChat: React.FC<AIChatProps> = ({
             onScroll={handleScroll}
             className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 space-y-4 pb-4 dark:bg-transparent flex flex-col modern-scrollbar"
           >
+            {/* Show skeleton only when loading first messages */}
+            {isLoadingSessionMessages && messages.length === 0 && (
+              <MessageSkeleton />
+            )}
             {messages.length > 0 && (
               <MessageList
                 messages={messages}
