@@ -1,6 +1,168 @@
 import React, { useRef, useEffect } from 'react';
 import { Chart } from 'chart.js';
 
+/**
+ * Detect the most likely chart type from the config content.
+ * Used when the AI omits the `type` field.
+ */
+function detectChartType(obj: any): string {
+    const json = JSON.stringify(obj).toLowerCase();
+    if (json.includes('"pie"') || json.includes("'pie'")) return 'pie';
+    if (json.includes('"doughnut"') || json.includes("'doughnut'")) return 'doughnut';
+    if (json.includes('"line"') || json.includes("'line'") || json.includes('bordercolor')) return 'line';
+    if (json.includes('"radar"') || json.includes("'radar'")) return 'radar';
+    if (json.includes('"scatter"') || json.includes("'scatter'")) return 'scatter';
+    if (json.includes('"polararea"') || json.includes("'polararea'")) return 'polarArea';
+    // backgroundColor arrays without borderColor → likely a pie/doughnut chart
+    if (Array.isArray(obj?.datasets?.[0]?.backgroundColor) && !obj?.datasets?.[0]?.borderColor) return 'pie';
+    return 'bar'; // safe default
+}
+
+/**
+ * Balance unclosed braces / brackets in a JSON-ish string.
+ * - Appends missing `}` / `]` at the end for unclosed opens
+ * - Prepends missing `{` / `[` at the start for unmatched closes
+ */
+function balanceBraces(str: string): string {
+    let braces = 0;
+    let brackets = 0;
+    for (const ch of str) {
+        if (ch === '{') braces++;
+        else if (ch === '}') braces--;
+        else if (ch === '[') brackets++;
+        else if (ch === ']') brackets--;
+    }
+    let result = str;
+    // Prepend opening braces/brackets if we have more closes than opens
+    if (braces < 0) result = '{'.repeat(-braces) + result;
+    if (brackets < 0) result = '['.repeat(-brackets) + result;
+    // Append closing braces/brackets if we have more opens than closes
+    if (braces > 0) result += '}'.repeat(braces);
+    if (brackets > 0) result += ']'.repeat(brackets);
+    return result;
+}
+
+/**
+ * Robustly parse AI-generated Chart.js config.
+ * Handles:  valid JSON, JS object literals, truncated content,
+ *           missing `type`, data properties alongside `options`, etc.
+ */
+function parseChartConfig(content: string): any {
+    // ------- Attempt 1: strict JSON -------
+    try {
+        const parsed = JSON.parse(content);
+        return normalizeChartConfig(parsed);
+    } catch (_) { /* fall through */ }
+
+    // ------- Attempt 2: JS object via new Function -------
+    try {
+        const parsed = new Function(`return ${content}`)();
+        return normalizeChartConfig(parsed);
+    } catch (_) { /* fall through */ }
+
+    // ------- Attempt 3: wrap in braces + balance -------
+    {
+        let wrapped = content;
+        if (!wrapped.trimStart().startsWith('{')) wrapped = '{ ' + wrapped;
+        wrapped = balanceBraces(wrapped);
+
+        try {
+            const parsed = JSON.parse(wrapped);
+            return normalizeChartConfig(parsed);
+        } catch (_) { /* fall through */ }
+
+        try {
+            const parsed = new Function(`return ${wrapped}`)();
+            return normalizeChartConfig(parsed);
+        } catch (_) { /* fall through */ }
+    }
+
+    // ------- Attempt 4: balance the raw content (may already start with `{`) -------
+    {
+        const balanced = balanceBraces(content);
+        if (balanced !== content) {
+            try {
+                const parsed = JSON.parse(balanced);
+                return normalizeChartConfig(parsed);
+            } catch (_) { /* fall through */ }
+
+            try {
+                const parsed = new Function(`return ${balanced}`)();
+                return normalizeChartConfig(parsed);
+            } catch (_) { /* fall through */ }
+        }
+    }
+
+    // ------- Attempt 5: AI returned the INNER content of a chart config -------
+    // Pattern:  "labels": [...], "datasets": [...] }, "options": { ... }
+    // The `},` after datasets closes an implicit "data" wrapper that got stripped.
+    // Reconstruct as: { "data": { <data-guts> }, "options": <options-part> }
+    {
+        const optionsSplitMatch = content.match(
+            /^([\s\S]+?\]\s*)\},\s*"options"\s*:\s*([\s\S]+)$/
+        );
+        if (optionsSplitMatch) {
+            const dataGuts = optionsSplitMatch[1].trim();   // "labels":[...], "datasets":[...]
+            const optionsValue = optionsSplitMatch[2].trim(); // { "responsive": true, ... }
+            const reconstructed = `{ "data": { ${dataGuts} }, "options": ${optionsValue} }`;
+            const balanced = balanceBraces(reconstructed);
+
+            try {
+                const parsed = JSON.parse(balanced);
+                return normalizeChartConfig(parsed);
+            } catch (_) { /* fall through */ }
+
+            try {
+                const parsed = new Function(`return ${balanced}`)();
+                return normalizeChartConfig(parsed);
+            } catch (_) { /* fall through */ }
+        }
+    }
+
+    throw new Error('Unable to parse Chart.js configuration from AI output');
+}
+
+/**
+ * Ensure the parsed object is a valid Chart.js config:
+ *   { type, data: { labels, datasets }, options? }
+ */
+function normalizeChartConfig(obj: any): any {
+    if (!obj || typeof obj !== 'object') {
+        throw new Error('Parsed chart config is not an object');
+    }
+
+    // Already well-formed: { type, data: { ... } }
+    if (obj.type && obj.data) return obj;
+
+    // Has labels/datasets at top level alongside options → split into data + options
+    if ((obj.labels || obj.datasets) && obj.options) {
+        const { options, ...dataFields } = obj;
+        return {
+            type: obj.type || detectChartType(dataFields),
+            data: dataFields,
+            options,
+        };
+    }
+
+    // Has labels/datasets at top level → treat entire object as data
+    if (obj.labels || obj.datasets) {
+        return {
+            type: detectChartType(obj),
+            data: obj,
+            options: { responsive: true },
+        };
+    }
+
+    // Has data nested but no type
+    if (obj.data && !obj.type) {
+        obj.type = detectChartType(obj.data);
+        return obj;
+    }
+
+    // Fallback — return as-is and let Chart.js try
+    return obj;
+}
+
 interface ChartJsRendererProps {
     chartJsContent: string;
     onMermaidError: (code: string | null, errorType: 'rendering', errorDetail?: string) => void;
@@ -25,73 +187,18 @@ export const ChartJsRenderer: React.FC<ChartJsRendererProps> = ({ chartJsContent
 
             try {
                 let chartData: any;
-                const cleanContent = chartJsContent.trim();
-                
-                // Try strictly compliant JSON first
-                try {
-                    chartData = JSON.parse(cleanContent);
-                } catch (e) {
-                    // Fallback 1: Try evaluating as a JS object (supports unquoted keys, trailing commas)
-                    try {
-                        const fn = new Function(`return ${cleanContent}`);
-                        chartData = fn();
-                    } catch (e2) {
-                        // Fallback 2: Check for common partial fragments
-                        // Scenario A: AI returns just the data object content starting with "labels" or labels:
-                        if (/^["']?labels["']?\s*:/.test(cleanContent)) {
-                             try {
-                                // Try wrapping in a standard bar chart structure
-                                // If it ends with }, "options": ... we need to be careful
-                                // Let's try to construct a valid object string
-                                let fixedContent = cleanContent;
-                                if (!cleanContent.trim().startsWith('{')) {
-                                   fixedContent = `{ ${cleanContent} }`; // Try to make it an object first
-                                }
-                                
-                                const fn = new Function(`return ${fixedContent}`);
-                                const partialData = fn();
-                                
-                                // Check if we got something with labels/datasets
-                                if (partialData.labels || partialData.datasets) {
-                                     chartData = {
-                                        type: 'bar', // Default
-                                        data: partialData,
-                                        options: { responsive: true }
-                                    };
-                                }
-                             } catch (e3) { /* continue */ }
-                        }
-                        
-                         if (!chartData) {
-                            // Fallback 3: Try wrapping in braces if it looks like a property list
-                            try {
-                                const fn = new Function(`return { ${cleanContent} }`);
-                                chartData = fn();
-                            } catch (e4) {
-                                throw e; // Throw simple JSON error if all fail
-                            }
-                         }
-                    }
-                }
+                // Strip any residual markdown fences that may leak through
+                const cleanContent = chartJsContent
+                    .replace(/^```\w*\n?/, '')
+                    .replace(/\n?```\s*$/, '')
+                    .trim();
 
-                // Heuristic: If 'datasets' is at the top level, this is likely just the 'data' object.
-                // Or if it lacks 'type', we need to default it for Chart.js to not crash.
-                if (chartData && !chartData.type && (chartData.datasets || chartData.labels)) {
-                    // Wrap it in a standard config with a default type (e.g., 'bar')
-                    // Ideally the AI should specify the type, but if missing, 'bar' is a safe visual default.
-                    chartData = {
-                        type: 'bar', // Default
-                        data: chartData,
-                        options: { responsive: true }
-                    };
-                } else if (chartData && !chartData.type && !chartData.data && !chartData.options) {
-                     // Empty or invalid object?
-                }
+                chartData = parseChartConfig(cleanContent);
                 
                 chartInstanceRef.current = new Chart(ctx, chartData);
 
             } catch (error: any) {
-                // console.error('Chart.js rendering error:', error);
+                // console.error('[ChartJsRenderer] Error:', error.message, { contentSnippet: chartJsContent?.slice(0, 200) });
                 // Don't replace innerHTML of canvas, it breaks React ref/rendering. 
                 // Draw error text on canvas instead.
                 ctx.save();

@@ -104,7 +104,7 @@ export const globalSearchService = {
       const { data, error } = await supabaseQuery;
 
       if (error) {
-        console.error(`Search error for ${config.tableName}:`, error);
+        // console.error(`Search error for ${config.tableName}:`, error);
         return { data: [], totalCount: 0, query, timestamp: Date.now() };
       }
 
@@ -138,7 +138,7 @@ export const globalSearchService = {
         timestamp: Date.now()
       };
     } catch (error) {
-      console.error(`Global search error for ${config.tableName}:`, error);
+      // console.error(`Global search error for ${config.tableName}:`, error);
       return { data: [], totalCount: 0, query, timestamp: Date.now() };
     }
   },

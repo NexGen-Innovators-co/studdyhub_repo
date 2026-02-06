@@ -12,6 +12,10 @@ import { MemoizedCodeBlock as CodeBlock, CodeBlockErrorBoundary } from './CodeBl
 import { calculateTypingSpeed } from '@/utils/calculateTypyingSpeed';
 import remarkEmoji from 'remark-emoji';
 
+// Stable plugin arrays — defined outside components to avoid new references on re-render
+const REHYPE_PLUGINS = [rehypeRaw, rehypeKatex] as const;
+const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkEmoji] as const;
+
 interface MemoizedMarkdownRendererProps {
   content: string;
   messageId: string;
@@ -37,8 +41,8 @@ export const MemoizedReactMarkdown = memo(
   ({ content, components }: { content: string; components: any }) => {
     return (
       <ReactMarkdown
-        rehypePlugins={[rehypeRaw, rehypeKatex]}
-        remarkPlugins={[remarkGfm, remarkMath, remarkEmoji]}
+        rehypePlugins={REHYPE_PLUGINS as any}
+        remarkPlugins={REMARK_PLUGINS as any}
         components={components}
       >
         {content}
@@ -198,13 +202,15 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
       />
     ),
     img: ({ src, alt, ...props }) => (
-      <span className="block my-4 relative group rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 max-w-full bg-gray-50 dark:bg-gray-900/50">
+      <span className="block my-4 relative group rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 max-w-full bg-gray-50 dark:bg-gray-900/50"
+        style={{ contain: 'layout style', minHeight: 120 }}>
         <img
           src={src}
           alt={alt || 'Generated Image'}
+          loading="lazy"
+          decoding="async"
           className="w-full h-auto max-h-[500px] object-contain cursor-pointer hover:opacity-95 transition-opacity"
           onClick={() => onViewDiagram('image', undefined, undefined, src)}
-          loading="lazy"
           {...props}
         />
         <span className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer backdrop-blur-sm"

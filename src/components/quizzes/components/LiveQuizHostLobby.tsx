@@ -56,6 +56,7 @@ const LiveQuizHostLobby: React.FC<LiveQuizHostLobbyProps> = ({
   toast,
 }) => {
   const [isFullScreen, setIsFullScreen] = React.useState(true);
+  const [isMobile, setIsMobile] = React.useState(false);
   // Lobby audio refs
   const bgRef = React.useRef<HTMLAudioElement | null>(null);
   const startRef = React.useRef<HTMLAudioElement | null>(null);
@@ -80,6 +81,13 @@ const LiveQuizHostLobby: React.FC<LiveQuizHostLobbyProps> = ({
     const timer = setInterval(updateCountdown, 1000);
     return () => clearInterval(timer);
   }, [scheduledTime]);
+
+  React.useEffect(() => {
+    const update = () => setIsMobile(typeof window !== 'undefined' ? window.innerWidth < 640 : false);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
 
   // initialize lobby audio
   React.useEffect(() => {
@@ -179,39 +187,45 @@ const LiveQuizHostLobby: React.FC<LiveQuizHostLobbyProps> = ({
         </div>
 
         {/* Top Bar */}
-        <div className="relative z-10 flex items-center justify-between px-4 py-3 md:px-6 md:py-4 bg-blue-600/90 dark:bg-black/20 backdrop-blur-md border-b border-blue-500/20 dark:border-white/10 shadow-lg dark:shadow-none">
-          <div className="flex items-center gap-3">
-             <div className="p-2 bg-white/20 rounded-lg shadow-inner border border-white/10">
-                <Crown className="h-6 w-6 text-white dark:text-yellow-500" />
-             </div>
-             <div>
-               <h1 className="font-bold text-lg md:text-xl leading-none text-white dark:text-white">
-                 <span className="hidden md:inline">VisioQuiz Host</span>
-                 <span className="md:hidden inline">Host</span>
-               </h1>
-               <div className="flex items-center gap-2 text-sm text-blue-100 dark:text-white/50">
-                  <Badge variant="outline" className="border-white/30 dark:border-white/20 text-white dark:text-white/70 h-5 px-1.5 bg-white/10 dark:bg-transparent text-[10px] md:text-xs">
-                    <Users className="h-3 w-3 mr-1 md:hidden" />
-                    <span className="hidden md:inline">{players.length} Players Ready</span>
-                    <span className="md:hidden inline">{players.length}</span>
-                  </Badge>
-                  {isMediatorMode && <Badge variant="secondary" className="bg-blue-900/40 text-blue-100 dark:bg-blue-500/20 dark:text-blue-300 border border-white/10 text-[10px] md:text-xs">Mediator</Badge>}
-               </div>
-             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button 
-               variant="ghost" 
-               size="icon" 
-               onClick={() => setIsFullScreen(false)}
-               className="hover:bg-white/20 dark:hover:bg-white/10 text-white/80 dark:text-white/70 hover:text-white dark:hover:text-white"
+        {/* Responsive Top Bar */}
+        <div className="relative z-10 flex items-center justify-between px-6 py-4 bg-white/80 dark:bg-black/20 backdrop-blur-md border-b border-gray-200 dark:border-white/10 shrink-0">
+          {/* Minimize button - far left */}
+          <div className="flex flex-row gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsFullScreen(false)}
+              className="hover:bg-white/20 dark:hover:bg-white/10 text-gray-900 dark:text-white hover:text-gray-900 dark:hover:text-white"
             >
-               <Minimize2 className="h-5 w-5" />
+              <Minimize2 className="h-5 w-5 text-gray-900 dark:text-white" />
             </Button>
+          </div>
+          {/* Center crown, Host text, and badges */}
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/20 rounded-lg shadow-inner border border-white/10">
+              <Crown className="h-6 w-6 text-gray-900 dark:text-yellow-500" />
+            </div>
+            <div>
+              <h1 className="font-bold text-lg md:text-xl leading-none text-gray-900 dark:text-white">
+                <span className="hidden md:inline">VisioQuiz Host</span>
+                <span className="md:hidden inline">Host</span>
+              </h1>
+              <div className="flex items-center gap-2 text-sm text-gray-900 dark:text-white/70">
+                <Badge variant="outline" className="border-white/30 dark:border-white/20 text-gray-900 dark:text-white h-5 px-1.5 bg-white/10 dark:bg-transparent text-[10px] md:text-xs">
+                  <Users className="h-3 w-3 mr-1 md:hidden text-gray-900 dark:text-white" />
+                  <span className="hidden md:inline">{players.length} Players Ready</span>
+                  <span className="md:hidden inline">{players.length}</span>
+                </Badge>
+                {isMediatorMode && <Badge variant="secondary" className="bg-blue-900/40 text-blue-100 dark:bg-blue-500/20 dark:text-blue-300 border border-white/10 text-[10px] md:text-xs">Mediator</Badge>}
+              </div>
+            </div>
+          </div>
+          {/* Leave button - far right */}
+          <div className="flex flex-row gap-2">
             <Button
               variant="destructive"
               size="sm"
-              onClick={resetView} 
+              onClick={resetView}
               className="bg-red-500/80 dark:bg-red-500/20 hover:bg-red-600 dark:hover:bg-red-500/40 text-white dark:text-red-300 border border-white/20 dark:border-red-500/30 shadow-sm px-2 md:px-4"
             >
               <LogOut className="h-4 w-4 md:mr-2" />
@@ -243,16 +257,16 @@ const LiveQuizHostLobby: React.FC<LiveQuizHostLobbyProps> = ({
                         <Copy className="h-5 w-5" />
                     </Button>
                  </h2>
-                 <button 
+                  <button 
                     onClick={() => {
-                        navigator.clipboard.writeText(session.join_code);
-                        toast({ title: 'Copied!', description: 'Join code copied to clipboard' });
+                      navigator.clipboard.writeText(session.join_code);
+                      toast({ title: 'Copied!', description: 'Join code copied to clipboard' });
                     }}
-                    className="text-6xl md:text-8xl lg:text-9xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-400 dark:from-white dark:via-blue-100 dark:to-white/50 drop-shadow-xl dark:drop-shadow-2xl font-mono hover:scale-105 transition-transform cursor-pointer outline-none focus:scale-105"
+                    className="text-5xl md:text-8xl lg:text-9xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-400 dark:from-white dark:via-blue-100 dark:to-white/50 drop-shadow-xl dark:drop-shadow-2xl font-mono hover:scale-105 transition-transform cursor-pointer outline-none focus:scale-105 break-words"
                     title="Click to copy"
-                 >
+                  >
                     {session.join_code}
-                 </button>
+                  </button>
                  <p className="text-lg md:text-xl text-gray-500 dark:text-white/40">Enter this code to join</p>
               </div>
 
@@ -277,7 +291,7 @@ const LiveQuizHostLobby: React.FC<LiveQuizHostLobbyProps> = ({
            </motion.div>
 
            {/* Right: Player Grid */}
-           <div className="flex-1 w-full max-w-2xl bg-white/60 dark:bg-black/20 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-white/5 p-4 md:p-6 h-[350px] md:h-[500px] flex flex-col shadow-xl dark:shadow-none">
+           <div className="flex-1 w-full max-w-2xl bg-white/60 dark:bg-black/20 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-white/5 p-2 md:p-6 h-[300px] md:h-[500px] flex flex-col shadow-xl dark:shadow-none">
               <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200 dark:border-white/10">
                  <h3 className="text-xl font-semibold flex items-center gap-2 text-gray-900 dark:text-white">
                     <Users className="h-5 w-5 text-blue-600 dark:text-white" /> Participants
@@ -424,7 +438,7 @@ const LiveQuizHostLobby: React.FC<LiveQuizHostLobbyProps> = ({
               </Button>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-60 overflow-y-auto">
               {players.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">
                   <Loader2 className="h-8 w-8 mx-auto mb-2 opacity-40 animate-spin" />

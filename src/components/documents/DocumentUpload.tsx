@@ -293,7 +293,7 @@ const allDocuments = contextDocuments || documents;
         toast.error("No file URL or extracted content available for download");
       }
     } catch (e) {
-      console.error("Download failed, falling back to window.open", e);
+      // console.error("Download failed, falling back to window.open", e);
       if (doc.file_url) {
         window.open(doc.file_url, '_blank');
       } else {

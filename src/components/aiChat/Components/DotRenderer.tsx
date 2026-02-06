@@ -13,15 +13,23 @@ export const DotRenderer: React.FC<DotRendererProps> = ({ dotContent, onMermaidE
         const container = containerRef.current;
         container.innerHTML = '';
 
+        // Strip any residual markdown fences that may leak through
+        const cleanContent = dotContent
+            .replace(/^```\w*\n?/, '')
+            .replace(/\n?```\s*$/, '')
+            .trim();
+
+        if (!cleanContent) return;
+
         const renderGraphviz = async () => {
             try {
                 const graphviz = await import('@hpcc-js/wasm').then(m => m.Graphviz.load());
-                const svg = graphviz.layout(dotContent, 'svg', 'dot');
+                const svg = graphviz.layout(cleanContent, 'svg', 'dot');
                 container.innerHTML = svg;
             } catch (error: any) {
-                //console.error('Graphviz rendering error:', error);
+                // console.error('[DotRenderer] Graphviz error:', error.message, { contentSnippet: cleanContent.slice(0, 200) });
                 container.innerHTML = `<div class="text-red-500 dark:text-red-400">DOT render error: ${error.message}</div>`;
-                onMermaidError(dotContent, 'rendering', error.message || 'Unknown Graphviz error');
+                onMermaidError(cleanContent, 'rendering', error.message || 'Unknown Graphviz error');
             }
         };
 

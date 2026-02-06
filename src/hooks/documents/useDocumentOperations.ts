@@ -54,7 +54,7 @@ export const useDocumentOperations = ({
           { folder_id: targetFolderId, document_id: documentId }
         ]);
         if (error) {
-          console.error(error); 
+          // console.error(error); 
            // If it's a unique constraint violation, it might be fine, but we are supposed to set the relationship newly.
            // However based on the original code logic which was replacing:
            // Actually original logic was a bit simplified in the snippet I saw. 

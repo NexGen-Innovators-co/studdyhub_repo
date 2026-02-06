@@ -111,6 +111,8 @@ const AppWithSEO = () => {
           <Route path="/documents" element={<Index />} />
           <Route path="/settings" element={<Index />} />
           <Route path="/quizzes" element={<Index />} />
+          <Route path="/quizzes/:tab" element={<Index />} />
+          <Route path="/quizzes/:tab/:sessionId" element={<Index />} />
           <Route path="/library" element={<Index />} />
           <Route path="/library/:tab" element={<Index />} />
           <Route path="/subscription" element={<SubscriptionPage />} />

@@ -461,7 +461,7 @@ const Auth = () => {
                 toast.success('Code Night Offer Applied! You have 1 month of Free Premium access.');
               }
            } catch (err) {
-             console.error('Error applying promo:', err);
+             // console.error('Error applying promo:', err);
            }
         }
         // toast.success('Welcome back!');

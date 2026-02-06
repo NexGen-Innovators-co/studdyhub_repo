@@ -214,10 +214,14 @@ mermaid.initialize({
 mermaid.parseError = function(err, hash) {
     // console.error('Mermaid parse error:', err);
     errorContainer.style.display = 'block';
-    errorMessage.textContent = err.message || err;
+    var errStr = (typeof err === 'string') ? err
+        : (err && err.message) ? err.message
+        : (err && typeof err === 'object') ? JSON.stringify(err)
+        : String(err);
+    errorMessage.textContent = errStr;
     window.parent.postMessage({ 
         type: 'mermaidError', 
-        error: err.toString(),
+        error: errStr,
         code: \`${mermaidContent.replace(/`/g, '\\`')}\`
     }, '*');
 };

@@ -649,12 +649,17 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <header className="sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 z-50">
+      <header className="bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 relative">
         {/* Main Header Row */}
         <div className="flex items-center justify-between min-h-16 px-3 sm:px-4 py-3 sm:py-0 gap-2 sm:gap-3">
           {/* Left: Toggle + App Menu + Title */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink-0">
-            <button onClick={onToggleSidebar} className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 flex-shrink-0">
+            <button
+              type="button"
+              onClick={onToggleSidebar}
+              className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 flex-shrink-0 cursor-pointer touch-manipulation"
+              aria-label="Toggle sidebar"
+            >
               <Menu className="h-5 w-5" />
             </button>
 

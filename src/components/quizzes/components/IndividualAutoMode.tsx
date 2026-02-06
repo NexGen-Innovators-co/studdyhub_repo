@@ -34,7 +34,7 @@ const IndividualAutoMode: React.FC<IndividualAutoModeProps> = ({ sessionId, play
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       containerRef.current?.requestFullscreen().catch((err) => {
-          console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+          // console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
       });
       setIsFullscreen(true);
     } else {
@@ -176,7 +176,7 @@ const IndividualAutoMode: React.FC<IndividualAutoModeProps> = ({ sessionId, play
              toast.error(`Failed to save answer: ${result.error || 'Unknown error'}`);
         }
     } catch (err: any) {
-        console.error("Submission error", err);
+        // console.error("Submission error", err);
         toast.error("Failed to save answer");
     } finally {
         setSubmitting(false);

@@ -120,7 +120,7 @@ export const AIInsights: React.FC<AIInsightsProps> = ({ stats, userName, onRefre
                     }
                 }
             } catch (e) {
-                console.warn('Failed to parse cached insights', e);
+                // console.warn('Failed to parse cached insights', e);
             }
         }
 
@@ -137,13 +137,13 @@ export const AIInsights: React.FC<AIInsightsProps> = ({ stats, userName, onRefre
                     data: rawInsights
                 }));
             } catch (e) {
-                console.warn('Failed to save insights to cache', e);
+                // console.warn('Failed to save insights to cache', e);
             }
 
             mapAndSetInsights(rawInsights);
 
         } catch (err) {
-            console.error("Failed to generate AI insights", err);
+            // console.error("Failed to generate AI insights", err);
         } finally {
             setIsLoading(false);
         }

@@ -304,9 +304,9 @@ export const createRecordingSession = async (podcastId: string, userId?: string 
       if (!error && data && !data.error) {
         return data;
       }
-      if (error) console.warn('start-recording-session invoke error', error);
+      if (error) {} // console.warn('start-recording-session invoke error', error);
     } catch (edgeErr) {
-       console.warn('start-recording-session skipped', edgeErr);
+       // console.warn('start-recording-session skipped', edgeErr);
     }
 
     // Fallback (Client-side insert)
@@ -357,7 +357,7 @@ export const uploadChunk = async (podcastId: string, uploadSessionId: string, ch
       });
 
       if (error) {
-         console.error('upload-podcast-chunk invoke error:', error);
+         // console.error('upload-podcast-chunk invoke error:', error);
          throw error;
       }
       
@@ -368,7 +368,7 @@ export const uploadChunk = async (podcastId: string, uploadSessionId: string, ch
 
       return { chunk: data.chunk, publicUrl };
     } catch (e) {
-      console.warn('uploadChunk failed', e);
+      // console.warn('uploadChunk failed', e);
       throw e;
     }
 };
@@ -385,16 +385,16 @@ export const finalizeRecording = async (podcastId: string, uploadSessionId: stri
     if (assemblePath) payload.assemble_path = assemblePath;
     if (triggerTranscription !== undefined) payload.trigger_transcription = triggerTranscription;
 
-    console.log('finalizeRecording payload:', payload);
+    // console.log('finalizeRecording payload:', payload);
 
     const { data, error } = await supabase.functions.invoke('complete-podcast-chunks', { body: payload } as any);
     if (error) {
-        console.error('complete-podcast-chunks invoke error details:', error);
+        // console.error('complete-podcast-chunks invoke error details:', error);
         throw error;
     }
     return data;
   } catch (e) {
-    console.warn('finalizeRecording exception:', e);
+    // console.warn('finalizeRecording exception:', e);
     throw e;
   }
 };

@@ -1243,7 +1243,7 @@ export const useAppOperations = ({
         .limit(50);
 
       if (error) {
-        console.error('Note search error:', error);
+        // console.error('Note search error:', error);
         return [];
       }
 
@@ -1258,7 +1258,7 @@ export const useAppOperations = ({
 
       return results as Note[];
     } catch (error) {
-      console.error('Note search error:', error);
+      // console.error('Note search error:', error);
       return [];
     }
   }, [userProfile?.id]);

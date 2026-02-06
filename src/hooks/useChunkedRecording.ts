@@ -55,10 +55,10 @@ export function useChunkedRecording(): UseChunkedRecordingReturn {
                 const s = sessionRef.current;
                 if (!s) return;
                 // upload chunk via service helper
-                console.log(`Uploading chunk ${currentIdx}, size: ${ev.data.size}`);
+                // console.log(`Uploading chunk ${currentIdx}, size: ${ev.data.size}`);
                 await uploadChunkService(s.podcastId, s.sessionId || '', currentIdx, ev.data, { mimeType });
             } catch (e) {
-                console.error(`Chunk upload ${currentIdx} failed`, e);
+                // console.error(`Chunk upload ${currentIdx} failed`, e);
                 setLastError(e as Error);
             }
         })();
@@ -87,16 +87,16 @@ export function useChunkedRecording(): UseChunkedRecordingReturn {
             // Function to handle cleanup after recorder stops
             const performCleanup = async () => {
                 try {
-                    console.log('Waiting for pending uploads:', uploadQueueRef.current.length);
+                    // console.log('Waiting for pending uploads:', uploadQueueRef.current.length);
                     await Promise.all(uploadQueueRef.current);
                     
                     const s = sessionRef.current;
                     if (s) {
-                        console.log('Finalizing recording session:', s.sessionId);
+                        // console.log('Finalizing recording session:', s.sessionId);
                         await finalizeRecording(s.podcastId, s.sessionId || '');
                     }
                 } catch (err) {
-                    console.error('Error during finalize:', err);
+                    // console.error('Error during finalize:', err);
                     setLastError(err as Error);
                 } finally {
                     sessionRef.current = null;

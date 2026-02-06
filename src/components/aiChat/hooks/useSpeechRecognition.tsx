@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, type MutableRefObject } from 'react';
 import { toast } from 'sonner';
 import { throttle } from 'lodash';
 
 interface UseSpeechRecognitionProps {
     setInputMessage: (message: string) => void;
     resizeTextarea: () => void;
-    inputMessage: string;
+    inputMessageRef: MutableRefObject<string>;
     requestNotificationPermission: () => Promise<boolean>;
     requestMicrophonePermission: () => Promise<boolean>;
     checkMicrophonePermission: () => Promise<'granted' | 'denied' | 'prompt' | 'unknown'>;
@@ -41,7 +41,7 @@ declare global {
 export const useSpeechRecognition = ({
     setInputMessage,
     resizeTextarea,
-    inputMessage,
+    inputMessageRef,
     requestNotificationPermission,
     requestMicrophonePermission,
     checkMicrophonePermission,
@@ -51,12 +51,6 @@ export const useSpeechRecognition = ({
     const recognitionRef = useRef<SpeechRecognition | null>(null);
     const lastInterimTranscriptRef = useRef<string>('');
     const isRecognizingRef = useRef(false);
-    const inputMessageRef = useRef(inputMessage);
-
-    // Keep inputMessageRef in sync with inputMessage
-    useEffect(() => {
-        inputMessageRef.current = inputMessage;
-    }, [inputMessage]);
 
     useEffect(() => {
         checkMicrophonePermission().then(status => {

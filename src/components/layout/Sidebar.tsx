@@ -993,12 +993,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
+      {/* Mobile backdrop overlay — closes sidebar on tap */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-[55] md:hidden"
+          onClick={handleToggleSidebar}
+          onTouchStart={handleToggleSidebar}
+          aria-hidden="true"
+        />
+      )}
       <div
         ref={sidebarRef}
         className={`bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 border-r h-full transition-all duration-300 ease-in-out ${isOpen
             ? 'translate-x-0 w-72 md:w-64'
             : '-translate-x-full md:translate-x-0'
-          } ${isSidebarExpanded ? 'md:w-64' : 'md:w-16'} fixed inset-y-0 left-0 z-10 flex flex-col shadow-lg md:shadow-none md:translate-x-0 md:relative overflow-hidden overflow-y-scroll modern-scrollbar`}
+          } ${isSidebarExpanded ? 'md:w-64' : 'md:w-16'} fixed inset-y-0 left-0 z-[60] md:z-auto flex flex-col shadow-lg md:shadow-none md:translate-x-0 md:relative overflow-hidden overflow-y-scroll modern-scrollbar pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]`}
       >
         <div className="p-6 sm:p-4 flex-1">
           {/* Toggle Button for Mobile */}

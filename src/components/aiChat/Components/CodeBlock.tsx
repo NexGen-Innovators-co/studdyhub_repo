@@ -92,7 +92,7 @@ interface CodeBlockProps {
     children: React.ReactNode;
     onMermaidError: (code: string, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => void;
     onSuggestAiCorrection: (prompt: string) => void;
-    onViewDiagram: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html', content?: string, language?: string, imageUrl?: string) => void;
+    onViewDiagram: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html' | 'slides', content?: string, language?: string, imageUrl?: string) => void;
     isFirstBlock?: boolean;
     autoTypeInPanel?: boolean;
     isDiagramPanelOpen: boolean;
@@ -144,7 +144,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
     }, [isEditing]);
 
     // Check if this is a special diagram type
-    const isDiagramType = lang && ['mermaid', 'chartjs', 'threejs', 'dot', 'html'].includes(lang);
+    const isDiagramType = lang && ['mermaid', 'chartjs', 'threejs', 'dot', 'html', 'slides'].includes(lang);
 
     // Determine if raw code should be shown based on various conditions
     const shouldShowRawCodeForGeneric = !isDiagramType && autoTypeInPanel && !isDiagramPanelOpen;
@@ -327,6 +327,8 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
         content = renderDiagramBlock('Three.js 3D Scene', 'threejs');
     } else if (!inline && lang === 'dot') {
         content = renderDiagramBlock('DOT Graph', 'dot');
+    } else if (!inline && lang === 'slides') {
+        content = renderDiagramBlock('Presentation Slides', 'slides');
     } else if (!inline && lang) {
         content = renderDiagramBlock(lang.toUpperCase() + ' Code', 'code');
     } else {
