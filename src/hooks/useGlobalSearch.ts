@@ -82,7 +82,7 @@ export const useGlobalSearch = <T = any>(
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Search failed';
         setError(errorMessage);
-        console.error('Search error:', err);
+        // console.error('Search error:', err);
       } finally {
         setIsSearching(false);
       }
@@ -238,7 +238,7 @@ export const useMultiSearch = (
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Search failed';
         setError(errorMessage);
-        console.error('Multi-search error:', err);
+        // console.error('Multi-search error:', err);
       } finally {
         setIsSearching(false);
       }

@@ -10,6 +10,40 @@ interface ThreeJSRendererProps {
     onSceneReady: (scene: THREE.Scene, renderer: THREE.WebGLRenderer, cleanup: () => void) => void;
 }
 
+/**
+ * Fix common syntax errors that AI models produce in Three.js code.
+ * This runs BEFORE `new Function()`, turning would-be SyntaxErrors into
+ * working code so the 3-D scene can render.
+ */
+function sanitizeThreeJsCode(code: string): string {
+    let fixed = code;
+
+    // 1) `= => {`  →  `= () => {`   (missing empty parens on arrow function)
+    fixed = fixed.replace(/=\s*=>\s*\{/g, '= () => {');
+
+    // 2) `.dispose;` `.destroy;` etc  →  `.dispose();`  (missing call-parens)
+    //    Only target common no-arg cleanup methods followed by `;`
+    fixed = fixed.replace(
+        /\.(dispose|destroy|remove|clear|stop|disconnect|terminate|close)\s*;/g,
+        '.$1();',
+    );
+
+    // 3) `new THREE.<Class>;`  →  `new THREE.<Class>();`  (missing constructor parens before `;`)
+    fixed = fixed.replace(
+        /new\s+(THREE\.\w+)\s*;/g,
+        'new $1();',
+    );
+
+    // 4) Balance braces — append missing `}` so the function body is valid
+    const opens = (fixed.match(/\{/g) || []).length;
+    const closes = (fixed.match(/\}/g) || []).length;
+    if (opens > closes) {
+        fixed += '\n' + '}'.repeat(opens - closes);
+    }
+
+    return fixed;
+}
+
 export const ThreeJsRenderer = memo(({ codeContent, canvasRef, onInvalidCode, onSceneReady }: ThreeJSRendererProps) => {
     const animationFrameIdRef = useRef<number | null>(null);
     const cleanupRef = useRef<(() => void) | null>(null);
@@ -41,8 +75,20 @@ export const ThreeJsRenderer = memo(({ codeContent, canvasRef, onInvalidCode, on
         }
 
         try {
+            // Strip any residual markdown fences (```threejs ... ```) that may
+            // leak through from the typing-animation auto-type pipeline.
+            const strippedCode = (codeContent || '')
+                .replace(/^```\w*\n?/, '')
+                .replace(/\n?```\s*$/, '')
+                .trim();
+
+            // Fix common AI-generated syntax mistakes before evaluation
+            const cleanCode = sanitizeThreeJsCode(strippedCode);
+
+            // console.log('[ThreeJsRenderer] Executing code:', { codeContentLen: codeContent?.length, cleanCodeLen: cleanCode.length, sanitized: strippedCode !== cleanCode, cleanCodeSnippet: cleanCode.slice(0, 200) });
+
             const createSceneWrapper = new Function('THREE', 'OrbitControls', 'GLTFLoader', `
-        ${codeContent}
+        ${cleanCode}
         return createThreeJSScene;
       `);
 

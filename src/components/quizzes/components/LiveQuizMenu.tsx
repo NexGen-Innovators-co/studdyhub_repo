@@ -395,7 +395,7 @@ const LiveQuizMenu: React.FC<LiveQuizMenuProps> = ({
   const menuContent = (
     <div className={isFullScreen ? "max-w-4xl mx-auto space-y-6 relative z-10" : "max-w-4xl mx-auto space-y-6"}>
       {/* Debug Button */}
-      {process.env.NODE_ENV === 'development' && (
+      {/* {process.env.NODE_ENV === 'development' && (
         <Button
           onClick={() => setDebugMode(!debugMode)}
           variant="ghost"
@@ -404,10 +404,10 @@ const LiveQuizMenu: React.FC<LiveQuizMenuProps> = ({
         >
           🐛 Debug
         </Button>
-      )}
+      )} */}
 
       {/* Debug Panel */}
-      {debugMode && (
+      {/* {debugMode && (
         <Card className="fixed bottom-20 left-4 w-96 z-50 max-h-80 overflow-auto bg-yellow-50">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Debug Info</CardTitle>
@@ -422,7 +422,7 @@ const LiveQuizMenu: React.FC<LiveQuizMenuProps> = ({
             </pre>
           </CardContent>
         </Card>
-      )}
+      )} */}
 
       {/* Active Sessions Section */}
       {activeSessions.length > 0 && (
@@ -434,7 +434,7 @@ const LiveQuizMenu: React.FC<LiveQuizMenuProps> = ({
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock className={isFullScreen ? "h-5 w-5 text-amber-500 dark:text-amber-400" : "h-5 w-5 text-amber-500"} />
-              Your Active Sessions
+              <span className="text-gray-900 dark:text-white">Your Active Sessions</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -482,8 +482,8 @@ const LiveQuizMenu: React.FC<LiveQuizMenuProps> = ({
                         </div>
                         <div className="space-y-1">
                           <div className={`flex items-center gap-2 text-sm ${isFullScreen ? 'text-gray-900 dark:text-white' : ''}`}>
-                            <span className="font-semibold">Join Code:</span>
-                            <span className="font-mono font-bold text-lg">{sessionData.join_code}</span>
+                            <span className="font-semibold text-gray-900 dark:text-white">Join Code:</span>
+                            <span className="font-mono font-bold text-lg text-gray-900 dark:text-white">{sessionData.join_code}</span>
                             <Button
                               variant="ghost"
                               size="sm"
@@ -497,7 +497,7 @@ const LiveQuizMenu: React.FC<LiveQuizMenuProps> = ({
                             </Button>
                           </div>
                           <div className={`flex items-center gap-2 text-sm ${isFullScreen ? 'text-gray-600 dark:text-gray-300' : 'text-gray-600 dark:text-gray-400'}`}>
-                            <Users className="h-4 w-4" />
+                            <Users className="h-4 w-4 text-gray-900 dark:text-white" />
                             <span>Playing as: {sessionData.player_info.display_name}</span>
                           </div>
                           {sessionData.status === 'in_progress' && (
@@ -895,29 +895,38 @@ const LiveQuizMenu: React.FC<LiveQuizMenuProps> = ({
                           <div className="space-y-3 pr-4">
                             {customQuestions.map((q, qIdx) => (
                               <Card key={qIdx} className={isFullScreen ? "bg-white/40 dark:bg-black/20 border-black/5 dark:border-white/10" : ""}>
-                                <CardContent className="p-4 space-y-3">
-                                  <div className="flex justify-between items-start">
-                                    <span className={`font-semibold ${isFullScreen ? 'text-gray-900 dark:text-white' : ''}`}>Q{qIdx + 1}</span>
+                                <CardContent className="p-4 space-y-5">
+                                  <div className="flex justify-between items-center mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`inline-flex items-center justify-center h-7 w-7 rounded-full font-bold text-base ${isFullScreen ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : 'bg-blue-50 text-blue-700'}`}>Q{qIdx + 1}</span>
+                                      <span className={`font-semibold text-lg ${isFullScreen ? 'text-gray-900 dark:text-white' : ''}`}>Question</span>
+                                    </div>
                                     {customQuestions.length > 1 && (
                                       <Button
                                         variant="ghost"
-                                        size="sm"
+                                        size="icon"
                                         onClick={() => removeCustomQuestion(qIdx)}
                                         className={isFullScreen ? "text-red-600 dark:text-red-400 hover:bg-red-500/20" : ""}
+                                        aria-label="Remove question"
                                       >
-                                        <XCircle className="h-4 w-4" />
+                                        <XCircle className="h-5 w-5" />
                                       </Button>
                                     )}
                                   </div>
-                                  <Input
-                                    placeholder="Question text"
-                                    value={q.question_text}
-                                    onChange={(e) => updateCustomQuestion(qIdx, 'question_text', e.target.value)}
-                                    className={isFullScreen ? "bg-black/5 dark:bg-white/10 border-black/10 dark:border-white/20 text-gray-900 dark:text-white" : ""}
-                                  />
                                   <div className="space-y-2">
+                                    <label className={`block text-sm font-medium mb-1 ${isFullScreen ? 'text-gray-700 dark:text-gray-200' : ''}`}>Question Text</label>
+                                    <Input
+                                      placeholder="Enter question text..."
+                                      value={q.question_text}
+                                      onChange={(e) => updateCustomQuestion(qIdx, 'question_text', e.target.value)}
+                                      className={isFullScreen ? "bg-black/5 dark:bg-white/10 border-black/10 dark:border-white/20 text-gray-900 dark:text-white" : ""}
+                                    />
+                                  </div>
+                                  <div className="border-t border-dashed border-gray-300 dark:border-gray-700 my-3" />
+                                  <div className="space-y-2">
+                                    <label className={`block text-sm font-medium mb-1 ${isFullScreen ? 'text-gray-700 dark:text-gray-200' : ''}`}>Options</label>
                                     {q.options.map((opt, optIdx) => (
-                                      <div key={optIdx} className="flex gap-2">
+                                      <div key={optIdx} className="flex gap-2 items-center mb-1">
                                         <Input
                                           placeholder={`Option ${optIdx + 1}`}
                                           value={opt}
@@ -927,37 +936,42 @@ const LiveQuizMenu: React.FC<LiveQuizMenuProps> = ({
                                         {q.options.length > 2 && (
                                           <Button
                                             variant="ghost"
-                                            size="sm"
+                                            size="icon"
                                             onClick={() => removeCustomOption(qIdx, optIdx)}
                                             className={isFullScreen ? "text-red-600 dark:text-red-400 hover:bg-red-500/20" : ""}
+                                            aria-label="Remove option"
                                           >
                                             <XCircle className="h-4 w-4" />
                                           </Button>
                                         )}
                                       </div>
                                     ))}
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => addCustomOption(qIdx)}
+                                      className={`w-full mt-2 ${isFullScreen ? "bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/20 text-gray-900 dark:text-white hover:bg-black/10 dark:hover:bg-white/10" : ""}`}
+                                    >
+                                      + Add Option
+                                    </Button>
                                   </div>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => addCustomOption(qIdx)}
-                                    className={`w-full ${isFullScreen ? "bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/20 text-gray-900 dark:text-white hover:bg-black/10 dark:hover:bg-white/10" : ""}`}
-                                  >
-                                    Add Option
-                                  </Button>
-                                  <select
-                                    value={q.correct_answer}
-                                    onChange={(e) => updateCustomQuestion(qIdx, 'correct_answer', parseInt(e.target.value))}
-                                    className={`w-full p-2 border rounded-lg ${
-                                        isFullScreen 
-                                        ? "bg-black/5 dark:bg-white/10 border-black/10 dark:border-white/20 text-gray-900 dark:text-white" 
-                                        : "bg-white dark:bg-gray-900 dark:border-gray-700 text-gray-900 dark:text-white"
-                                    }`}
-                                  >
-                                    {q.options.map((opt, i) => (
-                                      <option key={i} value={i} className={isFullScreen ? "bg-white dark:bg-slate-800" : "bg-white dark:bg-gray-900"}>Correct Answer: Option {i + 1}</option>
-                                    ))}
-                                  </select>
+                                  <div className="border-t border-dashed border-gray-300 dark:border-gray-700 my-3" />
+                                  <div className="space-y-2">
+                                    <label className={`block text-sm font-medium mb-1 ${isFullScreen ? 'text-gray-700 dark:text-gray-200' : ''}`}>Correct Answer</label>
+                                    <select
+                                      value={q.correct_answer}
+                                      onChange={(e) => updateCustomQuestion(qIdx, 'correct_answer', parseInt(e.target.value))}
+                                      className={`w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition ${
+                                          isFullScreen 
+                                          ? "bg-black/5 dark:bg-white/10 border-black/10 dark:border-white/20 text-gray-900 dark:text-white" 
+                                          : "bg-white dark:bg-gray-900 dark:border-gray-700 text-gray-900 dark:text-white"
+                                      }`}
+                                    >
+                                      {q.options.map((opt, i) => (
+                                        <option key={i} value={i} className={isFullScreen ? "bg-white dark:bg-slate-800" : "bg-white dark:bg-gray-900"}>{opt ? opt : `Option ${i + 1}`}</option>
+                                      ))}
+                                    </select>
+                                  </div>
                                 </CardContent>
                               </Card>
                             ))}
@@ -1227,23 +1241,23 @@ const LiveQuizMenu: React.FC<LiveQuizMenuProps> = ({
         </div>
 
         {/* Top Bar */}
-        <div className="relative z-10 flex items-center justify-between px-6 py-4 bg-blue-600/90 dark:bg-black/20 backdrop-blur-md border-b border-white/10 shrink-0 shadow-lg dark:shadow-none">
+        <div className="relative z-10 flex items-center justify-between px-6 py-4 bg-white/80 dark:bg-black/20 backdrop-blur-md border-b border-gray-200 dark:border-white/10 shrink-0">
           <div className="flex items-center gap-3">
-             <div className="p-2 bg-white/20 dark:bg-blue-500/20 rounded-lg shadow-inner">
-                <Sparkles className="h-6 w-6 text-white dark:text-blue-400" />
+             <div className="p-2 bg-blue-100 dark:bg-blue-600/30 rounded-lg shadow-inner">
+               <Sparkles className="h-6 w-6 text-blue-600 dark:text-blue-400" />
              </div>
              <div>
-               <h1 className="font-bold text-xl leading-none text-white dark:text-white">VisioQuiz Setup</h1>
-               <p className="text-xs text-blue-100 dark:text-white/50">Configure your session</p>
+               <h1 className="font-bold text-xl leading-none text-gray-900 dark:text-white">VisioQuiz Setup</h1>
+               <p className="text-xs text-gray-700 dark:text-white/50">Configure your session</p>
              </div>
           </div>
           <Button 
             variant="ghost" 
             size="sm" 
             onClick={() => setIsFullScreen(false)}
-            className="text-white/80 dark:text-white/70 hover:text-white dark:hover:text-white hover:bg-white/20 dark:hover:bg-white/10"
+            className="text-gray-900 dark:text-white hover:text-gray-900 dark:hover:text-white hover:bg-white/20 dark:hover:bg-white/10"
           >
-            <Minimize2 className="h-4 w-4 mr-2" />
+            <Minimize2 className="h-4 w-4 mr-2 text-gray-900 dark:text-white" />
             Exit Fullscreen
           </Button>
         </div>

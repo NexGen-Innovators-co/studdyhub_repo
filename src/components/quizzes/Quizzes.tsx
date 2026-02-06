@@ -1,5 +1,6 @@
 // src/components/quizzes/Quizzes.tsx - REDESIGNED
 import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ClassRecording, Quiz } from '../../types/Class';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -58,6 +59,8 @@ interface QuizzesProps {
 }
 
 export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerateQuiz, userId }) => {
+  const navigate = useNavigate();
+  const params = useParams();
   const [selectedRecording, setSelectedRecording] = useState<string>('');
     // Get userName from context (userProfile or user)
     const { userProfile, user } = useAppContext();
@@ -68,7 +71,9 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
   const [allBadges, setAllBadges] = useState<BadgeType[]>([]);
   const [earnedAchievements, setEarnedAchievements] = useState<Achievement[]>([]);
   const [isLoadingBadges, setIsLoadingBadges] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview');
+  // Determine initial tab from URL param, fallback to overview
+  const initialTab = params.tab || 'overview';
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [livePastSessions, setLivePastSessions] = useState<any[]>([]);
   const [loadingLivePastSessions, setLoadingLivePastSessions] = useState(false);
   const [viewingLiveSessionId, setViewingLiveSessionId] = useState<string | null>(null);
@@ -91,6 +96,23 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
       players: [],
       currentQuestion: null,
     });
+
+    // --- Live Quiz Routing: reflect sessionId in URL when active ---
+    useEffect(() => {
+      if (activeTab === 'live') {
+        // If a live session is active, update URL to /quizzes/live/:sessionId
+        if (liveQuizState.session && liveQuizState.session.id) {
+          if (params.sessionId !== liveQuizState.session.id) {
+            navigate(`/quizzes/live/${liveQuizState.session.id}`, { replace: true });
+          }
+        } else {
+          // No session, ensure URL is just /quizzes/live
+          if (params.sessionId) {
+            navigate(`/quizzes/live`, { replace: true });
+          }
+        }
+      }
+    }, [activeTab, liveQuizState.session, params.sessionId, navigate]);
   // Initialize global search hook for quizzes
   const { search, results: searchResults, isSearching: isSearchingQuizzes } = useGlobalSearch(
     SEARCH_CONFIGS.quizzes,
@@ -146,9 +168,21 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
   const { refreshData, dataLoading } = useAppContext();
 
   // Sync tab changes with global header
+
+  // Sync tab state with URL
   useEffect(() => {
+    if (params.tab !== activeTab) {
+      navigate(`/quizzes/${activeTab}`, { replace: true });
+    }
     window.dispatchEvent(new CustomEvent('section-tab-active', { detail: { section: 'quizzes', tab: activeTab } }));
   }, [activeTab]);
+
+  // Update tab if URL param changes (browser nav)
+  useEffect(() => {
+    if (params.tab && params.tab !== activeTab) {
+      setActiveTab(params.tab);
+    }
+  }, [params.tab]);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -1053,6 +1087,24 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
                   }}
                   quiz={viewingSessionData.quiz}
                   userAnswers={viewingSessionData.userAnswers}
+                  onShareToFeedDraft={({ session, quiz, userAnswers, players }) => {
+                    // 1. Close the modal
+                    setViewingLiveSessionId(null);
+                    // 2. Prepare the data to pass
+                    const shareData = { session, quiz, userAnswers, players, type: 'quiz' };
+                    // 3. Navigate to social feed and open CreatePostDialog with quiz content (like podcast sharing)
+                    if ((window as any).onNavigateToTab) {
+                      (window as any).onNavigateToTab('social');
+                    } else {
+                      // fallback navigation if needed
+                      navigate('/social');
+                    }
+                    setTimeout(() => {
+                      if ((window as any).socialFeedRef && (window as any).socialFeedRef.current && (window as any).socialFeedRef.current.openCreatePostDialogWithQuiz) {
+                        (window as any).socialFeedRef.current.openCreatePostDialogWithQuiz(shareData);
+                      }
+                    }, 300);
+                  }}
                 />
               ) : (
                 <div className="text-center py-12">

@@ -1,5 +1,5 @@
 // src/components/quizzes/components/LiveQuizResults.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
@@ -19,6 +19,9 @@ import {
   Share2
 } from 'lucide-react';
 import { LiveQuizSession, LiveQuizPlayer } from '@/services/liveQuizService';
+import { ShareDialog } from '../../ui/ShareDialog';
+import { useSocialActions } from '../../social/hooks/useSocialActions';
+import { Privacy } from '../../social/types/social';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactConfetti from 'react-confetti';
 
@@ -30,6 +33,7 @@ interface LiveQuizResultsProps {
   toast: any;
   quiz?: any;
   userAnswers?: any[];
+  onShareToFeedDraft?: (data: { session: any; quiz: any; userAnswers: any; players: any }) => void;
 }
 
 const LiveQuizResults: React.FC<LiveQuizResultsProps> = ({
@@ -40,27 +44,90 @@ const LiveQuizResults: React.FC<LiveQuizResultsProps> = ({
   toast,
   quiz,
   userAnswers = [],
+  onShareToFeedDraft,
 }) => {
   const [isFullScreen, setIsFullScreen] = React.useState(true);
   const [recycleConfetti, setRecycleConfetti] = React.useState(true);
   const [windowSize, setWindowSize] = React.useState({ width: window.innerWidth, height: window.innerHeight });
+  const [showShareModal, setShowShareModal] = useState(false);
+  // Social feed sharing
+  const [isUploading, setIsUploading] = useState(false);
+  // Dummy state for posts/groups/users (replace with real state if available)
+  const [posts, setPosts] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [suggestedUsers, setSuggestedUsers] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const socialActions = useSocialActions(currentUser, posts, setPosts, setSuggestedUsers, groups, setGroups, setCurrentUser);
+  //
 
-  React.useEffect(() => {
+  // Share quiz results to feed by navigating to social tab and opening CreatePostDialog with quiz payload
+  const handleShareToFeedDraft = ({ content, coverUrl }: { content: string; coverUrl?: string }) => {
+    if (onShareToFeedDraft) {
+      onShareToFeedDraft({ session, quiz, userAnswers, players });
+      setShowShareModal(false);
+      return;
+    }
+    // fallback to internal logic if no prop provided (legacy)
+    const payload = {
+      content,
+      coverUrl,
+      metadata: {
+        type: 'quiz',
+        quizId: session?.id,
+        title: quiz?.title,
+        description: quiz?.description || '',
+        coverUrl,
+        leaderboard: sortedPlayers.map((p, i) => ({ rank: i + 1, name: p.display_name, score: p.score })),
+      }
+    };
+    const w = window as typeof window & {
+      socialFeedRef?: { current?: { openCreatePostDialog: (payload: any) => void } };
+      onNavigateToTab?: (tab: string) => void;
+    };
+    if (typeof w.onNavigateToTab === 'function') {
+      w.onNavigateToTab('social');
+      let attempts = 0;
+      const maxAttempts = 20;
+      const checkRef = () => {
+        if (w.socialFeedRef?.current) {
+          w.socialFeedRef.current.openCreatePostDialog(payload);
+        } else if (attempts < maxAttempts) {
+          attempts++;
+          setTimeout(checkRef, 100);
+        }
+      };
+      setTimeout(checkRef, 100);
+    } else if (w.socialFeedRef?.current) {
+      w.socialFeedRef.current.openCreatePostDialog(payload);
+    } else {
+      window.location.href = '/social';
+    }
+    setShowShareModal(false);
+  };
+
+    React.useEffect(() => {
       const handleResize = () => {
-          setWindowSize({ width: window.innerWidth, height: window.innerHeight });
+        setWindowSize({ width: window.innerWidth, height: window.innerHeight });
       };
       window.addEventListener('resize', handleResize);
 
+      // Play applause sound on results view mount
+      const applauseUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/mixkit-end-of-show-clapping-crowd-477.wav';
+      const applause = new Audio(applauseUrl);
+      applause.volume = 0.7;
+      applause.play().catch(() => {});
+
       // Stop recycling after 6 seconds
       const timer = setTimeout(() => {
-          setRecycleConfetti(false);
+        setRecycleConfetti(false);
       }, 6000);
 
       return () => {
-          window.removeEventListener('resize', handleResize);
-          clearTimeout(timer);
+        window.removeEventListener('resize', handleResize);
+        clearTimeout(timer);
+        applause.pause();
       };
-  }, []);
+    }, []);
 
   if (!session) return null;
 
@@ -101,7 +168,17 @@ const LiveQuizResults: React.FC<LiveQuizResultsProps> = ({
                 <Button 
                     variant="ghost" 
                     size="sm" 
-                    onClick={() => setIsFullScreen(false)}
+                    onClick={() => {
+                      // Stop all playing audio when exiting fullscreen
+                      try {
+                        const audios = document.querySelectorAll('audio');
+                        audios.forEach((audio) => {
+                          (audio as HTMLAudioElement).pause();
+                          (audio as HTMLAudioElement).currentTime = 0;
+                        });
+                      } catch (e) {}
+                      setIsFullScreen(false);
+                    }}
                     className="text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10"
                 >
                     <Minimize2 className="h-4 w-4 mr-2" />
@@ -110,7 +187,7 @@ const LiveQuizResults: React.FC<LiveQuizResultsProps> = ({
             </div>
 
             {/* Main Content Area */}
-            <div className="relative z-10 flex-col lg:flex-row flex items-center justify-center gap-8 lg:gap-16 p-8 pt-20 flex-1 overflow-y-auto">
+            <div className="relative z-10 flex-col lg:flex-row flex items-center justify-center gap-8 lg:gap-16 p-4 pt-28 sm:pt-32 md:pt-36 lg:pt-24 flex-1 overflow-y-auto">
                 {/* Winner / Podium Section */}
                 <motion.div 
                     initial={{ opacity: 0, y: 50 }}
@@ -118,21 +195,19 @@ const LiveQuizResults: React.FC<LiveQuizResultsProps> = ({
                     transition={{ delay: 0.2 }}
                     className="flex flex-col items-center flex-1 max-w-2xl"
                 >
-                    <h2 className="text-4xl lg:text-5xl font-black text-center mb-12 text-transparent bg-clip-text bg-gradient-to-br from-yellow-600 via-amber-500 to-yellow-600 dark:from-yellow-300 dark:via-amber-200 dark:to-yellow-500 drop-shadow-xl uppercase tracking-wider">
-                        {noResults ? "No Players" : "Leaderboard"}
-                    </h2>
+                    
 
                     {sortedPlayers.length >= 1 && (
-                        <div className="flex items-end justify-center gap-4 lg:gap-8 w-full mb-12 h-[400px]">
+                      <div className="flex items-end justify-center gap-4 lg:gap-8 w-full mb-2 mt-16 sm:mt-20 md:mt-24 lg:mt-0 max-h-[300px]">
                             {/* 2nd Place */}
                             {podium[0] && (
                                 <motion.div 
-                                    initial={{ height: 0, opacity: 0 }}
-                                    animate={{ height: "auto", opacity: 1 }}
-                                    transition={{ delay: 0.5, duration: 0.8 }}
-                                    className="flex flex-col items-center w-1/3 max-w-[180px]"
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  transition={{ delay: 0.5, duration: 0.8 }}
+                                  className="flex flex-col items-center w-1/3 max-w-[140px] sm:max-w-[160px] md:max-w-[180px]"
                                 >
-                                    <Avatar className="h-16 w-16 lg:h-20 lg:w-20 mb-4 border-4 border-gray-400 shadow-lg ring-4 ring-black/50">
+                                  <Avatar className="h-14 w-14 sm:h-16 sm:w-16 md:h-20 md:w-20 mb-4 border-4 border-gray-400 shadow-lg ring-4 ring-black/50">
                                         <AvatarImage src={podium[0].avatar_url || undefined} />
                                         <AvatarFallback className="text-xl bg-gray-800 text-gray-200">
                                             {(podium[0].display_name || 'U')[0]?.toUpperCase()}
@@ -142,37 +217,37 @@ const LiveQuizResults: React.FC<LiveQuizResultsProps> = ({
                                         <div className="font-bold text-lg lg:text-xl truncate w-full px-2 text-gray-900 dark:text-white">{podium[0].display_name}</div>
                                         <div className="text-gray-600 dark:text-gray-400 font-mono">{podium[0].score} pts</div>
                                     </div>
-                                    <div className="w-full h-48 lg:h-64 bg-gradient-to-t from-gray-900 via-gray-700 to-gray-500 rounded-t-xl border-x border-t border-white/20 flex flex-col items-center justify-start py-4 shadow-[0_0_30px_rgba(255,255,255,0.1)]">
-                                        <span className="text-4xl lg:text-5xl drop-shadow-lg">🥈</span>
+                                    <div className="w-full h-32 sm:h-40 md:h-48 lg:h-64 bg-gradient-to-t from-gray-900 via-gray-700 to-gray-500 rounded-t-xl border-x border-t border-white/20 flex flex-col items-center justify-start py-4 shadow-[0_0_30px_rgba(255,255,255,0.1)]">
+                                      <span className="text-3xl sm:text-4xl md:text-5xl drop-shadow-lg">🥈</span>
                                     </div>
                                 </motion.div>
                             )}
 
                             {/* 1st Place */}
                             {podium[1] && (
-                                <motion.div 
-                                    initial={{ height: 0, opacity: 0 }}
-                                    animate={{ height: "auto", opacity: 1 }}
-                                    transition={{ delay: 0.8, duration: 0.8 }}
-                                    className="flex flex-col items-center w-1/3 max-w-[200px] z-20 relative"
-                                >
-                                    <div className="absolute -top-24 animate-bounce">
-                                        <Crown className="h-12 w-12 text-yellow-400 fill-yellow-400 drop-shadow-[0_0_15px_rgba(234,179,8,0.8)]" />
-                                    </div>
-                                    <Avatar className="h-24 w-24 lg:h-32 lg:w-32 mb-4 border-4 border-yellow-400 shadow-[0_0_30px_rgba(234,179,8,0.4)] ring-4 ring-black/50">
-                                        <AvatarImage src={podium[1].avatar_url || undefined} />
-                                        <AvatarFallback className="text-2xl bg-yellow-900 text-yellow-100">
-                                            {(podium[1].display_name || 'U')[0]?.toUpperCase()}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <div className="text-center mb-2 scale-110">
-                                        <div className="font-bold text-xl lg:text-2xl truncate w-full px-2 text-yellow-700 dark:text-yellow-200">{podium[1].display_name}</div>
-                                        <div className="text-yellow-600 dark:text-yellow-400/80 font-mono font-bold text-lg">{podium[1].score} pts</div>
-                                    </div>
-                                    <div className="w-full h-64 lg:h-80 bg-gradient-to-t from-orange-900 via-amber-600 to-yellow-500 rounded-t-xl border-x border-t border-white/30 flex flex-col items-center justify-start py-6 shadow-[0_0_50px_rgba(234,179,8,0.3)]">
-                                        <span className="text-5xl lg:text-7xl drop-shadow-lg">🥇</span>
-                                    </div>
-                                </motion.div>
+                              <motion.div 
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                transition={{ delay: 0.8, duration: 0.8 }}
+                                className="flex flex-col items-center w-1/3 max-w-[200px] z-20 relative mt-8 sm:mt-10 lg:mt-0"
+                              >
+                                <div className="absolute -top-12 sm:-top-8 animate-bounce">
+                                  <Crown className="h-12 w-12 sm:h-16 sm:w-16 text-yellow-400 fill-yellow-400 drop-shadow-[0_0_15px_rgba(234,179,8,0.8)]" />
+                                </div>
+                                <Avatar className="h-20 w-20 sm:h-24 sm:w-24 md:h-28 md:w-28 lg:h-32 lg:w-32 mb-4 border-4 border-yellow-400 shadow-[0_0_30px_rgba(234,179,8,0.4)] ring-4 ring-black/50">
+                                  <AvatarImage src={podium[1].avatar_url || undefined} />
+                                  <AvatarFallback className="text-2xl bg-yellow-900 text-yellow-100">
+                                    {(podium[1].display_name || 'U')[0]?.toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="text-center mb-2 scale-110">
+                                  <div className="font-bold text-xl lg:text-2xl truncate w-full px-2 text-yellow-700 dark:text-yellow-200">{podium[1].display_name}</div>
+                                  <div className="text-yellow-600 dark:text-yellow-400/80 font-mono font-bold text-lg">{podium[1].score} pts</div>
+                                </div>
+                                <div className="w-full h-44 sm:h-56 md:h-64 lg:h-80 bg-gradient-to-t from-orange-900 via-amber-600 to-yellow-500 rounded-t-xl border-x border-t border-white/30 flex flex-col items-center justify-start py-6 shadow-[0_0_50px_rgba(234,179,8,0.3)]">
+                                  <span className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl drop-shadow-lg">🥇</span>
+                                </div>
+                              </motion.div>
                             )}
 
                             {/* 3rd Place */}
@@ -181,9 +256,9 @@ const LiveQuizResults: React.FC<LiveQuizResultsProps> = ({
                                     initial={{ height: 0, opacity: 0 }}
                                     animate={{ height: "auto", opacity: 1 }}
                                     transition={{ delay: 0.6, duration: 0.8 }}
-                                    className="flex flex-col items-center w-1/3 max-w-[180px]"
+                                    className="flex flex-col items-center w-1/3 max-w-[120px] sm:max-w-[140px] md:max-w-[160px]"
                                 >
-                                    <Avatar className="h-16 w-16 lg:h-20 lg:w-20 mb-4 border-4 border-orange-700 shadow-lg ring-4 ring-black/50">
+                                    <Avatar className="h-12 w-12 sm:h-16 sm:w-16 md:h-20 md:w-20 mb-4 border-4 border-orange-700 shadow-lg ring-4 ring-black/50">
                                         <AvatarImage src={podium[2].avatar_url || undefined} />
                                         <AvatarFallback className="text-xl bg-orange-950 text-orange-200">
                                             {(podium[2].display_name || 'U')[0]?.toUpperCase()}
@@ -193,13 +268,16 @@ const LiveQuizResults: React.FC<LiveQuizResultsProps> = ({
                                         <div className="font-bold text-lg lg:text-xl truncate w-full px-2 text-gray-900 dark:text-white">{podium[2].display_name}</div>
                                         <div className="text-gray-600 dark:text-gray-400 font-mono">{podium[2].score} pts</div>
                                     </div>
-                                    <div className="w-full h-40 lg:h-56 bg-gradient-to-t from-orange-950 via-orange-800 to-orange-600 rounded-t-xl border-x border-t border-white/20 flex flex-col items-center justify-start py-4 shadow-[0_0_30px_rgba(255,255,255,0.1)]">
-                                        <span className="text-4xl lg:text-5xl drop-shadow-lg">🥉</span>
+                                    <div className="w-full h-28 sm:h-32 md:h-40 lg:h-56 bg-gradient-to-t from-orange-950 via-orange-800 to-orange-600 rounded-t-xl border-x border-t border-white/20 flex flex-col items-center justify-start py-4 shadow-[0_0_30px_rgba(255,255,255,0.1)]">
+                                      <span className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl drop-shadow-lg">🥉</span>
                                     </div>
                                 </motion.div>
                             )}
                         </div>
                     )}
+                    <h2 className="text-4xl lg:text-5xl font-black text-center mb-4 text-transparent bg-clip-text bg-gradient-to-br from-yellow-600 via-amber-500 to-yellow-600 dark:from-yellow-300 dark:via-amber-200 dark:to-yellow-500 drop-shadow-xl uppercase tracking-wider z-30 relative">
+                        {noResults ? "No Players" : "Leaderboard"}
+                    </h2>
                 </motion.div>
 
                 {/* Right Side: Stats Panel & Actions */}
@@ -245,11 +323,15 @@ const LiveQuizResults: React.FC<LiveQuizResultsProps> = ({
                             <Play className="h-5 w-5 mr-2" /> Play Again
                         </Button>
                         <Button 
-                            variant="outline" 
-                            size="lg"
-                            className="w-full border-gray-300 dark:border-white/20 text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-white/10 py-6"
+                          variant="outline" 
+                          size="lg"
+                          className="w-full border-gray-300 dark:border-white/20 text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-white/10 py-6"
+                          onClick={() => {
+                            if (isFullScreen) setIsFullScreen(false);
+                            setTimeout(() => setShowShareModal(true), 200);
+                          }}
                         >
-                            <Share2 className="h-5 w-5 mr-2" /> Share Results
+                          <Share2 className="h-5 w-5 mr-2" /> Share Results
                         </Button>
                         <Button
                             variant="ghost"
@@ -278,6 +360,18 @@ const LiveQuizResults: React.FC<LiveQuizResultsProps> = ({
 
   return (
     <div className="max-w-3xl mx-auto space-y-5 relative">
+      {showShareModal && (
+        <ShareDialog
+          open={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          shareUrl={`${window.location.origin}/quizzes/results/${session?.id}`}
+          title={quiz?.title || 'Quiz Results'}
+          description={`🎉 Quiz Results!\n\n${sortedPlayers.map((p, i) => `${i + 1}. ${p.display_name} - ${p.score} pts`).join('\n')}`}
+          coverImageUrl={quiz?.cover_image_url || undefined}
+          user={{ full_name: currentPlayer?.display_name || '', avatar_url: currentPlayer?.avatar_url }}
+          onShareToFeedDraft={handleShareToFeedDraft}
+        />
+      )}
         <div className="flex justify-end mb-4">
             <Button variant="outline" onClick={() => setIsFullScreen(true)}>
                 <Maximize2 className="h-4 w-4 mr-2" />

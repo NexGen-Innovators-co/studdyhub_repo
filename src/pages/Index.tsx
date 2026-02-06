@@ -769,9 +769,9 @@ const Index = () => {
           sticky top-0 
           bg-white dark:bg-slate-900 
           border-b border-slate-200 dark:border-slate-800 
-          shadow-sm z-20
+          shadow-sm z-40
           ${(currentActiveTab !== 'chat')
-            ? '  lg:z-20 '
+            ? '  lg:z-40 '
             : 'block lg:hidden'}
         `}>
           <Header onThemeChange={handleThemeChange} {...headerProps} />
@@ -782,7 +782,7 @@ const Index = () => {
       <SubscriptionStatusBar />
 
       <div className="flex-1 flex relative overflow-hidden">
-        <div className={`z-30 ${currentActiveTab === 'chat' ? 'block' : 'lg:hidden'}`}>
+        <div className={`${currentActiveTab === 'chat' ? 'block' : 'lg:hidden'}`}>
           <Sidebar {...sidebarProps} />
         </div>
 

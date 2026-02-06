@@ -2091,7 +2091,7 @@ export const useAppData = () => {
         .limit(50);
 
       if (error) {
-        console.error('Note search error:', error);
+        // console.error('Note search error:', error);
         return [];
       }
 
@@ -2106,7 +2106,7 @@ export const useAppData = () => {
 
       return results as Note[];
     } catch (error) {
-      console.error('Note search error:', error);
+      // console.error('Note search error:', error);
       return [];
     }
   }, [currentUser?.id]);

@@ -264,9 +264,28 @@ digraph G {
 
 **When to use:** Data visualization, statistics, metrics
 
-**Format:** JSON configuration for Chart.js
+**Format:** VALID JSON configuration for Chart.js (must be strict JSON)
+
+**CRITICAL SYNTAX RULES:**
+✅ keys MUST be in double quotes (e.g., "type": "bar", NOT type: "bar")
+✅ values MUST be valid JSON types
+✅ NO trailing commas after last item in array/object
+✅ NO JavaScript functions, variables, or calculations
+✅ ENSURE the JSON block is complete and closed properly with }
+✅ **MUST include the COMPLETE root object structure with ALL three top-level keys:**
+   { "type": "...", "data": { "labels": [...], "datasets": [...] }, "options": { ... } }
+✅ **The "type" key is MANDATORY** — always specify one of: bar, line, pie, doughnut, radar, polarArea, scatter, bubble
+✅ **The "data" key is MANDATORY** — it wraps "labels" and "datasets"
+✅ **Every dataset MUST have a "data" array** with numeric values (e.g., "data": [10, 20, 30])
+✅ **NEVER output just the inner content** — always output the FULL config starting with { "type":
 
 **Supported Types:** line, bar, pie, doughnut, radar, polarArea, scatter, bubble
+
+**WRONG (partial config — NEVER do this):**
+"labels": ["A", "B"], "datasets": [{"data": [1,2]}] }, "options": { ... }
+
+**CORRECT (complete config — ALWAYS do this):**
+{ "type": "bar", "data": { "labels": ["A", "B"], "datasets": [{"label": "X", "data": [1,2]}] }, "options": { "responsive": true } }
 
 **Example - Bar Chart:**
 \`\`\`chartjs
@@ -522,7 +541,22 @@ function createThreeJSScene(canvas, THREE, OrbitControls) {
 
 **When to use:** Step-by-step tutorials, presentations, multi-page content
 
-**Format:** JSON array of slide objects
+**Format:** VALID JSON **array** of slide objects (must be strict JSON)
+
+**CRITICAL SYNTAX RULES:**
+✅ Output MUST be a JSON **array** wrapped in [ ] brackets
+✅ Each slide object MUST have "title" (string) and "content" (string) keys
+✅ Keys MUST be in double quotes
+✅ Use \\n for newlines inside content strings
+✅ NO trailing commas after last item
+✅ NO JavaScript — pure JSON only
+✅ **NEVER output just the inner slide objects without the outer [ ] array brackets**
+
+**WRONG (missing outer array brackets — NEVER do this):**
+{"title": "Slide 1", "content": "..."}, {"title": "Slide 2", "content": "..."}
+
+**CORRECT (complete JSON array — ALWAYS do this):**
+[{"title": "Slide 1", "content": "..."}, {"title": "Slide 2", "content": "..."}]
 
 **Example:**
 \`\`\`slides
@@ -813,8 +847,8 @@ This shows how different services communicate while remaining independent!"
 3. ✅ Validate syntax (especially Mermaid and Three.js)
 4. ✅ Include descriptive labels and colors
 5. ✅ For Three.js: MUST return {scene, renderer, camera, controls, cleanup}
-6. ✅ For Chart.js: Use valid JSON with proper data structure
-7. ✅ For slides: Use JSON array with title and content
+6. ✅ For Chart.js: Output COMPLETE valid JSON starting with { "type": "..." } — MUST include "type", "data" (with "labels" and "datasets" containing a "data" array of numbers), and "options"
+7. ✅ For slides: Output COMPLETE JSON array wrapped in [ ] — each object MUST have "title" and "content" keys, NEVER omit the outer brackets
 8. ✅ Test complex diagrams work correctly before sending
 9. ✅ Add explanatory text before/after diagrams
 10. ✅ Use emojis to make diagrams more engaging

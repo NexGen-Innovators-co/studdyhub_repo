@@ -14,15 +14,10 @@ import {
   ChevronLeft, ChevronRight, MousePointer, Image as ImageIcon, FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Chart, registerables } from 'chart.js';
 import * as THREE from 'three';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import DOMPurify from 'dompurify';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ErrorBoundary from '../../layout/ErrorBoundary';
-import * as ReactDOMClient from 'react-dom/client';
 import { HtmlRenderer } from './HtmlRenderer';
 import { MermaidRenderer } from './MermaidRenderer';
 import { SlidesRenderer, Slide } from './SlidesRenderer';
@@ -35,7 +30,6 @@ import { PlainTextRenderer } from './PlainTexRenderer';
 import {MemoizedMarkdownRenderer } from './MarkdownRenderer';
 import DocumentMarkdownRenderer from './DocumentMarkdownRenderer';
 
-Chart.register(...registerables);
 
 interface DiagramPanelProps {
   diagramContent?: string;
@@ -59,6 +53,86 @@ interface ThreeJSRendererProps {
   canvasRef: MutableRefObject<HTMLCanvasElement | null>;
   onInvalidCode: Dispatch<SetStateAction<string | null>>;
   onSceneReady: (scene: THREE.Scene, renderer: THREE.WebGLRenderer, cleanup: () => void) => void;
+}
+
+/**
+ * Robustly parse slide JSON content. Handles:
+ * - Complete JSON arrays: [{ ... }, { ... }]
+ * - Unwrapped objects (no outer brackets): { ... }, { ... }
+ * - Fence markers from markdown: ```slides ... ```
+ * - Single slide object: { "title": "...", "content": "..." }
+ */
+function parseSlides(raw: string): Slide[] {
+  // Strip markdown fence markers
+  let text = raw
+    .replace(/^```\w*\n?/, '')
+    .replace(/\n?```\s*$/, '')
+    .trim();
+
+  // Attempt 1: direct JSON.parse (handles well-formed arrays)
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].title) return parsed;
+    if (parsed && typeof parsed === 'object' && parsed.title) return [parsed];
+  } catch { /* continue */ }
+
+  // Attempt 2: wrap in brackets (handles unwrapped comma-separated objects)
+  try {
+    const wrapped = JSON.parse(`[${text}]`);
+    if (Array.isArray(wrapped) && wrapped.length > 0 && wrapped[0].title) return wrapped;
+  } catch { /* continue */ }
+
+  // Attempt 3: balance braces then retry
+  try {
+    const balanced = balanceSlideBraces(text);
+    const parsed = JSON.parse(balanced);
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].title) return parsed;
+  } catch { /* continue */ }
+
+  // Attempt 4: wrap balanced text in brackets
+  try {
+    const balanced = balanceSlideBraces(text);
+    const wrapped = JSON.parse(`[${balanced}]`);
+    if (Array.isArray(wrapped) && wrapped.length > 0 && wrapped[0].title) return wrapped;
+  } catch { /* continue */ }
+
+  // Attempt 5: regex extract individual JSON objects with "title" and "content"
+  try {
+    const objectPattern = /\{[^{}]*"title"\s*:\s*"[^"]*"[^{}]*"content"\s*:\s*"[^"]*(?:\\.[^"]*)*"[^{}]*\}/g;
+    const matches = text.match(objectPattern);
+    if (matches && matches.length > 0) {
+      const slides: Slide[] = [];
+      for (const m of matches) {
+        try {
+          const obj = JSON.parse(m);
+          if (obj.title) slides.push(obj);
+        } catch { /* skip bad object */ }
+      }
+      if (slides.length > 0) return slides;
+    }
+  } catch { /* continue */ }
+
+  return [];
+}
+
+/** Balance unmatched braces/brackets in slide JSON text */
+function balanceSlideBraces(text: string): string {
+  let opens = 0;
+  let squareOpens = 0;
+  for (const ch of text) {
+    if (ch === '{') opens++;
+    else if (ch === '}') opens--;
+    else if (ch === '[') squareOpens++;
+    else if (ch === ']') squareOpens--;
+  }
+  let result = text;
+  // Prepend missing openers
+  while (opens < 0) { result = '{' + result; opens++; }
+  while (squareOpens < 0) { result = '[' + result; squareOpens++; }
+  // Append missing closers
+  while (opens > 0) { result = result + '}'; opens--; }
+  while (squareOpens > 0) { result = result + ']'; squareOpens--; }
+  return result;
 }
 
 export const DiagramPanel = memo(({
@@ -110,10 +184,22 @@ export const DiagramPanel = memo(({
   }, [renderContent, diagramType]);
 
   const handleDiagramError = useCallback((code: string | null, errorMessage: string) => {
-    setDiagramError(errorMessage);
-    setFaultyCode(code);
+    // Stringify objects that were coerced to "[object Object]"
+    const msg = (typeof errorMessage === 'object' && errorMessage !== null)
+      ? ((errorMessage as any).message || JSON.stringify(errorMessage))
+      : errorMessage;
+
+    // Skip non-informative errors — keep the first meaningful one
+    if (!msg || msg === '[object Object]' || msg === 'undefined' || msg === 'null') {
+      // console.warn('[DiagramPanel] Skipping non-informative error:', errorMessage);
+      return;
+    }
+
+    // console.error('[DiagramPanel] Rendering error:', { errorMessage: msg, diagramType, codeSnippet: code?.slice(0, 200) });
+    setDiagramError(prev => prev || msg); // Keep the first meaningful error, don't overwrite
+    setFaultyCode(prev => prev || code);
     toast.error('Diagram rendering error detected.');
-  }, []);
+  }, [diagramType]);
 
   const effectiveDiagramType = useMemo(() => {
     if (diagramType === 'code' && renderContent) {
@@ -184,14 +270,6 @@ export const DiagramPanel = memo(({
     });
   }, []);
 
-  const sanitizeHtml = useCallback((html: string) => {
-    return DOMPurify.sanitize(html, {
-      USE_PROFILES: { html: true },
-      ADD_TAGS: ['style'],
-      ADD_ATTR: ['style'],
-    });
-  }, []);
-
   const handleNodeClick = useCallback((nodeId: string) => {
     toast.success(`Node ${nodeId} clicked`);
   }, []);
@@ -257,12 +335,11 @@ export const DiagramPanel = memo(({
 
   useEffect(() => {
     if (effectiveDiagramType === 'slides' && renderContent) {
-      try {
-        const parsedSlides: Slide[] = JSON.parse(renderContent);
-        setSlides(parsedSlides);
+      const parsed = parseSlides(renderContent);
+      if (parsed.length > 0) {
+        setSlides(parsed);
         setCurrentSlideIndex(0);
-      } catch (error) {
-        //console.error('Error parsing slide JSON:', error);
+      } else {
         setSlides([]);
         toast.error('Failed to parse slide content. Invalid JSON format.');
       }
@@ -287,165 +364,9 @@ export const DiagramPanel = memo(({
     });
   }, [handleNodeClick]);
 
-  useEffect(() => {
-    if (!renderContent || !containerRef.current) return;
-    const container = containerRef.current;
-    container.innerHTML = '';
-    if (effectiveDiagramType === 'html' || effectiveDiagramType === 'mermaid' || effectiveDiagramType === 'slides' || effectiveDiagramType === 'threejs') {
-      return;
-    }
-
-    const renderGraphviz = async () => {
-      try {
-        const graphviz = await import('@hpcc-js/wasm').then(m => m.Graphviz.load());
-        const svg = graphviz.layout(renderContent, 'svg', 'dot');
-        container.innerHTML = svg;
-      } catch (error: any) {
-        //console.error('Graphviz rendering error:', error);
-        container.innerHTML = `<div class="text-red-500 dark:text-red-400">DOT render error.</div>`;
-        onMermaidError(renderContent, 'rendering');
-      }
-    };
-
-    const renderChartjs = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        if (isInteractiveContent) {
-          canvas.style.width = '100%';
-          canvas.style.height = '100%';
-        }
-        container.appendChild(canvas);
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          const chartData = JSON.parse(renderContent);
-          new Chart(ctx, chartData);
-        }
-      } catch (error: any) {
-        //console.error('Chart.js rendering error:', error);
-        container.innerHTML = `<div class="text-red-500 dark:text-red-400">Chart.js render error. Invalid JSON or chart configuration.</div>`;
-        onMermaidError(renderContent, 'rendering');
-      }
-    };
-
-    const renderCode = () => {
-      container.innerHTML = '';
-      const wrapper = document.createElement('div');
-      wrapper.className = 'relative w-full h-full overflow-auto modern-scrollbar';
-      const codeContainer = document.createElement('div');
-      codeContainer.className = 'relative bg-white dark:bg-gray-900 w-full box-border';
-      wrapper.appendChild(codeContainer);
-      const root = ReactDOMClient.createRoot(codeContainer);
-      root.render(
-        <SyntaxHighlighter
-          language={language || 'text'}
-          style={vscDarkPlus}
-          showLineNumbers={true}
-          wrapLines={true}
-          customStyle={{
-            margin: 0,
-            padding: '0.75rem 1rem',
-            fontSize: '0.875rem',
-            lineHeight: '1.5',
-            background: 'transparent',
-            borderRadius: '0 0 0.375rem 0.375rem',
-          }}
-          codeTagProps={{
-            className: 'font-mono text-gray-800 dark:text-gray-100',
-          }}
-        >
-          {renderContent}
-        </SyntaxHighlighter>
-      );
-      container.appendChild(wrapper);
-    };
-
-    const renderPlainText = () => {
-      const plainTextStyle = `
-.text-block-wrapper {
-position: relative;
-counter-reset: line;
-padding-left: 40px;
-background-color: #1e1e1e;
-color: #d4d4d4;
-font-family: sans-serif;
-font-size: 0.875rem;
-line-height: 1.4;
-width: 100%;
-height: 100%;
-overflow-x: auto;
-overflow-y: auto;
-white-space: pre-wrap;
-word-break: break-all;
-word-wrap: break-word;
--webkit-overflow-scrolling: touch;
-border-radius: 8px;
-border: 1px solid #3c3c3c;
-box-sizing: border-box;
-padding-top: 1rem;
-padding-bottom: 1rem;
-min-width: 0;
-flex-shrink: 0;
-}
-
-.text-block-wrapper .text-line {
-position: relative;
-display: block;
-min-height: 1.4em;
-padding-right: 1rem;
-padding-left: 0.5rem;
-}
-
-.text-block-wrapper .text-line::before {
-content: counter(line);
-counter-increment: line;
-position: absolute;
-left: -40px;
-width: 30px;
-text-align: right;
-padding-right: 10px;
-color: #858585;
-font-size: 0.85em;
-line-height: inherit;
-display: inline-block;
-pointer-events: none;
-user-select: none;
-box-sizing: border-box;
-}
-`;
-      const styleElement = document.createElement('style');
-      styleElement.textContent = plainTextStyle;
-      container.appendChild(styleElement);
-      const pre = document.createElement('pre');
-      pre.className = `text-block-wrapper modern-scrollbar`;
-      container.appendChild(pre);
-      const lines = DOMPurify.sanitize(renderContent).split('\n');
-      const numberedHtml = lines.map(line => `<div class="text-line">${line || '&nbsp;'}</div>`).join('');
-      pre.innerHTML = numberedHtml;
-    };
-
-    switch (effectiveDiagramType) {
-      case 'dot':
-        renderGraphviz();
-        break;
-      case 'chartjs':
-        renderChartjs();
-        break;
-      case 'code':
-        renderCode();
-        break;
-      case 'image':
-        container.innerHTML = `<img src="${imageUrl}" alt="Generated Image" className="max-w-full h-auto object-contain rounded-lg shadow-md mx-auto" onerror="this.onerror=null;this.src='https://placehold.co/400x300/e0e0e0/555555?text=Image+Load+Error';" />`;
-        break;
-      case 'document-text':
-      case 'unknown':
-        renderPlainText();
-        break;
-      default:
-        break;
-    }
-  }, [effectiveDiagramType, renderContent, imageUrl, onMermaidError, language, isInteractiveContent, sanitizeHtml]);
-
-
+  // NOTE: Old DOM-based rendering useEffect removed — containerRef was never
+  // attached to a DOM element so it always early-returned. All diagram types
+  // now render via dedicated React components in JSX below.
 
   const downloadContent = useCallback(() => {
     if (!renderContent) {

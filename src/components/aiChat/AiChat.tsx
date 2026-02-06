@@ -103,6 +103,45 @@ interface AIChatProps {
   onSuggestAiCorrection?: (prompt: string) => Promise<void>;
 }
 
+// ── Extracted outside AIChat to keep stable references across re-renders ──
+const MessageSkeleton: React.FC = () => (
+  <div className="space-y-4 animate-pulse">
+    {[1, 2, 3].map((i) => (
+      <div key={i} className="flex gap-3">
+        <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0" />
+        <div className="flex-1 space-y-2">
+          <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4" />
+          <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-1/2" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: number }> = ({ isLoadingSession, messageCount }) => {
+  if (!isLoadingSession) return null;
+
+  return (
+    <div className="flex flex-col items-center justify-center py-8 space-y-4">
+      <BookPagesAnimation className="h-16 w-16 text-pink-500" showText={false} />
+      <div className="space-y-2 text-center">
+        <p className="text-base text-gray-600 dark:text-gray-300 animate-pulse">
+          Loading conversation...
+        </p>
+      </div>
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="flex gap-3">
+          <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4" />
+            <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-1/2" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const AIChat: React.FC<AIChatProps> = ({
   messages,
   isLoading,
@@ -137,7 +176,22 @@ const AIChat: React.FC<AIChatProps> = ({
   streamingState,
   onSuggestAiCorrection,
 }) => {
-  const [inputMessage, setInputMessage] = useState('');
+  // ── Perf: keep input text in a ref (uncontrolled textarea) to avoid
+  //    re-rendering the entire 1400+ line component on every keystroke.
+  //    Only `hasInput` (boolean) is state – it toggles the send/mic icon.
+  const inputMessageRef = useRef('');
+  const [hasInput, setHasInput] = useState(false);
+
+  /** Programmatically update the textarea value (for edit, speech-rec, clear, etc.) */
+  const setInputValue = useCallback((value: string) => {
+    inputMessageRef.current = value;
+    setHasInput(value.trim().length > 0);
+    if (textareaRef.current) {
+      textareaRef.current.value = value;
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, []);
 
   const [showPodcastGenerator, setShowPodcastGenerator] = useState(false);
   const [activePodcast, setActivePodcast] = useState<PodcastData | null>(null);
@@ -155,7 +209,6 @@ const AIChat: React.FC<AIChatProps> = ({
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [expandedMessages, setExpandedMessages] = useState<string[]>([]);
-  const [showScrollToBottomButton, setShowScrollToBottomButton] = useState(false);
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
   // NEW: State for editing message
   const [editingMessage, setEditingMessage] = useState<{
@@ -315,6 +368,8 @@ const AIChat: React.FC<AIChatProps> = ({
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const [isLoadingSession, setIsLoadingSession] = useState(false);
   const [isAutoScrolling, setIsAutoScrolling] = useState(true);
+  const [showScrollDown, setShowScrollDown] = useState(false);
+  const [showScrollUp, setShowScrollUp] = useState(false);
   const isCurrentlySendingRef = useRef(false);
   const prevSessionIdRef = useRef<string | null>(null);
   const [loadingStatus, setLoadingStatus] = useState<{
@@ -326,47 +381,7 @@ const AIChat: React.FC<AIChatProps> = ({
     message: '',
     progress: 0
   });
-  // MessageSkeleton: loading placeholder for messages
-  const MessageSkeleton: React.FC = () => (
-    <div className="space-y-4 animate-pulse">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="flex gap-3">
-          <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0" />
-          <div className="flex-1 space-y-2">
-            <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4" />
-            <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-1/2" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
 
-  const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: number }> = ({ isLoadingSession, messageCount }) => {
-    if (!isLoadingSession) return null;
-
-    return (
-      <div className="flex flex-col items-center justify-center py-8 space-y-4">
-        {/* Animated book loader */}
-        <BookPagesAnimation className="h-16 w-16 text-pink-500" showText={false} />
-
-        {/* Loading text with fade animation */}
-        <div className="space-y-2 text-center">
-          <p className="text-base text-gray-600 dark:text-gray-300 animate-pulse">
-            Loading conversation...
-          </p>
-        </div>
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="flex gap-3">
-            <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0" />
-            <div className="flex-1 space-y-2">
-              <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4" />
-              <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-1/2" />
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  };
   const loadSessionDocuments = useCallback(async (sessionId: string) => {
     if (!userProfile?.id) return;
 
@@ -446,14 +461,14 @@ const AIChat: React.FC<AIChatProps> = ({
     localStorage.setItem('ai-streaming-mode', String(enableStreamingMode));
   }, [enableStreamingMode]);
   const { isRecognizing, startRecognition, stopRecognition, micPermissionStatus } = useSpeechRecognition({
-    setInputMessage,
+    setInputMessage: setInputValue,
     resizeTextarea: useCallback(() => {
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
         textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
       }
     }, []),
-    inputMessage,
+    inputMessageRef,
     requestNotificationPermission: useCallback(async (): Promise<boolean> => {
       if (!("Notification" in window)) {
         //console.warn("Notification API not supported in this browser.");
@@ -499,13 +514,16 @@ const AIChat: React.FC<AIChatProps> = ({
       stopRecognition();
     }
 
+    // Read text from the ref (uncontrolled textarea)
+    const inputMessage = inputMessageRef.current;
+
     // Check if this is an image generation request
     const imageDetection = detectImageGenerationRequest(inputMessage);
     if (imageDetection.isImageRequest && imageDetection.extractedPrompt) {
       // Open image generator with the detected prompt
       setDetectedImagePrompt(imageDetection.extractedPrompt);
       setShowImageGenerator(true);
-      setInputMessage(''); // Clear the input
+      setInputValue(''); // Clear the input
       return;
     }
 
@@ -624,7 +642,7 @@ const AIChat: React.FC<AIChatProps> = ({
           };
         })
       );
-      setInputMessage('');
+      setInputValue('');
 
       // Note: Message count updates automatically via realtime subscription when AI responds
       await onSendMessageToBackend(
@@ -665,7 +683,7 @@ const AIChat: React.FC<AIChatProps> = ({
       }
 
       toast.error(`Error: ${errorMessage}`);
-      setInputMessage('');
+      setInputValue('');
       setAttachedFiles([]);
       setExpandedMessages([]);
     } finally {
@@ -675,7 +693,6 @@ const AIChat: React.FC<AIChatProps> = ({
       isCurrentlySendingRef.current = false;
     }
   }, [
-    inputMessage,
     attachedFiles,
     userProfile?.id,
     activeChatSessionId,
@@ -688,7 +705,8 @@ const AIChat: React.FC<AIChatProps> = ({
     messages,
     isRecognizing,
     stopRecognition,
-    detectImageGenerationRequest
+    detectImageGenerationRequest,
+    setInputValue,
   ]);
   const handleMarkMessageDisplayed = useCallback(async (messageId: string) => {
     if (!userProfile?.id || !activeChatSessionId) {
@@ -731,18 +749,34 @@ const AIChat: React.FC<AIChatProps> = ({
   // Memoized handlers for better performance
   const memoizedHandleBlockDetected = useCallback((blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => {
     if (autoTypeInPanel && isFirstBlock) {
+      // useTypingAnimation classifies all fenced code blocks as 'code', but
+      // diagram-specific languages need their own type so DiagramPanel renders
+      // the correct renderer (ThreeJsRenderer, ChartJsRenderer, DotRenderer, etc.)
+      const DIAGRAM_LANGUAGES = ['threejs', 'chartjs', 'dot'] as const;
+      const resolvedType = (blockType === 'code' && language && (DIAGRAM_LANGUAGES as readonly string[]).includes(language))
+        ? language as typeof activeDiagram extends { type: infer T } ? T : string
+        : blockType;
+
+      // useTypingAnimation accumulates raw markdown words including ```fences.
+      // Strip them so renderers receive clean inner content.
+      const cleanContent = content
+        .replace(/^```\w*\n?/, '')   // opening fence
+        .replace(/\n?```\s*$/, '');  // closing fence
+
+      // console.log('[AiChat] BlockDetected (auto-type):', { blockType, resolvedType, language, contentSnippet: cleanContent?.slice(0, 150) });
       requestAnimationFrame(() => {
         setActiveDiagram(prev => {
-          if (prev && prev.type === blockType && prev.content === content && prev.language === language) {
+          if (prev && prev.type === resolvedType && prev.content === cleanContent && prev.language === language) {
             return prev;
           }
-          return { type: blockType, content, language };
+          return { type: resolvedType as any, content: cleanContent, language };
         });
       });
     }
   }, [autoTypeInPanel]);
 
   const memoizedHandleViewContent = useCallback((type, content, language, imageUrl) => {
+    // console.log('[AiChat] ViewContent (manual click):', { type, language, contentSnippet: content?.slice(0, 150) });
     setActiveDiagram(null);
     requestAnimationFrame(() => {
       setActiveDiagram({ type, content, language, imageUrl });
@@ -786,7 +820,7 @@ const AIChat: React.FC<AIChatProps> = ({
 
     if (isSessionChange && activeChatSessionId) {
       // Batch state updates
-      setInputMessage('');
+      setInputValue('');
       setAttachedFiles([]);
       setExpandedMessages([]);
       setIsCurrentlySending(false);
@@ -861,8 +895,8 @@ const AIChat: React.FC<AIChatProps> = ({
         };
         setAttachedFiles(prev => [...prev, attachedFile]);
         // Optionally add the prompt to the input message
-        if (prompt && !inputMessage.trim()) {
-          setInputMessage(`Generated image: ${prompt}`);
+        if (prompt && !inputMessageRef.current.trim()) {
+          setInputValue(`Generated image: ${prompt}`);
         }
       })
       .catch(error => {
@@ -880,7 +914,7 @@ const AIChat: React.FC<AIChatProps> = ({
       // console.log('[AiChat] handleEditClick message:', message);
     if (message.role !== 'user') return;
 
-    setInputMessage(message.content);
+    setInputValue(message.content);
     // Find the following assistant message if it exists
     const index = messages.findIndex(msg => msg.id === message.id);
     const nextMsg = index !== -1 ? messages[index + 1] : null;
@@ -901,8 +935,8 @@ const AIChat: React.FC<AIChatProps> = ({
 
   const handleCancelEdit = useCallback(() => {
     setEditingMessage(null);
-    setInputMessage('');
-  }, []);
+    setInputValue('');
+  }, [setInputValue]);
 
   const selectedDocumentTitles = useMemo(() => {
     return mergedDocuments
@@ -933,10 +967,10 @@ const AIChat: React.FC<AIChatProps> = ({
     onDocumentUpdated(updatedDoc);
   }, [onDocumentUpdated]);
 
-  function handleDiagramCodeUpdate(messageId: string, newCode: string): Promise<void> {
+  const handleDiagramCodeUpdate = useCallback((messageId: string, newCode: string): Promise<void> => {
     toast.info('Diagram code updated. You can regenerate the response to see changes.');
     return Promise.resolve();
-  }
+  }, []);
 
   const memoizedOnMermaidError = useCallback((code: string | null, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => {
     //console.error("Mermaid error in DiagramPanel:", code, errorType);
@@ -948,12 +982,12 @@ const AIChat: React.FC<AIChatProps> = ({
       onSuggestAiCorrection(prompt);
       return;
     }
-    setInputMessage(prompt);
+    setInputValue(prompt);
     if (textareaRef.current) {
       textareaRef.current.focus();
     }
     toast.info("AI correction prepared in input. Review and send to apply.");
-  }, [onSuggestAiCorrection]);
+  }, [onSuggestAiCorrection, setInputValue]);
 
   const handleScrollToTop = () => {
     if (chatContainerRef.current) {
@@ -972,9 +1006,10 @@ const AIChat: React.FC<AIChatProps> = ({
     if (!chatContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
 
-    // Show scroll to bottom button if we are not at the bottom
-    const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 100;
-    setShowScrollToBottomButton(!isAtBottom);
+    // Show/hide scroll navigation buttons based on position
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    setShowScrollDown(distanceFromBottom > 200);
+    setShowScrollUp(scrollTop > 200);
 
     // Load older messages when scrolling to top
     if (scrollTop < 50 && hasMoreMessages && !isLoadingOlderMessages) {
@@ -992,13 +1027,13 @@ const AIChat: React.FC<AIChatProps> = ({
       {/* Main Chat Container */}
       <div
         ref={dropZoneRef}
-        className={`flex h-[90vh] lg:h-screen pt-24 lg:pt-0 border-none relative bg-transparent dark:bg-transparent overflow-hidden font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+        className={`flex h-[90vh] lg:h-screen pt-2 lg:pt-0 border-none relative bg-transparent dark:bg-transparent overflow-hidden font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
       >
         <DragOverlay isDragging={isDragging} />
 
         {/* Chat Panel */}
         <div
-          className={`flex flex-col h-full rounded-lg panel-transition bg-transparent dark:bg-transparent transition-all duration-300 relative ${isDiagramPanelOpen ? 'flex-shrink-0' : 'flex-1'} ${isPhone() ? 'fixed inset-0 z-30 rounded-none h-screen w-screen ' : ''} ${(!isDiagramPanelOpen && !activePodcast && !isPhone()) ? 'max-w-3xl mx-auto' : ''}`}
+          className={`flex flex-col h-full rounded-lg panel-transition bg-transparent dark:bg-transparent transition-all duration-300 relative ${isDiagramPanelOpen ? 'flex-shrink-0' : 'flex-1'} ${isPhone() ? 'fixed inset-0 z-30 rounded-none h-screen w-screen pt-16' : ''} ${(!isDiagramPanelOpen && !activePodcast && !isPhone()) ? 'max-w-3xl mx-auto' : ''}`}
           style={isDiagramPanelOpen && !isPhone() ? { width: `calc(${100 - panelWidth}% - 1px)` } : isPhone() ? { width: '100vw', height: '100vh', left: 0, top: 0 } : { flex: 1 }}
         >
           {/* Enhanced Loading States */}
@@ -1030,8 +1065,7 @@ const AIChat: React.FC<AIChatProps> = ({
           <div
             ref={chatContainerRef}
             onScroll={handleScroll}
-            className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 dark:bg-transparent flex flex-col modern-scrollbar"
-            style={{ paddingBottom: '180px' }}
+            className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 space-y-4 pb-4 dark:bg-transparent flex flex-col modern-scrollbar"
           >
             {messages.length > 0 && (
               <MessageList
@@ -1081,36 +1115,40 @@ const AIChat: React.FC<AIChatProps> = ({
             )}
             <div ref={messagesEndRef} />
           </div>
-          {/* Scroll Navigation Buttons */}
-          <div className="absolute bottom-24 right-4 flex flex-col gap-2 z-20 pointer-events-auto">
-            <Button
-              size="icon"
-              variant="secondary"
-              className="h-8 w-8 rounded-full shadow-md bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 transition-all duration-200"
-              onClick={handleScrollToTop}
-              title="Scroll to Top"
-            >
-              <ArrowUp className="h-4 w-4 text-gray-600 dark:text-gray-300" />
-            </Button>
-            <Button
-              size="icon"
-              variant="secondary"
-              className="h-8 w-8 rounded-full shadow-md bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 transition-all duration-200"
-              onClick={handleScrollToBottom}
-              title="Scroll to Bottom"
-            >
-              <ArrowDown className="h-4 w-4 text-gray-600 dark:text-gray-300" />
-            </Button>
+          {/* Scroll Navigation Buttons — only visible when scrolled away from top/bottom */}
+          <div className="absolute bottom-20 right-3 sm:right-4 flex flex-col gap-2 z-20 pointer-events-auto">
+            {showScrollUp && (
+              <Button
+                size="icon"
+                variant="secondary"
+                className="h-8 w-8 rounded-full shadow-md bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 transition-all duration-200 opacity-70 hover:opacity-100"
+                onClick={handleScrollToTop}
+                title="Scroll to Top"
+              >
+                <ArrowUp className="h-4 w-4 text-gray-600 dark:text-gray-300" />
+              </Button>
+            )}
+            {showScrollDown && (
+              <Button
+                size="icon"
+                variant="secondary"
+                className="h-8 w-8 rounded-full shadow-md bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 transition-all duration-200 opacity-70 hover:opacity-100"
+                onClick={handleScrollToBottom}
+                title="Scroll to Bottom"
+              >
+                <ArrowDown className="h-4 w-4 text-gray-600 dark:text-gray-300" />
+              </Button>
+            )}
           </div>
 
           {/* Input area */}
-          <div className={`fixed bottom-0 left-0 right-0 sm:pb-8 md:shadow-none md:static rounded-t-lg rounded-lg md:rounded-lg bg-transparent dark:bg-transparent dark:border-gray-700 font-sans z-10
+          <div className={`shrink-0 pb-[env(safe-area-inset-bottom)] bg-transparent dark:bg-transparent dark:border-gray-700 font-sans z-10
             ${isDiagramPanelOpen ? `md:pr-[calc(${panelWidth}%+1.5rem)]` : ''}`}>
             <div className={`w-full ${(!isDiagramPanelOpen && !activePodcast) ? 'max-w-3xl' : 'max-w-4xl'} mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:border-gray-700 p-2`}>
               <SubscriptionGuard
                 feature="AI Chat"
                 limitFeature="maxAiMessages"
-                currentCount={useAiMessageTracker().messagesToday}
+                currentCount={userMessagesToday}
                 message="You've reached your daily AI message limit."
               >
                 {editingMessage && (
@@ -1226,11 +1264,14 @@ const AIChat: React.FC<AIChatProps> = ({
                   </Menubar>
                   <textarea
                     ref={textareaRef}
-                    value={inputMessage}
+                    defaultValue=""
                     onChange={(e) => {
-                      e.preventDefault();
                       const newValue = e.target.value;
-                      setInputMessage(newValue);
+                      inputMessageRef.current = newValue;
+                      // Only trigger a re-render when empty↔non-empty changes (for button icon)
+                      const nowHasInput = newValue.trim().length > 0;
+                      if (nowHasInput !== hasInput) setHasInput(nowHasInput);
+                      // Resize textarea (DOM-only, no state)
                       if (textareaRef.current) {
                         textareaRef.current.style.height = 'auto';
                         textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
@@ -1282,7 +1323,7 @@ const AIChat: React.FC<AIChatProps> = ({
                       onClick={(e) => {
                         if (editingMessage) {
                           onEditAndResendMessage?.(
-                            inputMessage,
+                            inputMessageRef.current,
                             editingMessage.id,
                             editingMessage.originalAssistantId,
                             editingMessage.attachedDocumentIds,
@@ -1291,8 +1332,8 @@ const AIChat: React.FC<AIChatProps> = ({
                             editingMessage.imageMimeType
                           );
                           setEditingMessage(null);
-                          setInputMessage('');
-                        } else if (inputMessage.trim() || attachedFiles.length > 0) {
+                          setInputValue('');
+                        } else if (inputMessageRef.current.trim() || attachedFiles.length > 0) {
                           handleSendMessage(e);
                         } else {
                           if (isRecognizing) {
@@ -1317,7 +1358,7 @@ const AIChat: React.FC<AIChatProps> = ({
                     >
                       {isSubmittingUserMessage || isCurrentlySending || isAiTyping ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (inputMessage.trim() || attachedFiles.length > 0 || editingMessage) ? (
+                      ) : (hasInput || attachedFiles.length > 0 || editingMessage) ? (
                         <Send className="h-4 w-4" />
                       ) : (
                         <motion.div

@@ -1113,13 +1113,13 @@ export async function getAvailableSessions(): Promise<any[]> {
       .limit(20);
 
     if (error) {
-       console.error('Error fetching available sessions:', error);
+       // console.error('Error fetching available sessions:', error);
       return [];
     }
 
     return data || [];
   } catch (err) {
-     console.error('Exception fetching available sessions:', err);
+     // console.error('Exception fetching available sessions:', err);
     return [];
   }
 }

@@ -42,6 +42,7 @@ const LiveQuizParticipantLobby: React.FC<LiveQuizParticipantLobbyProps> = ({
   toast,
 }) => {
   const [isFullScreen, setIsFullScreen] = React.useState(true);
+  const [isMobile, setIsMobile] = React.useState(false);
   // Audio refs for lobby
   const bgRef = React.useRef<HTMLAudioElement | null>(null);
   const startRef = React.useRef<HTMLAudioElement | null>(null);
@@ -104,6 +105,13 @@ const LiveQuizParticipantLobby: React.FC<LiveQuizParticipantLobbyProps> = ({
     };
   }, []);
 
+  React.useEffect(() => {
+    const update = () => setIsMobile(typeof window !== 'undefined' ? window.innerWidth < 640 : false);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
   if (!session) return null;
 
   // --- Fullscreen Immersive View ---
@@ -120,37 +128,43 @@ const LiveQuizParticipantLobby: React.FC<LiveQuizParticipantLobbyProps> = ({
         </div>
 
         {/* Top Bar */}
-        <div className="relative z-10 flex items-center justify-between px-6 py-4 bg-blue-600/90 dark:bg-black/20 backdrop-blur-md border-b border-blue-500/20 dark:border-white/10 shrink-0 shadow-lg dark:shadow-none">
-          <div className="flex items-center gap-3">
-             <div className="p-2 bg-white/20 dark:bg-green-500/20 rounded-lg border border-white/10 dark:border-green-500/30 shadow-inner">
-                <Users className="h-5 w-5 text-white dark:text-green-400" />
-             </div>
-             <div>
-               <h1 className="font-bold text-lg leading-none text-white dark:text-white">Participant Lobby</h1>
-               <div className="flex items-center gap-2 text-sm text-blue-100 dark:text-white/50">
-                  <Badge variant="outline" className="border-white/30 dark:border-white/20 text-white dark:text-white/70 h-5 px-1.5 text-[10px] bg-white/10 dark:bg-transparent">
-                    Waiting for Host
-                  </Badge>
-               </div>
-             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button 
-               variant="ghost" 
-               size="sm" 
-               onClick={() => setIsFullScreen(false)}
-               className="hover:bg-white/20 dark:hover:bg-white/10 text-white/80 dark:text-white/70 hover:text-white dark:hover:text-white"
+        <div className="relative z-10 flex flex-row items-center justify-between px-6 py-4 bg-blue-600/90 dark:bg-black/20 backdrop-blur-md border-b border-blue-500/20 dark:border-white/10 shrink-0 shadow-lg dark:shadow-none">
+          {/* Minimize button - far left */}
+          <div className="flex flex-row gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsFullScreen(false)}
+              className="hover:bg-white/20 dark:hover:bg-white/10 text-white/80 dark:text-white/70 hover:text-white dark:hover:text-white"
             >
-               <Minimize2 className="h-4 w-4 mr-2" />
-               Exit Fullscreen
+              <Minimize2 className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Exit Fullscreen</span>
             </Button>
+          </div>
+          {/* Center avatar, name, status */}
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/20 dark:bg-green-500/20 rounded-lg border border-white/10 dark:border-green-500/30 shadow-inner">
+              <Users className="h-5 w-5 text-white dark:text-green-400" />
+            </div>
+            <div>
+              <h1 className="font-bold text-lg leading-none text-white dark:text-white">Participant Lobby</h1>
+              <div className="flex items-center gap-2 text-sm text-blue-100 dark:text-white/50">
+                <Badge variant="outline" className="border-white/30 dark:border-white/20 text-white dark:text-white/70 h-5 px-1.5 text-[10px] bg-white/10 dark:bg-transparent">
+                  Waiting for Host
+                </Badge>
+              </div>
+            </div>
+          </div>
+          {/* Leave button - far right */}
+          <div className="flex flex-row gap-2">
             <Button
               variant="destructive"
               size="sm"
-              onClick={resetView} 
+              onClick={resetView}
               className="bg-red-500/80 dark:bg-red-500/20 hover:bg-red-600 dark:hover:bg-red-500/40 text-white dark:text-red-300 border border-white/20 dark:border-red-500/30"
             >
-              <LogOut className="h-4 w-4 mr-2" /> Leave
+              <LogOut className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Leave</span>
             </Button>
           </div>
         </div>
@@ -160,7 +174,7 @@ const LiveQuizParticipantLobby: React.FC<LiveQuizParticipantLobbyProps> = ({
            <motion.div
              initial={{ scale: 0.9, opacity: 0 }}
              animate={{ scale: 1, opacity: 1 }}
-             className="bg-white/60 dark:bg-white/5 backdrop-blur-2xl border border-white/20 dark:border-white/10 p-8 md:p-12 rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col md:flex-row items-center gap-8 md:gap-12"
+             className="bg-white/60 dark:bg-white/5 backdrop-blur-2xl border border-white/20 dark:border-white/10 p-6 md:p-12 rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col md:flex-row items-center gap-6 md:gap-12 mt-8 md:mt-12"
            >
               {/* Left Side: Avatar & Status */}
               <div className="flex flex-col items-center gap-4 min-w-[200px] border-b md:border-b-0 md:border-r border-gray-200 dark:border-white/10 pb-6 md:pb-0 md:pr-12 w-full md:w-auto">
@@ -194,8 +208,8 @@ const LiveQuizParticipantLobby: React.FC<LiveQuizParticipantLobbyProps> = ({
                   {scheduledTime && countdown ? (
                      <div className="bg-black/5 dark:bg-black/30 rounded-2xl p-6 border border-black/10 dark:border-white/5">
                         <p className="text-green-600 dark:text-emerald-400/80 uppercase tracking-widest text-xs font-bold mb-2">Quiz Starts In</p>
-                        <div className="text-5xl md:text-7xl font-mono font-black text-gray-900 dark:text-white tabular-nums tracking-tighter">
-                            {countdown}
+                        <div className="text-5xl md:text-7xl font-mono font-black text-gray-900 dark:text-white tabular-nums tracking-tighter break-words">
+                          {countdown}
                         </div>
                      </div>
                   ) : (
@@ -203,7 +217,7 @@ const LiveQuizParticipantLobby: React.FC<LiveQuizParticipantLobbyProps> = ({
                         <p className="text-lg md:text-xl text-gray-600 dark:text-white/70 font-light leading-relaxed">
                            See your name on screen? Sit tight! The host will start the game shortly.
                         </p>
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-sm text-gray-500 dark:text-white/50 animate-pulse">
+                        <div className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-sm text-gray-500 dark:text-white/50 animate-pulse">
                             <Clock className="w-4 h-4" />
                             <span>Waiting for host...</span>
                         </div>

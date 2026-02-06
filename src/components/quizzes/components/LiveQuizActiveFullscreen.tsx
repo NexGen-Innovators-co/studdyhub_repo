@@ -132,6 +132,7 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
   const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number; color: string; size: number; rotation: number; velocityX: number; velocityY: number }>>([]);
   const [answerResult, setAnswerResult] = useState<{ isCorrect: boolean; points: number } | null>(null);
   const [isMuted, setIsMuted] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   // Audio refs
   const bgMusicRef = useRef<HTMLAudioElement | null>(null);
@@ -248,6 +249,14 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
     } catch (e) {}
   }, [currentQuestion?.id]);
 
+  // Track small screens to adapt UI and toasts
+  useEffect(() => {
+    const update = () => setIsMobile(typeof window !== 'undefined' ? window.innerWidth < 640 : false);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
   // Show correct answer after submission
   useEffect(() => {
     if (hasAnswered && !isHost) {
@@ -321,11 +330,13 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
 
     submitAnswer(session.id, currentQuestion.id, -1, currentQuestion.time_limit || 0);
 
-    toast({
-      title: "⏱️ Time's Up!",
-      description: 'No answer was submitted in time.',
-      variant: 'destructive',
-    });
+    if (!isMobile) {
+      toast({
+        title: "⏱️ Time's Up!",
+        description: 'No answer was submitted in time.',
+        variant: 'destructive',
+      });
+    }
   }, [timeRemaining, hasAnswered, isLoading, isPlayer, currentQuestion, session, toast]);
 
   const handleSubmitAnswer = async () => {
@@ -405,10 +416,10 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
       setSelectedAnswer(null);
       await refreshSessionState();
 
-      toast({ title: 'Question Advanced', description: 'Next question is now active' });
+      if (!isMobile) toast({ title: 'Question Advanced', description: 'Next question is now active' });
     } catch (err: any) {
       setError(err.message || 'Failed to advance');
-      toast({ title: 'Error', description: err.message || 'Failed to advance', variant: 'destructive' });
+      if (!isMobile) toast({ title: 'Error', description: err.message || 'Failed to advance', variant: 'destructive' });
 
       try {
         const fb = await advanceQuestionFallback(session.id);
@@ -416,9 +427,9 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
         setHasAnswered(false);
         setSelectedAnswer(null);
         await refreshSessionState();
-        toast({ title: 'Advanced (Fallback)', description: 'Question advanced via fallback' });
+        if (!isMobile) toast({ title: 'Advanced (Fallback)', description: 'Question advanced via fallback' });
       } catch (fbErr: any) {
-        toast({ title: 'Fallback Failed', description: fbErr.message || 'Could not advance', variant: 'destructive' });
+        if (!isMobile) toast({ title: 'Fallback Failed', description: fbErr.message || 'Could not advance', variant: 'destructive' });
       }
     } finally {
       setIsLoading(false);
@@ -431,22 +442,45 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
     setIsLoading(true);
     setError(null);
 
+    // Stop all audio playback except applause
+    const audioRefs = [
+      bgMusicRef,
+      correctSfxRef,
+      incorrectSfxRef,
+      startSfxRef,
+      thinkingLoopRef,
+      tickRef,
+      submitSfxRef,
+      advanceSfxRef,
+      clickSfxRef
+    ];
+    audioRefs.forEach(ref => {
+      if (ref.current) {
+        try {
+          ref.current.pause();
+          ref.current.currentTime = 0;
+        } catch {}
+      }
+    });
+
     try {
       const result = await endQuizSession(session.id);
       if (result.error) throw new Error(result.error);
 
+      // Play applause sound fully (clone to avoid interruption)
       try {
         if (!isMuted && endSfxRef.current) {
-          endSfxRef.current.currentTime = 0;
-          endSfxRef.current.play().catch(() => {});
+          const applause = endSfxRef.current.cloneNode(true) as HTMLAudioElement;
+          applause.volume = endSfxRef.current.volume;
+          applause.play().catch(() => {});
         }
       } catch (e) {}
 
-      toast({ title: 'Quiz Ended', description: 'Thanks for playing!' });
+      if (!isMobile) toast({ title: 'Quiz Ended', description: 'Thanks for playing!' });
       await refreshSessionState();
     } catch (err: any) {
       setError(err.message || 'Failed to end quiz');
-      toast({ title: 'Error', description: err.message || 'Failed to end quiz', variant: 'destructive' });
+      if (!isMobile) toast({ title: 'Error', description: err.message || 'Failed to end quiz', variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
@@ -530,27 +564,58 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
         ))}
       </AnimatePresence>
 
-      {/* Top right Controls */}
-      <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
-         {/* Mute Button */}
-         <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setIsMuted(!isMuted)}
-          className="text-gray-700 dark:text-white hover:bg-black/5 dark:hover:bg-white/20 rounded-full"
-         >
-           {isMuted ? <VolumeX className="h-6 w-6" /> : <Volume2 className="h-6 w-6" />}
-         </Button>
-
-         {/* Close Button */}
-         <Button
-            variant="ghost"
-            size="icon"
-            onClick={onExitFullscreen}
-            className="text-gray-700 dark:text-white hover:bg-black/5 dark:hover:bg-white/20 rounded-full"
-          >
-            <X className="h-6 w-6" />
-          </Button>
+      {/* Top Controls - Responsive Header */}
+      <div
+        className="fixed z-50 flex gap-2"
+        style={{
+          top: '1rem',
+          left: '0',
+          right: '0',
+          width: '100vw',
+          justifyContent: 'flex-end',
+          paddingLeft: '1rem',
+          paddingRight: '1rem',
+          pointerEvents: 'none',
+        }}
+      >
+        <div
+          className="flex gap-2 w-full"
+          style={{
+            maxWidth: '100vw',
+            justifyContent: 'flex-end',
+            pointerEvents: 'auto',
+          }}
+        >
+          {/* On mobile, spread buttons horizontally */}
+          <div className="flex flex-row w-full max-w-xs sm:max-w-none sm:w-auto justify-between sm:justify-end gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsMuted(!isMuted)}
+              className="text-gray-700 dark:text-white hover:bg-black/5 dark:hover:bg-white/20 rounded-full"
+            >
+              {isMuted ? <VolumeX className="h-6 w-6" /> : <Volume2 className="h-6 w-6" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                // Stop all playing audio when exiting fullscreen
+                try {
+                  const audios = document.querySelectorAll('audio');
+                  audios.forEach((audio) => {
+                    (audio as HTMLAudioElement).pause();
+                    (audio as HTMLAudioElement).currentTime = 0;
+                  });
+                } catch (e) {}
+                onExitFullscreen();
+              }}
+              className="text-gray-700 dark:text-white hover:bg-black/5 dark:hover:bg-white/20 rounded-full"
+            >
+              <X className="h-6 w-6" />
+            </Button>
+          </div>
+        </div>
       </div>
 
       <div className="relative z-10 container mx-auto px-4 py-8 max-w-6xl min-h-screen flex flex-col">
@@ -583,7 +648,7 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
           </div>
 
           {/* Header Info */}
-          <div className="flex items-center justify-between text-gray-900 dark:text-white">
+          <div className="relative z-10 flex items-center justify-between px-6 py-4 bg-white/80 dark:bg-black/20 backdrop-blur-md border-b border-gray-200 dark:border-white/10 shrink-0">
             <motion.div
               initial={{ x: -30, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
@@ -638,8 +703,8 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
                 className="lg:col-span-1 bg-white/60 dark:bg-black/40 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-white/10 p-6 flex flex-col overflow-hidden max-h-[600px] shadow-lg dark:shadow-none"
               >
                 <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-200 dark:border-white/10">
-                  <Trophy className="h-8 w-8 text-yellow-500 dark:text-yellow-400" />
-                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Leaderboard</h3>
+                  <Trophy className="h-8 w-8 text-yellow-500 dark:text-yellow-400 z-20" />
+                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white z-20 relative">Leaderboard</h3>
                 </div>
                 
                 <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
@@ -728,18 +793,19 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
                                       <div className={`text-gray-900 dark:text-white font-bold text-xl mb-1 transition-opacity ${count > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                                          {count} <span className="text-sm font-normal opacity-70 text-gray-500 dark:text-white/70">({Math.round((count / (currentAnswers.length || 1)) * 100)}%)</span>
                                       </div>
-                                      <motion.div
+                                        <motion.div
                                          initial={{ height: 0 }}
                                          animate={{ height: `${height}%` }}
                                          transition={{ type: 'spring', damping: 20 }}
                                          className={`w-full max-w-[80px] rounded-t-xl relative min-h-[10px] ${barColor} transition-colors duration-500`}
-                                      >
+                                         style={{ marginTop: showResult && isCorrect ? '2.5rem' : undefined }}
+                                        >
                                           {showResult && isCorrect && (
-                                              <div className="absolute -top-10 left-1/2 -translate-x-1/2">
-                                                  <CheckCircle className="h-8 w-8 text-green-500 dark:text-green-400 drop-shadow-lg animate-bounce" />
-                                              </div>
+                                            <div className="absolute top-0 left-1/2 -translate-x-1/2 mt-[-2.5rem] sm:mt-[-2.5rem]">
+                                              <CheckCircle className="h-8 w-8 text-green-500 dark:text-green-400 drop-shadow-lg animate-bounce" />
+                                            </div>
                                           )}
-                                      </motion.div>
+                                        </motion.div>
                                       
                                       <div className="h-12 w-12 rounded-full bg-gray-100 dark:bg-white/10 flex items-center justify-center text-gray-900 dark:text-white font-bold text-lg border border-gray-200 dark:border-white/20">
                                          {String.fromCharCode(65 + i)}
@@ -991,7 +1057,7 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
 
           {/* Feedback Overlay (for Player) */}
           <AnimatePresence>
-            {isPlayer && hasAnswered && showCorrectAnswer && (
+              {isPlayer && hasAnswered && showCorrectAnswer && !isMobile && (
               <motion.div
                 initial={{ y: 50, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -1000,7 +1066,7 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
                   fixed bottom-8 left-1/2 -translate-x-1/2 
                   px-8 py-6 rounded-3xl shadow-2xl backdrop-blur-xl border border-white/20
                   ${answerResult.isCorrect ? 'bg-green-500/80' : 'bg-red-500/80'}
-                  text-white flex items-center gap-6 z-40 min-w-[300px] justify-center
+                  text-white flex items-center gap-6 z-40 w-auto max-w-[90%] sm:min-w-[300px] justify-center
                 `}
               >
                 {answerResult.isCorrect ? (

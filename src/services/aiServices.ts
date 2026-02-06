@@ -204,13 +204,13 @@ export const generateDashboardInsights = async (stats: any, userProfile?: any): 
     });
 
     if (error) {
-        console.error("Supabase Function Error:", error);
+        // console.error("Supabase Function Error:", error);
         throw error;
     }
     
     return data.insights || [];
   } catch (error) {
-    console.error('Error fetching AI insights:', error);
+    // console.error('Error fetching AI insights:', error);
     return []; 
   }
 };
