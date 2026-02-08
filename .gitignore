@@ -26,3 +26,6 @@ dist-ssr
 .vercel
 .env*.local
 .temp
+
+# Database exports with secrets
+scripts/all_rls_triggers_func.json
