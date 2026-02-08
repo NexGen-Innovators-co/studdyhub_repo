@@ -248,12 +248,11 @@ export const useSocialNotifications = () => {
   // Optimized: Memoized action functions
   const markNotificationAsRead = useCallback(async (notificationId: string) => {
     try {
-      const { error } = await supabase
-        .from('social_notifications')
-        .update({ is_read: true })
-        .eq('id', notificationId);
+      const { data: response, error } = await supabase.functions.invoke('manage-notifications', {
+        body: { action: 'mark_read', notification_id: notificationId },
+      });
 
-      if (error) throw error;
+      if (error || !response?.success) throw new Error('Failed to mark notification as read');
 
       setNotifications(prev =>
         prev.map(notif =>
@@ -273,13 +272,11 @@ export const useSocialNotifications = () => {
     try {
       if (!userId) return;
 
-      const { error } = await supabase
-        .from('social_notifications')
-        .update({ is_read: true })
-        .eq('user_id', userId)
-        .eq('is_read', false);
+      const { data: response, error } = await supabase.functions.invoke('manage-notifications', {
+        body: { action: 'mark_all_read' },
+      });
 
-      if (error) throw error;
+      if (error || !response?.success) throw new Error('Failed to mark notifications as read');
 
       setNotifications(prev =>
         prev.map(notif => ({ ...notif, is_read: true }))
@@ -294,12 +291,11 @@ export const useSocialNotifications = () => {
 
   const deleteNotification = useCallback(async (notificationId: string) => {
     try {
-      const { error } = await supabase
-        .from('social_notifications')
-        .delete()
-        .eq('id', notificationId);
+      const { data: response, error } = await supabase.functions.invoke('manage-notifications', {
+        body: { action: 'delete', notification_id: notificationId },
+      });
 
-      if (error) throw error;
+      if (error || !response?.success) throw new Error('Failed to delete notification');
 
       setNotifications(prev => prev.filter(notif => notif.id !== notificationId));
 

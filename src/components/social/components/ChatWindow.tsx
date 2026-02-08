@@ -299,52 +299,27 @@ const SharedDocumentPreview: React.FC<{ documentId: string; currentUserId: strin
         return;
       }
 
-      // Check document limit before inserting
-      const { count } = await supabase
-        .from('documents')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', currentUserId);
-
-      // Check if user is admin (admins have unlimited access)
-      const { data: adminUser } = await supabase
-        .from('admin_users')
-        .select('id, is_active')
-        .eq('user_id', currentUserId)
-        .eq('is_active', true)
-        .single();
-
-      const isAdmin = !!adminUser;
-
-      // Only check limits for non-admin users
-      if (!isAdmin) {
-        const { data: subscription } = await supabase
-          .from('subscriptions')
-          .select('subscription_tier, maxDocUploads')
-          .eq('user_id', currentUserId)
-          .single();
-
-        const maxDocs = subscription?.maxDocUploads || 50;
-        const currentCount = count || 0;
-
-        if (subscription?.subscription_tier === 'free' && currentCount >= maxDocs) {
-          toast.error(`Document limit reached (${maxDocs}). Upgrade to add more documents.`);
-          return;
-        }
-      }
-
-      const { error } = await supabase.from('documents').insert({
-        user_id: currentUserId,
-        title: doc.title ||
-
-          doc.file_name,
-        file_name: doc.file_name,
-        file_url: doc.file_url,
-        file_type: doc.file_type,
-        file_size: doc.file_size,
-        type: 'uploaded',
+      const { data: response, error } = await supabase.functions.invoke('save-shared-resource', {
+        body: {
+          resource_type: 'document',
+          resource_data: {
+            title: doc.title || doc.file_name,
+            file_name: doc.file_name,
+            file_url: doc.file_url,
+            file_type: doc.file_type,
+            file_size: doc.file_size,
+          }
+        },
       });
 
-      if (error) throw error;
+      if (error || !response?.success) {
+        if (response?.message) {
+          toast.error(response.message);
+          return;
+        }
+        throw new Error('Failed to save document');
+      }
+
       setIsAdded(true);
       toast.success('Document saved to your library!', { icon: 'Sparkle' });
     } catch {
@@ -534,30 +509,30 @@ const SharedClassRecordingPreview: React.FC<{ recordingId: string; currentUserId
     if (!recording || isAdded) return;
     setIsAdding(true);
     try {
-      const { data: existing } = await supabase
-        .from('class_recordings')
-        .select('id')
-        .eq('user_id', currentUserId)
-        .eq('audio_url', recording.audio_url)
-        .maybeSingle();
-
-      if (existing) {
-        toast.info('You already have this recording');
-        setIsAdded(true);
-        return;
-      }
-
-      const { error } = await supabase.from('class_recordings').insert({
-        user_id: currentUserId,
-        title: recording.title,
-        summary: recording.summary,
-        audio_url: recording.audio_url,
-        duration: recording.duration,
-        subject: recording.subject,
-        date: recording.date,
+      const { data: response, error } = await supabase.functions.invoke('save-shared-resource', {
+        body: {
+          resource_type: 'class_recording',
+          resource_data: {
+            source_recording_id: recording.id,
+            title: recording.title,
+            summary: recording.summary,
+            audio_url: recording.audio_url,
+            duration: recording.duration,
+            subject: recording.subject,
+            date: recording.date,
+          }
+        },
       });
 
-      if (error) throw error;
+      if (error || !response?.success) {
+        if (response?.duplicate) {
+          toast.info('You already have this recording');
+          setIsAdded(true);
+          return;
+        }
+        throw new Error('Failed to save recording');
+      }
+
       setIsAdded(true);
       toast.success('Recording saved to your library!');
     } catch {
@@ -685,25 +660,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       const fetchResources = async () => {
         setIsLoadingResources(true);
         try {
-          const [notesResult, documentsResult, recordingsResult] = await Promise.all([
-            supabase.from('notes').select('*').eq('user_id', currentUserId).order('created_at', { ascending: false }).range(0, ITEMS_PER_PAGE - 1),
-            supabase.from('documents').select('*').eq('user_id', currentUserId).order('created_at', { ascending: false }).range(0, ITEMS_PER_PAGE - 1),
-            supabase.from('class_recordings').select('*').eq('user_id', currentUserId).order('created_at', { ascending: false }).range(0, ITEMS_PER_PAGE - 1)
-          ]);
+          const { data: response, error } = await supabase.functions.invoke('get-user-resources', {
+            body: { resource_type: 'all', offset: 0, limit: ITEMS_PER_PAGE },
+          });
 
-          if (notesResult.data) {
-            setUserNotes(notesResult.data);
-            setHasMoreNotes(notesResult.data.length === ITEMS_PER_PAGE);
+          if (error || !response?.success) throw new Error('Failed to load resources');
+
+          if (response.notes) {
+            setUserNotes(response.notes);
+            setHasMoreNotes(response.has_more_notes);
             setNotesOffset(ITEMS_PER_PAGE);
           }
-          if (documentsResult.data) {
-            setUserDocuments(documentsResult.data);
-            setHasMoreDocuments(documentsResult.data.length === ITEMS_PER_PAGE);
+          if (response.documents) {
+            setUserDocuments(response.documents);
+            setHasMoreDocuments(response.has_more_documents);
             setDocumentsOffset(ITEMS_PER_PAGE);
           }
-          if (recordingsResult.data) {
-            setUserClassRecordings(recordingsResult.data);
-            setHasMoreRecordings(recordingsResult.data.length === ITEMS_PER_PAGE);
+          if (response.class_recordings) {
+            setUserClassRecordings(response.class_recordings);
+            setHasMoreRecordings(response.has_more_recordings);
             setRecordingsOffset(ITEMS_PER_PAGE);
           }
         } catch (error) {
@@ -749,16 +724,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     if (isLoadingMore || !hasMoreNotes) return;
     setIsLoadingMore(true);
     try {
-      const { data } = await supabase
-        .from('notes')
-        .select('*')
-        .eq('user_id', currentUserId)
-        .order('created_at', { ascending: false })
-        .range(notesOffset, notesOffset + ITEMS_PER_PAGE - 1);
+      const { data: response, error } = await supabase.functions.invoke('get-user-resources', {
+        body: { resource_type: 'notes', offset: notesOffset, limit: ITEMS_PER_PAGE },
+      });
 
-      if (data) {
-        setUserNotes(prev => [...prev, ...data]);
-        setHasMoreNotes(data.length === ITEMS_PER_PAGE);
+      if (!error && response?.notes) {
+        setUserNotes(prev => [...prev, ...response.notes]);
+        setHasMoreNotes(response.has_more_notes);
         setNotesOffset(prev => prev + ITEMS_PER_PAGE);
       }
     } catch (error) {
@@ -772,16 +744,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     if (isLoadingMore || !hasMoreDocuments) return;
     setIsLoadingMore(true);
     try {
-      const { data } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('user_id', currentUserId)
-        .order('created_at', { ascending: false })
-        .range(documentsOffset, documentsOffset + ITEMS_PER_PAGE - 1);
+      const { data: response, error } = await supabase.functions.invoke('get-user-resources', {
+        body: { resource_type: 'documents', offset: documentsOffset, limit: ITEMS_PER_PAGE },
+      });
 
-      if (data) {
-        setUserDocuments(prev => [...prev, ...data]);
-        setHasMoreDocuments(data.length === ITEMS_PER_PAGE);
+      if (!error && response?.documents) {
+        setUserDocuments(prev => [...prev, ...response.documents]);
+        setHasMoreDocuments(response.has_more_documents);
         setDocumentsOffset(prev => prev + ITEMS_PER_PAGE);
       }
     } catch (error) {
@@ -795,16 +764,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     if (isLoadingMore || !hasMoreRecordings) return;
     setIsLoadingMore(true);
     try {
-      const { data } = await supabase
-        .from('class_recordings')
-        .select('*')
-        .eq('user_id', currentUserId)
-        .order('created_at', { ascending: false })
-        .range(recordingsOffset, recordingsOffset + ITEMS_PER_PAGE - 1);
+      const { data: response, error } = await supabase.functions.invoke('get-user-resources', {
+        body: { resource_type: 'class_recordings', offset: recordingsOffset, limit: ITEMS_PER_PAGE },
+      });
 
-      if (data) {
-        setUserClassRecordings(prev => [...prev, ...data]);
-        setHasMoreRecordings(data.length === ITEMS_PER_PAGE);
+      if (!error && response?.class_recordings) {
+        setUserClassRecordings(prev => [...prev, ...response.class_recordings]);
+        setHasMoreRecordings(response.has_more_recordings);
         setRecordingsOffset(prev => prev + ITEMS_PER_PAGE);
       }
     } catch (error) {
@@ -830,45 +796,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const handleAddSharedNote = async () => {
     if (!noteToAdd || !currentUserId) return;
     try {
-      // Check notes limit before inserting
-      const { count } = await supabase
-        .from('notes')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', currentUserId);
+      const { data: response, error } = await supabase.functions.invoke('save-shared-resource', {
+        body: {
+          resource_type: 'note',
+          resource_data: {
+            title: newNoteTitle || noteToAdd.title,
+            content: noteToAdd.content,
+          }
+        },
+      });
 
-      // Check if user is admin (admins have unlimited access)
-      const { data: adminUser } = await supabase
-        .from('admin_users')
-        .select('id, is_active')
-        .eq('user_id', currentUserId)
-        .eq('is_active', true)
-        .single();
-
-      const isAdmin = !!adminUser;
-
-      // Only check limits for non-admin users
-      if (!isAdmin) {
-        const { data: subscription } = await supabase
-          .from('subscriptions')
-          .select('subscription_tier, maxNotes')
-          .eq('user_id', currentUserId)
-          .single();
-
-        const maxNotes = subscription?.maxNotes || 50;
-        const currentCount = count || 0;
-
-        if (subscription?.subscription_tier === 'free' && currentCount >= maxNotes) {
-          toast.error(`Note limit reached (${maxNotes}). Upgrade to add more notes.`);
+      if (error || !response?.success) {
+        if (response?.message) {
+          toast.error(response.message);
           return;
         }
+        throw new Error('Failed to save note');
       }
 
-      const { error } = await supabase.from('notes').insert({
-        user_id: currentUserId,
-        title: newNoteTitle || noteToAdd.title,
-        content: noteToAdd.content,
-      });
-      if (error) throw error;
       toast.success('Note added to your collection!', { icon: 'Sparkle' });
       setAddNoteDialogOpen(false);
       setNoteToAdd(null);

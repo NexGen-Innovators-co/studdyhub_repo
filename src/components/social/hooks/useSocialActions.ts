@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { supabase } from '../../../integrations/supabase/client';
 import { SocialPostWithDetails, SocialUserWithDetails, SocialGroupWithDetails, SocialGroup, CreateGroupData, GroupPrivacy } from '../../../integrations/supabase/socialTypes';
 import { toast } from 'sonner';
-import { extractHashtags, generateShareText } from '../utils/postUtils';
+import { extractHashtags } from '../utils/postUtils';
 import { Privacy } from '../types/social';
 import { v4 as uuidv4 } from 'uuid';
 import { offlineStorage, STORES } from '../../../utils/offlineStorage';
@@ -150,52 +150,53 @@ export const useSocialActions = (
     }
 
     try {
-      const status = privacy === 'public' ? 'active' : 'pending'; // Auto-join public, request for private
+      const status = privacy === 'public' ? 'active' : 'pending';
 
-      const { error } = await supabase
-        .from('social_group_members')
-        .insert({
-          group_id: groupId,
-          user_id: currentUser.id,
-          role: 'member',
-          status: status
-        });
-
-      if (error) throw error;
-
-      // If active, update members_count on server
-      if (status === 'active') {
-        const { count, error: countError } = await supabase
+      // For private groups, still need client insert with pending status
+      if (privacy !== 'public') {
+        const { error } = await supabase
           .from('social_group_members')
-          .select('count', { count: 'exact' })
-          .eq('group_id', groupId);
+          .insert({
+            group_id: groupId,
+            user_id: currentUser.id,
+            role: 'member',
+            status: 'pending'
+          });
+        if (error) throw error;
 
-        if (countError) throw countError;
+        setGroups(prev => prev.map(g => g.id === groupId ? {
+          ...g,
+          is_member: false,
+          member_status: 'pending',
+          member_role: 'member',
+        } : g));
 
-        await supabase
-          .from('social_groups')
-          .update({ members_count: count })
-          .eq('id', groupId);
+        toast.info('Request to join sent. Waiting for admin approval.');
+        return true;
       }
 
-      // Refetch or use backend count only, do not increment locally
+      // Use edge function for public groups (handles insert + count update)
+      const { data: response, error } = await supabase.functions.invoke('join-leave-group', {
+        body: { group_id: groupId, action: 'join' },
+      });
+
+      if (error || !response?.success) {
+        toast.error('Failed to join group. You might already have a pending request.');
+        return false;
+      }
+
       setGroups(prev => prev.map(g => g.id === groupId ? {
         ...g,
-        is_member: status === 'active',
-        member_status: status,
+        is_member: true,
+        member_status: 'active',
         member_role: 'member',
-        // members_count: backend will update, so do not increment here
+        members_count: response.members_count ?? g.members_count,
       } : g));
 
-      if (status === 'active') {
-        toast.success('Successfully joined the group!');
-      } else {
-        toast.info('Request to join sent. Waiting for admin approval.');
-      }
+      toast.success('Successfully joined the group!');
       return true;
 
     } catch (error) {
-
       toast.error('Failed to join group. You might already have a pending request.');
       return false;
     }
@@ -208,44 +209,27 @@ export const useSocialActions = (
     }
 
     try {
-      // Delete the membership record
-      const { error } = await supabase
-        .from('social_group_members')
-        .delete()
-        .eq('group_id', groupId)
-        .eq('user_id', currentUser.id);
+      const { data: response, error } = await supabase.functions.invoke('join-leave-group', {
+        body: { group_id: groupId, action: 'leave' },
+      });
 
-      if (error) throw error;
-
-      // If was active, update members_count on server
-      const group = groups.find(group => group.id === groupId);
-      if (group?.member_status === 'active') {  // Ensure group is fetched and check member_status
-        const { count, error: countError } = await supabase
-          .from('social_group_members')
-          .select('count', { count: 'exact' })
-          .eq('group_id', groupId);
-
-        if (countError) throw countError;
-
-        await supabase
-          .from('social_groups')
-          .update({ members_count: count })
-          .eq('id', groupId);
+      if (error || !response?.success) {
+        toast.error('Failed to leave group. Please try again.');
+        return false;
       }
-      // Refetch or use backend count only, do not decrement locally
+
       setGroups(prev => prev.map(g => g.id === groupId ? {
         ...g,
         is_member: false,
         member_status: null,
         member_role: null,
-        // members_count: backend will update, so do not decrement here
+        members_count: response.members_count ?? g.members_count,
       } : g));
 
       toast.info('You have left the group.');
       return true;
 
     } catch (error) {
-      ////console.error('Error leaving group:', error);
       toast.error('Failed to leave group. Please try again.');
       return false;
     }
@@ -423,51 +407,8 @@ export const useSocialActions = (
         throw new Error('Failed to create post');
       }
 
-      const newPost = response.post;
-
-      // Step 2: Fetch related data (author, group)
-      const { data: authorData, error: authorError } = await supabase
-        .from('social_users')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (authorError || !authorData) throw authorError || new Error('Failed to fetch author');
-
-      let groupData: SocialGroup | null = null;
-      if (groupId) {
-        const { data, error } = await supabase
-          .from('social_groups')
-          .select('*')
-          .eq('id', groupId)
-          .single();
-        if (error) throw error;
-        groupData = { ...data, privacy: data.privacy as "public" | "private" };
-      }
-
-      // Step 4: Handle hashtags
-      const hashtags = extractHashtags(content);
-      for (const tag of hashtags) {
-        const { data: hashtag, error: hashtagError } = await supabase
-          .from('social_hashtags')
-          .upsert({ name: tag }, { onConflict: 'name' })
-          .select()
-          .single();
-
-        if (!hashtagError && hashtag) {
-          await supabase.from('social_post_hashtags').insert({
-            post_id: newPost.id,
-            hashtag_id: hashtag.id,
-            created_at: new Date().toISOString(),
-          });
-        }
-      }
-
-      // Step 5: Update user's posts count
-      await supabase
-        .from('social_users')
-        .update({ posts_count: (currentUser?.posts_count || 0) + 1 })
-        .eq('id', user.id);
+      // Hashtags, author data fetch, and posts_count update are now handled server-side
+      // by the create-social-post edge function
 
       toast.success('Post created successfully!');
       return true;
@@ -482,7 +423,6 @@ export const useSocialActions = (
   };
   const toggleLike = async (postId: string, isLiked: boolean) => {
     try {
-      // Get the current session instead of just user
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
         toast.error('You must be logged in to like posts');
@@ -492,7 +432,6 @@ export const useSocialActions = (
       const userId = session.user.id;
 
       if (!navigator.onLine) {
-        // Optimistic update
         setPosts(prev => prev.map(p => {
           if (p.id === postId) {
             const updatedPost = structuredClone(p);
@@ -504,12 +443,11 @@ export const useSocialActions = (
         }));
 
         await offlineStorage.addPendingSync(isLiked ? 'delete' : 'create', 'social_likes', { post_id: postId, user_id: userId });
-
         toast.info(isLiked ? 'Unliked offline' : 'Liked offline');
         return;
       }
 
-      // Optimistic update first - create a deep copy to avoid reference issues
+      // Optimistic update
       setPosts(prev => prev.map(post => {
         if (post.id === postId) {
           const updatedPost = structuredClone(post);
@@ -520,82 +458,30 @@ export const useSocialActions = (
         return post;
       }));
 
-      if (isLiked) {
-        const { error: deleteError } = await supabase
-          .from('social_likes')
-          .delete()
-          .eq('post_id', postId)
-          .eq('user_id', userId);
+      const { data: response, error } = await supabase.functions.invoke('toggle-like', {
+        body: { post_id: postId, is_liked: isLiked },
+      });
 
-        if (deleteError) {
-          // Revert optimistic update on error
-          setPosts(prev => prev.map(post => {
-            if (post.id === postId) {
-              const revertedPost = structuredClone(post);
-              revertedPost.is_liked = isLiked;
-              revertedPost.likes_count = post.likes_count + 1;
-              return revertedPost;
-            }
-            return post;
-          }));
-          toast.error('Failed to unlike post');
-          return;
-        }
-      } else {
-        // Check if social_users record exists
-        const { data: socialUser, error: socialUserError } = await supabase
-          .from('social_users')
-          .select('id')
-          .eq('id', userId)
-          .single();
-        
-        if (socialUserError || !socialUser) {
-          // Revert optimistic update on error
-          setPosts(prev => prev.map(post => {
-            if (post.id === postId) {
-              const revertedPost = structuredClone(post);
-              revertedPost.is_liked = isLiked;
-              revertedPost.likes_count = post.likes_count - 1;
-              return revertedPost;
-            }
-            return post;
-          }));
-          toast.error('Please refresh the page');
-          return;
-        }
+      if (error || !response?.success) {
+        // Revert optimistic update
+        setPosts(prev => prev.map(post => {
+          if (post.id === postId) {
+            const revertedPost = structuredClone(post);
+            revertedPost.is_liked = isLiked;
+            revertedPost.likes_count = isLiked ? post.likes_count + 1 : post.likes_count - 1;
+            return revertedPost;
+          }
+          return post;
+        }));
+        toast.error(isLiked ? 'Failed to unlike post' : 'Failed to like post');
+        return;
+      }
 
-        const { data: insertData, error: insertError } = await supabase
-          .from('social_likes')
-          .insert({ post_id: postId, user_id: userId })
-          .select();
-
-        if (insertError) {
-          // Revert optimistic update on error
-          setPosts(prev => prev.map(post => {
-            if (post.id === postId) {
-              const revertedPost = structuredClone(post);
-              revertedPost.is_liked = isLiked;
-              revertedPost.likes_count = post.likes_count - 1;
-              return revertedPost;
-            }
-            return post;
-          }));
-          toast.error('Failed to like post');
-          return;
-        }
-
+      // Send push notification for new likes (client-side push only)
+      if (!isLiked) {
         const post = posts.find(p => p.id === postId);
         if (post && post.author_id !== userId) {
-          let actorName = currentUser?.display_name;
-          if (!actorName) {
-            const { data: actor } = await supabase
-              .from('social_users')
-              .select('display_name')
-              .eq('id', userId)
-              .single();
-            actorName = actor?.display_name || 'Someone';
-          }
-
+          const actorName = response.actor_name || currentUser?.display_name || 'Someone';
           await createNotification({
             userId: post.author_id,
             type: 'social_like',
@@ -609,8 +495,6 @@ export const useSocialActions = (
         }
       }
     } catch (error) {
-      // console.error('Error toggling like:', error);
-      // Revert optimistic update on error
       setPosts(prev => prev.map(post => {
         if (post.id === postId) {
           const revertedPost = structuredClone(post);
@@ -658,49 +542,24 @@ export const useSocialActions = (
         return post;
       }));
 
-      if (isBookmarked) {
-        const { error: deleteError } = await supabase
-          .from('social_bookmarks')
-          .delete()
-          .eq('post_id', postId)
-          .eq('user_id', user.id);
-        
-        if (deleteError) {
-          // Revert optimistic update on error
-          setPosts(prev => prev.map(post => {
-            if (post.id === postId) {
-              const revertedPost = structuredClone(post);
-              revertedPost.bookmarks_count = post.bookmarks_count + 1;
-              revertedPost.is_bookmarked = isBookmarked;
-              return revertedPost;
-            }
-            return post;
-          }));
-          toast.error('Failed to remove bookmark');
-          return;
-        }
-      } else {
-        const { error: insertError } = await supabase
-          .from('social_bookmarks')
-          .insert({ post_id: postId, user_id: user.id });
-        
-        if (insertError) {
-          // Revert optimistic update on error
-          setPosts(prev => prev.map(post => {
-            if (post.id === postId) {
-              const revertedPost = structuredClone(post);
-              revertedPost.bookmarks_count = post.bookmarks_count - 1;
-              revertedPost.is_bookmarked = isBookmarked;
-              return revertedPost;
-            }
-            return post;
-          }));
-          toast.error('Failed to bookmark post');
-          return;
-        }
+      const { data: response, error } = await supabase.functions.invoke('toggle-bookmark', {
+        body: { post_id: postId, is_bookmarked: isBookmarked },
+      });
+
+      if (error || !response?.success) {
+        // Revert optimistic update on error
+        setPosts(prev => prev.map(post => {
+          if (post.id === postId) {
+            const revertedPost = structuredClone(post);
+            revertedPost.bookmarks_count = isBookmarked ? post.bookmarks_count + 1 : post.bookmarks_count - 1;
+            revertedPost.is_bookmarked = isBookmarked;
+            return revertedPost;
+          }
+          return post;
+        }));
+        toast.error(isBookmarked ? 'Failed to remove bookmark' : 'Failed to bookmark post');
       }
     } catch (error) {
-      ////console.error('Error toggling bookmark:', error);
       // Revert optimistic update on error
       setPosts(prev => prev.map(post => {
         if (post.id === postId) {
@@ -741,80 +600,35 @@ export const useSocialActions = (
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Check if already following
-      const { data: existingFollow, error: checkError } = await supabase
-        .from('social_follows')
-        .select('id')
-        .eq('follower_id', user.id)
-        .eq('following_id', userId)
-        .maybeSingle();
+      const { data: response, error } = await supabase.functions.invoke('toggle-follow', {
+        body: { target_user_id: userId },
+      });
 
-      if (checkError && checkError.code !== 'PGRST116') throw checkError;
+      if (error || !response?.success) {
+        throw new Error('Failed to update follow status');
+      }
 
-      const isCurrentlyFollowing = !!existingFollow;
+      const isNowFollowing = response.is_now_following;
 
-      if (isCurrentlyFollowing) {
-        // Unfollow
-        const { error: deleteError } = await supabase
-          .from('social_follows')
-          .delete()
-          .eq('follower_id', user.id)
-          .eq('following_id', userId);
+      // Optimistically update current user's following count
+      setCurrentUser(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          following_count: isNowFollowing
+            ? (prev.following_count || 0) + 1
+            : Math.max(0, (prev.following_count || 0) - 1)
+        };
+      });
 
-        if (deleteError) throw deleteError;
+      // Refetch user profile for correct counts
+      if (typeof refetchCurrentUser === 'function') {
+        await refetchCurrentUser();
+      }
 
-        // Optimistically update current user's following count
-        setCurrentUser(prev => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            following_count: Math.max(0, (prev.following_count || 0) - 1)
-          };
-        });
-
-        // After unfollow, refetch user profile to get correct counts
-        if (typeof refetchCurrentUser === 'function') {
-          await refetchCurrentUser();
-        }
-
-        toast.success('Unfollowed user');
-        return { isNowFollowing: false };
-      } else {
-        // Follow
-        const { error: followError } = await supabase
-          .from('social_follows')
-          .insert({
-            follower_id: user.id,
-            following_id: userId
-          });
-
-        if (followError) throw followError;
-
-        // Optimistically update current user's following count
-        setCurrentUser(prev => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            following_count: (prev.following_count || 0) + 1
-          };
-        });
-
-        // After follow, refetch user profile to get correct counts
-        if (typeof refetchCurrentUser === 'function') {
-          await refetchCurrentUser();
-        }
-
-        let actorName = currentUser?.display_name;
-        if (!actorName) {
-          const { data: actor } = await supabase
-            .from('social_users')
-            .select('display_name')
-            .eq('id', user.id)
-            .single();
-          actorName = actor?.display_name || 'Someone';
-        }
-
-        // Create notification
+      if (isNowFollowing) {
+        // Send client-side push notification
+        const actorName = response.actor_name || currentUser?.display_name || 'Someone';
         await createNotification({
           userId: userId,
           type: 'social_follow',
@@ -827,14 +641,15 @@ export const useSocialActions = (
 
         // Remove from suggested users list
         setSuggestedUsers(prev => prev.filter(u => u.id !== userId));
-
         toast.success('Followed user');
-        return { isNowFollowing: true };
+      } else {
+        toast.success('Unfollowed user');
       }
+
+      return { isNowFollowing };
     } catch (error) {
-      ////console.error('Error toggling follow:', error);
       toast.error('Failed to update follow status');
-      throw error; // Re-throw so the UI can handle the error
+      throw error;
     }
   };
   // Add these functions to useSocialActions.ts
@@ -856,48 +671,23 @@ export const useSocialActions = (
         return true;
       }
 
-      // Get the post to verify ownership
-      const { data: post, error: fetchError } = await supabase
-        .from('social_posts')
-        .select('author_id')
-        .eq('id', postId)
-        .single();
+      // Optimistic update
+      const previousPosts = [...posts];
+      setPosts(prev => prev.filter(p => p.id !== postId));
 
-      if (fetchError) throw fetchError;
-      if (post.author_id !== user.id) {
-        toast.error('You can only delete your own posts');
+      const { data: response, error } = await supabase.functions.invoke('delete-social-post', {
+        body: { post_id: postId },
+      });
+
+      if (error || !response?.success) {
+        // Revert optimistic update
+        setPosts(previousPosts);
+        toast.error(error?.message || 'Failed to delete post');
         return false;
       }
 
-      // Delete associated data first
-      await Promise.all([
-        supabase.from('social_likes').delete().eq('post_id', postId),
-        supabase.from('social_comments').delete().eq('post_id', postId),
-        supabase.from('social_bookmarks').delete().eq('post_id', postId),
-        supabase.from('social_media').delete().eq('post_id', postId),
-        supabase.from('social_post_hashtags').delete().eq('post_id', postId),
-        supabase.from('social_post_tags').delete().eq('post_id', postId),
-        supabase.from('social_notifications').delete().eq('post_id', postId),
-      ]);
-
-      // Delete the post
-      const { error: deleteError } = await supabase
-        .from('social_posts')
-        .delete()
-        .eq('id', postId);
-
-      if (deleteError) throw deleteError;
-
-      // Update local state
-      setPosts(prev => prev.filter(p => p.id !== postId));
-
-      // Update user's posts count
+      // Update local user posts count
       if (currentUser) {
-        await supabase
-          .from('social_users')
-          .update({ posts_count: Math.max(0, (currentUser.posts_count || 0) - 1) })
-          .eq('id', user.id);
-
         setCurrentUser(prev => prev ? {
           ...prev,
           posts_count: Math.max(0, prev.posts_count - 1)
@@ -907,7 +697,6 @@ export const useSocialActions = (
       toast.success('Post deleted successfully');
       return true;
     } catch (error) {
-      ////console.error('Error deleting post:', error);
       toast.error('Failed to delete post');
       return false;
     }
@@ -923,70 +712,25 @@ export const useSocialActions = (
         return false;
       }
 
-      // Get the post to verify ownership
-      const { data: post, error: fetchError } = await supabase
-        .from('social_posts')
-        .select('author_id, content')
-        .eq('id', postId)
-        .single();
+      const { data: response, error } = await supabase.functions.invoke('edit-social-post', {
+        body: { post_id: postId, content: newContent },
+      });
 
-      if (fetchError) throw fetchError;
-      if (post.author_id !== user.id) {
-        toast.error('You can only edit your own posts');
+      if (error || !response?.success) {
+        toast.error(error?.message || 'Failed to update post');
         return false;
       }
-
-      // Update the post
-      const { error: updateError } = await supabase
-        .from('social_posts')
-        .update({
-          content: newContent.trim(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', postId);
-
-      if (updateError) throw updateError;
 
       // Update local state
       setPosts(prev => prev.map(p =>
         p.id === postId
-          ? { ...p, content: newContent.trim(), updated_at: new Date().toISOString() }
+          ? { ...p, content: response.content, updated_at: new Date().toISOString() }
           : p
       ));
-
-      // Handle hashtags
-      const oldHashtags = extractHashtags(post.content);
-      const newHashtags = extractHashtags(newContent);
-
-      // Remove old hashtag associations
-      if (oldHashtags.length > 0) {
-        await supabase
-          .from('social_post_hashtags')
-          .delete()
-          .eq('post_id', postId);
-      }
-
-      // Add new hashtag associations
-      for (const tag of newHashtags) {
-        const { data: hashtag, error: hashtagError } = await supabase
-          .from('social_hashtags')
-          .upsert({ name: tag }, { onConflict: 'name' })
-          .select()
-          .single();
-
-        if (!hashtagError && hashtag) {
-          await supabase.from('social_post_hashtags').insert({
-            post_id: postId,
-            hashtag_id: hashtag.id,
-            created_at: new Date().toISOString(),
-          });
-        }
-      }
 
       toast.success('Post updated successfully');
       return true;
     } catch (error) {
-      ////console.error('Error editing post:', error);
       toast.error('Failed to update post');
       return false;
     }

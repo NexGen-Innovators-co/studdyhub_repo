@@ -127,60 +127,27 @@ export const OtherUserProfile: React.FC<OtherUserProfileProps> = (props) => {
         try {
             const offset = reset ? 0 : userPosts.length;
 
-            const { data: postsData, error: postsError } = await supabase
-                .from('social_posts')
-                .select(`
-                    *,
-                    author:social_users(*),
-                    group:social_groups(*),
-                    media:social_media(*)
-                `)
-                .eq('author_id', userId)
-                .eq('privacy', 'public')
-                .order('created_at', { ascending: false })
-                .range(offset, offset + POSTS_PER_PAGE - 1);
+            const { data: response, error } = await supabase.functions.invoke('get-user-posts-metadata', {
+                body: { author_id: userId, offset, limit: POSTS_PER_PAGE },
+            });
 
-            if (postsError) throw postsError;
+            if (error || !response?.success) throw new Error('Failed to fetch posts');
 
-            if (!postsData || postsData.length === 0) {
+            if (!response.posts || response.posts.length === 0) {
                 setHasMore(false);
                 loadingState(false);
                 return;
             }
 
-            const postIds = postsData.map(p => p.id);
-
-            const [hashtagResult, tagResult, likeResult, bookmarkResult] = await Promise.all([
-                supabase.from('social_post_hashtags').select(`post_id, hashtag:social_hashtags(*)`).in('post_id', postIds),
-                supabase.from('social_post_tags').select(`post_id, tag:social_tags(*)`).in('post_id', postIds),
-                props.currentUser
-                    ? supabase.from('social_likes').select('post_id').eq('user_id', props.currentUser.id).in('post_id', postIds)
-                    : Promise.resolve({ data: [] }),
-                props.currentUser
-                    ? supabase.from('social_bookmarks').select('post_id').eq('user_id', props.currentUser.id).in('post_id', postIds)
-                    : Promise.resolve({ data: [] })
-            ]);
-
-            const transformedPosts = postsData.map(post => {
-                const postHashtags = hashtagResult.data?.filter(ph => ph.post_id === post.id)?.map(ph => ph.hashtag)?.filter(Boolean) || [];
-                const postTags = tagResult.data?.filter(pt => pt.post_id === post.id)?.map(pt => pt.tag)?.filter(Boolean) || [];
-                const isLiked = likeResult.data?.some(like => like.post_id === post.id) || false;
-                const isBookmarked = bookmarkResult.data?.some(bookmark => bookmark.post_id === post.id) || false;
-
-                return {
-                    ...post,
-                    privacy: post.privacy as "public" | "followers" | "private",
-                    media: (post.media || []).map((m: any) => ({ ...m, type: m.type as "image" | "video" | "document" })),
-                    group: post.group ? { ...post.group, privacy: post.group.privacy as "public" | "private" } : undefined,
-                    hashtags: postHashtags,
-                    tags: postTags,
-                    is_liked: isLiked,
-                    is_bookmarked: isBookmarked
-                };
-            });
+            const transformedPosts = response.posts.map((post: any) => ({
+                ...post,
+                privacy: post.privacy as "public" | "followers" | "private",
+                media: (post.media || []).map((m: any) => ({ ...m, type: m.type as "image" | "video" | "document" })),
+                group: post.group ? { ...post.group, privacy: post.group.privacy as "public" | "private" } : undefined,
+            }));
 
             setUserPosts(prev => reset ? transformedPosts : [...prev, ...transformedPosts]);
-            setHasMore(postsData.length === POSTS_PER_PAGE);
+            setHasMore(response.has_more);
         } catch (error) {
             //console.error('Error fetching user posts:', error);
             toast.error('Failed to load posts');

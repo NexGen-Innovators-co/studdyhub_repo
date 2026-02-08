@@ -109,13 +109,11 @@ export const GroupChat: React.FC<GroupChatProps> = ({
     }
 
     try {
-      const { error } = await supabase.from('social_chat_messages').insert({
-        group_id: groupId,
-        sender_id: currentUser.id,
-        content: newMessage,
+      const { data: response, error } = await supabase.functions.invoke('send-group-message', {
+        body: { group_id: groupId, content: newMessage },
       });
 
-      if (error) throw error;
+      if (error || !response?.success) throw new Error('Failed to send message');
       setNewMessage('');
       inputRef.current?.focus();
     } catch (error) {

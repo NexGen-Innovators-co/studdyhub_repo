@@ -24,17 +24,15 @@ export const useSocialComments = (
     try {
       setLoadingComments(prev => new Set([...prev, postId]));
 
-      const { data, error } = await supabase
-        .from('social_comments')
-        .select(`*, author:social_users(*)`)
-        .eq('post_id', postId)
-        .order('created_at', { ascending: true });
+      const { data: response, error } = await supabase.functions.invoke('get-comments', {
+        body: { post_id: postId },
+      });
 
-      if (error) throw error;
+      if (error || !response?.success) throw error || new Error('Failed to fetch comments');
 
       setComments(prev => ({
         ...prev,
-        [postId]: data || []
+        [postId]: response.comments || []
       }));
 
       // Subscribe to real-time updates
@@ -121,18 +119,10 @@ export const useSocialComments = (
 
        const comment = response.comment;
 
-      // Create notification for post author
+      // Send client-side push notification (in-DB notification already created server-side)
       const post = posts.find(p => p.id === postId);
       if (post && post.author_id !== user.id) {
-        let actorName = currentUser?.display_name;
-        if (!actorName) {
-          const { data: actor } = await supabase
-            .from('social_users')
-            .select('display_name')
-            .eq('id', user.id)
-            .single();
-          actorName = actor?.display_name || 'Someone';
-        }
+        const actorName = response.actor_name || currentUser?.display_name || 'Someone';
 
         await createNotification({
           userId: post.author_id,

@@ -17,39 +17,20 @@ export const useChatActions = (currentUserId: string | null) => {
         try {
             setIsCreatingSession(true);
 
-            const { data: existing, error: searchError } = await supabase
-                .from('social_chat_sessions')
-                .select('id')
-                .eq('chat_type', 'p2p')
-                .or(
-                    `and(user_id1.eq.${currentUserId},user_id2.eq.${otherUserId}),and(user_id1.eq.${otherUserId},user_id2.eq.${currentUserId})`
-                )
-                .maybeSingle();
+            const { data: response, error } = await supabase.functions.invoke('create-chat-session', {
+                body: { other_user_id: otherUserId },
+            });
 
-            if (searchError && searchError.code !== 'PGRST116') {
-                throw searchError;
+            if (error || !response?.success) {
+                throw new Error('Failed to create chat session');
             }
 
-            if (existing) {
-                return existing.id;
+            if (response.created) {
+                toast.success('Chat session created');
             }
 
-            const { data: newSession, error: createError } = await supabase
-                .from('social_chat_sessions')
-                .insert({
-                    chat_type: 'p2p',
-                    user_id1: currentUserId,
-                    user_id2: otherUserId,
-                })
-                .select()
-                .single();
-
-            if (createError) throw createError;
-
-            toast.success('Chat session created');
-            return newSession.id;
+            return response.session_id;
         } catch (error) {
-            ////console.error('Error creating chat session:', error);
             toast.error('Failed to create chat session');
             return null;
         } finally {
@@ -70,31 +51,8 @@ export const useChatActions = (currentUserId: string | null) => {
         try {
             setIsSending(true);
 
-            // Get current user info for optimistic update
-            const { data: sender } = await supabase
-                .from('social_users')
-                .select('*')
-                .eq('id', currentUserId)
-                .single();
-
-            if (!sender) throw new Error('Sender not found');
-
-            // Insert message directly into social_chat_messages
-            const { data: newMessage, error: messageError } = await supabase
-                .from('social_chat_messages')
-                .insert({
-                    session_id: sessionId,
-                    sender_id: currentUserId,
-                    content: content.trim(),
-                    group_id: null,
-                })
-                .select()
-                .single();
-
-            if (messageError) throw messageError;
-
-            // Handle file uploads and create media records
-            const mediaRecords = [];
+            // Upload files client-side first (requires File objects)
+            const mediaItems: Array<{ type: string; url: string; filename: string; size_bytes: number; mime_type: string }> = [];
             if (files && files.length > 0) {
                 for (const file of files) {
                     const fileExt = file.name.split('.').pop();
@@ -110,36 +68,35 @@ export const useChatActions = (currentUserId: string | null) => {
                         .from('social-media')
                         .getPublicUrl(fileName);
 
-                    const { data: mediaRecord } = await supabase
-                        .from('social_chat_message_media')
-                        .insert({
-                            message_id: newMessage.id,
-                            type: file.type.startsWith('image/')
-                                ? 'image'
-                                : file.type.startsWith('video/')
-                                    ? 'video'
-                                    : 'document',
-                            url: publicUrl,
-                            filename: file.name,
-                            size_bytes: file.size,
-                            mime_type: file.type,
-                        })
-                        .select()
-                        .single();
-
-                    if (mediaRecord) mediaRecords.push(mediaRecord);
+                    mediaItems.push({
+                        type: file.type.startsWith('image/')
+                            ? 'image'
+                            : file.type.startsWith('video/')
+                                ? 'video'
+                                : 'document',
+                        url: publicUrl,
+                        filename: file.name,
+                        size_bytes: file.size,
+                        mime_type: file.type,
+                    });
                 }
             }
 
-            // Return complete message with media
-            return {
-                ...newMessage,
-                sender,
-                media: mediaRecords,
-                resources: [],
-            };
+            // Use edge function for sender fetch + message insert + media record creation
+            const { data: response, error } = await supabase.functions.invoke('send-chat-message', {
+                body: {
+                    session_id: sessionId,
+                    content,
+                    media_items: mediaItems.length > 0 ? mediaItems : undefined,
+                },
+            });
+
+            if (error || !response?.success) {
+                throw new Error('Failed to send message');
+            }
+
+            return response.message as ChatMessageWithDetails;
         } catch (error) {
-            ////console.error('Error sending message:', error);
             toast.error('Failed to send message');
             return null;
         } finally {
@@ -199,49 +156,21 @@ export const useChatActions = (currentUserId: string | null) => {
         try {
             setIsSending(true);
 
-            // Get current user info
-            const { data: sender } = await supabase
-                .from('social_users')
-                .select('*')
-                .eq('id', currentUserId)
-                .single();
-
-            if (!sender) throw new Error('Sender not found');
-
-            // Insert message
-            const { data: newMessage, error: messageError } = await supabase
-                .from('social_chat_messages')
-                .insert({
+            // Use edge function for sender fetch + message insert + resource attach
+            const { data: response, error } = await supabase.functions.invoke('send-chat-message', {
+                body: {
                     session_id: sessionId,
-                    sender_id: currentUserId,
-                    content: content.trim(),
-                    group_id: null,
-                })
-                .select()
-                .single();
+                    content,
+                    resource: { resource_id: resourceId, resource_type: resourceType },
+                },
+            });
 
-            if (messageError) throw messageError;
+            if (error || !response?.success) {
+                throw new Error('Failed to send message');
+            }
 
-            // Share resource
-            const { data: resourceRecord } = await supabase
-                .from('social_chat_message_resources')
-                .insert({
-                    message_id: newMessage.id,
-                    resource_id: resourceId,
-                    resource_type: resourceType,
-                })
-                .select()
-                .single();
-
-            // Return complete message with resource
-            return {
-                ...newMessage,
-                sender,
-                media: [],
-                resources: resourceRecord ? [resourceRecord] : [],
-            };
+            return response.message as ChatMessageWithDetails;
         } catch (error) {
-            ////console.error('Error sending message with resource:', error);
             toast.error('Failed to send message');
             return null;
         } finally {

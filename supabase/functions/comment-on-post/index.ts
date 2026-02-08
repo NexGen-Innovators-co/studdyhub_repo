@@ -123,11 +123,38 @@ serve(async (req: Request) => {
       return createSubErrorResponse("Failed to create comment", 500);
     }
 
+    // Fetch post author and commenter name for notification (server-side)
+    let actorName = 'Someone';
+    try {
+      const [postResult, actorResult] = await Promise.all([
+        supabase.from('social_posts').select('author_id').eq('id', postId).single(),
+        supabase.from('social_users').select('display_name, avatar_url').eq('id', userId).single(),
+      ]);
+
+      actorName = actorResult.data?.display_name || 'Someone';
+
+      // Create in-DB notification if commenter is not the post author
+      if (postResult.data && postResult.data.author_id !== userId) {
+        await supabase.from('social_notifications').insert({
+          user_id: postResult.data.author_id,
+          actor_id: userId,
+          type: 'comment',
+          title: 'New Comment',
+          message: `${actorName} commented on your post`,
+          post_id: postId,
+          is_read: false,
+        }).then(null, () => { /* ignore notification errors */ });
+      }
+    } catch (_) {
+      // Don't fail the comment if notification fails
+    }
+
     return createSuccessResponse(
       {
         success: true,
         comment: comment,
-      },
+        actor_name: actorName,
+      } as any,
       201
     );
   } catch (error) {

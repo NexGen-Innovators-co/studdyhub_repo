@@ -349,6 +349,46 @@ Respond in JSON format:
       }
     }
 
+    // Handle hashtags server-side
+    const hashtagRegex = /#(\w+)/g;
+    const hashtagMatches = content.match(hashtagRegex);
+    if (hashtagMatches && hashtagMatches.length > 0) {
+      const tags = [...new Set(hashtagMatches.map((h: string) => h.slice(1).toLowerCase()))];
+      for (const tag of tags) {
+        try {
+          const { data: hashtag } = await supabase
+            .from('social_hashtags')
+            .upsert({ name: tag }, { onConflict: 'name' })
+            .select()
+            .single();
+
+          if (hashtag) {
+            await supabase.from('social_post_hashtags').insert({
+              post_id: post.id,
+              hashtag_id: hashtag.id,
+              created_at: new Date().toISOString(),
+            });
+          }
+        } catch (_) {
+          // Ignore individual hashtag errors
+        }
+      }
+    }
+
+    // Update user's posts count
+    const { data: userProfile } = await supabase
+      .from('social_users')
+      .select('posts_count')
+      .eq('id', userId)
+      .single();
+
+    if (userProfile) {
+      await supabase
+        .from('social_users')
+        .update({ posts_count: (userProfile.posts_count || 0) + 1 })
+        .eq('id', userId);
+    }
+
     // Trigger Notifications (Fire and Forget)
     (async () => {
       try {

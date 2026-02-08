@@ -7,10 +7,8 @@ import { DEFAULT_LIMITS } from '../components/social/utils/socialConstants';
 
 import {
   CACHE_KEYS,
-  CACHE_DURATION,
   saveToCache,
   loadFromCache,
-  clearCache
 } from '../utils/socialCache';
 import { offlineStorage, STORES } from '../utils/offlineStorage';
 
@@ -27,95 +25,24 @@ const uniqueById = <T extends { id: string }>(arr: T[]): T[] => {
   });
 };
 
-// Optimized: Batch queries and cache frequently used data
-// Dynamic feed algorithm: mixes engagement, recency, and randomization for varied content
-const createPostQuery = (baseQuery: any, sortBy: SortBy) => {
-  let query = baseQuery;
-
-  if (sortBy === 'newest') {
-    // Mix of newest posts with some randomization
-    // Fetch more than needed and will shuffle in-memory
-    query = query.order('created_at', { ascending: false });
-  } else if (sortBy === 'popular') {
-    // Engagement-based algorithm: score = (likes + comments*2 + shares*3) / age_in_hours
-    // This balances viral content with fresh content
-    query = query.order('likes_count', { ascending: false });
-  }
-
-  return query;
-};
-
-const fetchPostRelations = async (postIds: string[], currentUserId: string | null) => {
-  if (!postIds.length) return { hashtags: [], tags: [], likes: [], bookmarks: [] };
-
-  const [hashtagResult, tagResult, likeResult, bookmarkResult] = await Promise.all([
-    supabase
-      .from('social_post_hashtags')
-      .select(`post_id, hashtag:social_hashtags(*)`)
-      .in('post_id', postIds),
-    supabase
-      .from('social_post_tags')
-      .select(`post_id, tag:social_tags(*)`)
-      .in('post_id', postIds),
-    currentUserId
-      ? supabase
-        .from('social_likes')
-        .select('post_id')
-        .eq('user_id', currentUserId)
-        .in('post_id', postIds)
-      : { data: [] },
-    currentUserId
-      ? supabase
-        .from('social_bookmarks')
-        .select('post_id')
-        .eq('user_id', currentUserId)
-        .in('post_id', postIds)
-      : { data: [] }
-  ]);
-
-  return {
-    hashtags: hashtagResult.data || [],
-    tags: tagResult.data || [],
-    likes: likeResult.data || [],
-    bookmarks: bookmarkResult.data || []
-  };
-};
-
-const transformPosts = (
-  postsData: any[],
-  relations: any
-): SocialPostWithDetails[] => {
-  return postsData.map(post => {
-    const postHashtags = relations.hashtags
-      .filter((ph: any) => ph.post_id === post.id)
-      .map((ph: any) => ph.hashtag)
-      .filter(Boolean);
-
-    const postTags = relations.tags
-      .filter((pt: any) => pt.post_id === post.id)
-      .map((pt: any) => pt.tag)
-      .filter(Boolean);
-
-    const isLiked = relations.likes.some((like: any) => like.post_id === post.id);
-    const isBookmarked = relations.bookmarks.some((bookmark: any) => bookmark.post_id === post.id);
-
-    return {
-      ...post,
-      privacy: post.privacy as "public" | "followers" | "private",
-      media: (post.media || []).map((m: any) => ({
-        ...m,
-        type: m.type as "image" | "video" | "document"
-      })),
-      group: post.group ? {
-        ...post.group,
-        privacy: post.group.privacy as "public" | "private"
-      } : undefined,
-      hashtags: postHashtags,
-      tags: postTags,
-      is_liked: isLiked,
-      is_bookmarked: isBookmarked
-    };
-  });
+// Normalize post types coming from edge functions
+const normalizePosts = (posts: any[]): SocialPostWithDetails[] => {
+  return posts.map(post => ({
+    ...post,
+    privacy: post.privacy as "public" | "followers" | "private",
+    media: (post.media || []).map((m: any) => ({
+      ...m,
+      type: m.type as "image" | "video" | "document"
+    })),
+    group: post.group ? {
+      ...post.group,
+      privacy: post.group.privacy as "public" | "private"
+    } : undefined,
+    hashtags: post.hashtags || [],
+    tags: post.tags || [],
+    is_liked: post.is_liked ?? false,
+    is_bookmarked: post.is_bookmarked ?? false,
+  }));
 };
 
 export const useSocialData = (
@@ -162,8 +89,7 @@ export const useSocialData = (
   const [newPostsBuffer, setNewPostsBuffer] = useState<SocialPostWithDetails[]>([]);
   const [hasNewPosts, setHasNewPosts] = useState(false);
 
-  const POST_LIMIT = DEFAULT_LIMITS.POSTS_PER_PAGE;
-  const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
+
 
   const subscriptionsRef = useRef<any[]>([]);
   const currentUserIdRef = useRef<string | null>(null);
@@ -173,10 +99,9 @@ export const useSocialData = (
   const [viewedPostIds, setViewedPostIds] = useState<Set<string>>(new Set());
   const groupPageRef = useRef<number>(0);
 
-  // Cache for frequently accessed data
-  const postRelationsCache = useRef<Map<string, any>>(new Map());
 
-  // OPTIMIZED: Fetch posts with batched relations
+
+  // OPTIMIZED: Fetch posts via edge function (single API call replaces 5+ DB queries)
   const fetchPosts = useCallback(async (reset: boolean = false) => {
     if (!reset && (!hasMorePosts || isLoadingMorePosts)) return;
 
@@ -187,32 +112,24 @@ export const useSocialData = (
     }
 
     try {
-      // Only show main loading spinner if we don't have any posts yet
       if (reset) {
         setIsLoading(posts.length === 0);
       }
       if (!reset) setIsLoadingMorePosts(true);
 
       const currentOffset = reset ? 0 : postsOffset;
-      const fetchLimit = DEFAULT_LIMITS.POSTS_PER_PAGE * 3;
 
-      let query = createPostQuery(
-        supabase
-          .from('social_posts')
-          .select(`
-            *,
-            author:social_users(*),
-            group:social_groups(*),
-            media:social_media(*)
-          `)
-          .eq('privacy', 'public'),
-        sortBy
-      );
+      const { data: response, error } = await supabase.functions.invoke('get-social-feed', {
+        body: {
+          mode: 'feed',
+          sortBy,
+          offset: currentOffset,
+          limit: DEFAULT_LIMITS.POSTS_PER_PAGE,
+          viewedPostIds: Array.from(viewedPostIds),
+        },
+      });
 
-      const { data: postsData, error: postsError } = await query
-        .range(currentOffset, currentOffset + fetchLimit - 1);
-
-      if (postsError) {
+      if (error) {
         if (!navigator.onLine) {
           const offlinePosts = await offlineStorage.getAll<SocialPostWithDetails>(STORES.SOCIAL_POSTS);
           if (offlinePosts.length > 0) {
@@ -221,70 +138,15 @@ export const useSocialData = (
             return;
           }
         }
-        throw postsError;
+        throw error;
       }
-      
-      if (!postsData || postsData.length === 0) {
+
+      const transformedPosts = normalizePosts(response?.posts || []);
+
+      if (transformedPosts.length === 0) {
         setHasMorePosts(false);
         return;
       }
-
-      // Filter posts (same logic as before)
-      const filteredPosts = postsData.filter(post => {
-        if (post.author_id === currentUserIdRef.current) {
-          const postCreatedAt = new Date(post.created_at).getTime();
-          const now = Date.now();
-          const fiveMinutesAgo = now - (5 * 60 * 1000);
-          return postCreatedAt >= fiveMinutesAgo;
-        }
-        return true;
-      });
-
-      // DYNAMIC FEED ALGORITHM:
-      // 1. Separate viewed and unviewed posts
-      const unviewedPosts = filteredPosts.filter(p => !viewedPostIds.has(p.id));
-      const viewedPosts = filteredPosts.filter(p => viewedPostIds.has(p.id));
-
-      // 2. Apply smart shuffling to unviewed posts for variety
-      // Shuffle using Fisher-Yates with engagement weight
-      const shuffleWithEngagement = (posts: any[]) => {
-        const weighted = [...posts];
-        
-        // Calculate engagement score for each post
-        const withScores = weighted.map(post => ({
-          post,
-          // Engagement score: recent posts get boost, popular posts get boost
-          score: (post.likes_count || 0) + 
-                 (post.comments_count || 0) * 2 + 
-                 (post.shares_count || 0) * 3 +
-                 // Recency bonus: newer posts (within 24h) get up to 10 point boost
-                 Math.max(0, 10 - ((Date.now() - new Date(post.created_at).getTime()) / (1000 * 60 * 60 * 24))),
-          // Add randomness (0-5 points) to prevent always showing same top posts
-          random: Math.random() * 5
-        }));
-
-        // Sort by combined score (engagement + recency + randomness)
-        withScores.sort((a, b) => (b.score + b.random) - (a.score + a.random));
-        
-        return withScores.map(item => item.post);
-      };
-
-      // 3. Shuffle unviewed posts for variety, keep viewed posts at end
-      const shuffledUnviewed = shuffleWithEngagement(unviewedPosts);
-      const sortedViewed = viewedPosts.sort((a, b) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-
-      // 4. Combine: unviewed posts first (shuffled), then viewed posts
-      const reorderedPosts = [...shuffledUnviewed, ...sortedViewed];
-
-      const selectedPosts = reorderedPosts.slice(0, POST_LIMIT);
-      const postIds = selectedPosts.map(post => post.id);
-
-      // OPTIMIZED: Batch fetch all relations at once
-      const relations = await fetchPostRelations(postIds, currentUserIdRef.current);
-
-      const transformedPosts = transformPosts(selectedPosts, relations);
 
       // Save to offline storage
       if (transformedPosts.length > 0) {
@@ -299,11 +161,8 @@ export const useSocialData = (
         setPostsOffset(prev => prev + transformedPosts.length);
       }
 
-      if (selectedPosts.length < DEFAULT_LIMITS.POSTS_PER_PAGE) {
-        setHasMorePosts(false);
-      }
+      setHasMorePosts(response?.hasMore ?? false);
     } catch (error) {
-      ////console.error('Error fetching posts:', error);
       toast.error('Failed to load posts');
     } finally {
       setIsLoading(false);
@@ -311,7 +170,7 @@ export const useSocialData = (
     }
   }, [sortBy, filterBy, hasMorePosts, isLoadingMorePosts, postsOffset, viewedPostIds]);
 
-  // OPTIMIZED: Trending posts with same batching
+  // OPTIMIZED: Trending posts via edge function
   const fetchTrendingPosts = useCallback(async (reset: boolean = false) => {
     if (!reset && (!hasMoreTrendingPosts || isLoadingMorePosts)) return;
 
@@ -323,69 +182,29 @@ export const useSocialData = (
 
     try {
       if (reset) {
-        // Only show spinner if we don't have data
         setIsLoading(trendingPosts.length === 0); 
       }
       if (!reset) setIsLoadingMorePosts(true);
 
       const currentOffset = reset ? 0 : trendingPostsOffset;
-      const fetchLimit = DEFAULT_LIMITS.POSTS_PER_PAGE * 3;
 
-      let query = supabase
-        .from('social_posts')
-        .select(`
-          *,
-          author:social_users(*),
-          group:social_groups(*),
-          media:social_media(*)
-        `)
-        .eq('privacy', 'public')
-        .order('likes_count', { ascending: false })
-        .order('comments_count', { ascending: false });
+      const { data: response, error } = await supabase.functions.invoke('get-social-feed', {
+        body: {
+          mode: 'trending',
+          offset: currentOffset,
+          limit: DEFAULT_LIMITS.POSTS_PER_PAGE,
+          viewedPostIds: Array.from(viewedPostIds),
+        },
+      });
 
-      if (currentUserIdRef.current) {
-        query = query.neq('author_id', currentUserIdRef.current);
-      }
+      if (error) throw error;
 
-      const { data: postsData, error: postsError } = await query
-        .range(currentOffset, currentOffset + fetchLimit - 1);
+      const transformedPosts = normalizePosts(response?.posts || []);
 
-      if (postsError) throw postsError;
-      if (!postsData || postsData.length === 0) {
+      if (transformedPosts.length === 0) {
         setHasMoreTrendingPosts(false);
         return;
       }
-
-      // DYNAMIC TRENDING ALGORITHM:
-      // Add variety to trending posts instead of always showing same top posts
-      const unviewedTrending = postsData.filter(p => !viewedPostIds.has(p.id));
-      const viewedTrending = postsData.filter(p => viewedPostIds.has(p.id));
-
-      // Mix trending posts with slight randomization to show variety
-      const mixTrending = (posts: any[]) => {
-        return posts.map(post => ({
-          post,
-          // Trending score: heavily weighted toward likes/comments but with small random factor
-          score: (post.likes_count || 0) * 3 + 
-                 (post.comments_count || 0) * 2 + 
-                 (post.shares_count || 0) * 5 +
-                 // Small random factor (0-2 points) for variety
-                 Math.random() * 2
-        }))
-        .sort((a, b) => b.score - a.score)
-        .map(item => item.post);
-      };
-
-      const sortedUnviewed = mixTrending(unviewedTrending);
-      const sortedViewed = mixTrending(viewedTrending);
-
-      const reorderedPosts = [...sortedUnviewed, ...sortedViewed];
-      const selectedPosts = reorderedPosts.slice(0, POST_LIMIT);
-      const postIds = selectedPosts.map(post => post.id);
-
-      // OPTIMIZED: Batch fetch relations
-      const relations = await fetchPostRelations(postIds, currentUserIdRef.current);
-      const transformedPosts = transformPosts(selectedPosts, relations);
 
       if (reset) {
         setTrendingPosts(uniqueById(transformedPosts));
@@ -395,11 +214,8 @@ export const useSocialData = (
         setTrendingPostsOffset(prev => prev + transformedPosts.length);
       }
 
-      if (selectedPosts.length < DEFAULT_LIMITS.POSTS_PER_PAGE) {
-        setHasMoreTrendingPosts(false);
-      }
+      setHasMoreTrendingPosts(response?.hasMore ?? false);
     } catch (error) {
-      ////console.error('Error fetching trending posts:', error);
       toast.error('Failed to load trending posts');
     } finally {
       setIsLoading(false);
@@ -407,7 +223,7 @@ export const useSocialData = (
     }
   }, [hasMoreTrendingPosts, isLoadingMorePosts, trendingPostsOffset, viewedPostIds]);
 
-  // OPTIMIZED: User posts with batching
+  // OPTIMIZED: User posts via edge function
   const fetchUserPosts = useCallback(async (reset: boolean = false) => {
     if (!reset && (!hasMoreUserPosts || isLoadingUserPosts)) return;
 
@@ -421,41 +237,25 @@ export const useSocialData = (
         setIsLoadingUserPosts(userPosts.length === 0);
       }
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setUserPosts([]);
-        setIsLoadingUserPosts(false);
-        return;
-      }
-
       const currentOffset = reset ? 0 : userPostsOffset;
 
-      let query = supabase
-        .from('social_posts')
-        .select(`
-          *,
-          author:social_users(*),
-          group:social_groups(*),
-          media:social_media(*)
-        `)
-        .eq('author_id', user.id)
-        .order('created_at', { ascending: false });
+      const { data: response, error } = await supabase.functions.invoke('get-social-feed', {
+        body: {
+          mode: 'user',
+          offset: currentOffset,
+          limit: DEFAULT_LIMITS.POSTS_PER_PAGE,
+        },
+      });
 
-      const { data: postsData, error: postsError } = await query
-        .range(currentOffset, currentOffset + DEFAULT_LIMITS.POSTS_PER_PAGE - 1);
+      if (error) throw error;
 
-      if (postsError) throw postsError;
-      if (!postsData || postsData.length === 0) {
+      const transformedPosts = normalizePosts(response?.posts || []);
+
+      if (transformedPosts.length === 0) {
         setHasMoreUserPosts(false);
         setIsLoadingUserPosts(false);
         return;
       }
-
-      const postIds = postsData.map(post => post.id);
-
-      // OPTIMIZED: Batch fetch relations
-      const relations = await fetchPostRelations(postIds, user.id);
-      const transformedPosts = transformPosts(postsData, relations);
 
       if (reset) {
         setUserPosts(uniqueById(transformedPosts));
@@ -465,196 +265,58 @@ export const useSocialData = (
         setUserPostsOffset(prev => prev + transformedPosts.length);
       }
 
-      if (transformedPosts.length < DEFAULT_LIMITS.POSTS_PER_PAGE) {
-        setHasMoreUserPosts(false);
-      }
+      setHasMoreUserPosts(response?.hasMore ?? false);
     } catch (error) {
-      ////console.error('Error fetching user posts:', error);
       toast.error('Failed to load user posts');
     } finally {
       setIsLoadingUserPosts(false);
     }
   }, [hasMoreUserPosts, isLoadingUserPosts, userPostsOffset]);
 
-  // OPTIMIZED: Liked posts with batching
+  // OPTIMIZED: Liked posts via edge function
   const fetchLikedPosts = useCallback(async () => {
     try {
       setIsLoadingLikedPosts(true);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setLikedPosts([]);
-        return;
-      }
-
-      // Get liked post IDs
-      const { data: likesData, error: likesError } = await supabase
-        .from('social_likes')
-        .select('post_id')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (likesError) throw likesError;
-      if (!likesData || likesData.length === 0) {
-        setLikedPosts([]);
-        return;
-      }
-
-      const postIds = likesData.map(like => like.post_id);
-
-      // Fetch post details
-      const { data: postsData, error: postsError } = await supabase
-        .from('social_posts')
-        .select(`
-          *,
-          author:social_users(*),
-          group:social_groups(*),
-          media:social_media(*)
-        `)
-        .in('id', postIds);
-
-      if (postsError) throw postsError;
-      if (!postsData) {
-        setLikedPosts([]);
-        return;
-      }
-
-      // OPTIMIZED: Batch fetch relations (excluding likes since we know they're liked)
-      const [hashtagResult, tagResult, bookmarksResult] = await Promise.all([
-        supabase
-          .from('social_post_hashtags')
-          .select(`post_id, hashtag:social_hashtags(*)`)
-          .in('post_id', postIds),
-        supabase
-          .from('social_post_tags')
-          .select(`post_id, tag:social_tags(*)`)
-          .in('post_id', postIds),
-        supabase
-          .from('social_bookmarks')
-          .select('post_id')
-          .eq('user_id', user.id)
-          .in('post_id', postIds)
-      ]);
-
-      const transformedPosts = postsData.map(post => {
-        const postHashtags = hashtagResult.data?.filter(ph => ph.post_id === post.id)?.map(ph => ph.hashtag)?.filter(Boolean) || [];
-        const postTags = tagResult.data?.filter(pt => pt.post_id === post.id)?.map(pt => pt.tag)?.filter(Boolean) || [];
-        const isBookmarked = bookmarksResult.data?.some(bookmark => bookmark.post_id === post.id) || false;
-
-        return {
-          ...post,
-          privacy: post.privacy as "public" | "followers" | "private",
-          media: (post.media || []).map((m: any) => ({ ...m, type: m.type as "image" | "video" | "document" })),
-          group: post.group ? { ...post.group, privacy: post.group.privacy as "public" | "private" } : undefined,
-          hashtags: postHashtags,
-          tags: postTags,
-          is_liked: true,
-          is_bookmarked: isBookmarked
-        };
+      const { data: response, error } = await supabase.functions.invoke('get-social-feed', {
+        body: { mode: 'liked' },
       });
 
+      if (error) throw error;
+
+      const transformedPosts = normalizePosts(response?.posts || []);
       setLikedPosts(transformedPosts);
     } catch (error) {
-      ////console.error('Error fetching liked posts:', error);
       toast.error('Failed to load liked posts');
     } finally {
       setIsLoadingLikedPosts(false);
     }
   }, []);
 
-  // OPTIMIZED: Bookmarked posts with batching
+  // OPTIMIZED: Bookmarked posts via edge function
   const fetchBookmarkedPosts = useCallback(async () => {
     try {
       setIsLoadingBookmarkedPosts(true);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setBookmarkedPosts([]);
-        return;
-      }
-
-      // Get bookmarked post IDs
-      const { data: bookmarksData, error: bookmarksError } = await supabase
-        .from('social_bookmarks')
-        .select('post_id')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: true });
-
-      if (bookmarksError) throw bookmarksError;
-      if (!bookmarksData || bookmarksData.length === 0) {
-        setBookmarkedPosts([]);
-        return;
-      }
-
-      const postIds = bookmarksData.map(bookmark => bookmark.post_id);
-
-      // Fetch post details
-      const { data: postsData, error: postsError } = await supabase
-        .from('social_posts')
-        .select(`
-          *,
-          author:social_users(*),
-          group:social_groups(*),
-          media:social_media(*)
-        `)
-        .in('id', postIds);
-
-      if (postsError) throw postsError;
-      if (!postsData) {
-        setBookmarkedPosts([]);
-        return;
-      }
-
-      // OPTIMIZED: Batch fetch relations (excluding bookmarks since we know they're bookmarked)
-      const [hashtagResult, tagResult, likesResult] = await Promise.all([
-        supabase
-          .from('social_post_hashtags')
-          .select(`post_id, hashtag:social_hashtags(*)`)
-          .in('post_id', postIds),
-        supabase
-          .from('social_post_tags')
-          .select(`post_id, tag:social_tags(*)`)
-          .in('post_id', postIds),
-        supabase
-          .from('social_likes')
-          .select('post_id')
-          .eq('user_id', user.id)
-          .in('post_id', postIds)
-      ]);
-
-      const transformedPosts = postsData.map(post => {
-        const postHashtags = hashtagResult.data?.filter(ph => ph.post_id === post.id)?.map(ph => ph.hashtag)?.filter(Boolean) || [];
-        const postTags = tagResult.data?.filter(pt => pt.post_id === post.id)?.map(pt => pt.tag)?.filter(Boolean) || [];
-        const isLiked = likesResult.data?.some(like => like.post_id === post.id) || false;
-
-        return {
-          ...post,
-          privacy: post.privacy as "public" | "followers" | "private",
-          media: (post.media || []).map((m: any) => ({ ...m, type: m.type as "image" | "video" | "document" })),
-          group: post.group ? { ...post.group, privacy: post.group.privacy as "public" | "private" } : undefined,
-          hashtags: postHashtags,
-          tags: postTags,
-          is_liked: isLiked,
-          is_bookmarked: true
-        };
+      const { data: response, error } = await supabase.functions.invoke('get-social-feed', {
+        body: { mode: 'bookmarked' },
       });
 
+      if (error) throw error;
+
+      const transformedPosts = normalizePosts(response?.posts || []);
       setBookmarkedPosts(transformedPosts);
     } catch (error) {
-      ////console.error('Error fetching bookmarked posts:', error);
       toast.error('Failed to load bookmarked posts');
     } finally {
       setIsLoadingBookmarkedPosts(false);
     }
   }, []);
 
-  // OPTIMIZED: Groups query - simplified and more efficient
+  // OPTIMIZED: Groups via edge function (2 queries → 1 API call)
   const fetchGroups = useCallback(async (reset = true) => {
     if (!currentUserIdRef.current) return;
     if (!reset && (!hasMoreGroups || isLoadingMoreGroups)) return;
-    
-    // Removed the guard that was blocking initial load when isLoadingGroups was true
-    // if (reset && isLoadingGroups) return;
 
     const limit = DEFAULT_LIMITS.GROUPS_PER_PAGE;
     const offset = reset ? 0 : groupsOffset;
@@ -665,17 +327,9 @@ export const useSocialData = (
         setIsLoadingGroups(groups.length === 0);
       }
 
-      // OPTIMIZED: Single query with proper filtering
-      // We fetch all groups to allow discovery, and then check membership
-      const { data: rawGroups, error } = await supabase
-        .from('social_groups')
-        .select(`
-          *,
-          creator:social_users!social_groups_created_by_fkey(*),
-          members:social_group_members(count)
-        `)
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
+      const { data: response, error } = await supabase.functions.invoke('get-social-groups', {
+        body: { offset, limit },
+      });
 
       if (error) {
         if (!navigator.onLine) {
@@ -689,31 +343,7 @@ export const useSocialData = (
         throw error;
       }
 
-      // Fetch memberships for these groups for the current user separately
-      // to avoid filtering out groups the user hasn't joined yet
-      const groupIds = (rawGroups || []).map(g => g.id);
-      let memberships: any[] = [];
-      
-      if (groupIds.length > 0 && currentUserIdRef.current) {
-        const { data: membershipData } = await supabase
-          .from('social_group_members')
-          .select('group_id, role, status')
-          .eq('user_id', currentUserIdRef.current)
-          .in('group_id', groupIds);
-        memberships = membershipData || [];
-      }
-
-      const groupsWithDetails: SocialGroupWithDetails[] = (rawGroups || []).map(g => {
-        const membership = memberships.find(m => m.group_id === g.id);
-        return {
-          ...g,
-          creator: g.creator,
-          members_count: g.members[0]?.count || g.members_count || 0,
-          is_member: !!membership,
-          member_role: membership?.role || null,
-          member_status: membership?.status || null,
-        };
-      });
+      const groupsWithDetails: SocialGroupWithDetails[] = response?.groups || [];
 
       if (reset) {
         setGroups(groupsWithDetails);
@@ -721,7 +351,7 @@ export const useSocialData = (
         setGroups(prev => [...prev, ...groupsWithDetails]);
       }
 
-      setHasMoreGroups(groupsWithDetails.length === limit);
+      setHasMoreGroups(response?.hasMore ?? false);
       setGroupsOffset(offset + groupsWithDetails.length);
 
       // Save to offline storage
@@ -731,7 +361,6 @@ export const useSocialData = (
 
       saveToCache(CACHE_KEYS.GROUPS, reset ? groupsWithDetails : [...groups, ...groupsWithDetails]);
     } catch (err) {
-      ////console.error('Error fetching groups:', err);
       toast.error('Failed to load groups');
     } finally {
       setIsLoadingGroups(false);
@@ -1258,6 +887,7 @@ export const useSocialData = (
     }
   };
 
+  // OPTIMIZED: Suggested users via edge function (5+ queries → 1 API call)
   const fetchSuggestedUsers = useCallback(
     async (reset: boolean = false) => {
       if (!reset && (isLoadingSuggestedUsers || !hasMoreSuggestedUsers)) {
@@ -1277,123 +907,16 @@ export const useSocialData = (
           setHasMoreSuggestedUsers(true);
         }
 
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          setIsLoadingSuggestedUsers(false);
-          return;
-        }
-
         const currentOffset = reset ? 0 : suggestedUsersOffset;
         const limit = DEFAULT_LIMITS.SUGGESTED_USERS;
 
-        // --------------------------------------------------------------
-        // 1. Get the IDs we already follow (and ourselves)
-        // --------------------------------------------------------------
-        const { data: followingData } = await supabase
-          .from('social_follows')
-          .select('following_id')
-          .eq('follower_id', user.id);
-
-        const followingIds = followingData?.map(f => f.following_id) ?? [];
-        const excludeIds = [user.id, ...followingIds];
-
-        // --------------------------------------------------------------
-        // 2. Fetch potential candidates and calculate mutual follows
-        // --------------------------------------------------------------
-        let mutualFollowsMap: Record<string, number> = {};
-        if (followingIds.length > 0) {
-          const { data: mutuals } = await supabase
-            .from('social_follows')
-            .select('following_id')
-            .in('follower_id', followingIds.slice(0, 50));
-          
-          mutuals?.forEach(m => {
-            if (!excludeIds.includes(m.following_id)) {
-              mutualFollowsMap[m.following_id] = (mutualFollowsMap[m.following_id] || 0) + 1;
-            }
-          });
-        }
-
-        // Fetch a pool of users to score
-        const poolIds = Object.keys(mutualFollowsMap);
-        let userPool: SocialUserWithDetails[] = [];
-
-        if (poolIds.length > 0) {
-          const { data: mutualPool } = await supabase
-            .from('social_users')
-            .select('*')
-            .in('id', poolIds.slice(0, 100));
-          if (mutualPool) userPool = mutualPool as SocialUserWithDetails[];
-        }
-
-        // Also fetch some popular users to fill the pool
-        let popularQuery = supabase
-          .from('social_users')
-          .select('*');
-        
-        if (excludeIds.length > 0) {
-          popularQuery = popularQuery.not('id', 'in', `(${excludeIds.slice(0, 100).join(',')})`);
-        }
-
-        const { data: popularPool } = await popularQuery
-          .order('followers_count', { ascending: false })
-          .limit(50);
-        
-        if (popularPool) {
-          const existingIds = new Set(userPool.map(u => u.id));
-          popularPool.forEach(u => {
-            if (!existingIds.has(u.id) && !excludeIds.includes(u.id)) {
-              userPool.push(u as SocialUserWithDetails);
-            }
-          });
-        }
-
-        // --------------------------------------------------------------
-        // 3. Scoring Algorithm
-        // --------------------------------------------------------------
-        const userInterests = currentUser?.interests || [];
-        
-        const scoredUsers: SuggestedUser[] = userPool.map(poolUser => {
-          let score = 0;
-
-          // Mutual follows score (High weight)
-          const mutualCount = mutualFollowsMap[poolUser.id] || 0;
-          score += mutualCount * 15;
-
-          // Interest match score (Medium weight)
-          if (userInterests.length > 0 && poolUser.interests) {
-            const commonInterests = poolUser.interests.filter(interest => 
-              userInterests.includes(interest)
-            );
-            score += commonInterests.length * 10;
-          }
-
-          // Popularity score (Low weight)
-          score += Math.min((poolUser.followers_count || 0) / 10, 20);
-
-          // Activity score (Medium weight)
-          score += Math.min((poolUser.posts_count || 0) / 5, 15);
-
-          // Recency bonus
-          const lastActive = poolUser.last_active ? new Date(poolUser.last_active) : new Date(0);
-          const daysSinceActive = (Date.now() - lastActive.getTime()) / (1000 * 3600 * 24);
-          if (daysSinceActive < 3) score += 15;
-          else if (daysSinceActive < 7) score += 5;
-
-          return {
-            ...poolUser,
-            recommendation_score: score,
-            mutual_friends_count: mutualCount,
-            is_following: false,
-            is_followed_by: false
-          };
+        const { data: response, error } = await supabase.functions.invoke('get-suggested-users', {
+          body: { offset: currentOffset, limit },
         });
 
-        // Sort by score
-        scoredUsers.sort((a, b) => (b.recommendation_score || 0) - (a.recommendation_score || 0));
+        if (error) throw error;
 
-        // Paginate
-        const paginatedUsers = scoredUsers.slice(currentOffset, currentOffset + limit);
+        const paginatedUsers: SuggestedUser[] = response?.users || [];
 
         if (paginatedUsers.length === 0) {
           setHasMoreSuggestedUsers(false);
@@ -1408,7 +931,7 @@ export const useSocialData = (
         }
 
         setSuggestedUsersOffset(currentOffset + paginatedUsers.length);
-        setHasMoreSuggestedUsers(currentOffset + paginatedUsers.length < scoredUsers.length);
+        setHasMoreSuggestedUsers(response?.hasMore ?? false);
 
       } catch (err) {
         ////console.error('Error fetching suggested users:', err);

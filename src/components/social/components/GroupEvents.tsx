@@ -139,30 +139,21 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
         ? new Date(`${formData.end_date}T${formData.end_time}`)
         : new Date(startDateTime.getTime() + 2 * 60 * 60 * 1000); // Default 2 hours
 
-      const { data: eventData, error: eventError } = await supabase
-        .from('social_events')
-        .insert({
+      const { data: response, error } = await supabase.functions.invoke('manage-event', {
+        body: {
+          action: 'create',
+          group_id: groupId,
           title: formData.title,
           description: formData.description,
-          group_id: groupId,
-          organizer_id: currentUser.id,
           start_date: startDateTime.toISOString(),
           end_date: endDateTime.toISOString(),
           location: formData.is_online ? formData.meeting_link : formData.location,
           is_online: formData.is_online,
           max_attendees: formData.max_attendees ? parseInt(formData.max_attendees) : null
-        })
-        .select()
-        .single();
-
-      if (eventError) throw eventError;
-
-      // Auto-RSVP organizer
-      await supabase.from('social_event_attendees').insert({
-        event_id: eventData.id,
-        user_id: currentUser.id,
-        status: 'attending'
+        },
       });
+
+      if (error || !response?.success) throw new Error('Failed to create event');
 
       toast.success('Event created successfully!');
       setShowCreateDialog(false);
@@ -189,30 +180,11 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
 
   const handleUpdateRSVP = async (eventId: string, status: 'attending' | 'maybe' | 'declined') => {
     try {
-      // Check if user already has an attendance record
-      const { data: existingAttendance } = await supabase
-        .from('social_event_attendees')
-        .select('id')
-        .eq('event_id', eventId)
-        .eq('user_id', currentUser.id)
-        .single();
+      const { data: response, error } = await supabase.functions.invoke('manage-event', {
+        body: { action: 'rsvp', event_id: eventId, status },
+      });
 
-      if (existingAttendance) {
-        // Update existing
-        await supabase
-          .from('social_event_attendees')
-          .update({ status })
-          .eq('id', existingAttendance.id);
-      } else {
-        // Create new
-        await supabase
-          .from('social_event_attendees')
-          .insert({
-            event_id: eventId,
-            user_id: currentUser.id,
-            status
-          });
-      }
+      if (error || !response?.success) throw new Error('Failed to update RSVP');
 
       // Update local state
       setEvents(prev => prev.map(event =>
@@ -238,8 +210,11 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
     if (!window.confirm('Are you sure you want to delete this event?')) return;
 
     try {
-      await supabase.from('social_event_attendees').delete().eq('event_id', eventId);
-      await supabase.from('social_events').delete().eq('id', eventId);
+      const { data: response, error } = await supabase.functions.invoke('manage-event', {
+        body: { action: 'delete', event_id: eventId },
+      });
+
+      if (error || !response?.success) throw new Error('Failed to delete event');
 
       setEvents(prev => prev.filter(e => e.id !== eventId));
       toast.success('Event deleted');

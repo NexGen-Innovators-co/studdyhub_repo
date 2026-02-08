@@ -155,95 +155,13 @@ export const UserProfile: React.FC<any> = ({
     const page = suggestedPage.current;
 
     try {
-      // 1. Get current user's following list to exclude
-      const { data: followingData } = await supabase
-        .from('social_follows')
-        .select('following_id')
-        .eq('follower_id', currentUser?.id || profileUser.id);
-
-      const followingIds = followingData?.map(f => f.following_id) ?? [];
-      const excludeIds = [currentUser?.id || profileUser.id, ...followingIds];
-
-      // 2. Find mutual follows
-      let mutualFollowsMap: Record<string, number> = {};
-      if (followingIds.length > 0) {
-        const { data: mutuals } = await supabase
-          .from('social_follows')
-          .select('following_id')
-          .in('follower_id', followingIds.slice(0, 50));
-        
-        mutuals?.forEach(m => {
-          if (!excludeIds.includes(m.following_id)) {
-            mutualFollowsMap[m.following_id] = (mutualFollowsMap[m.following_id] || 0) + 1;
-          }
-        });
-      }
-
-      // 3. Fetch potential candidates
-      const poolIds = Object.keys(mutualFollowsMap);
-      let userPool: any[] = [];
-
-      if (poolIds.length > 0) {
-        const { data: mutualPool } = await supabase
-          .from('social_users')
-          .select('*')
-          .in('id', poolIds.slice(0, 100));
-        if (mutualPool) userPool = mutualPool;
-      }
-
-      // Also fetch some popular users
-      let popularQuery = supabase.from('social_users').select('*');
-      if (excludeIds.length > 0) {
-        popularQuery = popularQuery.not('id', 'in', `(${excludeIds.slice(0, 100).join(',')})`);
-      }
-      
-      const { data: popularPool } = await popularQuery
-        .order('followers_count', { ascending: false })
-        .limit(50);
-      
-      if (popularPool) {
-        const existingIds = new Set(userPool.map(u => u.id));
-        popularPool.forEach(u => {
-          if (!existingIds.has(u.id) && !excludeIds.includes(u.id)) {
-            userPool.push(u);
-          }
-        });
-      }
-
-      // 4. Scoring Algorithm
-      const userInterests = (currentUser || profileUser)?.interests || [];
-      
-      const scoredUsers = userPool.map(poolUser => {
-        let score = 0;
-        const mutualCount = mutualFollowsMap[poolUser.id] || 0;
-        score += mutualCount * 15;
-
-        if (userInterests.length > 0 && poolUser.interests) {
-          const commonInterests = poolUser.interests.filter((interest: string) => 
-            userInterests.includes(interest)
-          );
-          score += commonInterests.length * 10;
-        }
-
-        score += Math.min((poolUser.followers_count || 0) / 10, 20);
-        score += Math.min((poolUser.posts_count || 0) / 5, 15);
-
-        const lastActive = poolUser.last_active ? new Date(poolUser.last_active) : new Date(0);
-        const daysSinceActive = (Date.now() - lastActive.getTime()) / (1000 * 3600 * 24);
-        if (daysSinceActive < 3) score += 15;
-        else if (daysSinceActive < 7) score += 5;
-
-        return {
-          ...poolUser,
-          recommendation_score: score,
-          mutual_friends_count: mutualCount
-        };
+      const { data: response, error } = await supabase.functions.invoke('get-suggested-users', {
+        body: { offset: page * PAGE_SIZE, limit: PAGE_SIZE },
       });
 
-      scoredUsers.sort((a, b) => (b.recommendation_score || 0) - (a.recommendation_score || 0));
+      if (error) throw error;
 
-      // Paginate
-      const paginatedUsers = scoredUsers.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+      const paginatedUsers = response?.users || [];
 
       if (paginatedUsers.length === 0) {
         setHasMoreSuggested(false);
@@ -253,11 +171,10 @@ export const UserProfile: React.FC<any> = ({
           const newUsers = paginatedUsers.filter((u: any) => !existingIds.has(u.id));
           return [...prev, ...newUsers];
         });
-        setHasMoreSuggested(paginatedUsers.length === PAGE_SIZE);
+        setHasMoreSuggested(response?.hasMore ?? paginatedUsers.length === PAGE_SIZE);
         suggestedPage.current += 1;
       }
     } catch (error) {
-      //console.error('Error fetching suggestions:', error);
       setHasMoreSuggested(false);
     } finally {
       setIsLoadingSuggested(false);

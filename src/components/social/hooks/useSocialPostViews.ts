@@ -15,65 +15,35 @@ export const useSocialPostViews = (
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Check if the user has already viewed this post
-      const { data: existingView } = await supabase
-        .from('social_post_views')
-        .select('id')
-        .eq('post_id', postId)
-        .eq('user_id', user.id)
-        .single();
+      // Check in-memory set first (avoids even the edge function call)
+      if (viewedPosts.current.has(postId)) return;
+      viewedPosts.current.add(postId);
 
-      if (existingView) {
-        // User has already viewed this post, skip tracking
-        viewedPosts.current.add(postId);
+      // Use edge function to check + insert + update count server-side
+      const { data: response, error } = await supabase.functions.invoke('track-post-view', {
+        body: { post_id: postId },
+      });
+
+      if (error || !response?.success) {
+        viewedPosts.current.delete(postId);
         return;
       }
 
-      // Mark as viewed in memory to prevent duplicate tracking in the same session
-      viewedPosts.current.add(postId);
+      if (!response.already_viewed) {
+        // Update local state to reflect the new view count
+        const updatePostInState = (posts: SocialPostWithDetails[]) =>
+          posts.map(post =>
+            post.id === postId
+              ? { ...post, views_count: post.views_count + 1 }
+              : post
+          );
 
-      // Insert view record
-      const { error: viewError } = await supabase
-        .from('social_post_views')
-        .insert({
-          post_id: postId,
-          user_id: user.id,
-          viewed_at: new Date().toISOString(),
-        });
-
-      if (viewError) throw viewError;
-
-      // Update the view count in the database
-      const { data: post } = await supabase
-        .from('social_posts')
-        .select('views_count')
-        .eq('id', postId)
-        .single();
-
-      if (post) {
-        const { error: updateError } = await supabase
-          .from('social_posts')
-          .update({ views_count: post.views_count + 1 })
-          .eq('id', postId);
-
-        if (updateError) throw updateError;
+        setPosts(updatePostInState);
+        if (setTrendingPosts) setTrendingPosts(updatePostInState);
+        if (setUserPosts) setUserPosts(updatePostInState);
       }
-
-      // Update local state to reflect the new view count
-      const updatePostInState = (posts: SocialPostWithDetails[]) =>
-        posts.map(post =>
-          post.id === postId
-            ? { ...post, views_count: post.views_count + 1 }
-            : post
-        );
-
-      setPosts(updatePostInState);
-      if (setTrendingPosts) setTrendingPosts(updatePostInState);
-      if (setUserPosts) setUserPosts(updatePostInState);
-      ////console.log(`✅ Tracked view for post ${postId}`);
     } catch (error) {
-      ////console.error('Error tracking post view:', error);
-      viewedPosts.current.delete(postId); // Remove from viewedPosts on error to allow retry
+      viewedPosts.current.delete(postId);
     }
   }, [setPosts, setTrendingPosts, setUserPosts]);
 

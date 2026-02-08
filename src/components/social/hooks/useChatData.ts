@@ -231,51 +231,23 @@ export const useChatData = (currentUserId: string | null) => {
 
         try {
             setIsLoadingSessions(true);
-            const { data: sessions, error } = await supabase
-                .from('social_chat_sessions')
-                .select(`
-                    *,
-                    group:social_groups(*),
-                    user1:social_users!social_chat_sessions_user_id1_fkey(*),
-                    user2:social_users!social_chat_sessions_user_id2_fkey(*)
-                `)
-                .or(`user_id1.eq.${currentUserId},user_id2.eq.${currentUserId}`)
-                .order('last_message_at', { ascending: false, nullsFirst: false });
+
+            const { data: response, error } = await supabase.functions.invoke('get-chat-sessions', {
+                body: {},
+            });
 
             if (error) throw error;
 
-            const sessionsWithDetails = await Promise.all(
-                (sessions || []).map(async (session) => {
-                    const { data: lastMessage } = await supabase
-                        .from('social_chat_messages')
-                        .select('*, sender:social_users(*)')
-                        .eq('session_id', session.id)
-                        .order('created_at', { ascending: false })
-                        .limit(1)
-                        .maybeSingle();
-
-                    const { data: unreadCount = 0 } = await supabase.rpc('get_session_unread_count', {
-                        p_session_id: session.id,
-                        p_user_id: currentUserId,
-                    });
-
-                    return {
-                        ...session,
-                        group: session.group ? {
-                            ...session.group,
-                            privacy: session.group.privacy as "public" | "private"
-                        } : undefined,
-                        user1: session.user1,
-                        user2: session.user2,
-                        last_message: lastMessage || undefined,
-                        unread_count: unreadCount || 0,
-                    };
-                })
-            );
+            const sessionsWithDetails = (response || []).map((session: any) => ({
+                ...session,
+                group: session.group ? {
+                    ...session.group,
+                    privacy: session.group.privacy as "public" | "private"
+                } : undefined,
+            }));
 
             setChatSessions(sessionsWithDetails as ChatSessionWithDetails[]);
         } catch (error) {
-            ////console.error('Error fetching chat sessions:', error);
             toast.error('Failed to load chats');
         } finally {
             setIsLoadingSessions(false);
@@ -286,43 +258,19 @@ export const useChatData = (currentUserId: string | null) => {
         try {
             setIsLoadingMessages(true);
 
-            const { data: messages, error } = await supabase
-                .from('social_chat_messages')
-                .select('*, sender:social_users(*)')
-                .eq('session_id', sessionId)
-                .order('created_at', { ascending: true });
+            const { data: response, error } = await supabase.functions.invoke('get-chat-messages', {
+                body: { session_id: sessionId },
+            });
 
             if (error) throw error;
 
-            const messageIds = messages.map(m => m.id);
+            setActiveSessionMessages((response || []) as ChatMessageWithDetails[]);
 
-            const [{ data: allMedia }, { data: allBasicResources }] = await Promise.all([
-                supabase.from('social_chat_message_media').select('*').in('message_id', messageIds),
-                supabase.from('social_chat_message_resources').select('*').in('message_id', messageIds),
-            ]);
-
-            const mediaByMsg = groupBy(allMedia || [], m => m.message_id);
-            const resourcesByMsg = groupBy(allBasicResources || [], r => r.message_id);
-
-            const messagesWithDetails = await Promise.all(
-                messages.map(async (msg) => {
-                    const enrichedResources = await Promise.all(
-                        (resourcesByMsg[msg.id] || []).map(enrichResource)
-                    );
-
-                    return {
-                        ...msg,
-                        sender: msg.sender,
-                        media: mediaByMsg[msg.id] || [],
-                        resources: enrichedResources,
-                    } as ChatMessageWithDetails;
-                })
+            // Edge function already marks messages as read, update local state
+            setChatSessions(prev =>
+                prev.map(s => (s.id === sessionId ? { ...s, unread_count: 0 } : s))
             );
-
-            setActiveSessionMessages(messagesWithDetails);
-            markSessionMessagesAsRead(sessionId);
         } catch (error) {
-            ////console.error('Error fetching messages:', error);
             toast.error('Failed to load messages');
         } finally {
             setIsLoadingMessages(false);
@@ -348,19 +296,19 @@ export const useChatData = (currentUserId: string | null) => {
 
     const deleteMessage = async (messageId: string): Promise<boolean> => {
         try {
-            await Promise.all([
-                supabase.from('social_chat_message_media').delete().eq('message_id', messageId),
-                supabase.from('social_chat_message_resources').delete().eq('message_id', messageId),
-            ]);
+            const { data: response, error } = await supabase.functions.invoke('delete-chat-message', {
+                body: { message_id: messageId },
+            });
 
-            const { error } = await supabase.from('social_chat_messages').delete().eq('id', messageId);
-            if (error) throw error;
+            if (error || !response?.success) {
+                toast.error('Failed to delete message');
+                return false;
+            }
 
             setActiveSessionMessages(prev => prev.filter(m => m.id !== messageId));
             toast.success('Message deleted');
             return true;
         } catch (error) {
-            ////console.error('Error deleting message:', error);
             toast.error('Failed to delete message');
             return false;
         }

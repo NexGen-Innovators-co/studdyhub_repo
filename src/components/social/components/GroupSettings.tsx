@@ -266,21 +266,11 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
 
     setIsDeleting(true);
     try {
-      // Delete all related data
-      await Promise.all([
-        supabase.from('social_group_members').delete().eq('group_id', groupId),
-        supabase.from('social_posts').delete().eq('group_id', groupId),
-        supabase.from('social_events').delete().eq('group_id', groupId),
-        supabase.from('social_chat_messages').delete().eq('group_id', groupId),
-      ]);
+      const { data: response, error } = await supabase.functions.invoke('delete-group', {
+        body: { group_id: groupId },
+      });
 
-      // Delete the group
-      const { error } = await supabase
-        .from('social_groups')
-        .delete()
-        .eq('id', groupId);
-
-      if (error) throw error;
+      if (error || !response?.success) throw new Error('Failed to delete group');
 
       toast.success('Group deleted successfully');
       navigate('/social/groups');
@@ -293,48 +283,18 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
   };
   const handleApproveMember = async (membershipId: string, userId: string) => {
     try {
-      //console.log('Approving member via RPC:', { membershipId, userId, groupId });
-
-      // Call the PostgreSQL function that bypasses RLS
-      const { data, error } = await supabase.rpc('approve_group_member', {
-        p_membership_id: membershipId,
-        p_group_id: groupId,
-        p_user_id: userId,
-        p_approver_id: currentUser.id
+      const { data: response, error } = await supabase.functions.invoke('manage-group-member', {
+        body: {
+          action: 'approve',
+          membership_id: membershipId,
+          target_user_id: userId,
+          group_id: groupId
+        },
       });
 
-      if (error) {
-        //console.error('RPC error:', error);
-        toast.error(`Failed: ${error.message}`);
+      if (error || !response?.success) {
+        toast.error('Failed to approve member');
         return;
-      }
-
-      //console.log('RPC result:', data);
-
-      if (!data?.success) {
-        toast.error(data?.error || 'Failed to approve member');
-        return;
-      }
-
-      // Update group members count
-      try {
-        const { count } = await supabase
-          .from('social_group_members')
-          .select('*', { count: 'exact', head: true })
-          .eq('group_id', groupId)
-          .eq('status', 'active');
-
-        if (count !== null) {
-          await supabase
-            .from('social_groups')
-            .update({
-              members_count: count,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', groupId);
-        }
-      } catch (countError) {
-        //console.error('Error updating count:', countError);
       }
 
       // Remove from pending list
@@ -349,7 +309,6 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
       }, 500);
 
     } catch (error: any) {
-      //console.error('Error approving member:', error);
       toast.error(`Failed: ${error.message || 'Unknown error'}`);
     }
   };
@@ -389,28 +348,22 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
   };
   const handleRejectMember = async (membershipId: string, userId: string) => {
     try {
-      const { error } = await supabase
-        .from('social_group_members')
-        .delete()
-        .eq('id', membershipId);
-
-      if (error) throw error;
-
-      // Send notification
-      await supabase.from('social_notifications').insert({
-        user_id: userId,
-        type: 'group_invite',
-        title: 'Request Declined',
-        message: `Your request to join "${group.name}" was declined.`,
-        data: { group_id: groupId }
+      const { data: response, error } = await supabase.functions.invoke('manage-group-member', {
+        body: {
+          action: 'reject',
+          membership_id: membershipId,
+          target_user_id: userId,
+          group_id: groupId
+        },
       });
+
+      if (error || !response?.success) throw new Error('Failed to reject member');
 
       // Remove from pending list
       setPendingMembers(prev => prev.filter(m => m.id !== membershipId));
 
       toast.success('Request declined');
     } catch (error) {
-      //console.error('Error rejecting member:', error);
       toast.error('Failed to reject member');
     }
   };
