@@ -660,11 +660,6 @@ export const useWebRTC = ({
       // Close existing connection if any
       const existingPeer = peerConnectionsRef.current.get(listenerId);
       if (existingPeer) {
-        const state = existingPeer.connection.connectionState;
-        if (state === 'connected' || state === 'connecting') {
-          log('Already connected to listener:', listenerId);
-          return;
-        }
         existingPeer.connection.close();
       }
 
@@ -730,22 +725,15 @@ export const useWebRTC = ({
         try { setLocalStream(localStreamRef.current); } catch (e) {}
       }
 
-      // Add the video track to all existing peer connections
-      peerConnectionsRef.current.forEach(({ connection }, peerId) => {
+      // Renegotiate all existing peer connections to include the new video track
+      const peerIds = Array.from(peerConnectionsRef.current.keys());
+      for (const peerId of peerIds) {
         try {
-          const senders = connection.getSenders();
-          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-          if (videoSender) {
-            videoSender.replaceTrack(vtrack);
-          } else {
-            connection.addTrack(vtrack, localStreamRef.current!);
-          }
-           // IMPORTANT: Re-negotiate connection to signal new track
-           createOfferForListener(peerId);
+          await createOfferForListener(peerId);
         } catch (e) {
-          log('Error adding video track to peer:', peerId, e);
+          log('Error renegotiating with peer after adding video:', peerId, e);
         }
-      });
+      }
 
     } catch (e) {
       log('Error accessing local video:', e);
@@ -760,11 +748,6 @@ export const useWebRTC = ({
       // Close existing connection if any
       const existingPeer = peerConnectionsRef.current.get(payload.from);
       if (existingPeer) {
-        const state = existingPeer.connection.connectionState;
-        if (state === 'connected' || state === 'connecting') {
-          log('Already connected to:', payload.from);
-          return;
-        }
         existingPeer.connection.close();
       }
 
@@ -781,9 +764,10 @@ export const useWebRTC = ({
       await applyPendingIceCandidates(payload.from, pc);
 
       // Create answer - listeners don't send audio back unless they're hosts/cohosts
+      // Always accept video so renegotiation for audio-to-video works
       const answer = await pc.createAnswer({
         offerToReceiveAudio: !isHost && !isCohostMode, // Listeners receive audio
-        offerToReceiveVideo: !!enableVideo
+        offerToReceiveVideo: true
       });
       
       log('Created answer, setting local description');

@@ -1,14 +1,11 @@
-// Enhanced LivePodcastViewer.tsx - Modern UI with Dark/Light Mode Support
+// LivePodcastViewer.tsx — Zoom / Google Meet style UI
 import React, { useEffect, useRef, useState } from 'react';
-import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { 
-  Mic, MicOff, X, Headphones, MessageCircle, Heart, 
-  ThumbsUp, Send, Clock, Volume2, VolumeX, Share2,
-  HelpCircle, Sparkles, Radio, Wifi, Video as VideoIcon, Loader2,
-  MoreVertical, PhoneOff, Users, MessageSquare, Hand, Smile, Settings
+  Mic, MicOff, X, Send, Sparkles, Wifi, Video as VideoIcon, Loader2,
+  PhoneOff, Users, MessageSquare, Hand, Smile, BookmarkPlus, MoreVertical
 } from 'lucide-react';
 import { useWebRTC } from '@/hooks/useWebRTC';
 import { toast } from 'sonner';
@@ -17,7 +14,14 @@ import { addPodcastListener, removePodcastListener, createParticipationRequest }
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'; // Import Tabs
+
+interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  timestamp: number;
+}
 
 interface LivePodcastViewerProps {
   podcastId: string;
@@ -30,19 +34,26 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
   const remoteStreamRef = useRef<MediaStream | null>(null);
   
   const [isRequesting, setIsRequesting] = useState(false);
+  const [requestAccepted, setRequestAccepted] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isStreamLoaded, setIsStreamLoaded] = useState(false);
-  const [question, setQuestion] = useState('');
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatDraft, setChatDraft] = useState('');
   const [reactions, setReactions] = useState<Record<string, number>>({ clap: 0, like: 0, heart: 0 });
   const [captions, setCaptions] = useState<Array<{text: string; timestamp: number}>>([]);
   const [streamDuration, setStreamDuration] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
+  const [showMobileMore, setShowMobileMore] = useState(false);
   const [enableVideo, setEnableVideo] = useState(false);
   const [keyPoints, setKeyPoints] = useState<string[]>([]);
   const [showReactionEffect, setShowReactionEffect] = useState(false);
-  const [showSidePanel, setShowSidePanel] = useState(false); // New state for side panel
-  const [activeTab, setActiveTab] = useState('chat'); // New state for side panel tab
+  const [showSidePanel, setShowSidePanel] = useState(false);
+  const [activeTab, setActiveTab] = useState('chat');
+  const [unreadChat, setUnreadChat] = useState(0);
   const captionsChannelRef = useRef<any>(null);
+  const chatChannelRef = useRef<any>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const [currentUserName, setCurrentUserName] = useState('Listener');
 
   // Mobile detection
   useEffect(() => {
@@ -114,6 +125,11 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
     podcastId,
     isHost: false,
     enableVideo: false, // Viewer should not send video by default, but receive it if offered
+    onPermissionGranted: (_userId, _requestType) => {
+      setRequestAccepted(true);
+      setIsRequesting(false);
+      toast.success('Your request to speak was accepted!');
+    },
     onRemoteStream: (stream: MediaStream) => {
       // Store reference to stream for when UI becomes ready
       remoteStreamRef.current = stream;
@@ -166,6 +182,77 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
     return () => { void channel.unsubscribe(); };
   }, [podcastId]);
 
+  // Subscribe to live chat broadcast channel
+  useEffect(() => {
+    if (!podcastId) return;
+    const channel = supabase.channel(`podcast-chat-${podcastId}`);
+    chatChannelRef.current = channel;
+    channel.on('broadcast', { event: 'chat-message' }, ({ payload }) => {
+      if (payload) {
+        const msg = payload as ChatMessage;
+        setChatMessages(prev => [...prev.slice(-100), msg]);
+        if (activeTab !== 'chat' || !showSidePanel) {
+          setUnreadChat(prev => prev + 1);
+        }
+      }
+    }).subscribe();
+    return () => {
+      channel.unsubscribe();
+      chatChannelRef.current = null;
+    };
+  }, [podcastId]);
+
+  // Auto-scroll chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  // Clear unread when chat tab is active
+  useEffect(() => {
+    if (activeTab === 'chat' && showSidePanel) {
+      setUnreadChat(0);
+    }
+  }, [activeTab, showSidePanel]);
+
+  // Get current user display name
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase.from('social_users').select('display_name').eq('id', user.id).single();
+        if (data?.display_name) setCurrentUserName(data.display_name);
+      }
+    })();
+  }, []);
+
+  // Send a chat message via broadcast
+  const sendChatMessage = async () => {
+    if (!chatDraft.trim()) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const msg: ChatMessage = {
+        id: crypto.randomUUID(),
+        senderId: user?.id || 'anonymous',
+        senderName: currentUserName,
+        text: chatDraft.trim(),
+        timestamp: Date.now(),
+      };
+      setChatMessages(prev => [...prev.slice(-100), msg]);
+      setChatDraft('');
+      if (chatChannelRef.current) {
+        await chatChannelRef.current.send({
+          type: 'broadcast',
+          event: 'chat-message',
+          payload: msg,
+        });
+      } else {
+        throw new Error('Chat channel not connected');
+      }
+    } catch (e) {
+      toast.error('Failed to send message');
+    }
+  };
+
   // Listener registration
   useEffect(() => {
     (async () => {
@@ -201,33 +288,41 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
     return () => { void channel.unsubscribe(); };
   }, [podcastId]);
 
+  // Save key highlights to the user's personal notes
+  const saveNotesToUserNotes = async () => {
+    if (keyPoints.length === 0) {
+      toast.error('No highlights to save');
+      return;
+    }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { toast.error('Not authenticated'); return; }
+      const { data: podcast } = await supabase.from('ai_podcasts').select('title').eq('id', podcastId).single();
+      const title = `Live Podcast Notes — ${podcast?.title || 'Untitled'}`;
+      const content = keyPoints.map((p, i) => `${i + 1}. ${p}`).join('\n');
+      const { error } = await supabase.from('notes').insert({
+        user_id: user.id,
+        title,
+        content,
+        category: 'podcast',
+        tags: ['live-podcast', 'auto-saved'],
+      });
+      if (error) throw error;
+      toast.success('Notes saved to My Notes');
+    } catch (e) {
+      toast.error('Failed to save notes');
+    }
+  };
+
   const handleRequestToSpeak = async () => {
     setIsRequesting(true);
     try {
       requestPermission('speak');
-      // Request is handled by useWebRTC internally (broadcast + db insert)
       toast.success('Request sent to host');
     } catch (e) {
       toast.error('Request failed');
     } finally {
       setIsRequesting(false);
-    }
-  };
-
-  const postQuestion = async () => {
-    if (!question.trim()) return;
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('posts').insert({
-        author_id: user?.id,
-        content: question,
-        privacy: 'public',
-        metadata: { type: 'podcast-question', podcastId }
-      });
-      setQuestion('');
-      toast.success('Question posted');
-    } catch (e) {
-      toast.error('Failed to post question');
     }
   };
 
@@ -259,34 +354,31 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
   return (
     <div className="fixed inset-0 z-50 bg-[#202124] text-white flex flex-col overflow-hidden font-sans">
       
-      {/* 1. Top Bar */}
-      <div className="flex-none h-14 px-4 flex items-center justify-between z-10 bg-gradient-to-b from-black/50 to-transparent">
+      {/* 1. Top Bar — Transparent overlay */}
+      <div className="flex-none h-14 px-4 flex items-center justify-between z-10 bg-gradient-to-b from-black/60 to-transparent">
         <div className="flex items-center gap-3">
-           <Badge variant="destructive" className="animate-pulse bg-red-600 hover:bg-red-700 text-white border-none gap-1.5 px-2 py-0.5">
+           <Badge variant="destructive" className="animate-pulse bg-red-600 hover:bg-red-700 text-white border-none gap-1.5 px-2.5 py-0.5 text-xs font-semibold">
               <span className="h-1.5 w-1.5 rounded-full bg-white block" />
               LIVE
            </Badge>
            <div className="h-4 w-px bg-white/20" />
-           <span className="text-white/90 text-sm font-medium tracking-wide">{formatTime(streamDuration)}</span>
+           <span className="text-white/90 text-sm font-mono tracking-wide">{formatTime(streamDuration)}</span>
         </div>
         
         <div className="flex items-center gap-2">
             <div className={cn(
-              "flex items-center gap-1.5 px-2 py-1 rounded bg-[#3c4043]/80 backdrop-blur-sm text-xs",
+              "flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 backdrop-blur-sm text-xs font-medium",
               connectionQuality === 'excellent' ? "text-green-400" : connectionQuality === 'good' ? "text-yellow-400" : "text-red-400"
             )}>
               <Wifi className="h-3 w-3" />
               <span className="hidden sm:inline capitalize">{connectionQuality}</span>
             </div>
-            <Avatar className="h-8 w-8 border border-white/10 hidden sm:block">
-               <AvatarFallback className="bg-purple-600 text-xs">AI</AvatarFallback>
-            </Avatar>
         </div>
       </div>
 
       {/* 2. Main Staging Area */}
       <div className="flex-1 flex overflow-hidden relative">
-        <div className="flex-1 flex items-center justify-center relative p-4 bg-[#202124]">
+        <div className="flex-1 flex items-center justify-center relative p-2 sm:p-4 bg-[#202124]">
            <div className="relative w-full h-full max-w-6xl max-h-[calc(100vh-8rem)] rounded-xl overflow-hidden bg-[#3c4043] shadow-2xl flex items-center justify-center border border-white/5">
               {enableVideo ? (
                 <>
@@ -295,16 +387,21 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
                     className="w-full h-full object-contain bg-black" 
                     autoPlay
                     muted={false}
-                    controls
                     playsInline
                   />
                    {!isStreamLoaded && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#202124] text-center p-6">
-                      <div className="bg-blue-500/10 p-4 rounded-full mb-4">
+                      <div className="bg-blue-500/10 p-5 rounded-full mb-5">
                          <Loader2 className="h-10 w-10 animate-spin text-blue-400" />
                       </div>
-                      <h3 className="text-xl font-medium text-white mb-2">Connecting...</h3>
-                      <p className="text-gray-400 text-sm">Getting the best quality stream for you</p>
+                      <h3 className="text-xl font-medium text-white mb-2">Connecting to stream...</h3>
+                      <p className="text-gray-400 text-sm">Getting the best quality for you</p>
+                    </div>
+                  )}
+                  {/* Host label */}
+                  {isStreamLoaded && (
+                    <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-md z-10">
+                      Host
                     </div>
                   )}
                 </>
@@ -312,7 +409,7 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
                  <div className="flex flex-col items-center justify-center p-8 text-center">
                     <div className="relative mb-8">
                        <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full" />
-                       <Avatar className="h-32 w-32 border-4 border-[#3c4043] shadow-xl z-10">
+                       <Avatar className="h-32 w-32 border-4 border-[#3c4043] shadow-xl z-10 relative">
                           <AvatarFallback className="bg-gradient-to-br from-blue-600 to-purple-600 text-4xl font-bold">P</AvatarFallback>
                        </Avatar>
                        {/* Audio Wave Animation */}
@@ -320,15 +417,15 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
                           {[1, 2, 3].map((i) => (
                              <motion.div
                                key={i}
-                               className="absolute border border-blue-500/30 rounded-full" // Use Tailwind class for shape
+                               className="absolute border border-blue-500/30 rounded-full"
                                initial={{ width: '100%', height: '100%', opacity: 0.8 }}
-                               animate={{ width: `${100 + i * 20}%`, height: `${100 + i * 20}%`, opacity: 0 }}
+                               animate={{ width: `${100 + i * 25}%`, height: `${100 + i * 25}%`, opacity: 0 }}
                                transition={{ duration: 2, repeat: Infinity, delay: i * 0.4 }}
                              />
                           ))}
                         </div>
                     </div>
-                    <h2 className="text-2xl font-google-sans text-white mb-2">Audio Stream Active</h2>
+                    <h2 className="text-2xl font-semibold text-white mb-2">Audio Stream Active</h2>
                     <p className="text-gray-400 max-w-md">Listen to the conversation live. Use the controls below to interact.</p>
                     <audio ref={audioRef} className="hidden" />
                  </div>
@@ -341,9 +438,9 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    className="absolute bottom-8 left-0 right-0 flex justify-center z-20 pointer-events-none"
+                    className="absolute bottom-6 left-0 right-0 flex justify-center z-20 pointer-events-none"
                   >
-                    <div className="bg-black/60 backdrop-blur-sm text-white px-6 py-3 rounded-lg max-w-3xl text-center text-lg md:text-xl font-medium shadow-lg">
+                    <div className="bg-black/70 backdrop-blur-sm text-white px-6 py-3 rounded-lg max-w-3xl text-center text-base md:text-lg font-medium shadow-lg">
                       {captions[captions.length - 1].text}
                     </div>
                   </motion.div>
@@ -359,7 +456,8 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: isMobile ? '100%' : 360, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
-              className="bg-white dark:bg-[#202124] border-l border-white/10 flex flex-col h-full absolute right-0 top-0 z-20 md:relative shadow-2xl"
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="bg-[#202124] border-l border-white/10 flex flex-col h-full absolute right-0 top-0 z-20 md:relative shadow-2xl"
             >
                <div className="flex items-center justify-between p-4 border-b border-white/10 bg-[#202124]">
                   <h3 className="text-lg font-medium text-white">
@@ -373,33 +471,61 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
                <div className="flex-1 overflow-y-auto bg-[#202124] p-4 space-y-4">
                   {/* Chat Section */}
                   {activeTab === 'chat' && (
-                     <>
-                        <div className="bg-[#3c4043]/50 rounded-lg p-3 text-sm text-gray-300 text-center mb-4">
-                           Messages can only be seen by people in the call and are deleted when the call ends.
+                     <div className="flex flex-col h-full -m-4 -mt-4">
+                        <div className="bg-[#3c4043]/50 rounded-lg p-2.5 text-xs text-gray-400 text-center mx-4 mt-4 mb-2">
+                           Messages are visible to everyone in the call and are deleted when the call ends.
                         </div>
-                        
-                        {/* Question Input */}
-                         <div className="space-y-3">
-                           {/* Only showing input for "questions" as chat is simplified here */}
-                            <label className="text-sm font-medium text-gray-300 ml-1">Ask a question</label>
-                            <div className="relative">
-                              <textarea
-                                value={question}
-                                onChange={e => setQuestion(e.target.value)}
-                                placeholder="Send a message to everyone"
-                                className="w-full h-24 bg-[#3c4043] border border-transparent focus:border-blue-400 rounded-lg p-3 text-white placeholder:text-gray-500 resize-none text-sm outline-none transition-colors"
-                              />
-                               <Button 
-                                  size="icon" 
-                                  className="absolute bottom-2 right-2 h-8 w-8 bg-blue-600 hover:bg-blue-500 rounded-full"
-                                  disabled={!question.trim()}
-                                  onClick={postQuestion}
-                                >
-                                  <Send className="h-4 w-4 text-white" />
-                               </Button>
+                        <div className="flex-1 overflow-y-auto px-4 space-y-3 min-h-0">
+                          {chatMessages.length === 0 && (
+                            <div className="text-center py-8">
+                              <MessageSquare className="h-10 w-10 mx-auto mb-3 text-gray-600" />
+                              <p className="text-sm text-gray-500">No messages yet</p>
+                              <p className="text-xs text-gray-600 mt-1">Send a message to everyone in the call</p>
                             </div>
-                         </div>
-                     </>
+                          )}
+                          {chatMessages.map((msg) => (
+                            <motion.div
+                              key={msg.id}
+                              initial={{ opacity: 0, y: 8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="flex gap-2.5"
+                            >
+                              <Avatar className="h-7 w-7 shrink-0 mt-0.5 border border-white/10">
+                                <AvatarFallback className="text-[10px] font-semibold bg-gradient-to-br from-blue-600 to-purple-600">
+                                  {msg.senderName?.[0]?.toUpperCase() ?? 'U'}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-baseline gap-2">
+                                  <span className="text-xs font-medium text-white">{msg.senderName}</span>
+                                  <span className="text-[10px] text-gray-500">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                                <p className="text-sm text-gray-300 leading-relaxed break-words">{msg.text}</p>
+                              </div>
+                            </motion.div>
+                          ))}
+                          <div ref={chatEndRef} />
+                        </div>
+                        <div className="border-t border-white/10 p-3">
+                          <div className="flex gap-2 items-end">
+                            <textarea
+                              value={chatDraft}
+                              onChange={(e) => setChatDraft(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
+                              placeholder="Send a message to everyone"
+                              rows={1}
+                              className="flex-1 bg-[#3c4043] border border-transparent focus:border-blue-400 rounded-lg px-3 py-2 text-white placeholder:text-gray-500 resize-none text-sm outline-none transition-colors max-h-20"
+                            />
+                            <button
+                              onClick={sendChatMessage}
+                              disabled={!chatDraft.trim()}
+                              className="h-9 w-9 flex items-center justify-center bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-full shrink-0 transition-colors"
+                            >
+                              <Send className="h-4 w-4 text-white" />
+                            </button>
+                          </div>
+                        </div>
+                     </div>
                   )}
 
                   {/* People Section (Reactions/Requests) */}
@@ -419,9 +545,9 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
                            <Button 
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-full h-9" 
                             onClick={handleRequestToSpeak}
-                            disabled={isRequesting}
+                            disabled={isRequesting || requestAccepted}
                           >
-                             {isRequesting ? 'Requesting...' : 'Request to speak'}
+                             {requestAccepted ? '✓ Accepted — You can speak' : isRequesting ? 'Requesting...' : 'Request to speak'}
                           </Button>
                         </div>
                      </div>
@@ -461,6 +587,13 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
                                   </div>
                                 ))}
                               </div>
+                              <button
+                                onClick={saveNotesToUserNotes}
+                                className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
+                              >
+                                <BookmarkPlus className="h-4 w-4" />
+                                Save to My Notes
+                              </button>
                           </div>
                        )}
                     </div>
@@ -552,7 +685,7 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
          </div>
 
          {/* Right Controls */}
-         <div className="flex items-center justify-end min-w-[200px] gap-3">
+         <div className="flex items-center justify-end min-w-0 sm:min-w-[200px] gap-3">
              <Tooltip>
                <TooltipTrigger asChild>
                   <button 
@@ -581,13 +714,71 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
                <TooltipTrigger asChild>
                   <button 
                      onClick={() => toggleSidePanel('chat')} 
-                     className={cn("h-10 w-10 flex items-center justify-center rounded-full hover:bg-[#3c4043] text-white transition-colors", activeTab === 'chat' && showSidePanel && "bg-[#8ab4f8]/30 text-[#8ab4f8]")}
+                     className={cn("hidden sm:flex h-10 w-10 items-center justify-center rounded-full hover:bg-[#3c4043] text-white transition-colors relative", activeTab === 'chat' && showSidePanel && "bg-[#8ab4f8]/30 text-[#8ab4f8]")}
                   >
                      <MessageSquare className="h-5 w-5" />
+                     {unreadChat > 0 && (
+                       <span className="absolute -top-0.5 -right-0.5 h-4 w-4 bg-red-500 rounded-full text-[10px] font-bold flex items-center justify-center">{unreadChat > 9 ? '9+' : unreadChat}</span>
+                     )}
                   </button>
                </TooltipTrigger>
                <TooltipContent className="bg-gray-800 text-white border-0">Chat with everyone</TooltipContent>
             </Tooltip>
+
+            {/* Mobile "More" overflow menu */}
+            <div className="relative sm:hidden">
+              <button
+                onClick={() => setShowMobileMore(!showMobileMore)}
+                className={cn(
+                  "h-10 w-10 flex items-center justify-center rounded-full hover:bg-[#3c4043] text-white transition-colors relative",
+                  showMobileMore && "bg-[#3c4043]"
+                )}
+              >
+                <MoreVertical className="h-5 w-5" />
+                {unreadChat > 0 && !showMobileMore && (
+                  <span className="absolute -top-0.5 -right-0.5 h-3 w-3 bg-red-500 rounded-full" />
+                )}
+              </button>
+
+              <AnimatePresence>
+                {showMobileMore && (
+                  <>
+                    {/* Backdrop */}
+                    <div className="fixed inset-0 z-30" onClick={() => setShowMobileMore(false)} />
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute bottom-14 right-0 z-40 bg-[#2d2e31] rounded-xl shadow-2xl border border-white/10 py-2 min-w-[180px]"
+                    >
+                      <button
+                        onClick={() => { toggleSidePanel('chat'); setShowMobileMore(false); }}
+                        className={cn("w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-[#3c4043] transition-colors", activeTab === 'chat' && showSidePanel && "text-[#8ab4f8]")}
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                        Chat
+                        {unreadChat > 0 && <span className="ml-auto h-5 w-5 bg-red-500 rounded-full text-[10px] font-bold flex items-center justify-center">{unreadChat > 9 ? '9+' : unreadChat}</span>}
+                      </button>
+                      <button
+                        onClick={() => { toggleSidePanel('people'); setShowMobileMore(false); }}
+                        className={cn("w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-[#3c4043] transition-colors", activeTab === 'people' && showSidePanel && "text-[#8ab4f8]")}
+                      >
+                        <Users className="h-4 w-4" />
+                        People
+                      </button>
+                      <button
+                        onClick={() => { toggleSidePanel('activities'); setShowMobileMore(false); }}
+                        className={cn("w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-[#3c4043] transition-colors", activeTab === 'activities' && showSidePanel && "text-[#8ab4f8]")}
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        Activities
+                      </button>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
          </div>
       </div>
 

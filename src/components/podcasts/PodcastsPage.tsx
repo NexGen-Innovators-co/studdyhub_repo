@@ -1193,8 +1193,12 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
                                       if ((e.target as HTMLElement).closest('[role="menu"], button[aria-haspopup="menu"]')) {
                                         return;
                                       }
-                                      handlePlayPodcast(podcast);
-                                      navigate(`/podcast/${podcast.id}`);
+                                      if (podcast.is_live) {
+                                        handleJoinLiveCb(podcast.id, podcast.user_id === currentUser?.id);
+                                      } else {
+                                        handlePlayPodcast(podcast);
+                                        navigate(`/podcast/${podcast.id}`);
+                                      }
                                     }}
                                   >
                                     <div className="w-20 h-20 rounded-md overflow-hidden flex-shrink-0 bg-slate-100">
@@ -1387,8 +1391,12 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
                                             if ((e.target as HTMLElement).closest('[role="menu"], button[aria-haspopup="menu"]')) {
                                               return;
                                             }
-                                            handlePlayPodcast(podcast);
-                                            navigate(`/podcast/${podcast.id}`);
+                                            if (podcast.is_live) {
+                                              handleJoinLiveCb(podcast.id, podcast.user_id === currentUser?.id);
+                                            } else {
+                                              handlePlayPodcast(podcast);
+                                              navigate(`/podcast/${podcast.id}`);
+                                            }
                                           }}
                                         >
                                         <div className="w-24 h-24 rounded-lg overflow-hidden bg-slate-200 flex-shrink-0">

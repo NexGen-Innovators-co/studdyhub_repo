@@ -132,39 +132,6 @@ export const GoLiveDialog: React.FC<GoLiveDialogProps> = ({
           role: 'owner'
         });
 
-      // Create social post about going live via the edge function so moderation/bookkeeping is applied
-      let createdPostId: string | null = null;
-      if (isPublic) {
-        try {
-          // // console.log('[GoLive] Invoking create-social-post edge function');
-          const invokeRes = await supabase.functions.invoke('create-social-post', {
-            body: {
-              author_id: user.id,
-              content: `🔴 LIVE NOW: ${title}${description ? '\n\n' + description : ''}\n\nJoin the live podcast now!`,
-              privacy: 'public',
-              metadata: {
-                type: 'podcast',
-                podcastId: podcast.id,
-                title: podcast.title,
-                description: podcast.description || '',
-                coverUrl: podcast.cover_image_url,
-                authorName: podcast.user?.full_name || 'Anonymous'
-              }
-            }
-          });
-
-          if (invokeRes && invokeRes.data) {
-            createdPostId = invokeRes.data.id || invokeRes.data.post_id || null;
-          } else if (invokeRes && invokeRes.error) {
-            throw invokeRes.error;
-          } else {
-            throw new Error('create-social-post returned no data');
-          }
-        } catch (err: any) {
-          throw err;
-        }
-      }
-
       // Send notification to all podcast members (including owner)
       const { data: members } = await supabase
         .from('podcast_members')
