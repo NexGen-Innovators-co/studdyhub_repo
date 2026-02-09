@@ -40,19 +40,19 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ material, course }) 
   };
 
   return (
-    <Card className="h-full flex flex-col hover:shadow-md transition-shadow">
+    <Card className="h-full flex flex-col bg-white/90 dark:bg-slate-900/70 border-slate-200 dark:border-slate-700 hover:shadow-lg hover:border-blue-500/50 transition-all duration-300 group rounded-xl">
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start gap-2">
-          <CardTitle className="text-lg font-medium line-clamp-2" title={material.title}>
+          <CardTitle className="text-lg font-medium line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" title={material.title}>
             {material.title}
           </CardTitle>
-          <Badge variant="outline" className="shrink-0">
+          <Badge variant="outline" className="shrink-0 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300">
             {material.category || 'Resource'}
           </Badge>
         </div>
       </CardHeader>
       <CardContent className="flex-1 pb-2">
-        <p className="text-sm text-muted-foreground line-clamp-3">
+        <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-3">
           {material.description || 'No description available.'}
         </p>
       </CardContent>

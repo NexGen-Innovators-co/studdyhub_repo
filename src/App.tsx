@@ -40,6 +40,7 @@ const ContentModeration = lazy(() => import("./components/admin/ContentModeratio
 const SystemSettings = lazy(() => import("./components/admin/SystemSettings"));
 const ActivityLogs = lazy(() => import("./components/admin/ActivityLogs"));
 const CourseManagement = lazy(() => import("./components/admin/CourseManagement"));
+const CourseDashboard = lazy(() => import("./pages/CourseDashboard"));
 
 const queryClient = new QueryClient();
 
@@ -115,6 +116,7 @@ const AppWithSEO = () => {
           <Route path="/quizzes/:tab/:sessionId" element={<Index />} />
           <Route path="/library" element={<Index />} />
           <Route path="/library/:tab" element={<Index />} />
+          <Route path="/course/:courseId" element={<Suspense fallback={<Fallback />}><CourseDashboard /></Suspense>} />
           <Route path="/subscription" element={<SubscriptionPage />} />
           <Route path="/pricing" element={<SubscriptionPage />} />
           

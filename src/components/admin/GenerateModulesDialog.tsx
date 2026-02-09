@@ -279,6 +279,22 @@ Make titles descriptive and academic. Descriptions should outline learning objec
           document_id: doc?.id || null,
         });
 
+        // Also create course_resources entries for the document and note
+        if (doc?.id) {
+          await supabase.from('course_resources').insert({
+            course_id: courseId,
+            resource_type: 'document',
+            resource_id: doc.id,
+            title: mod.title,
+            description: mod.description || null,
+            category: normalizeCategory(mod.category),
+            is_required: false,
+            created_by: userId || null,
+          }).then(({ error }) => {
+            if (error && !error.message?.includes('duplicate')) console.warn('course_resources doc insert:', error.message);
+          });
+        }
+
         saved++;
         setModules((prev) =>
           prev.map((m, idx) =>

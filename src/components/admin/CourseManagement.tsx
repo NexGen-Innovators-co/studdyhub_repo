@@ -8,11 +8,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Loader2, Plus, Trash2, BookOpen, FileText, UploadCloud } from 'lucide-react';
+import { Loader2, Plus, Trash2, BookOpen, FileText, UploadCloud, Link2, BrainCircuit, Headphones, NotebookPen, Mic, Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppContext } from '@/hooks/useAppContext';
 import { GenerateCourseDialog } from './GenerateCourseDialog';
 import { GenerateModulesDialog } from './GenerateModulesDialog';
+import { LinkResourceDialog } from './LinkResourceDialog';
+import { GenerateCourseResourcesDialog } from '@/components/courseLibrary/GenerateCourseResourcesDialog';
+import { useCourseResources } from '@/hooks/useCourseResources';
 import { AIGeneratedCourse, generateInlineContent } from '@/services/aiServices';
 
 const CourseManagement = () => {
@@ -21,6 +24,7 @@ const CourseManagement = () => {
   const { userProfile } = useAppContext();
   const [isAddCourseOpen, setIsAddCourseOpen] = useState(false);
   const [isAddMaterialOpen, setIsAddMaterialOpen] = useState(false);
+  const [isAIGenerateOpen, setIsAIGenerateOpen] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   
   // File upload state
@@ -108,6 +112,11 @@ const CourseManagement = () => {
       toast.success('Material deleted');
     },
   });
+
+  // --- Course Resources (linked quizzes, podcasts, etc.) ---
+  const { useResources, useRemoveResource } = useCourseResources();
+  const { data: linkedResources, isLoading: isLoadingResources } = useResources(selectedCourseId);
+  const removeResource = useRemoveResource();
 
   // --- Helpers ---
   const getBase64 = (file: File): Promise<string> => {
@@ -398,8 +407,8 @@ const CourseManagement = () => {
   return (
     <div className="space-y-6 p-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold tracking-tight">Course Management</h1>
-        <div className="flex items-center gap-2">
+        <h1 className="text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400">Course Management</h1>
+        <div className="flex flex-wrap items-center gap-2 max-w-full overflow-x-auto scrollbar-thin scrollbar-thumb-blue-200 dark:scrollbar-thumb-blue-900">
           <GenerateCourseDialog onCourseGenerated={handleAIGeneratedCourse} />
           <Dialog open={isAddCourseOpen} onOpenChange={setIsAddCourseOpen}>
           <DialogTrigger asChild>
@@ -506,7 +515,7 @@ const CourseManagement = () => {
           </CardContent>
         </Card>
 
-        {/* Materials List */}
+        {/* Materials & Resources Panel */}
         <Card className="md:col-span-2 h-[calc(100vh-200px)] overflow-hidden flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>
@@ -515,13 +524,33 @@ const CourseManagement = () => {
                 : 'Select a course to view materials'}
             </CardTitle>
             {selectedCourseId && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 max-w-full overflow-x-auto scrollbar-thin scrollbar-thumb-blue-200 dark:scrollbar-thumb-blue-900">
+              <LinkResourceDialog
+                courseId={selectedCourseId}
+                courseTitle={courses?.find(c => c.id === selectedCourseId)?.title || ''}
+                onResourceLinked={() => queryClient.invalidateQueries({ queryKey: ['course_resources', selectedCourseId] })}
+              />
               <GenerateModulesDialog
                 courseId={selectedCourseId}
                 courseTitle={courses?.find(c => c.id === selectedCourseId)?.title || ''}
                 courseCode={courses?.find(c => c.id === selectedCourseId)?.code || ''}
                 userId={user?.id}
                 onModulesAdded={() => queryClient.invalidateQueries({ queryKey: ['admin-course-materials', selectedCourseId] })}
+              />
+              <Button size="sm" variant="outline" className="gap-2" onClick={() => setIsAIGenerateOpen(true)}>
+                <Sparkles className="h-4 w-4 text-yellow-500" /> AI Generate Resources
+              </Button>
+              <GenerateCourseResourcesDialog
+                open={isAIGenerateOpen}
+                onOpenChange={setIsAIGenerateOpen}
+                courseId={selectedCourseId}
+                courseTitle={courses?.find(c => c.id === selectedCourseId)?.title || ''}
+                courseCode={courses?.find(c => c.id === selectedCourseId)?.code || ''}
+                userId={user?.id || ''}
+                onComplete={() => {
+                  queryClient.invalidateQueries({ queryKey: ['course_resources', selectedCourseId] });
+                  queryClient.invalidateQueries({ queryKey: ['admin-course-materials', selectedCourseId] });
+                }}
               />
               <Dialog open={isAddMaterialOpen} onOpenChange={setIsAddMaterialOpen}>
                 <DialogTrigger asChild>
@@ -661,6 +690,66 @@ const CourseManagement = () => {
                     </Button>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Linked Resources Section */}
+            {selectedCourseId && (
+              <div className="mt-6">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Link2 className="h-4 w-4" /> Linked Resources
+                </h3>
+                {isLoadingResources ? (
+                  <Loader2 className="h-5 w-5 animate-spin mx-auto" />
+                ) : !linkedResources || linkedResources.length === 0 ? (
+                  <div className="text-center py-4 text-sm text-muted-foreground border border-dashed rounded-lg">
+                    No resources linked yet. Use "Link Resource" to add quizzes, podcasts, notes, etc.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {linkedResources.map((resource) => {
+                      const IconMap: Record<string, React.ElementType> = {
+                        document: FileText,
+                        quiz: BrainCircuit,
+                        podcast: Headphones,
+                        note: NotebookPen,
+                        recording: Mic,
+                      };
+                      const ResIcon = IconMap[resource.resource_type] || FileText;
+                      return (
+                        <div key={resource.id} className="flex items-center justify-between p-3 border rounded-lg bg-card">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-blue-500/10 rounded-full">
+                              <ResIcon className="h-4 w-4 text-blue-600" />
+                            </div>
+                            <div>
+                              <div className="font-medium text-sm">{resource.title}</div>
+                              <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                <span className="capitalize">{resource.resource_type}</span>
+                                {resource.category && <span>• {resource.category}</span>}
+                                {resource.is_required && (
+                                  <span className="text-orange-600 font-medium">• Required</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:text-destructive/90"
+                            disabled={removeResource.isPending}
+                            onClick={() => {
+                              if (confirm('Unlink this resource from the course?'))
+                                removeResource.mutate({ resourceId: resource.id, courseId: selectedCourseId });
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

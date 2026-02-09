@@ -11,6 +11,7 @@ import { Checkbox } from '../../ui/checkbox';
 import { useGlobalSearch } from '../../../hooks/useGlobalSearch';
 import { SEARCH_CONFIGS } from '../../../services/globalSearchService';
 import { supabase } from '../../../integrations/supabase/client';
+import { trackCourseResourceAccess } from '../../../services/courseProgressService';
 
 interface NotesListProps {
   notes: Note[] | null; // Allow notes to be null
@@ -158,6 +159,11 @@ export const NotesList: React.FC<NotesListProps> = ({
 
     // Call the original onNoteSelect
     onNoteSelect(note);
+
+    // Track course progress when user opens a note
+    if (userId && note.id) {
+      trackCourseResourceAccess(userId, 'note', note.id);
+    }
 
     // Use navigateToNote if available, otherwise use onClose
     if (navigateToNote) {

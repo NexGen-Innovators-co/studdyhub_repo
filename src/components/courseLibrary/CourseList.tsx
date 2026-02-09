@@ -133,8 +133,8 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
     <div className="flex flex-col h-full space-y-6">
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Course Library</h2>
-          <p className="text-muted-foreground">
+          <h2 className="text-2xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400">Course Library</h2>
+          <p className="text-gray-500 dark:text-gray-400">
             {userSchool ? `Browsing courses for ${userSchool}` : 'Access lecture notes, past questions, and more.'}
           </p>
         </div>
@@ -193,7 +193,7 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
             {filteredCourses?.map((course) => (
               <Card 
                 key={course.id} 
-                className="cursor-pointer hover:shadow-md transition-all hover:border-blue-500/50 group"
+                className="cursor-pointer hover:shadow-lg transition-all duration-300 hover:border-blue-500/50 group bg-white/90 dark:bg-slate-900/70 border-slate-200 dark:border-slate-700 rounded-xl hover:scale-[1.02]"
                 onClick={() => onSelectCourse(course)}
               >
                 <CardHeader>
@@ -224,10 +224,14 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
             ))}
             
             {filteredCourses?.length === 0 && (
-              <div className="col-span-full text-center py-12 text-muted-foreground">
-                <p>No courses found matching your search.</p>
+              <div className="col-span-full bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-2xl p-8 text-center">
+                <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900 dark:to-blue-800 rounded-full flex items-center justify-center">
+                  <Book className="h-8 w-8 text-blue-600 dark:text-blue-300" />
+                </div>
+                <h3 className="text-lg font-semibold mb-2">No Courses Found</h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-4">No courses found matching your search.</p>
                 {activeTab === 'my-school' && (
-                  <Button variant="link" onClick={() => handleTabChange('all')}>
+                  <Button variant="link" className="text-blue-600" onClick={() => handleTabChange('all')}>
                     Try browsing all schools
                   </Button>
                 )}

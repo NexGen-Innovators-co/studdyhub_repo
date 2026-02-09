@@ -1,6 +1,7 @@
 
 // src/components/DocumentUpload.tsx
 import React, { useState, useRef, useCallback, useMemo, useEffect, lazy, Suspense } from 'react';
+import { trackCourseResourceAccess } from '../../services/courseProgressService';
 import {
   UploadCloud, FileText, Image, Loader2, Check, XCircle, AlertTriangle,
   RefreshCw, Eye, Download, Calendar, HardDrive, Search, Filter,
@@ -368,6 +369,11 @@ const allDocuments = contextDocuments || documents;
   const openPreview = (document: Document) => {
     setSelectedDocument(document);
     setPreviewOpen(true);
+
+    // Track course progress when user views a document
+    if (docUserId && document.id) {
+      trackCourseResourceAccess(docUserId, 'document', document.id);
+    }
   };
 
   const copyToClipboard = async (text: string) => {

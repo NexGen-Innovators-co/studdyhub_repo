@@ -1,5 +1,6 @@
 // PodcastsPage.tsx - Complete fixed version
 import React, { useState, useEffect, useCallback, useRef, useMemo, useDeferredValue } from 'react';
+import { trackCourseResourceCompletion } from '../../services/courseProgressService';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../ui/button';
@@ -438,6 +439,9 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
 
       // Invalidate podcasts query to refresh the listen count in the UI
       queryClient.invalidateQueries({ queryKey: ['podcasts'] });
+
+      // Track course progress (fire-and-forget)
+      trackCourseResourceCompletion(currentUser.id, 'podcast', podcastId);
 
       // Optimistically mark as listened to avoid duplicate writes in this session
       listenedPodcastsRef.current.add(podcastId);

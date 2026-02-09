@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../integrations/supabase/client';
 import { toast } from 'sonner';
 import { QuizAttempt, UserStats, Achievement, Badge } from '../../../types/EnhancedClasses';
+import { trackCourseResourceCompletion } from '../../../services/courseProgressService';
 
 export const useQuizTracking = (userId: string) => {
   const [userStats, setUserStats] = useState<UserStats | null>(null);
@@ -149,6 +150,9 @@ export const useQuizTracking = (userId: string) => {
 
       // Refresh best attempts
       await fetchUserStats();
+
+      // Track course progress (fire-and-forget)
+      trackCourseResourceCompletion(userId, 'quiz', quizId, { score: percentage });
 
       return data;
     } catch (error) {
