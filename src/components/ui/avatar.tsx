@@ -28,7 +28,7 @@ Avatar.displayName = AvatarPrimitive.Root.displayName
 const AvatarImage = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Image>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
->(({ src, ...props }, ref) => {
+>(({ src, className, ...props }, ref) => {
   // Block Google avatar URLs
   const isGoogleAvatar = typeof src === 'string' && src.includes('lh3.googleusercontent.com');
   if (!src || isGoogleAvatar) return null;
@@ -37,7 +37,7 @@ const AvatarImage = React.forwardRef<
       ref={ref}
       src={src}
       referrerPolicy="no-referrer"
-      className={cn("aspect-square h-full w-full", props.className)}
+      className={cn("absolute inset-0 h-full w-full object-cover", className)}
       {...props}
     />
   );

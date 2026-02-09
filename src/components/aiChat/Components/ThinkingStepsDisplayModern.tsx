@@ -1,6 +1,6 @@
 import React, { memo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, ChevronRight, Brain, Sparkles, CheckCircle2, Clock, Loader2 } from 'lucide-react';
+import { ChevronDown, Brain, BookOpen, Lightbulb, Database, ShieldCheck, Zap, Sparkles, CheckCircle2, Loader2 } from 'lucide-react';
 import { ThinkingStep } from '@/types/Class';
 import { cn } from '@/lib/utils';
 
@@ -10,15 +10,28 @@ interface ThinkingStepsDisplayProps {
   className?: string;
 }
 
-const getStepEmoji = (type: ThinkingStep['type']) => {
+const getStepIcon = (type: ThinkingStep['type']) => {
   switch (type) {
-    case 'understanding': return '🤔';
-    case 'retrieval': return '🔍';
-    case 'reasoning': return '💡';
-    case 'memory': return '🧠';
-    case 'verification': return '✓';
-    case 'action': return '⚡';
-    default: return '💭';
+    case 'understanding': return Brain;
+    case 'retrieval': return BookOpen;
+    case 'reasoning': return Lightbulb;
+    case 'memory': return Database;
+    case 'verification': return ShieldCheck;
+    case 'action': return Zap;
+    default: return Sparkles;
+  }
+};
+
+const getStepColor = (type: ThinkingStep['type'], isActive: boolean) => {
+  if (isActive) return { bg: 'bg-blue-100 dark:bg-blue-900/40', border: 'border-blue-400', icon: 'text-blue-600 dark:text-blue-400' };
+  switch (type) {
+    case 'understanding': return { bg: 'bg-purple-100 dark:bg-purple-900/30', border: 'border-purple-300 dark:border-purple-700', icon: 'text-purple-600 dark:text-purple-400' };
+    case 'retrieval': return { bg: 'bg-sky-100 dark:bg-sky-900/30', border: 'border-sky-300 dark:border-sky-700', icon: 'text-sky-600 dark:text-sky-400' };
+    case 'reasoning': return { bg: 'bg-amber-100 dark:bg-amber-900/30', border: 'border-amber-300 dark:border-amber-700', icon: 'text-amber-600 dark:text-amber-400' };
+    case 'memory': return { bg: 'bg-cyan-100 dark:bg-cyan-900/30', border: 'border-cyan-300 dark:border-cyan-700', icon: 'text-cyan-600 dark:text-cyan-400' };
+    case 'verification': return { bg: 'bg-emerald-100 dark:bg-emerald-900/30', border: 'border-emerald-300 dark:border-emerald-700', icon: 'text-emerald-600 dark:text-emerald-400' };
+    case 'action': return { bg: 'bg-rose-100 dark:bg-rose-900/30', border: 'border-rose-300 dark:border-rose-700', icon: 'text-rose-600 dark:text-rose-400' };
+    default: return { bg: 'bg-slate-100 dark:bg-slate-800/30', border: 'border-slate-300 dark:border-slate-700', icon: 'text-slate-500 dark:text-slate-400' };
   }
 };
 
@@ -142,21 +155,20 @@ export const ThinkingStepsDisplay = memo(({ steps, isStreaming, className }: Thi
                                 <div className="absolute left-[11px] top-6 bottom-[-16px] w-0.5 bg-slate-200 dark:bg-slate-800" />
                              )}
                              
-                             {/* Dot Indicator */}
-                             <div className={cn(
-                                 "absolute left-[2px] top-1.5 h-[18px] w-[18px] rounded-full border-2 flex items-center justify-center z-10 bg-white dark:bg-slate-950",
-                                 isActive 
-                                    ? "border-blue-500 text-blue-500 animate-pulse" 
-                                    : "border-slate-200 dark:border-slate-700 text-slate-400"
-                             )}>
-                                 {isActive ? (
-                                    <div className="h-2 w-2 rounded-full bg-blue-500" />
-                                 ) : step.status === 'completed' ? (
-                                    <div className="h-2 w-2 rounded-full bg-emerald-400" />
-                                 ) : (
-                                    <div className="h-2 w-2 rounded-full bg-slate-300" />
-                                 )}
-                             </div>
+                             {/* Step Icon Indicator */}
+                             {(() => {
+                               const Icon = getStepIcon(step.type);
+                               const colors = getStepColor(step.type, isActive);
+                               return (
+                                 <div className={cn(
+                                   "absolute left-0 top-0.5 h-[22px] w-[22px] rounded-md border flex items-center justify-center z-10",
+                                   colors.bg, colors.border,
+                                   isActive && "animate-pulse shadow-sm"
+                                 )}>
+                                   <Icon className={cn("h-3 w-3", colors.icon)} />
+                                 </div>
+                               );
+                             })()}
 
                              {/* Step Content */}
                              <div className="flex flex-col gap-1">

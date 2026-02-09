@@ -177,7 +177,7 @@ export const useStreamingChat = (): StreamingChatHook => {
       const decoder = new TextDecoder();
       let buffer = '';
       let lastEventTime = Date.now();
-      const STREAM_TIMEOUT = 60000;
+      const STREAM_TIMEOUT = 180000; // 3 minutes — server sends heartbeats every 15s
 
       const timeoutCheck = setInterval(() => {
         const timeSinceLastEvent = Date.now() - lastEventTime;
@@ -241,6 +241,9 @@ export const useStreamingChat = (): StreamingChatHook => {
               if (abortControllerRef.current?.signal.aborted) break;
 
               switch (eventType) {
+                case 'heartbeat':
+                  // Keep-alive ping from server — just reset the timeout timer
+                  break;
                 case 'thinking_step':
                   accumulatedDataRef.current.thinkingSteps.push(data);
                   params.onThinkingStep(data);

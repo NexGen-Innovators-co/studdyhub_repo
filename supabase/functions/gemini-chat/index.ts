@@ -1481,6 +1481,9 @@ async function handleStreamingResponse(
 ): Promise<Response> {
   const { stream, handler } = createStreamResponse();
 
+  // Start automatic heartbeat to prevent client timeout during long operations
+  handler.startHeartbeat(15_000);
+
   // Start async processing
   (async () => {
     try {
@@ -2140,7 +2143,9 @@ Return JSON ONLY with the shape: { "final": true|false, "reason": "short reason"
       console.error('❌ FATAL ERROR in streaming handler:', error.message);
       console.error('❌ Stack trace:', error.stack);
       console.error('❌ Full error:', JSON.stringify(error, null, 2));
-      handler.sendError(error.message || 'An error occurred');
+      if (!handler.isClosed) {
+        handler.sendError(error.message || 'An error occurred');
+      }
       handler.close();
     }
   })();

@@ -12,6 +12,7 @@ import { Loader2, Plus, Trash2, BookOpen, FileText, UploadCloud } from 'lucide-r
 import { useAuth } from '@/hooks/useAuth';
 import { useAppContext } from '@/hooks/useAppContext';
 import { GenerateCourseDialog } from './GenerateCourseDialog';
+import { GenerateModulesDialog } from './GenerateModulesDialog';
 import { AIGeneratedCourse, generateInlineContent } from '@/services/aiServices';
 
 const CourseManagement = () => {
@@ -514,6 +515,14 @@ const CourseManagement = () => {
                 : 'Select a course to view materials'}
             </CardTitle>
             {selectedCourseId && (
+              <div className="flex items-center gap-2">
+              <GenerateModulesDialog
+                courseId={selectedCourseId}
+                courseTitle={courses?.find(c => c.id === selectedCourseId)?.title || ''}
+                courseCode={courses?.find(c => c.id === selectedCourseId)?.code || ''}
+                userId={user?.id}
+                onModulesAdded={() => queryClient.invalidateQueries({ queryKey: ['admin-course-materials', selectedCourseId] })}
+              />
               <Dialog open={isAddMaterialOpen} onOpenChange={setIsAddMaterialOpen}>
                 <DialogTrigger asChild>
                   <Button size="sm"><Plus className="mr-2 h-4 w-4" /> Add Material</Button>
@@ -612,6 +621,7 @@ const CourseManagement = () => {
                   </form>
                 </DialogContent>
               </Dialog>
+              </div>
             )}
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto">
