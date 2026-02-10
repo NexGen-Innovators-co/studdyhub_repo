@@ -6,6 +6,8 @@ import { supabase } from '../integrations/supabase/client';
 import { clearCache } from '../utils/socialCache'; // Import the utility
 import { clearDashboardCache } from '@/components/dashboard/hooks/useDashboardStats';
 import { offlineStorage, STORES } from '../utils/offlineStorage';
+import { pushNotificationService } from '@/services/pushNotificationService';
+import { resetPushInitialization } from '@/services/notificationInitService';
 
 interface AuthContextType {
   user: User | null;
@@ -46,6 +48,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         if (event === 'SIGNED_OUT') {
           ////console.log('🔴 Auth state: SIGNED_OUT - clearing cache');
           clearCache();
+          resetPushInitialization();
           // Clear offline IndexedDB stores
           try {
             //console.log('[useAuth] SIGNED_OUT detected - clearing offline storage');
@@ -70,6 +73,28 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signOut = async () => {
     try {
+      // Capture user ID before clearing auth for push unsubscription
+      const currentUserId = user?.id;
+
+      // Unsubscribe from push notifications (removes browser subscription + DB record)
+      if (currentUserId) {
+        try {
+          await pushNotificationService.unsubscribe(currentUserId);
+        } catch (e) {
+          // Non-blocking — continue with logout even if push unsub fails
+        }
+      }
+
+      // Reset push notification singleton state so next user can re-initialize
+      resetPushInitialization();
+
+      // Force-close all Supabase realtime channels to prevent stale subscriptions
+      try {
+        await supabase.removeAllChannels();
+      } catch (e) {
+        // Non-blocking
+      }
+
       // Clear React Query in-memory cache and any pending queries
       try {
         const qc = queryClient;
@@ -100,13 +125,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       localStorage.clear();
       sessionStorage.clear();
 
-      // Clear any service worker caches if you have them
+      // Clear any service worker caches
       if ('caches' in window) {
-        caches.keys().then(names => {
-          names.forEach(name => {
-            caches.delete(name);
-          });
-        });
+        try {
+          const cacheNames = await caches.keys();
+          await Promise.all(cacheNames.map(name => caches.delete(name)));
+        } catch (e) {
+          // Non-blocking
+        }
       }
 
       // Sign out from Supabase
@@ -118,8 +144,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // Still try to clear caches even if signout fails
       clearCache();
       clearDashboardCache();
+      resetPushInitialization();
       localStorage.clear();
       sessionStorage.clear();
+      try { await supabase.removeAllChannels(); } catch (e) {}
     }
   };
 

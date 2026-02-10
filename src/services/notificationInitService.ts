@@ -120,3 +120,12 @@ export function getNotificationPermissionStatus(): NotificationPermission {
 export function getPushService(): PushNotificationService {
   return pushService;
 }
+
+/**
+ * Reset initialization state on logout
+ * MUST be called on sign-out so the next user can re-initialize push notifications
+ */
+export function resetPushInitialization(): void {
+  initializationAttempted = false;
+  pushService.reset();
+}

@@ -260,6 +260,15 @@ class PushNotificationService {
   }
 
   /**
+   * Reset service state on logout
+   * Nulls all held references so the next user starts fresh
+   */
+  reset(): void {
+    this.registration = null;
+    this.subscription = null;
+  }
+
+  /**
    * Get current subscription
    */
   async getCurrentSubscription(): Promise<PushSubscription | null> {
