@@ -204,7 +204,7 @@ export const SEARCH_CONFIGS = {
     searchFields: ['title', 'description', 'subject', 'location'],
     userIdField: 'user_id',
     sortField: 'start_time',
-    limit: 50
+    limit: 1000 // Increased limit to show more/all schedule items
   } as SearchConfig,
 
   podcasts: {

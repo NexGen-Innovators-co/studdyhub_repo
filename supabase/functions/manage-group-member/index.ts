@@ -70,6 +70,23 @@ serve(async (req) => {
           .eq('id', group_id);
       }
 
+      // Send approval notification to the user
+      const { data: group } = await supabase
+        .from('social_groups')
+        .select('name')
+        .eq('id', group_id)
+        .single();
+
+      await supabase.from('social_notifications').insert({
+        user_id: target_user_id,
+        actor_id: userId,
+        type: 'group_invite',
+        title: 'Request Approved',
+        message: `Your request to join "${group?.name || 'the group'}" was approved!`,
+        is_read: false,
+        data: { group_id }
+      });
+
       return new Response(
         JSON.stringify({ success: true, action: 'approved', members_count: count }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -97,9 +114,11 @@ serve(async (req) => {
       // Send rejection notification
       await supabase.from('social_notifications').insert({
         user_id: target_user_id,
+        actor_id: userId,
         type: 'group_invite',
         title: 'Request Declined',
         message: `Your request to join "${group?.name || 'the group'}" was declined.`,
+        is_read: false,
         data: { group_id }
       });
 

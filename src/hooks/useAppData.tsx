@@ -13,7 +13,7 @@ import { offlineStorage, STORES } from '@/utils/offlineStorage';
 const INITIAL_LOAD_LIMITS = {
   notes: 12, // Reduced for faster initial load
   recordings: 6,
-  scheduleItems: 20,
+  scheduleItems: 1000, // Increased to fetch all schedule items
   documents: 10,
   chatMessages: 0,
   quizzes: 6,
@@ -23,7 +23,7 @@ const INITIAL_LOAD_LIMITS = {
 const LOAD_MORE_LIMITS = {
   notes: 20,
   recordings: 12,
-  scheduleItems: 30,
+  scheduleItems: 1000, // Increased to fetch all schedule items
   documents: 15,
   chatMessages: 50,
   quizzes: 12,

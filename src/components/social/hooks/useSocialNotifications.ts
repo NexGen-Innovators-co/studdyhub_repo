@@ -8,22 +8,25 @@ import { DEFAULT_LIMITS } from '../utils/socialConstants';
 export interface SocialNotification {
   id: string;
   user_id: string;
-  actor_id: string;
-  type: 'like' | 'comment' | 'follow' | 'mention' | 'share';
-  post_id?: string;
+  actor_id: string | null;
+  type: 'like' | 'comment' | 'follow' | 'mention' | 'share' | 'group_invite';
+  title?: string;
+  message?: string;
+  post_id?: string | null;
   is_read: boolean;
   created_at: string;
+  data?: Record<string, any> | null;
   actor?: {
     id: string;
     username: string;
     display_name: string;
     avatar_url?: string;
-  };
+  } | null;
   post?: {
     id: string;
     content: string;
     author_id: string;
-  };
+  } | null;
 }
 
 // Updated useSocialNotifications hook with duplicate prevention
@@ -180,12 +183,14 @@ export const useSocialNotifications = () => {
                       label: 'View',
                       onClick: () => {
                         const n = notificationData as SocialNotification;
-                        if (n.post_id) {
-                          navigate(`/social/post/${n.post_id}`);
-                        } else if (n.type === 'follow') {
+                        if (n.type === 'follow' && n.actor_id) {
                           navigate(`/social/profile/${n.actor_id}`);
+                        } else if (n.type === 'group_invite' && n.data?.group_id) {
+                          navigate(`/social/group/${n.data.group_id}`);
+                        } else if (n.post_id) {
+                          navigate(`/social/post/${n.post_id}`);
                         } else {
-                          navigate('/social');
+                          navigate('/social/notifications');
                         }
                       }
                     }
@@ -314,6 +319,9 @@ export const useSocialNotifications = () => {
 
   // Helper function for notification messages
   const getNotificationMessage = (notification: SocialNotification): string => {
+    // If the notification already has a message from the DB, use it
+    if (notification.message) return notification.message;
+
     const actorName = notification.actor?.display_name || 'Someone';
 
     switch (notification.type) {
@@ -327,6 +335,8 @@ export const useSocialNotifications = () => {
         return `${actorName} mentioned you in a post`;
       case 'share':
         return `${actorName} shared your post`;
+      case 'group_invite':
+        return notification.message || `Group membership update`;
       default:
         return 'You have a new notification';
     }

@@ -589,14 +589,14 @@ export const useSocialData = (
                 if (onNotificationReceived) {
                   onNotificationReceived(notificationData);
                 }
-                toast.info('You have a new notification!');
+                // Note: Toast is handled by useSocialNotifications hook to avoid duplicates
               }
             } catch (error) {
               ////console.error('Error fetching notification details:', error);
               if (onNotificationReceived) {
                 onNotificationReceived(payload.new);
               }
-              toast.info('You have a new notification!');
+              // Note: Toast is handled by useSocialNotifications hook to avoid duplicates
             }
           }
         )

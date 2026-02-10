@@ -30,6 +30,7 @@ interface Group {
   privacy: 'public' | 'private';
   members_count: number;
   is_member: boolean;
+  member_status?: 'active' | 'pending' | 'banned' | null;
   avatar_url?: string;
 }
 
@@ -337,11 +338,14 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
       {/* Grid */}
       {!isLoading && groups.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {groups.map((group: Group) => (
+          {groups.map((group: Group) => {
+            const isPending = group.member_status === 'pending';
+            const isActiveMember = group.is_member && group.member_status === 'active';
+            return (
             <Card
               key={group.id}
-              onClick={() => group.is_member && navigate(`/social/group/${group.id}`)}
-              className={`group relative overflow-hidden border-none shadow-sm hover:shadow-lg transition-all duration-300 bg-white dark:bg-slate-900 rounded-2xl flex flex-col h-full ${group.is_member ? 'cursor-pointer' : ''}`}
+              onClick={() => isActiveMember && navigate(`/social/group/${group.id}`)}
+              className={`group relative overflow-hidden border-none shadow-sm hover:shadow-lg transition-all duration-300 bg-white dark:bg-slate-900 rounded-2xl flex flex-col h-full ${isActiveMember ? 'cursor-pointer' : ''}`}
             >
               <div className="h-20 bg-slate-100 dark:bg-slate-800 relative">
                 {/* Decorative pattern or gradient could go here */}
@@ -376,9 +380,19 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
                     {group.members_count} Members
                   </div>
 
-                  {group.is_member ? (
+                  {isActiveMember ? (
                     <Button size="sm" variant="ghost" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 p-0 h-auto font-semibold">
                       View <ArrowRight className="ml-1 h-4 w-4" />
+                    </Button>
+                  ) : isPending ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled
+                      className="rounded-full h-8 text-xs text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-400 cursor-default"
+                    >
+                      <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                      Pending
                     </Button>
                   ) : (
                     <Button
@@ -402,7 +416,8 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 

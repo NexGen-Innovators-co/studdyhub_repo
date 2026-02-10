@@ -13,7 +13,9 @@ import {
   CheckCheck,
   X,
   Filter,
-  Loader2
+  Loader2,
+  Share2,
+  AtSign
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
@@ -156,7 +158,11 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
       case 'follow':
         return <UserPlus className="h-5 w-5 text-green-500" />;
       case 'group_invite':
-        return <Users className="h-5 w-5 text-blue-500" />;
+        return <Users className="h-5 w-5 text-purple-500" />;
+      case 'mention':
+        return <AtSign className="h-5 w-5 text-orange-500" />;
+      case 'share':
+        return <Share2 className="h-5 w-5 text-teal-500" />;
       default:
         return <Bell className="h-5 w-5 text-gray-500" />;
     }
@@ -186,8 +192,10 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
     }
 
     const { type, data } = notification;
-    const postId = data?.post?.id;
-    const actorId = data?.actor?.id || notification.actor?.id;
+    // Resolve IDs from multiple possible locations for robustness
+    const postId = data?.post_id || data?.post?.id;
+    const actorId = data?.actor_id || notification.actor?.id || data?.actor?.id;
+    const groupId = data?.group_id;
 
     try {
       switch (type) {
@@ -195,35 +203,36 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
         case 'comment':
         case 'mention':
         case 'share':
-          // Navigate to the post that was liked/commented on
           if (postId) {
             navigate(`/social/post/${postId}`);
           } else {
-            toast.info('Post not found');
+            toast.info('Post no longer available');
+            navigate('/social/feed');
           }
           break;
 
         case 'follow':
-          // Navigate to the follower's profile
           if (actorId) {
-            navigate(`/social/user/${actorId}`);
+            navigate(`/social/profile/${actorId}`);
           } else {
-            toast.info('User profile not found');
+            toast.info('User profile not available');
+            navigate('/social/feed');
           }
           break;
 
         case 'group_invite':
-          // Navigate to groups section
-          navigate('/social/groups');
+          if (groupId) {
+            navigate(`/social/group/${groupId}`);
+          } else {
+            navigate('/social/groups');
+          }
           break;
 
         default:
-          // For other notification types, navigate to social feed
           navigate('/social/feed');
           break;
       }
     } catch (error) {
-      // console.error('Navigation error:', error);
       toast.error('Failed to navigate');
     }
   };
@@ -323,14 +332,19 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                     }
                   }}
                 >
-                  {/* Actor Avatar */}
-                  {notification.actor ? (
-                    <Avatar className="h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0">
-                      <AvatarImage src={notification.actor.avatar_url} />
-                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white text-sm">
-                        {notification.actor.display_name.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
+                  {/* Actor Avatar with type icon overlay */}
+                  {notification.actor && notification.actor.display_name ? (
+                    <div className="relative flex-shrink-0">
+                      <Avatar className="h-10 w-10 sm:h-12 sm:w-12">
+                        <AvatarImage src={notification.actor.avatar_url} alt={notification.actor.display_name} />
+                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white text-sm">
+                          {notification.actor.display_name.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-600 flex items-center justify-center shadow-sm">
+                        {React.cloneElement(getNotificationIcon(notification.type), { className: 'h-3 w-3' })}
+                      </div>
+                    </div>
                   ) : (
                     <div className="h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 bg-slate-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
                       {getNotificationIcon(notification.type)}
@@ -356,12 +370,18 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                       <span>
                         {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
                       </span>
-                      {notification.actor && (
+                      {notification.actor?.username && (
                         <>
                           <span className="hidden sm:inline">•</span>
-                          <span>@{notification.actor.username}</span>
+                          <span className="font-medium text-slate-600 dark:text-gray-300">
+                            @{notification.actor.username}
+                          </span>
                         </>
                       )}
+                      <span className="hidden sm:inline">•</span>
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 capitalize">
+                        {notification.type.replace('_', ' ')}
+                      </Badge>
                     </div>
                   </div>
 

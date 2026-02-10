@@ -57,10 +57,14 @@ serve(async (req) => {
 
     const groups = rawGroups.map((g: any) => {
       const membership = membershipMap.get(g.id);
+      // Use the DB-maintained members_count (only counts active members via trigger)
+      // rather than the unfiltered aggregate which includes pending/banned rows
+      const activeCount = g.members_count || 0;
       return {
         ...g,
-        members_count: g.members?.[0]?.count || g.members_count || 0,
-        is_member: !!membership,
+        members_count: activeCount,
+        // Only mark as member if status is 'active' — pending users are NOT members
+        is_member: membership?.status === 'active',
         member_role: membership?.role || null,
         member_status: membership?.status || null,
       };

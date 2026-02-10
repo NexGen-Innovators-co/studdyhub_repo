@@ -324,7 +324,7 @@ export function useNotifications() {
                       }
                       break;
                     default:
-                      navigate('/notifications');
+                      navigate('/social/notifications');
                   }
                 }
               }
