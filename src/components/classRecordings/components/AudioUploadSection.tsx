@@ -75,7 +75,7 @@ export const AudioUploadSection: React.FC<AudioUploadSectionProps> = ({ onAddRec
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={triggerAudioUpload}
-          className={`relative border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all duration-200 ${
+          className={`relative border-2 border-dashed rounded-2xl p-6 sm:p-12 text-center cursor-pointer transition-all duration-200 ${
             isDragging 
               ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
               : 'border-border hover:border-blue-400 hover:bg-muted/50'
@@ -89,7 +89,7 @@ export const AudioUploadSection: React.FC<AudioUploadSectionProps> = ({ onAddRec
             </div>
             <div>
               <p className="font-medium text-foreground">
-                {isDragging ? 'Drop your audio file here' : 'Drag & drop audio file'}
+                {isDragging ? 'Drop your audio file here' : <><span className="hidden sm:inline">Drag & drop audio file</span><span className="sm:hidden">Tap to select audio file</span></>}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 or <span className="text-blue-500 hover:underline">browse files</span>
@@ -196,6 +196,7 @@ export const AudioUploadSection: React.FC<AudioUploadSectionProps> = ({ onAddRec
           <Button
             onClick={() => handleGenerateNoteFromAudio({
               ...uploadedAudioDetails,
+              audio_url: uploadedAudioDetails.url,
               audioUrl: uploadedAudioDetails.url,
               title: uploadedAudioDetails.name,
               subject: 'Uploaded Audio',
@@ -204,6 +205,7 @@ export const AudioUploadSection: React.FC<AudioUploadSectionProps> = ({ onAddRec
               duration: 0,
               date: new Date().toISOString(),
               created_at: new Date().toISOString(),
+              user_id: '',
               userId: '',
               id: ''
             })}

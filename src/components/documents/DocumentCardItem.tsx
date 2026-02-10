@@ -55,7 +55,7 @@ export const DocumentCardItem = React.memo(React.forwardRef<HTMLDivElement, Docu
     const Icon = getCategoryIcon(category);
     
     // We remove the heavy slide-in animation on every item
-    const cardClassName = `group overflow-hidden hover:shadow-xl transition-all duration-200 border-blue-200/50 dark:border-blue-900/50 flex flex-col relative rounded-2xl cursor-pointer bg-white dark:bg-slate-800 ${viewMode === 'list' ? 'flex' : 'h-full'}`;
+    const cardClassName = `group overflow-hidden hover:shadow-xl transition-shadow duration-200 border-blue-200/50 dark:border-blue-900/50 flex flex-col relative rounded-2xl cursor-pointer bg-white dark:bg-slate-800 ${viewMode === 'list' ? 'flex' : 'h-full'}`;
 
     return (
         <Card
@@ -69,13 +69,16 @@ export const DocumentCardItem = React.memo(React.forwardRef<HTMLDivElement, Docu
                 {/* Document Preview or Icon */}
                 <div
                   className="absolute inset-0 bg-slate-200 dark:bg-slate-800 text-slate-900 flex items-center justify-center"
-                  style={{
-                    backgroundImage: category === 'image' && doc.file_url ? `url(${doc.file_url})` : undefined,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center'
-                  }}
                 >
-                  {category !== 'image' && (
+                  {category === 'image' && doc.file_url ? (
+                    <img
+                      src={doc.file_url}
+                      alt={doc.title}
+                      loading="lazy"
+                      decoding="async"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
                     <div className="w-full h-full flex items-center justify-center">
                        <Icon className="h-16 w-16 text-blue-600 dark:text-blue-300 opacity-70" />
                     </div>

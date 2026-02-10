@@ -29,7 +29,6 @@ import { useFeatureAccess } from '../../hooks/useFeatureAccess';
 import { PodcastButton } from '../dashboard/PodcastButton';
 import { Checkbox } from '../ui/checkbox';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { a } from 'node_modules/framer-motion/dist/types.d-Cjd591yU';
 import { DocumentCardItem } from './DocumentCardItem';
 import { DocumentFilters } from './DocumentFilters';
 import { DocumentGridSkeleton, DocumentListSkeleton, FolderTreeSkeleton } from './DocumentSkeletons';
@@ -67,6 +66,12 @@ const LazyRenameFolderDialog = lazy(() =>
 );
 const LazyFolderSelector = lazy(() =>
   import('./FolderSelector').then((m) => ({ default: m.FolderSelector }))
+);
+const LazyMoveDocumentDialog = lazy(() =>
+  import('./MoveDocumentDialog').then((m) => ({ default: m.MoveDocumentDialog }))
+);
+const LazyMoveFolderDialog = lazy(() =>
+  import('./MoveFolderDialog').then((m) => ({ default: m.MoveFolderDialog }))
 );
 
 // Skeletons moved to ./DocumentSkeletons.tsx
@@ -127,6 +132,7 @@ const allDocuments = contextDocuments || documents;
     // Folder state
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [mobileFolderOpen, setMobileFolderOpen] = useState(false);
   const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false);
   const [renameFolderDialogOpen, setRenameFolderDialogOpen] = useState(false);
   const [folderToRename, setFolderToRename] = useState<DocumentFolder | null>(null);
@@ -336,17 +342,6 @@ const allDocuments = contextDocuments || documents;
 
 
 
-  // 2. Lazy load folder dialogs
-  const LazyMoveDocumentDialog = lazy(() =>
-    import('./MoveDocumentDialog').then((m) => ({ default: m.MoveDocumentDialog }))
-  );
-
-  const LazyMoveFolderDialog = lazy(() =>
-    import('./MoveFolderDialog').then((m) => ({ default: m.MoveFolderDialog }))
-  );
-  
-
-  
 
 
 
@@ -357,14 +352,35 @@ const allDocuments = contextDocuments || documents;
 
 
 
-  const isDocumentProcessing = (docId: string) => {
-    const doc = documents.find(d => d.id === docId);
-    // If document has extracted content, treat as completed
-    if (doc && doc.content_extracted && doc.content_extracted.trim().length > 0) {
-      return false;
+
+  // Memoize processing status as a Set for O(1) lookups per card
+  const processingDocIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const doc of documents) {
+      if (processingDocuments.has(doc.id)) {
+        // Only mark as processing if no content yet
+        if (!doc.content_extracted || doc.content_extracted.trim().length === 0) {
+          set.add(doc.id);
+        }
+      } else if ((doc.processing_status as string) === 'pending' && (!doc.content_extracted || doc.content_extracted.trim().length === 0)) {
+        set.add(doc.id);
+      }
     }
-    return processingDocuments.has(docId) || (doc?.processing_status as string) === 'pending';
-  };
+    return set;
+  }, [documents, processingDocuments]);
+
+  const isDocumentProcessing = useCallback((docId: string) => {
+    return processingDocIds.has(docId);
+  }, [processingDocIds]);
+
+  // Stable callback for document selection toggle (avoids breaking React.memo)
+  const handleToggleDocSelect = useCallback((id: string) => {
+    setSelectedDocumentIds(prev =>
+      prev.includes(id)
+        ? prev.filter(i => i !== id)
+        : [...prev, id]
+    );
+  }, []);
 
   const openPreview = (document: Document) => {
     setSelectedDocument(document);
@@ -518,27 +534,7 @@ const lastDocumentElementRef = useCallback(
     };
   }, [user?.id]); // Only run on mount and user change
 
-  // Enhanced document synchronization and duplicate prevention
-  useEffect(() => {
-    // Log for debugging
 
-
-    // Check for duplicates
-    const documentIds = allDocuments.map(doc => doc.id);
-    const uniqueIds = new Set(documentIds);
-
-    if (documentIds.length !== uniqueIds.size) {
-      // Remove duplicates if found
-      const uniqueDocuments = allDocuments.filter((doc, index) =>
-        allDocuments.findIndex(d => d.id === doc.id) === index
-      );
-
-      if (uniqueDocuments.length !== allDocuments.length) {
-        // You might want to update the parent state here
-        // or handle this in your data loading logic
-      }
-    }
-  }, [allDocuments]);
 
   // Filter documents by selected folder with deduplication
   const filteredDocumentsByFolder = useMemo(() => {
@@ -608,13 +604,16 @@ const lastDocumentElementRef = useCallback(
 
         {/* Main Content Area */}
         <div className="grid grid-cols-12 gap-6">
-          {/* Left Sidebar - Folder Tree (Sticky) */}
+          {/* Left Sidebar - Folder Tree (Sticky, collapsible on mobile) */}
           <div className="col-span-12 lg:col-span-3">
             <div className="lg:sticky lg:top-6 h-fit">
-              <Card className="border-0 shadow-lg bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm">
-                <CardHeader className="pb-3">
+              <Card className="border-0 shadow-lg bg-white dark:bg-slate-800">
+                <CardHeader className="pb-3 cursor-pointer lg:cursor-default" onClick={() => setMobileFolderOpen(!mobileFolderOpen)}>
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg font-semibold">Folders</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-lg font-semibold">Folders</CardTitle>
+                      <ChevronDown className={`h-4 w-4 text-slate-400 lg:hidden transition-transform ${mobileFolderOpen ? 'rotate-180' : ''}`} />
+                    </div>
                     <SubscriptionGuard
                       feature="Folders"
                       limitFeature="maxFolders"
@@ -631,7 +630,7 @@ const lastDocumentElementRef = useCallback(
                     </SubscriptionGuard>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className={`${mobileFolderOpen ? 'block' : 'hidden'} lg:block`}>
                   <Suspense fallback={<FolderTreeSkeleton />}>
                     <LazyFolderTree
                       folderTree={folderTree}
@@ -659,10 +658,10 @@ const lastDocumentElementRef = useCallback(
               limitFeature="maxDocUploads"
               currentCount={documents.length}
             >
-              <Card className="overflow-hidden border-0 shadow-xl bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm mb-8">
+              <Card className="overflow-hidden border-0 shadow-xl bg-white dark:bg-slate-800 mb-8">
                 <CardContent className="p-0">
                   <div
-                    className={`relative border-2 border-dashed rounded-lg transition-all duration-500 ${
+                    className={`relative border-2 border-dashed rounded-lg transition-[border-color,background-color,transform,box-shadow,opacity] duration-300 ${
                       dragLocked
                         ? 'border-red-400 bg-red-50 dark:bg-red-500/10 scale-[1.02] shadow-lg cursor-not-allowed opacity-60'
                         : dragActive
@@ -670,7 +669,7 @@ const lastDocumentElementRef = useCallback(
                           : selectedFile
                             ? 'border-green-400 bg-green-50 dark:bg-green-500/10 shadow-lg'
                             : 'border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                      } cursor-pointer p-8 md:p-12 ${isUploading || dragLocked ? 'pointer-events-none opacity-75' : ''}`}
+                      } cursor-pointer p-4 sm:p-8 md:p-12 ${isUploading || dragLocked ? 'pointer-events-none opacity-75' : ''}`}
                     onDragEnter={handleDrag}
                     onDragLeave={handleDrag}
                     onDragOver={handleDrag}
@@ -804,11 +803,12 @@ const lastDocumentElementRef = useCallback(
                           </div>
                         </div>
                       ) : (
-                        <div className="space-y-6">
-                          <h3 className="text-xl md:text-2xl font-semibold text-slate-800 dark:text-slate-200">
-                            Drop your files here, or <span className="text-blue-600 dark:text-blue-400 underline">browse</span>
+                        <div className="space-y-4 sm:space-y-6">
+                          <h3 className="text-lg sm:text-xl md:text-2xl font-semibold text-slate-800 dark:text-slate-200">
+                            <span className="hidden sm:inline">Drop your files here, or <span className="text-blue-600 dark:text-blue-400 underline">browse</span></span>
+                            <span className="sm:hidden">Tap to upload files</span>
                           </h3>
-                          <p className="text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+                          <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 max-w-md mx-auto">
                             Supports documents, images, videos, audio files, and code up to 200MB
                           </p>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-2xl mx-auto">
@@ -832,7 +832,7 @@ const lastDocumentElementRef = useCallback(
               </Card>
               {/* Add Folder Selection for Upload */}
               {selectedFile && !isUploading && (
-                <Card className="border-0 shadow-lg bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm mb-8">
+                <Card className="border-0 shadow-lg bg-white dark:bg-slate-800 mb-8">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -908,7 +908,7 @@ const lastDocumentElementRef = useCallback(
             </DocumentFilters>
 
             {/* Documents Display */}
-            <div ref={scrollContainerRef} className="space-y-6 max-h-[80vh] overflow-auto pb-8">
+            <div ref={scrollContainerRef} className="space-y-6 max-h-[80vh] overflow-auto pb-8" style={{ willChange: 'scroll-position', contain: 'layout style' }}>
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-slate-200">
                   {selectedFolderId
@@ -921,8 +921,8 @@ const lastDocumentElementRef = useCallback(
               {dataLoading && filteredDocumentsByFolder.length === 0 ? (
                 viewMode === 'grid' ? <DocumentGridSkeleton /> : <DocumentListSkeleton />
               ) : filteredDocumentsByFolder.length === 0 ? (
-                <Card className="border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
-                  <CardContent className="p-12 text-center">
+                <Card className="border-0 shadow-lg bg-white dark:bg-slate-800">
+                  <CardContent className="p-6 md:p-12 text-center">
                     <div className="w-24 h-24 mx-auto mb-6 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
                       {selectedFolderId ? (
                         <Folder className="h-12 w-12 text-slate-400 dark:text-slate-500" />
@@ -976,26 +976,18 @@ const lastDocumentElementRef = useCallback(
                   >
                     {filteredDocumentsByFolder.map((doc, idx) => {
                       const isLast = idx === filteredDocumentsByFolder.length - 1;
-                      const uniqueKey = `${doc.id}-${idx}`;
-                      const isProcessing = isDocumentProcessing(doc.id);
                       
                       return (
                         <DocumentCardItem
-                          key={uniqueKey}
+                          key={doc.id}
                           ref={isLast ? lastDocumentElementRef : null}
                           doc={doc}
                           viewMode={viewMode}
                           isSelected={selectedDocumentIds.includes(doc.id)}
-                          isProcessing={isProcessing}
+                          isProcessing={processingDocIds.has(doc.id)}
                           isUploading={isUploading}
                           showSelection={showSelection}
-                          onToggleSelect = {(id) => {
-                              setSelectedDocumentIds(prev => 
-                                prev.includes(id) 
-                                  ? prev.filter(i => i !== id)
-                                  : [...prev, id]
-                              );
-                          }}
+                          onToggleSelect={handleToggleDocSelect}
                           onPreview={openPreview}
                           onDelete={handleDeleteDocument}
                           onMove={handleMoveDocument}
@@ -1207,7 +1199,7 @@ const lastDocumentElementRef = useCallback(
                 <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-slate-50/50 dark:bg-slate-950/50">
                   
                   {/* Left Panel: Preview */}
-                  <div className="flex-none lg:flex-1 lg:basis-[45%] lg:max-h-full min-h-[250px] lg:min-h-0 relative flex flex-col border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-black/20">
+                  <div className="flex-none lg:flex-1 lg:basis-[45%] lg:max-h-full min-h-[180px] sm:min-h-[250px] lg:min-h-0 relative flex flex-col border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-black/20">
                      <div className="absolute inset-4 md:inset-8 flex items-center justify-center">
                         <div className="w-full h-full bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex items-center justify-center relative group">
                           {getFileCategory(selectedDocument.file_type) === 'image' && selectedDocument.file_url ? (

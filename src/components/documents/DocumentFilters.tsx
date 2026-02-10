@@ -32,7 +32,7 @@ interface DocumentFiltersProps {
   children?: React.ReactNode;
 }
 
-export const DocumentFilters: React.FC<DocumentFiltersProps> = ({
+export const DocumentFilters: React.FC<DocumentFiltersProps> = React.memo(({
   searchQuery, onSearchChange, onRefresh, isRefreshing,
   selectedCategory, onCategoryChange,
   selectedStatus, onStatusChange,
@@ -43,7 +43,7 @@ export const DocumentFilters: React.FC<DocumentFiltersProps> = ({
 }) => {
   return (
     <div className="mb-8">
-      <Card className="border-0 shadow-lg bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm">
+      <Card className="border-0 shadow-lg bg-white dark:bg-slate-800">
         <CardContent className="p-6">
           <div className="flex flex-col lg:flex-row gap-4">
             {/* Search */}
@@ -130,4 +130,4 @@ export const DocumentFilters: React.FC<DocumentFiltersProps> = ({
       </Card>
     </div>
   );
-}
+});

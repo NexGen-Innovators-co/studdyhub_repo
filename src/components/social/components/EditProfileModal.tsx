@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Textarea } from '../../ui/textarea';
 import { SocialUserWithDetails } from '../../../integrations/supabase/socialTypes';
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface EditProfileModalProps {
@@ -34,6 +34,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [interests, setInterests] = useState(user?.interests?.join(', ') || '');
   const [avatarPreview, setAvatarPreview] = useState(user?.avatar_url || '');
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setDisplayName(user?.display_name || '');
@@ -90,7 +91,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                 Avatar
               </label>
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-full overflow-hidden bg-slate-200 dark:bg-gray-700">
+                <div className="relative w-16 h-16 rounded-full overflow-hidden bg-slate-200 dark:bg-gray-700 group cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
                   {avatarPreview ? (
                     <img src={avatarPreview} alt="Avatar Preview" className="w-full h-full object-cover" />
                   ) : (
@@ -98,13 +99,27 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                       {user?.display_name?.charAt(0).toUpperCase() || 'U'}
                     </span>
                   )}
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 sm:group-hover:opacity-100 active:opacity-100 transition-opacity rounded-full">
+                    <Camera className="h-5 w-5 text-white" />
+                  </div>
                 </div>
-                <Input
+                <input
+                  ref={avatarInputRef}
                   type="file"
                   accept="image/*"
                   onChange={handleAvatarChange}
-                  className="text-sm text-slate-600 dark:text-gray-300 bg-white dark:bg-gray-700 border-slate-200 dark:border-gray-600"
+                  className="hidden"
                 />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="text-sm"
+                >
+                  <Camera className="h-4 w-4 mr-2" />
+                  Change Photo
+                </Button>
               </div>
             </div>
             <div>

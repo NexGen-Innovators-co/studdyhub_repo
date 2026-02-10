@@ -235,37 +235,37 @@ const LandingPage: React.FC = () => {
     {
       icon: LayoutDashboard,
       title: "Smart Dashboard",
-      description: "Visual overview of your learning curves. Track daily progress, recent activities, and upcoming tasks in one central hub.",
+      description: "Your personal command centre. Track study streaks, upcoming deadlines, recent activity, and AI-generated insights — all in one glance.",
       color: "bg-blue-600"
     },
     {
       icon: MessageSquare,
       title: "AI Chat Assistant",
-      description: "24/7 study companion. Ask questions, clarify doubts, and generate study guides based on your specific curriculum.",
+      description: "24/7 study companion powered by multiple AI models. Ask questions, clarify concepts, and generate flashcards from any topic.",
       color: "bg-indigo-600"
     },
     {
       icon: FileText,
       title: "Intelligent Notes",
-      description: "Next-gen editor with AI-powered autocompletion, formatting, and instant summarization of your thought process.",
+      description: "Rich-text editor with AI summarisation, auto-formatting, and smart organisation. Turn scattered thoughts into structured study material.",
       color: "bg-green-600"
     },
     {
       icon: Brain,
       title: "Document Analysis",
-      description: "Turn static PDFs into interactive knowledge. Upload course materials and chat directly with your documents.",
+      description: "Upload PDFs, slides, or images and chat with your documents. Extract key points, generate quizzes, and build study guides instantly.",
       color: "bg-orange-600"
     },
     {
       icon: Mic,
-      title: "Lecture Transcription",
-      description: "Never miss a detail. Record lectures directly in the app and get accurate, searchable text transcripts automatically.",
+      title: "Podcasts & Recordings",
+      description: "Record lectures, create study podcasts, and get AI-powered transcriptions with automatic chapter markers and searchable text.",
       color: "bg-red-600"
     },
     {
       icon: Users,
-      title: "Social Learning",
-      description: "Connect with classmates, share notes, and form study groups to master subjects together.",
+      title: "Social & Study Groups",
+      description: "Join study groups, share resources, participate in live quiz sessions, and build a learning community with classmates.",
       color: "bg-purple-600"
     }
   ];
@@ -309,7 +309,7 @@ const LandingPage: React.FC = () => {
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100/90 backdrop-blur-sm text-blue-700 rounded-full text-sm font-semibold mb-6 shadow-sm dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
           >
             <Zap className="h-4 w-4" />
-            <span>Intelligent Learning, Simplified</span>
+            <span>AI-Powered Study Platform</span>
           </motion.div>
 
           <motion.h1
@@ -318,7 +318,7 @@ const LandingPage: React.FC = () => {
             transition={{ delay: 0.3, duration: 0.6 }}
             className="text-4xl md:text-5xl lg:text-7xl font-bold mb-6 leading-tight text-gray-900 dark:text-white tracking-tight"
           >
-            Transform Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">Academic Journey</span>
+            Study Smarter with <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">AI-Powered Tools</span>
           </motion.h1>
 
           <motion.p
@@ -327,8 +327,8 @@ const LandingPage: React.FC = () => {
             transition={{ delay: 0.4, duration: 0.6 }}
             className="text-lg md:text-2xl text-gray-700 dark:text-gray-200 mb-10 max-w-3xl mx-auto leading-relaxed font-medium"
           >
-            Your intelligent companion for seamless learning, organization, and productivity.
-            Elevate how you take notes, record ideas, and manage your academic life with cutting-edge AI.
+            Notes, documents, recordings, podcasts, quizzes, scheduling, and social study groups — all enhanced by AI.
+            One platform for everything you need to excel academically.
           </motion.p>
 
           <motion.div
@@ -365,7 +365,7 @@ const LandingPage: React.FC = () => {
             </div>
             <div className="flex items-center gap-2 bg-white/60 dark:bg-black/40 px-4 py-2 rounded-full backdrop-blur-md shadow-sm border border-gray-100 dark:border-gray-800">
               <Award className="h-4 w-4 text-yellow-600" />
-              <span>Award-Winning Innovation</span>
+              <span>Built for Students, by Students</span>
             </div>
           </motion.div>
         </div>
@@ -666,7 +666,7 @@ const LandingPage: React.FC = () => {
               transition={{ delay: 0.1 }}
               className="text-xl md:text-2xl text-blue-100 max-w-2xl mx-auto leading-relaxed"
             >
-              Join thousands of students and professionals who've revolutionized their productivity with StuddyHub AI.
+              Join a growing community of students who study smarter, collaborate better, and achieve more with StuddyHub AI.
             </motion.p>
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
@@ -680,7 +680,7 @@ const LandingPage: React.FC = () => {
                 </Button>
               </Link>
             </motion.div>
-            <p className="text-sm text-blue-200 mt-4">No credit card required • 14-day free trial</p>
+            <p className="text-sm text-blue-200 mt-4">No credit card required • Free plan available • Upgrade anytime</p>
           </div>
         </ContentContainer>
       </section>

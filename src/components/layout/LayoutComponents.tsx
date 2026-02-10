@@ -502,7 +502,9 @@ export const ContentContainer: React.FC<{
 }> = ({ children, className = '' }) => {
   return (
     <div className={`container mx-auto px-4 md:px-8 py-12 ${className}`}>
-      {children}
+      <div className="max-w-6xl mx-auto">
+        {children}
+      </div>
     </div>
   );
 };
@@ -532,6 +534,60 @@ export const PageHeader: React.FC<{
   );
 };
 
+// Full-width hero banner inspired by professional agency designs
+export const PageHero: React.FC<{
+  title: string;
+  subtitle?: string;
+  description?: string;
+  gradient?: string;
+}> = ({ title, subtitle, description, gradient = 'from-blue-600 via-blue-700 to-indigo-800' }) => {
+  return (
+    <div className={`relative bg-gradient-to-br ${gradient} -mx-4 md:-mx-8 -mt-12 mb-12 md:mb-16 overflow-hidden`}>
+      {/* Decorative shapes */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-24 -right-24 w-96 h-96 bg-white/5 rounded-full blur-3xl" />
+        <div className="absolute -bottom-32 -left-32 w-[500px] h-[500px] bg-white/5 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-white/[0.02] rounded-full" />
+      </div>
+      {/* Grid pattern overlay */}
+      <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'40\' height=\'40\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M0 0h40v40H0z\' fill=\'none\' stroke=\'%23fff\' stroke-width=\'.5\'/%3E%3C/svg%3E")' }} />
+
+      <div className="relative container mx-auto px-4 md:px-8 py-20 md:py-28 text-center">
+        {subtitle && (
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 backdrop-blur-sm border border-white/20 text-white/90 rounded-full text-sm font-medium mb-5 tracking-wide uppercase">
+            {subtitle}
+          </div>
+        )}
+        <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-5 tracking-tight drop-shadow-sm">
+          {title}
+        </h1>
+        {description && (
+          <p className="text-lg md:text-xl text-blue-100/90 max-w-2xl mx-auto leading-relaxed">
+            {description}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Centered section heading with optional underline accent
+export const SectionHeading: React.FC<{
+  title: string;
+  description?: string;
+  centered?: boolean;
+}> = ({ title, description, centered = true }) => {
+  return (
+    <div className={`mb-10 ${centered ? 'text-center' : ''}`}>
+      <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-2">{title}</h2>
+      <div className={`w-12 h-1 bg-blue-600 rounded-full mb-4 ${centered ? 'mx-auto' : ''}`} />
+      {description && (
+        <p className="text-gray-500 dark:text-gray-400 max-w-xl mx-auto">{description}</p>
+      )}
+    </div>
+  );
+};
+
 // Card Component
 export const Card: React.FC<{
   children: React.ReactNode;
@@ -541,5 +597,29 @@ export const Card: React.FC<{
     <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-xl transition-shadow ${className}`}>
       {children}
     </div>
+  );
+};
+
+/**
+ * ThemedImg — renders a light-mode image and its dark-mode counterpart.
+ *
+ * Pass only the `-light.jpg` path as `src` and the component will automatically
+ * derive the dark variant by replacing `-light.` with `-dark.`.
+ * Override with explicit `darkSrc` if the naming convention differs.
+ *
+ * Uses Tailwind's `dark:hidden` / `hidden dark:block` so it's zero-JS.
+ */
+export const ThemedImg: React.FC<{
+  src: string;
+  darkSrc?: string;
+  alt: string;
+  className?: string;
+}> = ({ src, darkSrc, alt, className = '' }) => {
+  const dark = darkSrc || src.replace('-light.', '-dark.');
+  return (
+    <>
+      <img src={src}  alt={alt} className={`dark:hidden ${className}`} />
+      <img src={dark} alt={alt} className={`hidden dark:block ${className}`} />
+    </>
   );
 };
