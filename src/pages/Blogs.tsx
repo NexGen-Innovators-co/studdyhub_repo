@@ -75,7 +75,7 @@ const Blog: React.FC = () => {
                 {/* Photo-backed hero */}
                 <div className="relative rounded-2xl overflow-hidden mb-12">
                     <ThemedImg src="/screenshots/notes-light.jpg" alt="StuddyHub Blog" className="w-full h-72 md:h-80 object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-900/85 via-red-900/80 to-rose-900/75" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-black/20" />
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
                         <span className="text-orange-300 text-sm font-semibold tracking-widest uppercase mb-3">Latest Insights</span>
                         <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4">Our Blog</h1>

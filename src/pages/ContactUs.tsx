@@ -40,7 +40,7 @@ const Contact: React.FC = () => {
                 {/* Photo-backed hero */}
                 <div className="relative rounded-2xl overflow-hidden mb-12">
                     <ThemedImg src="/screenshots/chat-light.jpg" alt="Contact StuddyHub" className="w-full h-72 md:h-80 object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-r from-violet-900/85 via-purple-900/80 to-fuchsia-900/75" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-black/20" />
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
                         <span className="text-violet-300 text-sm font-semibold tracking-widest uppercase mb-3">Get in Touch</span>
                         <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4">Contact Us</h1>

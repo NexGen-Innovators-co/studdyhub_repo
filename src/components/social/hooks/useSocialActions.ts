@@ -8,6 +8,7 @@ import { Privacy } from '../types/social';
 import { v4 as uuidv4 } from 'uuid';
 import { offlineStorage, STORES } from '../../../utils/offlineStorage';
 import { createNotification } from '../../../services/notificationHelpers';
+import { validatePostContent, validatePostMedia, validateGroupName, validateGroupDescription, validateDisplayName, validateUsername, validateBio, validateAll } from '../../../utils/validation';
 
 export const useSocialActions = (
   currentUser: SocialUserWithDetails | null,
@@ -57,6 +58,20 @@ export const useSocialActions = (
     if (!currentUser) {
       toast.error('You must be logged in to create a group.');
       return null;
+    }
+
+    // Frontend validation
+    const nameCheck = validateGroupName(groupData.name);
+    if (!nameCheck.valid) {
+      toast.error(nameCheck.errors[0]);
+      return null;
+    }
+    if (groupData.description) {
+      const descCheck = validateGroupDescription(groupData.description);
+      if (!descCheck.valid) {
+        toast.error(descCheck.errors[0]);
+        return null;
+      }
     }
 
     try {
@@ -248,6 +263,25 @@ export const useSocialActions = (
       interests?: string[];
     }
   ) => {
+    // Frontend validation before any API call
+    if (updates.display_name) {
+      const nameCheck = validateDisplayName(updates.display_name);
+      if (!nameCheck.valid) { toast.error(nameCheck.errors[0]); return false; }
+    }
+    if (updates.username) {
+      const usernameCheck = validateUsername(updates.username);
+      if (!usernameCheck.valid) { toast.error(usernameCheck.errors[0]); return false; }
+    }
+    if (updates.bio) {
+      const bioCheck = validateBio(updates.bio);
+      if (!bioCheck.valid) { toast.error(bioCheck.errors[0]); return false; }
+    }
+    if (updates.avatar_file) {
+      const { validateAvatarUpload } = await import('../../../utils/validation');
+      const avatarCheck = validateAvatarUpload(updates.avatar_file);
+      if (!avatarCheck.valid) { toast.error(avatarCheck.errors[0]); return false; }
+    }
+
     try {
       setIsUploading(true);
       const { data: { user } } = await supabase.auth.getUser();
@@ -288,7 +322,19 @@ export const useSocialActions = (
   };
 
   const createPost = async (content: string, privacy: Privacy, selectedFiles: File[], groupId?: string, metadata?: any) => {
-    if (!content.trim()) return;
+    // Frontend validation before any API call
+    const contentCheck = validatePostContent(content);
+    if (!contentCheck.valid) {
+      toast.error(contentCheck.errors[0]);
+      return;
+    }
+    if (selectedFiles.length > 0) {
+      const mediaCheck = validatePostMedia(selectedFiles);
+      if (!mediaCheck.valid) {
+        toast.error(mediaCheck.errors[0]);
+        return;
+      }
+    }
 
     try {
       setIsUploading(true);

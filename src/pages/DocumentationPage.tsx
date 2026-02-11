@@ -112,7 +112,7 @@ const DocumentationPage: React.FC = () => {
                 {/* Photo-backed hero */}
                 <div className="relative rounded-2xl overflow-hidden mb-12">
                     <ThemedImg src="/screenshots/documents-light.jpg" alt="StuddyHub Documentation" className="w-full h-72 md:h-80 object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-900/90 via-blue-800/85 to-indigo-900/80" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-black/20" />
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
                         <span className="text-blue-300 text-sm font-semibold tracking-widest uppercase mb-3">Resources & Guides</span>
                         <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4">Documentation</h1>

@@ -1737,18 +1737,15 @@ export const useAppData = () => {
         // Ignore errors in background loading
       });
 
-      // Phase 5: UI is ready after core data + documents
       await Promise.race([
         documentsPromise,
-        new Promise(resolve => setTimeout(resolve, 3000)) // Max 3s wait for documents
+        new Promise(resolve => setTimeout(resolve, 1000)) // Max 1s wait for documents (reduced from 3s)
       ]);
 
       setLoading(false);
 
-      // Set complete phase after a short delay
-      setTimeout(() => {
-        setLoadingPhase({ phase: 'complete', progress: 100 });
-      }, 1000);
+      // Set complete phase immediately (removed 1s delay)
+      setLoadingPhase({ phase: 'complete', progress: 100 });
 
     } catch (error) {
       //console.error('❌ Error loading core user data:', error);
@@ -2097,7 +2094,7 @@ export const useAppData = () => {
 
       // Also filter by tags if needed (since ilike doesn't work on arrays)
       const results = (data || []).filter((note: any) => {
-        const matchesSearch = 
+        const matchesSearch =
           note.title?.toLowerCase().includes(searchLower) ||
           note.content?.toLowerCase().includes(searchLower) ||
           note.tags?.some((tag: string) => tag.toLowerCase().includes(searchLower));

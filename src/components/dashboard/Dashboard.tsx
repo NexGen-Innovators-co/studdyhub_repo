@@ -23,7 +23,7 @@ import { useDashboardStats } from './hooks/useDashboardStats';
 import { CentralDynamicChart } from './CentralDynamicChart';
 import { KnowledgeRadar } from './KnowledgeRadar';
 import { StudyPatterns } from './StudyPatterns';
-import BookPagesAnimation from '../ui/bookloader';
+import ModernPremiumLoader from '../ui/ModernPremiumLoader';
 import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 import { RecentPodcasts } from './RecentPodcasts';
 import { RecentActivityFeed } from './RecentActivityFeed';
@@ -131,7 +131,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
         return (
             <div className="flex items-center justify-center min-h-screen">
                 <div className="text-center">
-                    <BookPagesAnimation size="lg" showText text="Loading dashboard..." />
+                    <ModernPremiumLoader fullScreen={false} size="lg" text="DASHBOARD" />
                 </div>
             </div>
         );
@@ -193,9 +193,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
 
     return (
         <div className="min-h-screen max-w-5xl pb-8 mx-auto px-4 sm:px-6 lg:px-8">
-            
-             {/* Dashboard Header */}
-             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pt-8 pb-6">
+
+            {/* Dashboard Header */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pt-8 pb-6">
                 <div className="space-y-1">
                     <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 dark:text-gray-100 bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400">
                         Welcome back, {userProfile?.full_name?.split(' ')[0] || 'Learner'}!
@@ -205,11 +205,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                     </p>
                 </div>
                 <div className="mt-4 sm:mt-0">
-                    <Button 
-                        variant="secondary" 
-                        size="sm" 
-                        onClick={() => refresh()} 
-                        disabled={loading} 
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => refresh()}
+                        disabled={loading}
                         className="rounded-full shadow-sm hover:shadow transition-all duration-200 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200"
                     >
                         <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : 'text-indigo-500'}`} />
@@ -220,9 +220,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
 
             {/* AI Insights Banner */}
             <div className="mb-8">
-                <AIInsights 
-                    stats={stats} 
-                    userName={userProfile?.full_name} 
+                <AIInsights
+                    stats={stats}
+                    userName={userProfile?.full_name}
                     onRefresh={refresh}
                     onAction={(action) => {
                         const lowerAction = action.toLowerCase();
@@ -444,7 +444,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                                 {/* Left Column: Activity Feed */}
                                 <div className="lg:col-span-2">
-                                     <RecentActivityFeed stats={stats} onCreateNew={onCreateNew} />
+                                    <RecentActivityFeed stats={stats} onCreateNew={onCreateNew} />
                                 </div>
 
                                 {/* Right Column: Stats Summary */}

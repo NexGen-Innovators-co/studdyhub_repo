@@ -1,9 +1,9 @@
 // Grid/list view for upcoming, today, and past schedule items
 import React from 'react';
 import { Plus, CalendarDays, CalendarCheck, Clock, History } from 'lucide-react';
-import { Button } from '../ui/button';
-import { ScheduleItem } from '../../types/Class';
-import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
+import { Button } from '../../ui/button';
+import { ScheduleItem } from '../../../types/Class';
+import { SubscriptionGuard } from '../../subscription/SubscriptionGuard';
 import { ScheduleEventCard } from './ScheduleEventCard';
 
 type TabType = 'upcoming' | 'today' | 'past';

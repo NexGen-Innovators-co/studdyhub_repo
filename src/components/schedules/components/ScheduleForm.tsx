@@ -1,19 +1,19 @@
 // Schedule form for adding/editing schedule items
 import React, { useState } from 'react';
 import { Plus, Loader2, Repeat } from 'lucide-react';
-import { Button } from '../ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Input } from '../ui/input';
-import { Textarea } from '../ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Switch } from '../ui/switch';
-import { Label } from '../ui/label';
-import { ScheduleItem } from '../../types/Class';
+import { Button } from '../../ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
+import { Input } from '../../ui/input';
+import { Textarea } from '../../ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
+import { Switch } from '../../ui/switch';
+import { Label } from '../../ui/label';
+import { ScheduleItem } from '../../../types/Class';
 import { toast } from 'sonner';
-import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
-import { cn } from '../../lib/utils';
-import { typeIcons, DAYS_OF_WEEK, ScheduleFormData, defaultFormData } from './scheduleConstants';
-import { getColorForType, getMinDate } from './scheduleUtils';
+import { SubscriptionGuard } from '../../subscription/SubscriptionGuard';
+import { cn } from '../../../lib/utils';
+import { typeIcons, DAYS_OF_WEEK, ScheduleFormData, defaultFormData } from '../constants/scheduleConstants';
+import { getColorForType, getMinDate } from '../utils/scheduleUtils';
 
 interface ScheduleFormProps {
   editingItem: ScheduleItem | null;
@@ -251,13 +251,13 @@ export const ScheduleForm: React.FC<ScheduleFormProps> = ({
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>End Date (Optional)</Label>
-                    <Input 
+                    <Input
                       type="date"
                       value={formData.recurrenceEndDate || ''}
-                      onChange={(e) => setFormData(prev => ({...prev, recurrenceEndDate: e.target.value}))}
+                      onChange={(e) => setFormData(prev => ({ ...prev, recurrenceEndDate: e.target.value }))}
                       min={formData.date}
                     />
                   </div>
@@ -275,15 +275,15 @@ export const ScheduleForm: React.FC<ScheduleFormProps> = ({
                             onClick={() => {
                               setFormData(prev => ({
                                 ...prev,
-                                recurrenceDays: isSelected 
+                                recurrenceDays: isSelected
                                   ? prev.recurrenceDays.filter(d => d !== day.value)
                                   : [...prev.recurrenceDays, day.value].sort()
                               }));
                             }}
                             className={cn(
-                              "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium cursor-pointer transition-colors border",
-                              isSelected 
-                                ? "bg-blue-600 text-white border-blue-600" 
+                              "w-10 h-10 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-sm font-medium cursor-pointer transition-colors border",
+                              isSelected
+                                ? "bg-blue-600 text-white border-blue-600 shadow-sm"
                                 : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-blue-400"
                             )}
                           >

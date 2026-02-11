@@ -18,10 +18,10 @@ import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 import { format } from 'date-fns';
 
 // Extracted sub-components & hooks
-import { ScheduleForm } from './ScheduleForm';
-import { CalendarView } from './CalendarView';
-import { EventListView } from './EventListView';
-import { useScheduleCalendar } from './useScheduleCalendar';
+import { ScheduleForm } from './components/ScheduleForm';
+import { CalendarView } from './components/CalendarView';
+import { EventListView } from './components/EventListView';
+import { useScheduleCalendar } from './hooks/useScheduleCalendar';
 
 interface ScheduleProps {
   scheduleItems: ScheduleItem[];

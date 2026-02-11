@@ -76,7 +76,7 @@ const Careers: React.FC = () => {
                 {/* Photo-backed hero */}
                 <div className="relative rounded-2xl overflow-hidden mb-12">
                     <ThemedImg src="/screenshots/dashboard-light.jpg" alt="StuddyHub careers" className="w-full h-72 md:h-80 object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/85 via-teal-900/80 to-cyan-900/75" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-black/20" />
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
                         <span className="text-emerald-300 text-sm font-semibold tracking-widest uppercase mb-3">Careers</span>
                         <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4">Join Our Team</h1>
@@ -159,7 +159,7 @@ const Careers: React.FC = () => {
                 {/* Photo-backed CTA */}
                 <div className="relative rounded-2xl overflow-hidden">
                     <ThemedImg src="/screenshots/notes-light.jpg" alt="Join StuddyHub" className="w-full h-64 object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-900/90 to-blue-800/80" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-black/20" />
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
                         <h3 className="text-2xl font-bold text-white mb-4">Don't see the perfect role?</h3>
                         <p className="text-gray-200 mb-6 max-w-2xl">

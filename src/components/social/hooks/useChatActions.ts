@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../../../integrations/supabase/client';
 import { toast } from 'sonner';
 import { ChatMessageWithDetails } from '../types/social';
+import { validateChatMessage, sanitizeText, stripHtml } from '../../../utils/validation';
 
 export const useChatActions = (currentUserId: string | null) => {
     const [isSending, setIsSending] = useState(false);
@@ -44,7 +45,12 @@ export const useChatActions = (currentUserId: string | null) => {
         content: string,
         files?: File[]
     ): Promise<ChatMessageWithDetails | null> => {
-        if (!currentUserId || !content.trim()) {
+        if (!currentUserId) return null;
+
+        const sanitized = sanitizeText(stripHtml(content));
+        const validation = validateChatMessage(sanitized);
+        if (!validation.valid) {
+            toast.error(validation.errors[0]);
             return null;
         }
 

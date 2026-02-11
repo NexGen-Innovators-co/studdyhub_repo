@@ -15,7 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import BookPagesAnimation from '@/components/ui/bookloader';
+import ModernPremiumLoader from '@/components/ui/ModernPremiumLoader';
 import {
   ArrowLeft,
   BookOpen,
@@ -153,7 +153,7 @@ const CourseDashboard: React.FC<CourseDashboardProps> = (props) => {
   if (courseLoading || enrollmentLoading) {
     return (
       <div className={`flex items-center justify-center ${isInline ? 'h-full' : 'min-h-screen'}`}>
-        <BookPagesAnimation size="lg" showText text="Loading course..." />
+        <ModernPremiumLoader fullScreen={false} size="lg" text="COURSE" />
       </div>
     );
   }
@@ -203,11 +203,10 @@ const CourseDashboard: React.FC<CourseDashboardProps> = (props) => {
                 </h1>
                 <Badge
                   variant="secondary"
-                  className={`shrink-0 ${
-                    enrollment.status === 'completed'
+                  className={`shrink-0 ${enrollment.status === 'completed'
                       ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-800'
                       : 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800'
-                  }`}
+                    }`}
                 >
                   {enrollment.status === 'completed' ? (
                     <><Trophy className="w-3 h-3 mr-1" /> Completed</>

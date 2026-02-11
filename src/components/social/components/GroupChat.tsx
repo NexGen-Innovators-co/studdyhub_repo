@@ -6,6 +6,7 @@ import { Button } from '../../ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
 import { Loader2, MessageCircle, Send } from 'lucide-react';
 import { toast } from 'sonner';
+import { validateChatMessage, sanitizeText, stripHtml } from '../../../utils/validation';
 import { SocialChatMessage, SocialUserWithDetails } from '../../../integrations/supabase/socialTypes';
 import { getTimeAgo } from '../utils/postUtils';
 import { GroupHeader } from './GroupHeader';
@@ -103,14 +104,21 @@ export const GroupChat: React.FC<GroupChatProps> = ({
   }, [groupId]);
 
   const handleSend = async () => {
-    if (!newMessage.trim() || !currentUser) {
-      toast.error('Please enter a message and ensure you are logged in');
+    if (!currentUser) {
+      toast.error('Please sign in to send messages');
+      return;
+    }
+
+    const sanitized = sanitizeText(stripHtml(newMessage));
+    const validation = validateChatMessage(sanitized);
+    if (!validation.valid) {
+      toast.error(validation.errors[0]);
       return;
     }
 
     try {
       const { data: response, error } = await supabase.functions.invoke('send-group-message', {
-        body: { group_id: groupId, content: newMessage },
+        body: { group_id: groupId, content: sanitized },
       });
 
       if (error || !response?.success) throw new Error('Failed to send message');

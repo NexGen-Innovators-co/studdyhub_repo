@@ -5,7 +5,7 @@ import {
   eachDayOfInterval, isSameDay, addMonths, subMonths,
   isAfter, isBefore, getDay, addDays, isToday
 } from 'date-fns';
-import { ScheduleItem } from '../../types/Class';
+import { ScheduleItem } from '../../../types/Class';
 
 export const useScheduleCalendar = (scheduleItems: ScheduleItem[]) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());

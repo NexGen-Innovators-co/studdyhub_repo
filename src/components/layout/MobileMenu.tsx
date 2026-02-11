@@ -13,7 +13,7 @@ interface MobileMenuProps {
   activeTab: string;
 }
 
-const itemClasses = "flex flex-col items-center justify-center gap-2 p-3 rounded-xl transition-all duration-200 border";
+const itemClasses = "flex flex-col items-center justify-center gap-2 p-3 rounded-xl transition-all duration-200 border min-h-[44px] min-w-[44px] touch-manipulation";
 
 const mainNavItems = [
   { label: 'Dashboard', icon: LayoutDashboard, tab: 'dashboard' },

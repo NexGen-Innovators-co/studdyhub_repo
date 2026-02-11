@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { validateGroupName, validateGroupDescription, sanitizeText, stripHtml } from '../../../utils/validation';
 
 interface GroupSettingsProps {
   groupId: string;
@@ -208,8 +209,14 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
   };
 
   const handleSaveSettings = async () => {
-    if (!name.trim()) {
-      toast.error('Group name is required');
+    const nameVal = validateGroupName(name);
+    if (!nameVal.valid) {
+      toast.error(nameVal.errors[0]);
+      return;
+    }
+    const descVal = validateGroupDescription(description);
+    if (!descVal.valid) {
+      toast.error(descVal.errors[0]);
       return;
     }
 
@@ -227,8 +234,8 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
       const { error } = await supabase
         .from('social_groups')
         .update({
-          name: name.trim(),
-          description: description.trim(),
+          name: sanitizeText(stripHtml(name)),
+          description: sanitizeText(stripHtml(description)),
           category,
           privacy,
           avatar_url: avatarUrl,

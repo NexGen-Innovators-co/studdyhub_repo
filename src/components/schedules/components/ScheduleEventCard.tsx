@@ -1,11 +1,11 @@
 // Reusable schedule event card used in both calendar day panel and list views
 import React from 'react';
 import { Calendar as CalendarIcon, Clock, MapPin, Edit2, Trash2, Repeat, Timer } from 'lucide-react';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
-import { ScheduleItem } from '../../types/Class';
-import { typeColors, typeIcons } from './scheduleConstants';
-import { formatTime, formatDate, getTimeUntil } from './scheduleUtils';
+import { Button } from '../../ui/button';
+import { Badge } from '../../ui/badge';
+import { ScheduleItem } from '../../../types/Class';
+import { typeColors, typeIcons } from '../constants/scheduleConstants';
+import { formatTime, formatDate, getTimeUntil } from '../utils/scheduleUtils';
 
 interface ScheduleEventCardProps {
   item: ScheduleItem;

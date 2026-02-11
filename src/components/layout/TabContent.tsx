@@ -470,54 +470,56 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
             case 'notes':
               return (
-                <div className="h-full w-full flex items-center justify-center dark:bg-transparent overflow-hidden">
-                  {/* Centered Container with max-width */}
-                  <div className="w-full h-full max-w-[1400px] mx-auto flex relative lg:shadow-2xl">
-                    {/* Click overlay for mobile when sidebar is open */}
-                    {isNotesHistoryOpen && (
-                      <div
-                        className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
-                        onClick={onToggleNotesHistory}
-                      />
-                    )}
+                <ErrorBoundary>
+                  <div className="h-full w-full flex items-center justify-center dark:bg-transparent overflow-hidden">
+                    {/* Centered Container with max-width */}
+                    <div className="w-full h-full max-w-[1400px] mx-auto flex relative lg:shadow-2xl">
+                      {/* Click overlay for mobile when sidebar is open */}
+                      {isNotesHistoryOpen && (
+                        <div
+                          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+                          onClick={onToggleNotesHistory}
+                        />
+                      )}
 
-                    {/* Notes List - Sidebar */}
-                    <div className={`
+                      {/* Notes List - Sidebar */}
+                      <div className={`
                         ${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'}
                         lg:translate-x-0 lg:static lg:w-80 lg:flex-shrink-0
-                        fixed inset-y-0 left-0 lg:z-0 z-30 w-72 bg-white dark:bg-slate-900 shadow-lg lg:shadow-none
+                        fixed inset-y-0 left-0 lg:z-0 z-50 w-72 bg-white dark:bg-slate-900 shadow-lg lg:shadow-none
                         transition-transform duration-300 ease-in-out lg:transition-none
                         lg:border-r lg:border-gray-200 lg:dark:border-gray-700 lg:max-h-[90vh]
                       `}>
-                      <NotesList
-                        {...notesHistoryProps}
-                        isOpen={isNotesHistoryOpen}
-                        onClose={onToggleNotesHistory}
-                      />
-                    </div>
-
-                    {/* Editor Area - Centered content */}
-                    <div className="flex-1 h-full lg:max-h-[90vh] bg-white dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
-                      {notesProps.activeNote ? (
-                        <NoteEditor
-                          note={notesProps.activeNote}
-                          onNoteUpdate={notesProps.onNoteUpdate}
-                          userProfile={userProfile}
-                          onToggleNotesHistory={onToggleNotesHistory}
-                          isNotesHistoryOpen={isNotesHistoryOpen}
+                        <NotesList
+                          {...notesHistoryProps}
+                          isOpen={isNotesHistoryOpen}
+                          onClose={onToggleNotesHistory}
                         />
-                      ) : (
-                        <div className="h-full flex items-center justify-center text-slate-400 p-4 dark:text-gray-500">
-                          <div className="text-center">
-                            <div className="text-4xl sm:text-6xl mb-4">📝</div>
-                            <h3 className="text-lg sm:text-xl font-medium mb-2">No note selected</h3>
-                            <p className="text-sm sm:text-base">Select a note to start editing or create a new one</p>
+                      </div>
+
+                      {/* Editor Area - Centered content */}
+                      <div className="flex-1 h-full lg:max-h-[90vh] bg-white dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
+                        {notesProps.activeNote ? (
+                          <NoteEditor
+                            note={notesProps.activeNote}
+                            onNoteUpdate={notesProps.onNoteUpdate}
+                            userProfile={userProfile}
+                            onToggleNotesHistory={onToggleNotesHistory}
+                            isNotesHistoryOpen={isNotesHistoryOpen}
+                          />
+                        ) : (
+                          <div className="h-full flex items-center justify-center text-slate-400 p-4 dark:text-gray-500">
+                            <div className="text-center">
+                              <div className="text-4xl sm:text-6xl mb-4">📝</div>
+                              <h3 className="text-lg sm:text-xl font-medium mb-2">No note selected</h3>
+                              <p className="text-sm sm:text-base">Select a note to start editing or create a new one</p>
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
+                </ErrorBoundary>
               );
 
             case 'recordings':
@@ -546,7 +548,9 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
             case 'schedule':
               return (
                 <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
-                  <Schedule {...scheduleProps} />
+                  <ErrorBoundary>
+                    <Schedule {...scheduleProps} />
+                  </ErrorBoundary>
                 </div>
               );
 
@@ -578,13 +582,17 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
               ) : (
                 // Desktop: Side-by-side OR Mobile: Full chat
                 <div className="flex-1 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800">
-                  <AIChat {...chatProps} setIsLoading={props.setIsAILoading} />
+                  <ErrorBoundary>
+                    <AIChat {...chatProps} setIsLoading={props.setIsAILoading} />
+                  </ErrorBoundary>
                 </div>
               );
             case 'documents':
               return (
                 <div className="flex-1 p-3 sm:p-0 overflow-y-hidden dark:bg-transparent" onScroll={handleDocumentsScroll}>
-                  <DocumentUpload {...documentsProps} />
+                  <ErrorBoundary>
+                    <DocumentUpload {...documentsProps} />
+                  </ErrorBoundary>
                 </div>
               );
 
@@ -600,10 +608,12 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
             case 'settings':
               return (
                 <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
-                  <UserSettings
-                    profile={props.userProfile}
-                    onProfileUpdate={props.onProfileUpdate}
-                  />
+                  <ErrorBoundary>
+                    <UserSettings
+                      profile={props.userProfile}
+                      onProfileUpdate={props.onProfileUpdate}
+                    />
+                  </ErrorBoundary>
                 </div>
               );
 

@@ -251,50 +251,59 @@ export const AppHeader: React.FC<{
         </Button>
         <Button
           variant="outline"
+          size="icon"
           onClick={toggleDarkMode}
-          className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          className="min-w-[40px] min-h-[40px] w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          aria-label={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
         >
-          {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </Button>
       </nav>
 
-      {/* Mobile Menu Button */}
-      <div className="flex items-center md:hidden gap-2">
+      {/* Mobile Menu Button - Touch targets min 44x44px for WCAG compliance */}
+      <div className="flex items-center md:hidden gap-1">
         {showInstallPrompt && !isPwaInstalled && (
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={handleInstallApp}
             disabled={isInstalling}
-            className="rounded-full"
+            className="rounded-full min-w-[44px] min-h-[44px] w-11 h-11"
+            aria-label="Install app"
           >
             {isInstalling ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
-              <Smartphone className="h-4 w-4" />
+              <Smartphone className="h-5 w-5" />
             )}
           </Button>
         )}
         <Button
+          variant="ghost"
+          size="icon"
           onClick={toggleDarkMode}
-          className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          className="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          aria-label={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
         >
-          {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </Button>
         <Button
-          className="p-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          variant="ghost"
+          size="icon"
+          className="min-w-[44px] min-h-[44px] w-11 h-11 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           onClick={() => setIsMenuOpen(!isMenuOpen)}
+          aria-label={isMenuOpen ? "Close menu" : "Open menu"}
         >
-          {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
         </Button>
       </div>
 
       {/* Mobile Menu */}
       {isMenuOpen && (
         <div className="absolute top-full left-0 w-full bg-white dark:bg-gray-900 shadow-lg md:hidden">
-          <nav className="flex flex-col gap-4 p-6">
+          <nav className="flex flex-col gap-1 p-6">
             {/* Install App in Mobile Menu */}
             {showInstallPrompt && !isPwaInstalled && (
               <Button
@@ -303,16 +312,16 @@ export const AppHeader: React.FC<{
                   setIsMenuOpen(false);
                 }}
                 disabled={isInstalling}
-                className="w-full mb-2"
+                className="w-full mb-2 min-h-[44px]"
               >
                 {isInstalling ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
                     Installing...
                   </>
                 ) : (
                   <>
-                    <Smartphone className="h-4 w-4 mr-2" />
+                    <Smartphone className="h-5 w-5 mr-2" />
                     Install App
                   </>
                 )}
@@ -321,35 +330,35 @@ export const AppHeader: React.FC<{
 
             <a
               href="/#features"
-              className="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium"
+              className="min-h-[44px] flex items-center px-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-800 transition-colors font-medium"
               onClick={() => setIsMenuOpen(false)}
             >
               Features
             </a>
             <Link
               to="/documentation-page"
-              className="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium"
+              className="min-h-[44px] flex items-center px-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-800 transition-colors font-medium"
               onClick={() => setIsMenuOpen(false)}
             >
               Documentation
             </Link>
             <Link
               to="/pricing"
-              className="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium"
+              className="min-h-[44px] flex items-center px-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-800 transition-colors font-medium"
               onClick={() => setIsMenuOpen(false)}
             >
               Pricing
             </Link>
             <Link
               to="/about-us"
-              className="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium"
+              className="min-h-[44px] flex items-center px-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-800 transition-colors font-medium"
               onClick={() => setIsMenuOpen(false)}
             >
               About
             </Link>
             <Link
               to="/contact"
-              className="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium"
+              className="min-h-[44px] flex items-center px-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-800 transition-colors font-medium"
               onClick={() => setIsMenuOpen(false)}
             >
               Contact
@@ -408,22 +417,22 @@ export const AppFooter: React.FC = () => {
 
           <div>
             <h4 className="font-bold text-gray-900 dark:text-white mb-4">Product</h4>
-            <ul className="space-y-3">
-              <li><a href="/#features" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Features</a></li>
-              <li><Link to="/documentation-page" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Documentation</Link></li>
-              <li><Link to="/user-guide-page" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">User Guide</Link></li>
-              <li><Link to="/api" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">API Reference</Link></li>
-              <li><Link to="/pricing" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Pricing</Link></li>
+            <ul className="space-y-1">
+              <li><a href="/#features" className="inline-flex items-center min-h-[44px] text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Features</a></li>
+              <li><Link to="/documentation-page" className="inline-flex items-center min-h-[44px] text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Documentation</Link></li>
+              <li><Link to="/user-guide-page" className="inline-flex items-center min-h-[44px] text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">User Guide</Link></li>
+              <li><Link to="/api" className="inline-flex items-center min-h-[44px] text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">API Reference</Link></li>
+              <li><Link to="/pricing" className="inline-flex items-center min-h-[44px] text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Pricing</Link></li>
             </ul>
           </div>
 
           <div>
             <h4 className="font-bold text-gray-900 dark:text-white mb-4">Company</h4>
-            <ul className="space-y-3">
-              <li><Link to="/about-us" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">About Us</Link></li>
-              <li><Link to="/blogs" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Blog</Link></li>
-              <li><Link to="/careers" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Careers</Link></li>
-              <li><Link to="/contact" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Contact</Link></li>
+            <ul className="space-y-1">
+              <li><Link to="/about-us" className="inline-flex items-center min-h-[44px] text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">About Us</Link></li>
+              <li><Link to="/blogs" className="inline-flex items-center min-h-[44px] text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Blog</Link></li>
+              <li><Link to="/careers" className="inline-flex items-center min-h-[44px] text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Careers</Link></li>
+              <li><Link to="/contact" className="inline-flex items-center min-h-[44px] text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Contact</Link></li>
             </ul>
           </div>
         </div>

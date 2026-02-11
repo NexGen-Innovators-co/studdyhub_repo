@@ -13,7 +13,7 @@ import { useRef } from 'react';
 import { SocialFeedHandle } from '../components/social/SocialFeed';
 import { useAppContext } from '../hooks/useAppContext';
 import { useMessageHandlers } from '../hooks/useMessageHandlers';
-import BookPagesAnimation, { LoadingScreen } from '@/components/ui/bookloader';
+import BookPagesAnimation from '@/components/ui/bookloader';
 import { QuickTips } from '@/components/notes/components/QuickTip';
 import { AlertTriangle, Bot, FileText, Home, Mic, RefreshCw, Users2, X, Grid } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -37,8 +37,8 @@ const Index = () => {
 
   // Context
   const {
-      pendingAttachment,
-      setPendingAttachment,
+    pendingAttachment,
+    setPendingAttachment,
     user,
     authLoading,
     dataLoading,
@@ -456,6 +456,7 @@ const Index = () => {
     // Add error indicators
     hasDataErrors: Object.keys(dataErrors || {}).length > 0,
     currentTheme: currentTheme,
+    onThemeChange: handleThemeChange,
     subscriptionTier,
     subscriptionLoading,
     daysRemaining,
@@ -463,7 +464,7 @@ const Index = () => {
   }), [subscriptionTier, subscriptionLoading, daysRemaining,
     appOperations.createNewNote, isSidebarOpen, setIsSidebarOpen,
     currentActiveTab, userProfile, activeSocialTab, socialPostId,
-    socialGroupId, navigate, dataErrors,
+    socialGroupId, navigate, dataErrors, currentTheme, handleThemeChange,
   ]);
 
   // Enhanced sidebar props with error handling
@@ -810,15 +811,15 @@ const Index = () => {
                 </div>
               }>
                 {podcastPageData === null ? (
-                <div className="p-6 animate-pulse">
-                  <div className="h-8 bg-gray-200 dark:bg-slate-700 rounded w-1/3 mb-4" />
-                  <div className="h-56 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="h-6 bg-gray-200 dark:bg-slate-700 rounded" />
-                    <div className="h-6 bg-gray-200 dark:bg-slate-700 rounded" />
+                  <div className="p-6 animate-pulse">
+                    <div className="h-8 bg-gray-200 dark:bg-slate-700 rounded w-1/3 mb-4" />
+                    <div className="h-56 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="h-6 bg-gray-200 dark:bg-slate-700 rounded" />
+                      <div className="h-6 bg-gray-200 dark:bg-slate-700 rounded" />
+                    </div>
+                    <div className="mt-4 h-36 bg-gray-200 dark:bg-slate-700 rounded" />
                   </div>
-                  <div className="mt-4 h-36 bg-gray-200 dark:bg-slate-700 rounded" />
-                </div>
                 ) : (
                   <PodcastPanel
                     podcast={podcastPageData}
@@ -841,78 +842,78 @@ const Index = () => {
         || isLiveRoute
         || isPodcastPage
       ) && (
-        <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 z-20 shadow-2xl">
-          <div className="flex justify-around items-center h-16 max-w-lg mx-auto">
-            {[
-              { tab: 'dashboard', label: 'Home', icon: Home },
-              { tab: 'notes', label: 'Notes', icon: FileText },
-              {
-                tab: 'chat',
-                icon: AIBot,
-                size: "lg" as const, // Pass "lg" size to AIBot
-                isSpecial: true
-              },
-              { tab: 'social', label: 'Social', icon: Users2 },
-              { tab: 'more', label: 'More', icon: Grid },
-            ].map(({ tab, label, icon: Icon, size = undefined, isSpecial = false }) => {
-              const isActive =
-                currentActiveTab === tab ||
-                (tab === 'chat' && location.pathname.startsWith('/chat')) ||
-                (tab === 'social' && location.pathname.startsWith('/social'));
+          <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 z-20 shadow-2xl">
+            <div className="flex justify-around items-center h-16 max-w-lg mx-auto">
+              {[
+                { tab: 'dashboard', label: 'Home', icon: Home },
+                { tab: 'notes', label: 'Notes', icon: FileText },
+                {
+                  tab: 'chat',
+                  icon: AIBot,
+                  size: "lg" as const, // Pass "lg" size to AIBot
+                  isSpecial: true
+                },
+                { tab: 'social', label: 'Social', icon: Users2 },
+                { tab: 'more', label: 'More', icon: Grid },
+              ].map(({ tab, label, icon: Icon, size = undefined, isSpecial = false }) => {
+                const isActive =
+                  currentActiveTab === tab ||
+                  (tab === 'chat' && location.pathname.startsWith('/chat')) ||
+                  (tab === 'social' && location.pathname.startsWith('/social'));
 
-              return (
-                <button
-                  key={tab}
-                  onClick={() => {
-                    if (tab === 'chat') {
-                      handleNavigateToTab('chat');
-                    } else if (tab === 'more') {
-                      setIsMobileMenuOpen(true);
-                    } else {
-                      handleNavigateToTab(tab);
-                    }
-                  }}
-                  className={`
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => {
+                      if (tab === 'chat') {
+                        handleNavigateToTab('chat');
+                      } else if (tab === 'more') {
+                        setIsMobileMenuOpen(true);
+                      } else {
+                        handleNavigateToTab(tab);
+                      }
+                    }}
+                    className={`
                     relative flex flex-col items-center justify-center flex-1 h-full py-2
                     transition-all duration-300
                     ${isActive
-                      ? 'text-blue-600 dark:text-blue-400'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                    }
+                        ? 'text-blue-600 dark:text-blue-400'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                      }
                   `}
-                >
-                  {/* AIBot gets special styling and size prop */}
-                  <div className={`relative ${isActive ? 'text-blue-600 dark:text-blue-400' : ''}`}>
-                    {isSpecial ? (
-                      // Pass size prop to AIBot component
-                      <Icon size={size} className="mb-1" />
-                    ) : (
-                      <Icon className="h-6 w-6 mb-1" />
-                    )}
+                  >
+                    {/* AIBot gets special styling and size prop */}
+                    <div className={`relative ${isActive ? 'text-blue-600 dark:text-blue-400' : ''}`}>
+                      {isSpecial ? (
+                        // Pass size prop to AIBot component
+                        <Icon size={size} className="mb-1" />
+                      ) : (
+                        <Icon className="h-6 w-6 mb-1" />
+                      )}
 
-                    {/* Add a subtle glow effect for active AI tab */}
-                    {isActive && tab === 'chat' && (
-                      <div className="absolute inset-0 rounded-full bg-blue-500/20 blur-md -z-10"></div>
-                    )}
-                  </div>
-                  <span className={`text-xs font-medium ${isActive ? 'font-bold' : ''}`}>
-                    {label}
-                  </span>
+                      {/* Add a subtle glow effect for active AI tab */}
+                      {isActive && tab === 'chat' && (
+                        <div className="absolute inset-0 rounded-full bg-blue-500/20 blur-md -z-10"></div>
+                      )}
+                    </div>
+                    <span className={`text-xs font-medium ${isActive ? 'font-bold' : ''}`}>
+                      {label}
+                    </span>
 
-                  {/* Active Indicator */}
-                  {isActive && (
-                    <motion.div
-                      layoutId="bottomNavIndicator"
-                      className="absolute bottom-0 w-12 h-1 bg-blue-600 dark:bg-blue-400 rounded-t-full"
-                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </nav>
-      )}
+                    {/* Active Indicator */}
+                    {isActive && (
+                      <motion.div
+                        layoutId="bottomNavIndicator"
+                        className="absolute bottom-0 w-12 h-1 bg-blue-600 dark:bg-blue-400 rounded-t-full"
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        )}
 
       <MobileMenu
         isOpen={isMobileMenuOpen}

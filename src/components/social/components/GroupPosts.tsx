@@ -5,6 +5,7 @@ import { Button } from '../../ui/button';
 import { Loader2, Plus, Lock } from 'lucide-react';
 import { useFeatureAccess } from '../../../hooks/useFeatureAccess';
 import { toast } from 'sonner';
+import { validateComment, sanitizeText, stripHtml } from '../../../utils/validation';
 import { PostCard } from './PostCard';
 import { CreatePostDialog } from './CreatePostDialog';
 import { SocialPostWithDetails } from '../../../integrations/supabase/socialTypes';
@@ -195,8 +196,15 @@ export const GroupPosts: React.FC<GroupPostsProps> = ({ groupId, currentUser }) 
   };
 
   const handleSubmitComment = async (postId: string) => {
-    const content = newComments[postId]?.trim();
-    if (!content || !currentUser) return;
+    const raw = newComments[postId]?.trim();
+    if (!raw || !currentUser) return;
+
+    const content = sanitizeText(stripHtml(raw));
+    const validation = validateComment(content);
+    if (!validation.valid) {
+      toast.error(validation.errors[0]);
+      return;
+    }
 
     try {
       const { data, error } = await supabase

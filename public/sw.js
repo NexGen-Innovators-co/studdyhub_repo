@@ -1,7 +1,7 @@
 // Service Worker for Push Notifications and Offline Access
 // @ts-nocheck
 
-const CACHE_NAME = 'studdyhub-v1';
+const CACHE_NAME = 'studdyhub-v2'; // Increment version
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -15,10 +15,8 @@ const ASSETS_TO_CACHE = [
 
 // Install event - Cache static assets
 self.addEventListener('install', (event) => {
-  ////console.log('Service Worker installing');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      //console.log('Caching static assets');
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
@@ -27,13 +25,11 @@ self.addEventListener('install', (event) => {
 
 // Activate event - Clean up old caches
 self.addEventListener('activate', (event) => {
-  //console.log('Service Worker activating');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            //console.log('Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -44,38 +40,45 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - Serve from cache or network
 self.addEventListener('fetch', (event) => {
-  // Skip non-GET requests and Supabase API calls (handled by IndexedDB/Supabase client)
+  // Skip non-GET requests and Supabase API calls
   if (event.request.method !== 'GET' || event.request.url.includes('supabase.co')) {
     return;
   }
 
+  const url = new URL(event.request.url);
+
+  // Strategy 1: Network-First for index.html and navigation requests
+  // This ensures the user always gets the latest version of the app shell (if online)
+  if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
+          return response;
+        })
+        .catch(() => caches.match('/index.html') || caches.match(event.request))
+    );
+    return;
+  }
+
+  // Strategy 2: Stale-While-Revalidate for other assets
+  // Serve from cache immediately for speed, but refresh the cache in the background
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      // Return cached response if found
-      if (response) {
-        return response;
-      }
-
-      // Otherwise fetch from network
-      return fetch(event.request).then((networkResponse) => {
-        // Don't cache if not a valid response
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-          return networkResponse;
+    caches.match(event.request).then((cachedResponse) => {
+      const fetchPromise = fetch(event.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
         }
-
-        // Cache the new resource
-        const responseToCache = networkResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
-
         return networkResponse;
-      }).catch(() => {
-        // Offline fallback for navigation requests
-        if (event.request.mode === 'navigate') {
-          return caches.match('/index.html');
-        }
       });
+
+      return cachedResponse || fetchPromise;
     })
   );
 });

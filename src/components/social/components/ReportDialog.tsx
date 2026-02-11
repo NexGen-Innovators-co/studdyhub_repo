@@ -7,6 +7,7 @@ import { Label } from '../../ui/label';
 import { AlertTriangle, Flag, MessageSquareWarning, UserX, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../../integrations/supabase/client';
+import { sanitizeText, stripHtml } from '../../../utils/validation';
 
 interface ReportDialogProps {
   isOpen: boolean;
@@ -82,7 +83,7 @@ export const ReportDialog: React.FC<ReportDialogProps> = ({
           comment_id: commentId || null,
           reported_user_id: reportedUserId || null,
           reason: selectedReason,
-          description: description.trim() || null,
+          description: description.trim() ? sanitizeText(stripHtml(description)) : null,
           status: 'pending'
         });
 

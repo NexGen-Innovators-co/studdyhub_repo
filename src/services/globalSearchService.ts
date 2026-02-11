@@ -1,4 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
+import { cachedRequest, isRateLimited } from '@/utils/requestCache';
+import { validateSearchQuery } from '@/utils/validation';
 
 /**
  * Configuration for searching a specific entity type
@@ -51,6 +53,31 @@ export const globalSearchService = {
       return { data: [], totalCount: 0, query, timestamp: Date.now() };
     }
 
+    // Frontend validation — reject obviously bad queries before hitting the API
+    const validation = validateSearchQuery(query);
+    if (!validation.valid) {
+      return { data: [], totalCount: 0, query, timestamp: Date.now() };
+    }
+
+    // Rate-limit guard
+    const cacheKey = `search:${config.tableName}:${userId}:${query.trim().toLowerCase()}`;
+    if (isRateLimited(cacheKey, 20, 60_000)) {
+      // Return cached result if available, otherwise empty
+      return { data: [], totalCount: 0, query, timestamp: Date.now() };
+    }
+
+    return cachedRequest(
+      () => this._executeSearch(config, userId, query),
+      { key: cacheKey, ttl: 30_000 }
+    ) as Promise<SearchResult<T>>;
+  },
+
+  /** @internal Execute the actual Supabase search query */
+  async _executeSearch<T = any>(
+    config: SearchConfig,
+    userId: string,
+    query: string
+  ): Promise<SearchResult<T>> {
     try {
       // Don't escape or lowercase for now - let Supabase handle it
       const searchTerm = query.trim();

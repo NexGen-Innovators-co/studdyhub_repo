@@ -50,7 +50,7 @@ const Integrations: React.FC = () => {
                 {/* Photo-backed hero */}
                 <div className="relative rounded-2xl overflow-hidden mb-12">
                     <ThemedImg src="/screenshots/settings-light.jpg" alt="StuddyHub Integrations" className="w-full h-72 md:h-80 object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-r from-cyan-900/85 via-blue-900/80 to-indigo-900/75" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-black/20" />
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
                         <span className="text-cyan-300 text-sm font-semibold tracking-widest uppercase mb-3">Built-in & Upcoming</span>
                         <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4">Integrations</h1>
