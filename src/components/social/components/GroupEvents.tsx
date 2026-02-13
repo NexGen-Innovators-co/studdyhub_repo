@@ -25,6 +25,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../../ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { toast } from 'sonner';
+import { useConfirmDialog } from '../../ui/confirm-dialog';
 import { measureMemory } from 'vm';
 
 interface Event {
@@ -206,8 +207,16 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
     }
   };
 
+  const { confirm, ConfirmDialogComponent } = useConfirmDialog();
+
   const handleDeleteEvent = async (eventId: string) => {
-    if (!window.confirm('Are you sure you want to delete this event?')) return;
+    const confirmed = await confirm({
+      title: 'Delete Event',
+      description: 'Are you sure you want to delete this event?',
+      confirmLabel: 'Delete',
+      variant: 'destructive',
+    });
+    if (!confirmed) return;
 
     try {
       const { data: response, error } = await supabase.functions.invoke('manage-event', {
@@ -262,6 +271,7 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
   }
 
   return (
+    <>
     <div className="space-y-6">
       {/* Create Event Button */}
       {canManage && (
@@ -555,5 +565,7 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
         </div>
       )}
     </div>
+    {ConfirmDialogComponent}
+    </>
   );
 };

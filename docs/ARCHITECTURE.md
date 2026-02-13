@@ -17,57 +17,44 @@
 
 ## System Overview
 
-StuddyHub is built on a modern, scalable architecture that leverages:
+StuddyHub is built on a modern, scalable architecture that effectively combines a **Modular Monolith** on the frontend with a **Serverless (Edge Function) Backend**.
 
-- **Frontend**: React 18 + TypeScript + Vite
-- **Backend**: Supabase (PostgreSQL + Edge Functions)
-- **AI**: Google Gemini AI
-- **Hosting**: Vercel Edge Network
-- **Storage**: Supabase Storage
+### High-Level Architecture
 
-### Architecture Diagram
+```mermaid
+graph TD
+    User([User])
+    subgraph "Frontend (React Monolith)"
+        UI[App Shell / UI Layer]
+        Features[Feature Modules]
+        AuthHook[Auth Context]
+        DataHook[TanStack Query]
+    end
 
+    subgraph "Backend (Supabase BaaS)"
+        Auth[Supabase Auth]
+        DB[(Postgres DB)]
+        Storage[Supabase Storage]
+        Edge["Edge Functions (70+)"]
+    end
+
+    User <--> UI
+    UI <--> Features
+    Features <--> AuthHook
+    Features <--> DataHook
+
+    AuthHook <--> Auth
+    DataHook <--> Edge
+    Edge <--> DB
+    Edge <--> Storage
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        User Layer                            │
-│  (Browser - Desktop/Mobile)                                  │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Vercel Edge Network                       │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │            React Application (SPA)                    │  │
-│  │  - React Router (Client-side routing)                │  │
-│  │  - TanStack Query (Data fetching)                    │  │
-│  │  - Context API + Reducer (State management)          │  │
-│  └──────────────────────────────────────────────────────┘  │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Supabase Platform                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌─────────────────┐  │
-│  │  PostgreSQL  │  │    Auth      │  │   Storage       │  │
-│  │   Database   │  │   (JWT)      │  │  (S3-like)      │  │
-│  └──────────────┘  └──────────────┘  └─────────────────┘  │
-│  ┌─────────────────────────────────────────────────────┐  │
-│  │         Edge Functions (Deno Runtime)                │  │
-│  │  - AI Processing       - Document Analysis           │  │
-│  │  - Transcription       - Quiz Generation             │  │
-│  │  - Context Service     - Content Moderation          │  │
-│  └─────────────────────────────────────────────────────┘  │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   External Services                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌─────────────────┐  │
-│  │ Google       │  │  Paystack    │  │   Vercel        │  │
-│  │ Gemini AI    │  │  Payments    │  │   Analytics     │  │
-│  └──────────────┘  └──────────────┘  └─────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-```
+
+### Key Architectural Patterns
+
+- **Modular Monolith (Frontend)**: The UI is a single deployable unit but organized into strictly decoupled feature modules (Social, Notes, AI Chat, etc.).
+- **Serverless Edge Logic (Backend)**: Instead of a monolithic API server, logic is distributed across 70+ standalone Supabase Edge Functions.
+- **App Shell Pattern**: A central `Index.tsx` acts as a host for dynamic feature modules, providing smooth client-side transitions.
+- **Offline-First Ready**: Built-in support for offline tracking and background synchronization.
 
 ---
 
@@ -75,45 +62,47 @@ StuddyHub is built on a modern, scalable architecture that leverages:
 
 ### Frontend Technologies
 
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| React | 18.3.1 | UI framework |
-| TypeScript | 5.5.3 | Type safety |
-| Vite | 7.2.7 | Build tool & dev server |
-| React Router | 6.26.2 | Client-side routing |
-| TanStack Query | 5.56.2 | Server state management |
-| TailwindCSS | 3.4.18 | Utility-first styling |
-| Shadcn/ui | Latest | UI component library |
-| TipTap | 2.27.1 | Rich text editor |
-| Framer Motion | 12.23.12 | Animation library |
-| Lucide React | 0.462.0 | Icon library |
-| Zod | 3.23.8 | Schema validation |
+| Technology     | Version  | Purpose                 |
+| -------------- | -------- | ----------------------- |
+| React          | 18.3.1   | UI framework            |
+| TypeScript     | 5.5.3    | Type safety             |
+| Vite           | 7.2.7    | Build tool & dev server |
+| React Router   | 6.26.2   | Client-side routing     |
+| TanStack Query | 5.56.2   | Server state management |
+| TailwindCSS    | 3.4.18   | Utility-first styling   |
+| Shadcn/ui      | Latest   | UI component library    |
+| TipTap         | 2.27.1   | Rich text editor        |
+| Framer Motion  | 12.23.12 | Animation library       |
+| Lucide React   | 0.462.0  | Icon library            |
+| Zod            | 3.23.8   | Schema validation       |
 
 ### Backend Technologies
 
-| Technology | Purpose |
-|------------|---------|
-| Supabase | Backend-as-a-Service |
-| PostgreSQL 15 | Primary database |
-| PostgREST | Auto-generated REST API |
-| Supabase Auth | Authentication service |
-| Supabase Storage | File storage |
-| Supabase Realtime | WebSocket connections |
-| Edge Functions (Deno) | Serverless functions |
+| Technology            | Purpose                 |
+| --------------------- | ----------------------- |
+| Supabase              | Backend-as-a-Service    |
+| PostgreSQL 15         | Primary database        |
+| PostgREST             | Auto-generated REST API |
+| Supabase Auth         | Authentication service  |
+| Supabase Storage      | File storage            |
+| Supabase Realtime     | WebSocket connections   |
+| Edge Functions (Deno) | Serverless functions    |
 
 ### AI & ML
 
-| Service | Purpose |
-|---------|---------|
-| Google Gemini Pro | Text generation, analysis |
-| Google Gemini Flash | Fast responses |
-| Custom prompts | Context-aware assistance |
+| Service             | Purpose                   |
+| ------------------- | ------------------------- |
+| Google Gemini Pro   | Text generation, analysis |
+| Google Gemini Flash | Fast responses            |
+| Custom prompts      | Context-aware assistance  |
 
 ---
 
 ## Application Architecture
 
-### Frontend Architecture
+### Frontend Layer (Modular Monolith)
+
+The frontend is organized into logical feature domains. This prevents cross-feature leakage and allows for easier maintenance.
 
 ```
 src/
@@ -190,6 +179,7 @@ src/
 ### Design Patterns
 
 #### 1. Component Composition
+
 ```typescript
 // Base UI components are composed into feature components
 <Dialog>
@@ -203,18 +193,20 @@ src/
 ```
 
 #### 2. Custom Hooks Pattern
+
 ```typescript
 // Separation of concerns - logic in hooks
 function NoteList() {
   const { notes, loading } = useAppData();
   const { canCreateNote } = useFeatureAccess();
-  
+
   // Component focuses on UI
   return <div>...</div>;
 }
 ```
 
 #### 3. Service Layer Pattern
+
 ```typescript
 // Business logic separated from components
 export const aiServices = {
@@ -225,13 +217,14 @@ export const aiServices = {
 ```
 
 #### 4. Context + Reducer Pattern
+
 ```typescript
 // Global state management
 const [state, dispatch] = useReducer(appReducer, initialState);
 
 // Actions
-dispatch({ type: 'ADD_NOTE', payload: note });
-dispatch({ type: 'UPDATE_SUBSCRIPTION', payload: subscription });
+dispatch({ type: "ADD_NOTE", payload: note });
+dispatch({ type: "UPDATE_SUBSCRIPTION", payload: subscription });
 ```
 
 ---
@@ -241,6 +234,7 @@ dispatch({ type: 'UPDATE_SUBSCRIPTION', payload: subscription });
 ### Core Tables
 
 #### `profiles`
+
 User profile information
 
 ```sql
@@ -260,6 +254,7 @@ CREATE INDEX idx_profiles_email ON profiles(email);
 ```
 
 #### `subscriptions`
+
 User subscription data
 
 ```sql
@@ -273,7 +268,7 @@ CREATE TABLE subscriptions (
   payment_id TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  
+
   UNIQUE(user_id)
 );
 
@@ -283,6 +278,7 @@ CREATE INDEX idx_subscriptions_status ON subscriptions(status);
 ```
 
 #### `notes`
+
 Note storage
 
 ```sql
@@ -310,6 +306,7 @@ CREATE INDEX idx_notes_content ON notes USING GIN(to_tsvector('english', content
 ```
 
 #### `documents`
+
 Document metadata
 
 ```sql
@@ -335,6 +332,7 @@ CREATE INDEX idx_documents_type ON documents(file_type);
 ```
 
 #### `recordings`
+
 Audio recordings
 
 ```sql
@@ -357,6 +355,7 @@ CREATE INDEX idx_recordings_created ON recordings(created_at DESC);
 ```
 
 #### `folders`
+
 Folder structure
 
 ```sql
@@ -367,7 +366,7 @@ CREATE TABLE folders (
   parent_id UUID REFERENCES folders(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  
+
   -- Prevent circular references
   CHECK (id != parent_id)
 );
@@ -378,6 +377,7 @@ CREATE INDEX idx_folders_parent ON folders(parent_id);
 ```
 
 #### `ai_messages`
+
 AI chat history
 
 ```sql
@@ -397,6 +397,7 @@ CREATE INDEX idx_messages_created ON ai_messages(created_at DESC);
 ```
 
 #### `quizzes`
+
 Quiz data
 
 ```sql
@@ -416,6 +417,7 @@ CREATE INDEX idx_quizzes_note ON quizzes(note_id);
 ```
 
 #### `quiz_attempts`
+
 Quiz attempt tracking
 
 ```sql
@@ -434,6 +436,7 @@ CREATE INDEX idx_attempts_quiz ON quiz_attempts(quiz_id);
 ```
 
 #### `posts` (Social)
+
 User posts
 
 ```sql
@@ -454,6 +457,7 @@ CREATE INDEX idx_posts_created ON posts(created_at DESC);
 ```
 
 #### `follows`
+
 User following relationships
 
 ```sql
@@ -462,7 +466,7 @@ CREATE TABLE follows (
   follower_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   following_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  
+
   UNIQUE(follower_id, following_id),
   CHECK (follower_id != following_id)
 );
@@ -473,6 +477,7 @@ CREATE INDEX idx_follows_following ON follows(following_id);
 ```
 
 #### `usage_tracking`
+
 Daily usage limits
 
 ```sql
@@ -483,7 +488,7 @@ CREATE TABLE usage_tracking (
   ai_messages_count INTEGER DEFAULT 0,
   quizzes_taken INTEGER DEFAULT 0,
   recordings_created INTEGER DEFAULT 0,
-  
+
   UNIQUE(user_id, date)
 );
 
@@ -523,6 +528,7 @@ CREATE POLICY "Users can delete own notes"
 ### Database Functions
 
 #### Check subscription limits
+
 ```sql
 CREATE OR REPLACE FUNCTION check_note_limit(p_user_id UUID)
 RETURNS BOOLEAN AS $$
@@ -533,7 +539,7 @@ BEGIN
   SELECT tier INTO v_tier
   FROM subscriptions
   WHERE user_id = p_user_id AND status = 'active';
-  
+
   IF v_tier = 'visitor' THEN
     SELECT COUNT(*) INTO v_count FROM notes WHERE user_id = p_user_id;
     RETURN v_count < 50;
@@ -586,19 +592,21 @@ App.tsx
 ### Key Components
 
 #### Protected Route Component
+
 ```typescript
 // src/components/ProtectedRoute.tsx
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  
+
   if (loading) return <LoadingSpinner />;
   if (!user) return <Navigate to="/auth" />;
-  
+
   return <>{children}</>;
 }
 ```
 
 #### Feature Access Guard
+
 ```typescript
 // Checks subscription limits before allowing actions
 const { canCreateNote } = useFeatureAccess();
@@ -613,7 +621,9 @@ if (!canCreateNote) {
 
 ## State Management
 
-### Global State (AppContext)
+### Global UI State (AppContext)
+
+The `AppContext` is used for **Global UI State** (theming, sidebar toggle, notification counts) and certain aggregated data that needs to be accessible everywhere.
 
 ```typescript
 // src/contexts/AppContext.tsx
@@ -625,31 +635,32 @@ interface AppState {
   recordings: Recording[];
   folders: Folder[];
   loading: boolean;
-}
-
-interface AppContextType {
-  state: AppState;
-  dispatch: React.Dispatch<AppAction>;
-  // Derived state
-  activeNotes: Note[];
-  usageStats: UsageStats;
+  onPostCreated?: () => void; // Event handlers
 }
 ```
+
+### Server State Strategy (TanStack Query)
+
+While `AppContext` holds some data, **TanStack Query** is the primary source of truth for all server-side data (notes, posts, documents). This provides:
+
+- **Automatic Caching**: Prevents redundant network requests.
+- **Optimistic Updates**: Immediate UI feedback for actions like liking a post.
+- **Auto-Refetching**: Keeps data fresh across different views.
 
 ### State Actions
 
 ```typescript
 // src/contexts/appReducer.ts
 type AppAction =
-  | { type: 'SET_USER'; payload: User }
-  | { type: 'SET_SUBSCRIPTION'; payload: Subscription }
-  | { type: 'ADD_NOTE'; payload: Note }
-  | { type: 'UPDATE_NOTE'; payload: Note }
-  | { type: 'DELETE_NOTE'; payload: string }
-  | { type: 'SET_NOTES'; payload: Note[] }
-  | { type: 'ADD_DOCUMENT'; payload: Document }
-  | { type: 'SET_LOADING'; payload: boolean }
-  // ... more actions
+  | { type: "SET_USER"; payload: User }
+  | { type: "SET_SUBSCRIPTION"; payload: Subscription }
+  | { type: "ADD_NOTE"; payload: Note }
+  | { type: "UPDATE_NOTE"; payload: Note }
+  | { type: "DELETE_NOTE"; payload: string }
+  | { type: "SET_NOTES"; payload: Note[] }
+  | { type: "ADD_DOCUMENT"; payload: Document }
+  | { type: "SET_LOADING"; payload: boolean };
+// ... more actions
 ```
 
 ### Server State (TanStack Query)
@@ -657,7 +668,7 @@ type AppAction =
 ```typescript
 // Data fetching with caching
 const { data: notes, isLoading } = useQuery({
-  queryKey: ['notes', userId],
+  queryKey: ["notes", userId],
   queryFn: () => fetchNotes(userId),
   staleTime: 5 * 60 * 1000, // 5 minutes
 });
@@ -666,7 +677,7 @@ const { data: notes, isLoading } = useQuery({
 const createNoteMutation = useMutation({
   mutationFn: createNote,
   onSuccess: () => {
-    queryClient.invalidateQueries(['notes']);
+    queryClient.invalidateQueries(["notes"]);
   },
 });
 ```
@@ -675,58 +686,63 @@ const createNoteMutation = useMutation({
 
 ## API & Services
 
-### Supabase Edge Functions
+### Serverless Logic (70+ Supabase Edge Functions)
 
-All edge functions are deployed to Supabase and run on Deno runtime.
+The backend logic is decentralized into **70+ standalone TypeScript functions** running on the Deno runtime. This architecture enables:
+
+- **Independent Scaling**: Each feature's logic scales separately.
+- **Compute-Intensive Tasks**: Logic like AI quiz generation and document parsing is offloaded from the client.
+- **Secure Integration**: Sensitive operations (e.g., Paystack payments, Gemini AI keys) are handled in a protected environment.
 
 #### AI Chat Function
+
 ```typescript
 // supabase/functions/ai-chat/index.ts
 Deno.serve(async (req) => {
   const { message, context, userId } = await req.json();
-  
+
   // Check rate limits
   const canSend = await checkMessageLimit(userId);
   if (!canSend) {
-    return new Response(
-      JSON.stringify({ error: 'Daily limit reached' }),
-      { status: 429 }
-    );
+    return new Response(JSON.stringify({ error: "Daily limit reached" }), {
+      status: 429,
+    });
   }
-  
+
   // Generate AI response
   const response = await generateAIResponse(message, context);
-  
+
   // Track usage
   await trackMessageUsage(userId);
-  
+
   return new Response(JSON.stringify({ response }), {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   });
 });
 ```
 
 #### Document Analysis Function
+
 ```typescript
 // supabase/functions/analyze-document/index.ts
 Deno.serve(async (req) => {
   const { documentId, userId } = await req.json();
-  
+
   // Fetch document
   const document = await getDocument(documentId);
-  
+
   // Extract content based on file type
   const content = await extractContent(document);
-  
+
   // Analyze with AI
   const analysis = await analyzeWithGemini(content);
-  
+
   // Store results
   await updateDocument(documentId, {
     content,
     ai_summary: analysis.summary,
   });
-  
+
   return new Response(JSON.stringify({ analysis }));
 });
 ```
@@ -737,20 +753,20 @@ Deno.serve(async (req) => {
 // src/services/aiServices.ts
 export const aiServices = {
   async sendMessage(message: string, contextIds: string[] = []) {
-    const { data, error } = await supabase.functions.invoke('ai-chat', {
+    const { data, error } = await supabase.functions.invoke("ai-chat", {
       body: { message, contextIds },
     });
-    
+
     if (error) throw error;
     return data;
   },
-  
+
   async analyzeDocument(documentId: string) {
     const { data, error } = await supabase.functions.invoke(
-      'analyze-document',
-      { body: { documentId } }
+      "analyze-document",
+      { body: { documentId } },
     );
-    
+
     if (error) throw error;
     return data;
   },
@@ -802,12 +818,14 @@ export const aiServices = {
 ### Frontend Optimization
 
 #### Code Splitting
+
 ```typescript
 // Lazy load admin components
-const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard'));
+const AdminDashboard = lazy(() => import("./components/admin/AdminDashboard"));
 ```
 
 #### Memoization
+
 ```typescript
 const expensiveCalculation = useMemo(() => {
   return calculateStats(data);
@@ -819,6 +837,7 @@ const handleClick = useCallback(() => {
 ```
 
 #### Virtual Scrolling
+
 ```typescript
 // For large lists
 import { FixedSizeList } from 'react-window';
@@ -892,7 +911,7 @@ name: Deploy
 on:
   push:
     branches: [main]
-    
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -943,6 +962,7 @@ jobs:
 ## Conclusion
 
 StuddyHub's architecture is designed for:
+
 - ✅ **Scalability** - Can handle growing user base
 - ✅ **Performance** - Fast load times and responses
 - ✅ **Security** - Multiple layers of protection
@@ -950,6 +970,7 @@ StuddyHub's architecture is designed for:
 - ✅ **Developer Experience** - Modern tooling and patterns
 
 For more details on specific components, see:
+
 - [API Reference](API_REFERENCE.md)
 - [Features Documentation](FEATURES.md)
 - [Deployment Guide](DEPLOYMENT.md)

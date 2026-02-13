@@ -25,6 +25,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useConfirmDialog } from '../../ui/confirm-dialog';
 import { useNavigate } from 'react-router-dom';
 import { validateGroupName, validateGroupDescription, sanitizeText, stripHtml } from '../../../utils/validation';
 
@@ -257,19 +258,19 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
     }
   };
 
+  const { confirm, ConfirmDialogComponent } = useConfirmDialog();
+
   const handleDeleteGroup = async () => {
-    const confirmMessage = `Are you sure you want to delete "${group.name}"? This action cannot be undone and will remove all posts, members, and data associated with this group.`;
+    const confirmed = await confirm({
+      title: 'Delete Group',
+      description: `Are you sure you want to delete "${group.name}"? This action cannot be undone and will remove all posts, members, and data associated with this group.`,
+      confirmLabel: 'Delete Group',
+      variant: 'destructive',
+      confirmPhrase: group.name,
+      confirmPhraseLabel: `Type "${group.name}" to confirm deletion`,
+    });
 
-    if (!window.confirm(confirmMessage)) return;
-
-    const doubleConfirm = window.prompt(
-      `Type "${group.name}" to confirm deletion:`
-    );
-
-    if (doubleConfirm !== group.name) {
-      toast.error('Group name did not match. Deletion cancelled.');
-      return;
-    }
+    if (!confirmed) return;
 
     setIsDeleting(true);
     try {
@@ -397,6 +398,7 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
   };
 
   return (
+    <>
     <div className="space-y-6 h-[calc(100vh-4rem)] pb-6 pt-6 overflow-y-auto">
       {/* Basic Settings */}
       <Card>
@@ -726,5 +728,7 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
         </CardContent>
       </Card>
     </div>
+    {ConfirmDialogComponent}
+    </>
   );
 };

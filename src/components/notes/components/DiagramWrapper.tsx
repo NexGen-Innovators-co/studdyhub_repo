@@ -6,6 +6,7 @@ import { Edit2, X, AlertCircle, RotateCcw, ZoomIn, ZoomOut, Maximize2, Minimize2
 import { InlineAIEditor } from './InlineAIEditor';
 import { NodeViewWrapper, NodeViewContent } from '@tiptap/react';
 import { motion, useAnimation } from 'framer-motion';
+import { toast } from 'sonner';
 
 interface DiagramWrapperProps {
   node: any;
@@ -103,7 +104,7 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
                         link.click();
                     } catch (e) {
                         //console.error('Export failed', e);
-                        alert('Could not export to PNG due to security restrictions. Try SVG or PDF.');
+                        toast.error('Could not export to PNG due to security restrictions. Try SVG or PDF.');
                     }
                 }
             };
@@ -136,7 +137,7 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
              
              (window as any).html2pdf().from(element).save(filename);
         } else {
-            alert('PDF generation library not loaded.');
+            toast.warning('PDF generation library not loaded.');
         }
     }
   };

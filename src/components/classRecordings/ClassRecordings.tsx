@@ -19,6 +19,7 @@ import { AudioUploadSection } from './components/AudioUploadSection';
 import { useAudioProcessing } from './hooks/useAudioProcessing';
 import { RecordingSidePanel } from './components/RecordingSidePanel';
 import { toast } from 'sonner';
+import { useConfirmDialog } from '../ui/confirm-dialog';
 import { useRealtimeSync } from './hooks/useRealTimeSync';
 import { supabase } from '../../integrations/supabase/client';
 import { UserStats } from '../../types/EnhancedClasses';
@@ -181,8 +182,16 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
     toast.success('Recording downloaded!');
   }, []);
 
+  const { confirm, ConfirmDialogComponent } = useConfirmDialog();
+
   const handleDeleteRecordingClick = useCallback(async (recording: ClassRecording) => {
-    if (window.confirm(`Are you sure you want to delete "${recording.title}"? This action cannot be undone.`)) {
+    const confirmed = await confirm({
+      title: 'Delete Recording',
+      description: `Are you sure you want to delete "${recording.title}"? This action cannot be undone.`,
+      confirmLabel: 'Delete',
+      variant: 'destructive',
+    });
+    if (confirmed) {
       await onDeleteRecording(recording.id, recording.document_id || null, recording.audioUrl || null);
       if (selectedRecording?.id === recording.id) {
         setSelectedRecording(null);
@@ -191,7 +200,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
         }
       }
     }
-  }, [onDeleteRecording, selectedRecording, isPlayingAudio, handlePauseAudio]);
+  }, [onDeleteRecording, selectedRecording, isPlayingAudio, handlePauseAudio, confirm]);
 
   const handleCopyTranscript = useCallback((transcript: string) => {
     if (!transcript) {
@@ -259,6 +268,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
 
 
   return (
+    <>
     <div className="min-h-screen bg-transparent max-w-[1440px] mx-auto px-0">
       <audio ref={audioPlayerRef} className="hidden" onEnded={handleAudioEnded} />
 
@@ -972,5 +982,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
         </div>
       )}
     </div>
+    {ConfirmDialogComponent}
+    </>
   );
 };

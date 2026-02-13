@@ -240,7 +240,7 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
     // Validate that the quiz has questions before opening
     if (!quiz.questions || !Array.isArray(quiz.questions) || quiz.questions.length === 0) {
       // console.error('Quiz has no questions:', quiz);
-      alert('This quiz has no questions available. Please generate a new quiz.');
+      toast.warning('This quiz has no questions available. Please generate a new quiz.');
       return;
     }
     

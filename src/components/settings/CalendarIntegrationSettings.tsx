@@ -44,7 +44,12 @@ export function CalendarIntegrationSettings() {
       ) : (
         <div className="grid gap-4">
           {/* Google Calendar */}
-          <Card>
+          <Card className="opacity-75 relative overflow-hidden">
+            <div className="absolute inset-0 bg-white/50 dark:bg-slate-950/50 backdrop-blur-[1px] z-10 flex items-center justify-center">
+              <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 font-medium">
+                Coming Soon
+              </Badge>
+            </div>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -58,68 +63,24 @@ export function CalendarIntegrationSettings() {
                     </CardDescription>
                   </div>
                 </div>
-                
-                {googleIntegration?.sync_enabled ? (
-                  <Badge variant="default" className="gap-1">
-                    <Check className="h-3 w-3" />
-                    Connected
-                  </Badge>
-                ) : (
-                  <Badge variant="outline">Not Connected</Badge>
-                )}
+                <Badge variant="outline">Not Connected</Badge>
               </div>
             </CardHeader>
-            
             <CardContent>
-              {googleIntegration?.sync_enabled ? (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Last synced:</span>
-                    <span>
-                      {googleIntegration.last_synced_at
-                        ? formatDistanceToNow(new Date(googleIntegration.last_synced_at), { addSuffix: true })
-                        : 'Never'}
-                    </span>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => disconnect(googleIntegration.id)}
-                      className="gap-2"
-                    >
-                      <Unlink className="h-4 w-4" />
-                      Disconnect
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={refresh}
-                      disabled={syncing}
-                      className="gap-2"
-                    >
-                      <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
-                      Refresh
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <Button
-                  onClick={connectGoogle}
-                  className="gap-2"
-                  size="sm"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  Connect Google Calendar
-                </Button>
-              )}
+              <Button disabled className="gap-2 w-full sm:w-auto" size="sm">
+                <ExternalLink className="h-4 w-4" />
+                Connect Google Calendar
+              </Button>
             </CardContent>
           </Card>
 
           {/* Outlook Calendar */}
-          <Card>
+          <Card className="opacity-75 relative overflow-hidden">
+            <div className="absolute inset-0 bg-white/50 dark:bg-slate-950/50 backdrop-blur-[1px] z-10 flex items-center justify-center">
+              <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 font-medium">
+                Coming Soon
+              </Badge>
+            </div>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -133,63 +94,14 @@ export function CalendarIntegrationSettings() {
                     </CardDescription>
                   </div>
                 </div>
-                
-                {outlookIntegration?.sync_enabled ? (
-                  <Badge variant="default" className="gap-1">
-                    <Check className="h-3 w-3" />
-                    Connected
-                  </Badge>
-                ) : (
-                  <Badge variant="outline">Not Connected</Badge>
-                )}
+                <Badge variant="outline">Not Connected</Badge>
               </div>
             </CardHeader>
-            
             <CardContent>
-              {outlookIntegration?.sync_enabled ? (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Last synced:</span>
-                    <span>
-                      {outlookIntegration.last_synced_at
-                        ? formatDistanceToNow(new Date(outlookIntegration.last_synced_at), { addSuffix: true })
-                        : 'Never'}
-                    </span>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => disconnect(outlookIntegration.id)}
-                      className="gap-2"
-                    >
-                      <Unlink className="h-4 w-4" />
-                      Disconnect
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={refresh}
-                      disabled={syncing}
-                      className="gap-2"
-                    >
-                      <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
-                      Refresh
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <Button
-                  onClick={connectOutlook}
-                  className="gap-2"
-                  size="sm"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  Connect Outlook Calendar
-                </Button>
-              )}
+              <Button disabled className="gap-2 w-full sm:w-auto" size="sm">
+                <ExternalLink className="h-4 w-4" />
+                Connect Outlook Calendar
+              </Button>
             </CardContent>
           </Card>
 

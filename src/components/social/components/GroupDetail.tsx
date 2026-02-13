@@ -21,6 +21,7 @@ import {
   FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useConfirmDialog } from '../../ui/confirm-dialog';
 import {
   FaWhatsapp,
   FaFacebook,
@@ -238,6 +239,8 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
     return !!result; // Convert to boolean
   };
 
+  const { confirm: confirmAction, ConfirmDialogComponent } = useConfirmDialog();
+
   const handleLeaveGroup = async () => {
     if (!canAccessSocial()) {
       toast.error('Leaving groups is available for Scholar and Genius plans', {
@@ -249,7 +252,13 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
       });
       return;
     }
-    if (!confirm('Leave this group?')) return;
+    const confirmed = await confirmAction({
+      title: 'Leave Group',
+      description: 'Are you sure you want to leave this group?',
+      confirmLabel: 'Leave',
+      variant: 'destructive',
+    });
+    if (!confirmed) return;
     const { error } = await supabase
       .from('social_group_members')
       .delete()
@@ -338,6 +347,7 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
   const canManage = memberRole === 'admin' || memberRole === 'moderator';
 
   return (
+    <>
     <div className="bg-transparent font-sans min-h-screen">
       <div className="max-w-[1440px] mx-auto">
         {/* Desktop Layout */}
@@ -835,5 +845,7 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
         </div>
       </div>
     </div>
+    {ConfirmDialogComponent}
+    </>
   );
 };

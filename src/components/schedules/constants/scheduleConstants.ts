@@ -47,6 +47,7 @@ export type ScheduleFormData = {
   recurrencePattern: 'daily' | 'weekly' | 'monthly';
   recurrenceDays: number[];
   recurrenceEndDate: string;
+  color?: string;
 };
 
 export const defaultFormData: ScheduleFormData = {
@@ -61,5 +62,6 @@ export const defaultFormData: ScheduleFormData = {
   isRecurring: false,
   recurrencePattern: 'weekly',
   recurrenceDays: [],
-  recurrenceEndDate: ''
+  recurrenceEndDate: '',
+  color: typeColorHex['class']
 };

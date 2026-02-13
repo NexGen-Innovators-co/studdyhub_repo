@@ -1,8 +1,6 @@
-// Schedule form for adding/editing schedule items
 import React, { useState } from 'react';
-import { Plus, Loader2, Repeat } from 'lucide-react';
+import { Loader2, Repeat } from 'lucide-react';
 import { Button } from '../../ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Input } from '../../ui/input';
 import { Textarea } from '../../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
@@ -12,8 +10,8 @@ import { ScheduleItem } from '../../../types/Class';
 import { toast } from 'sonner';
 import { SubscriptionGuard } from '../../subscription/SubscriptionGuard';
 import { cn } from '../../../lib/utils';
-import { typeIcons, DAYS_OF_WEEK, ScheduleFormData, defaultFormData } from '../constants/scheduleConstants';
-import { getColorForType, getMinDate } from '../utils/scheduleUtils';
+import { typeIcons, DAYS_OF_WEEK, ScheduleFormData, defaultFormData, typeColorHex } from '../constants/scheduleConstants';
+import { getMinDate } from '../utils/scheduleUtils';
 
 interface ScheduleFormProps {
   editingItem: ScheduleItem | null;
@@ -49,11 +47,22 @@ export const ScheduleForm: React.FC<ScheduleFormProps> = ({
         isRecurring: editingItem.isRecurring || false,
         recurrencePattern: (editingItem.recurrencePattern as any) || 'weekly',
         recurrenceDays: editingItem.recurrenceDays || [],
-        recurrenceEndDate: editingItem.recurrenceEndDate || ''
+        recurrenceEndDate: editingItem.recurrenceEndDate || '',
+        color: editingItem.color || typeColorHex[editingItem.type] || '#3B82F6'
       };
     }
-    return { ...defaultFormData, date: initialDate || '' };
+    return { ...defaultFormData, date: initialDate || '', color: typeColorHex['class'] };
   });
+
+  // Update color when type changes if user hasn't manually set a custom color
+  // For simplicity, we'll just set the default color for the new type
+  const handleTypeChange = (value: ScheduleItem['type']) => {
+    setFormData(prev => ({
+      ...prev,
+      type: value,
+      color: typeColorHex[value] || '#3B82F6'
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,7 +92,7 @@ export const ScheduleForm: React.FC<ScheduleFormProps> = ({
         endTime: endDateTime.toISOString(),
         location: formData.location,
         description: formData.description,
-        color: getColorForType(formData.type),
+        color: formData.color,
         userId: editingItem?.userId || '',
         created_at: editingItem?.created_at || new Date().toISOString(),
         isRecurring: formData.isRecurring,
@@ -105,50 +114,35 @@ export const ScheduleForm: React.FC<ScheduleFormProps> = ({
   const minDate = getMinDate();
 
   return (
-    <Card className="border-2 border-blue-500 dark:border-blue-400 animate-in slide-in-from-top-2 duration-300">
-      <CardHeader className="bg-blue-50 dark:bg-blue-900/20">
-        <CardTitle className="flex items-center justify-between">
-          <span>{editingItem ? 'Edit' : 'Add'} Schedule Item</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onCancel}
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Title *</label>
+          <Input
+            placeholder="e.g., Linear Algebra Lecture"
+            value={formData.title}
+            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+            required
             disabled={isSubmitting}
-          >
-            ✕
-          </Button>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-6">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Title *</label>
-              <Input
-                placeholder="e.g., Linear Algebra Lecture"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                required
-                disabled={isSubmitting}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Subject</label>
-              <Input
-                placeholder="e.g., Mathematics"
-                value={formData.subject}
-                onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                disabled={isSubmitting}
-              />
-            </div>
-          </div>
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Subject</label>
+          <Input
+            placeholder="e.g., Mathematics"
+            value={formData.subject}
+            onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+            disabled={isSubmitting}
+          />
+        </div>
+      </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Type *</label>
               <Select
                 value={formData.type}
-                onValueChange={(value: ScheduleItem['type']) => setFormData({ ...formData, type: value })}
+                onValueChange={handleTypeChange}
                 disabled={isSubmitting}
               >
                 <SelectTrigger>
@@ -218,6 +212,26 @@ export const ScheduleForm: React.FC<ScheduleFormProps> = ({
               disabled={isSubmitting}
             />
           </div>
+          
+           <div className="space-y-2">
+              <label className="text-sm font-medium">Color</label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="color"
+                  value={formData.color}
+                  onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                  className="w-12 h-10 p-1 cursor-pointer"
+                  disabled={isSubmitting}
+                />
+                <Input
+                  value={formData.color}
+                  onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                  className="flex-1 font-mono uppercase"
+                  maxLength={7}
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
 
           {/* Recurring Settings */}
           <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
@@ -298,40 +312,38 @@ export const ScheduleForm: React.FC<ScheduleFormProps> = ({
             )}
           </div>
 
-          <div className="flex gap-2 pt-2">
-            <SubscriptionGuard
-              feature="Schedule Items"
-              limitFeature="maxScheduleItems"
-              currentCount={scheduleCount}
-            >
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    {editingItem ? 'Updating...' : 'Adding...'}
-                  </>
-                ) : (
-                  <>
-                    {editingItem ? 'Update' : 'Add'} Item
-                  </>
-                )}
-              </Button>
-            </SubscriptionGuard>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onCancel}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+      <div className="flex gap-2 pt-4 justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          disabled={isSubmitting}
+        >
+          Cancel
+        </Button>
+        <SubscriptionGuard
+          feature="Schedule Items"
+          limitFeature="maxScheduleItems"
+          currentCount={scheduleCount}
+        >
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                {editingItem ? 'Updating...' : 'Adding...'}
+              </>
+            ) : (
+              <>
+                {editingItem ? 'Update' : 'Add'} Item
+              </>
+            )}
+          </Button>
+        </SubscriptionGuard>
+      </div>
+    </form>
   );
 };

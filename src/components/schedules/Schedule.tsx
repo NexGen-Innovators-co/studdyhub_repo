@@ -1,10 +1,13 @@
 // components/Schedule.tsx — Orchestrator (imports extracted sub-components)
 import React, { useState, useCallback, useEffect } from 'react';
-import { Plus, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Sparkles, History, Lightbulb } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Sparkles, History, Lightbulb, List, CalendarDays } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ScheduleItem } from '../../types/Class';
 import { toast } from 'sonner';
+import { useConfirmDialog } from '../ui/confirm-dialog';
 import { useAppContext } from '../../hooks/useAppContext';
 import { AppShell } from '../layout/AppShell';
 import { StickyRail } from '../layout/StickyRail';
@@ -125,8 +128,16 @@ export const Schedule: React.FC<ScheduleProps> = ({
     setShowForm(true);
   }, []);
 
+  const { confirm, ConfirmDialogComponent } = useConfirmDialog();
+
   const handleDelete = useCallback(async (id: string, title: string) => {
-    if (window.confirm(`Are you sure you want to delete "${title}"?`)) {
+    const confirmed = await confirm({
+      title: 'Delete Schedule Item',
+      description: `Are you sure you want to delete "${title}"?`,
+      confirmLabel: 'Delete',
+      variant: 'destructive',
+    });
+    if (confirmed) {
       try {
         await onDeleteItem(id);
         toast.success('Schedule item deleted');
@@ -134,7 +145,7 @@ export const Schedule: React.FC<ScheduleProps> = ({
         toast.error('Failed to delete schedule item');
       }
     }
-  }, [onDeleteItem]);
+  }, [onDeleteItem, confirm]);
 
   // --- Derived data ---
   const getItemsForCurrentTab = () => {
@@ -191,6 +202,7 @@ export const Schedule: React.FC<ScheduleProps> = ({
   );
 
   return (
+    <>
     <AppShell left={leftRail} right={rightRail}>
       <div className="px-3 lg:px-0">
         <HeroHeader
@@ -217,18 +229,8 @@ export const Schedule: React.FC<ScheduleProps> = ({
           }
         />
 
-        <div className="space-y-6 w-full">
-          {/* ---------- Form ---------- */}
-          {showForm && (
-            <ScheduleForm
-              editingItem={editingItem}
-              onSubmit={handleFormSubmit}
-              onCancel={handleFormCancel}
-              scheduleCount={scheduleItems.length}
-              initialDate={initialFormDate || (selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined)}
-            />
-          )}
 
+        <div className="space-y-6 w-full">
           {/* ---------- Loading ---------- */}
           {isLoading && scheduleItems.length === 0 ? (
             <Card>
@@ -239,34 +241,100 @@ export const Schedule: React.FC<ScheduleProps> = ({
                 </div>
               </CardContent>
             </Card>
-          ) : activeTab === 'calendar' ? (
-            /* ---------- Calendar View ---------- */
-            <CalendarView
-              currentMonth={currentMonth}
-              selectedDate={selectedDate}
-              calendarDays={calendarDays}
-              scheduleItems={scheduleItems}
-              onSelectDate={setSelectedDate}
-              onPrevMonth={handlePrevMonth}
-              onNextMonth={handleNextMonth}
-              onToday={handleToday}
-              getEventsForDay={getEventsForDay}
-              onShowForm={handleShowForm}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              scheduleCount={scheduleItems.length}
-            />
           ) : (
-            /* ---------- List Views (upcoming / today / past) ---------- */
-            <EventListView
-              items={currentItems}
-              activeTab={activeTab as 'upcoming' | 'today' | 'past'}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onShowForm={() => handleShowForm()}
-              scheduleCount={scheduleItems.length}
-            />
+            <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as any)} className="w-full">
+              {/* <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                <TabsList className="grid w-full sm:w-auto grid-cols-4 bg-blue-50 dark:bg-slate-800 p-1 rounded-xl">
+                  <TabsTrigger value="calendar" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-400 data-[state=active]:shadow-sm">
+                    <CalendarDays className="w-4 h-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Calendar</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="upcoming" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-400 data-[state=active]:shadow-sm">
+                    <Clock className="w-4 h-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Upcoming</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="today" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-400 data-[state=active]:shadow-sm">
+                    <Sparkles className="w-4 h-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Today</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="past" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-400 data-[state=active]:shadow-sm">
+                    <History className="w-4 h-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Past</span>
+                  </TabsTrigger>
+                </TabsList>
+              </div> */}
+
+              <TabsContent value="calendar" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+                <CalendarView
+                  currentMonth={currentMonth}
+                  selectedDate={selectedDate}
+                  calendarDays={calendarDays}
+                  scheduleItems={scheduleItems}
+                  onSelectDate={setSelectedDate}
+                  onPrevMonth={handlePrevMonth}
+                  onNextMonth={handleNextMonth}
+                  onToday={handleToday}
+                  getEventsForDay={getEventsForDay}
+                  onShowForm={handleShowForm}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  scheduleCount={scheduleItems.length}
+                />
+              </TabsContent>
+
+              <TabsContent value="upcoming" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+                <EventListView
+                  items={upcomingItems}
+                  activeTab="upcoming"
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onShowForm={() => handleShowForm()}
+                  scheduleCount={scheduleItems.length}
+                />
+              </TabsContent>
+
+              <TabsContent value="today" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+                <EventListView
+                  items={todayItems}
+                  activeTab="today"
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onShowForm={() => handleShowForm()}
+                  scheduleCount={scheduleItems.length}
+                />
+              </TabsContent>
+
+              <TabsContent value="past" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+                <EventListView
+                  items={pastItems}
+                  activeTab="past"
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onShowForm={() => handleShowForm()}
+                  scheduleCount={scheduleItems.length}
+                />
+              </TabsContent>
+            </Tabs>
           )}
+
+          {/* ---------- Form Dialog ---------- */}
+          <Dialog open={showForm} onOpenChange={setShowForm}>
+            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>{editingItem ? 'Edit Event' : 'Add New Event'}</DialogTitle>
+                <DialogDescription>
+                  {editingItem ? 'Update the schedule details below.' : 'Create a new class, assignment, or study session.'}
+                </DialogDescription>
+              </DialogHeader>
+              <ScheduleForm
+                editingItem={editingItem}
+                onSubmit={handleFormSubmit}
+                onCancel={handleFormCancel}
+                scheduleCount={scheduleItems.length}
+                initialDate={initialFormDate || (selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined)}
+              />
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -297,5 +365,7 @@ export const Schedule: React.FC<ScheduleProps> = ({
         </div>
       )}
     </AppShell>
+    {ConfirmDialogComponent}
+    </>
   );
 };

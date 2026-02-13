@@ -31,6 +31,7 @@ import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { supabase } from '../../integrations/supabase/client';
 import { toast } from 'sonner';
+import { useConfirmDialog } from '../ui/confirm-dialog';
 import { UserProfile } from '../../types/Document';
 import { LearningGoals } from './components.tsx/LearningGoals';
 import { AppShell } from '../layout/AppShell';
@@ -94,6 +95,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
   profile,
   onProfileUpdate
 }) => {
+  const { confirm: confirmAction, ConfirmDialogComponent } = useConfirmDialog();
   // Tab state
   const [activeTab, setActiveTab] = useState<'profile' | 'learning' | 'goals' | 'achievements' | 'study' | 'privacy' | 'notifications' | 'security'>('profile');
 
@@ -615,9 +617,15 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
   };
 
   const deleteAccount = async () => {
-    if (!confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-      return;
-    }
+    const confirmed = await confirmAction({
+      title: 'Delete Account',
+      description: 'Are you sure you want to delete your account? This action cannot be undone.',
+      confirmLabel: 'Delete Account',
+      variant: 'destructive',
+      confirmPhrase: 'DELETE',
+      confirmPhraseLabel: 'Type "DELETE" to confirm',
+    });
+    if (!confirmed) return;
 
     try {
       toast.info('Account deletion feature would be implemented here');
@@ -696,6 +704,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
   );
 
   return (
+    <>
     <AppShell left={leftRail} right={rightRail}>
       <div className="px-4 pb-12">
         <HeroHeader
@@ -1415,5 +1424,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
         </Card>
       </div>
     </AppShell>
+    {ConfirmDialogComponent}
+    </>
   );
 };

@@ -74,6 +74,7 @@ import { UniversalTutorial } from '@/components/notes/components/UniversalTutori
 import { useTutorial } from '@/components/notes/hooks/useTutorials';
 import { getNoteEditorTutorial } from '@/components/notes/config/tutorialConfigs';
 import { convertMarkdownToHtml, convertHtmlToMarkdown } from '../../../utils/markdownUtils';
+import { EditorActionDialog, EditorActionMode } from './EditorActionDialog';
 
 /* ---------- Tiptap ---------- */
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -435,6 +436,25 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           class:
             'prose prose-sm sm:prose lg:prose-lg dark:prose-invert focus:outline-none min-h-full p-6 max-w-none',
         },
+        handlePaste(view, event) {
+          const text = event.clipboardData?.getData('text/plain');
+          if (text && isLikelyMarkdown(text)) {
+            const html = convertMarkdownToHtml(text);
+            const { state, dispatch } = view;
+            const { tr } = state;
+            const selection = state.selection;
+
+            // If we have a selection, replace it. Otherwise just insert at cursor.
+            if (!selection.empty) {
+              tr.delete(selection.from, selection.to);
+            }
+
+            editor?.chain().focus().insertContent(html).run();
+            toast.success('Markdown detected and formatted!');
+            return true;
+          }
+          return false;
+        },
       },
     });
     const handleStartTutorial = () => {
@@ -648,6 +668,50 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
       }
     };
 
+    const isLikelyMarkdown = (text: string): boolean => {
+      if (!text || text.trim().length === 0) return false;
+      // Basic check for common markdown patterns
+      const patterns = [
+        /^#\s+/m,           // Headings
+        /^\*\s+/m,          // Bullet Lists
+        /^\d+\.\s+/m,       // Ordered lists
+        /\[.+\]\(.+\)/,     // Links
+        /\*\*.+\*\*/,       // Bold
+        /^\s*>\s+/m,        // Blockquotes
+        /^```/m,            // Code blocks
+        /`[^`]+`/,          // Inline code
+        /\[x\]\s+.+/i       // Checkboxes
+      ];
+      return patterns.some(pattern => pattern.test(text));
+    };
+
+    const insertMarkdown = () => {
+      setEditorActionDialog({ isOpen: true, mode: 'markdown' });
+    };
+
+    const handleEditorActionConfirm = (value: string) => {
+      const mode = editorActionDialog.mode;
+      
+      if (!editor) return;
+
+      switch (mode) {
+        case 'markdown':
+          const html = convertMarkdownToHtml(value);
+          editor.chain().focus().insertContent(html).run();
+          toast.success('Markdown inserted successfully');
+          break;
+        case 'link':
+          editor.chain().focus().setLink({ href: value }).run();
+          break;
+        case 'image':
+          editor.chain().focus().setImage({ src: value }).run();
+          break;
+        case 'latex':
+          editor.chain().focus().insertLaTeX({ latex: value, displayMode: true }).run();
+          break;
+      }
+    };
+
     // Diagram rendering useEffect (only for visual rendering, doesn't affect content)
     useEffect(() => {
       const renderAllDiagrams = async () => {
@@ -746,6 +810,10 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     const [showMobileFormatMenu, setShowMobileFormatMenu] = useState(false);
     const [showFlashcardsMenu, setShowFlashcardsMenu] = useState(false);
     const [showTutorial, setShowTutorial] = useState(false);
+    const [editorActionDialog, setEditorActionDialog] = useState<{
+      isOpen: boolean;
+      mode: EditorActionMode;
+    }>({ isOpen: false, mode: 'markdown' });
 
     const toolbarRef = useRef<HTMLDivElement>(null);
 
@@ -1038,7 +1106,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
       // Insert
       <React.Fragment key="insert">
         <button
-          onClick={() => { const url = prompt('Enter link URL:'); if (url) editor?.chain().focus().setLink({ href: url }).run(); }}
+          onClick={() => setEditorActionDialog({ isOpen: true, mode: 'link' })}
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
           title="Insert Link"
           data-tutorial="insert-link-button"
@@ -1046,7 +1114,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           <LinkIcon className="w-4 h-4" />
         </button>
         <button
-          onClick={() => { const url = prompt('Enter image URL:'); if (url) editor?.chain().focus().setImage({ src: url }).run(); }}
+          onClick={() => setEditorActionDialog({ isOpen: true, mode: 'image' })}
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
           title="Insert Image"
           data-tutorial="insert-image-button"
@@ -1062,12 +1130,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           <TableIcon className="w-4 h-4" />
         </button>
         <button
-          onClick={() => {
-            const latex = prompt('Enter LaTeX code (e.g., E = mc^2):');
-            if (latex) {
-              editor?.chain().focus().insertLaTeX({ latex, displayMode: true }).run();
-            }
-          }}
+          onClick={() => setEditorActionDialog({ isOpen: true, mode: 'latex' })}
           className="p-2 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900 hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200"
           title="Insert LaTeX Equation"
           data-tutorial="insert-latex-button"
@@ -1109,6 +1172,13 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
+        </button>
+        <button
+          onClick={insertMarkdown}
+          className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+          title="Insert Markdown Code"
+        >
+          <FilePlus className="w-4 h-4 text-orange-600 dark:text-orange-400" />
         </button>
         <button
           onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
@@ -1723,6 +1793,14 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           isOpen={isOpen}
           onClose={closeTutorial}
           onComplete={completeTutorial}
+        />
+
+        {/* Editor Action Dialog (Markdown, Link, Image, LaTeX) */}
+        <EditorActionDialog
+          isOpen={editorActionDialog.isOpen}
+          onClose={() => setEditorActionDialog(prev => ({ ...prev, isOpen: false }))}
+          onConfirm={handleEditorActionConfirm}
+          mode={editorActionDialog.mode}
         />
       </div>
     );

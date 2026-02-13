@@ -17,6 +17,8 @@ export const useSocialActions = (
   setSuggestedUsers: React.Dispatch<React.SetStateAction<SocialUserWithDetails[]>>,
   groups: SocialGroupWithDetails[],
   setGroups: React.Dispatch<React.SetStateAction<SocialGroupWithDetails[]>>,
+  setTrendingPosts: React.Dispatch<React.SetStateAction<SocialPostWithDetails[]>>,
+  setUserPosts: React.Dispatch<React.SetStateAction<SocialPostWithDetails[]>>,
   setCurrentUser: React.Dispatch<React.SetStateAction<SocialUserWithDetails | null>>,
   refetchCurrentUser?: () => Promise<void>
 ) => {
@@ -359,7 +361,7 @@ export const useSocialActions = (
           is_bookmarked: false,
           author: currentUser as any,
           media: [],
-          hashtags: extractHashtags(content).map(h => ({ 
+          hashtags: extractHashtags(content).map(h => ({
             id: `offline-tag-${uuidv4()}`,
             name: h,
             posts_count: 0,
@@ -370,10 +372,10 @@ export const useSocialActions = (
 
         // Save to local state
         setPosts(prev => [optimisticPost, ...prev]);
-        
+
         // Save to IndexedDB
         await offlineStorage.save(STORES.SOCIAL_POSTS, optimisticPost);
-        
+
         // Add to pending sync
         await offlineStorage.addPendingSync('create', STORES.SOCIAL_POSTS, {
           content,
@@ -401,9 +403,9 @@ export const useSocialActions = (
         const url = await uploadFile(file);
         if (url) {
           media.push({
-            type: file.type.startsWith('image/') ? 'image' 
-                  : file.type.startsWith('video/') ? 'video' 
-                  : 'document',
+            type: file.type.startsWith('image/') ? 'image'
+              : file.type.startsWith('video/') ? 'video'
+                : 'document',
             url: url,
             filename: file.name,
             size_bytes: file.size,
@@ -441,7 +443,7 @@ export const useSocialActions = (
           description: response.moderation.reason || 'Content does not meet educational guidelines',
           duration: 5000,
         });
-        
+
         return {
           success: false,
           moderation: response.moderation
@@ -494,7 +496,7 @@ export const useSocialActions = (
       }
 
       // Optimistic update
-      setPosts(prev => prev.map(post => {
+      const updateList = (prev: SocialPostWithDetails[]) => prev.map(post => {
         if (post.id === postId) {
           const updatedPost = structuredClone(post);
           updatedPost.is_liked = !isLiked;
@@ -502,7 +504,11 @@ export const useSocialActions = (
           return updatedPost;
         }
         return post;
-      }));
+      });
+
+      setPosts(updateList);
+      setTrendingPosts(updateList);
+      setUserPosts(updateList);
 
       const { data: response, error } = await supabase.functions.invoke('toggle-like', {
         body: { post_id: postId, is_liked: isLiked },
@@ -510,7 +516,7 @@ export const useSocialActions = (
 
       if (error || !response?.success) {
         // Revert optimistic update
-        setPosts(prev => prev.map(post => {
+        const revertList = (prev: SocialPostWithDetails[]) => prev.map(post => {
           if (post.id === postId) {
             const revertedPost = structuredClone(post);
             revertedPost.is_liked = isLiked;
@@ -518,7 +524,11 @@ export const useSocialActions = (
             return revertedPost;
           }
           return post;
-        }));
+        });
+
+        setPosts(revertList);
+        setTrendingPosts(revertList);
+        setUserPosts(revertList);
         toast.error(isLiked ? 'Failed to unlike post' : 'Failed to like post');
         return;
       }
@@ -541,7 +551,7 @@ export const useSocialActions = (
         }
       }
     } catch (error) {
-      setPosts(prev => prev.map(post => {
+      const revertList = (prev: SocialPostWithDetails[]) => prev.map(post => {
         if (post.id === postId) {
           const revertedPost = structuredClone(post);
           revertedPost.is_liked = isLiked;
@@ -549,7 +559,11 @@ export const useSocialActions = (
           return revertedPost;
         }
         return post;
-      }));
+      });
+
+      setPosts(revertList);
+      setTrendingPosts(revertList);
+      setUserPosts(revertList);
       toast.error('Failed to update like');
     }
   };
@@ -578,7 +592,7 @@ export const useSocialActions = (
       }
 
       // Optimistic update first
-      setPosts(prev => prev.map(post => {
+      const updateList = (prev: SocialPostWithDetails[]) => prev.map(post => {
         if (post.id === postId) {
           const updatedPost = structuredClone(post);
           updatedPost.bookmarks_count = isBookmarked ? post.bookmarks_count - 1 : post.bookmarks_count + 1;
@@ -586,7 +600,11 @@ export const useSocialActions = (
           return updatedPost;
         }
         return post;
-      }));
+      });
+
+      setPosts(updateList);
+      setTrendingPosts(updateList);
+      setUserPosts(updateList);
 
       const { data: response, error } = await supabase.functions.invoke('toggle-bookmark', {
         body: { post_id: postId, is_bookmarked: isBookmarked },
@@ -594,7 +612,7 @@ export const useSocialActions = (
 
       if (error || !response?.success) {
         // Revert optimistic update on error
-        setPosts(prev => prev.map(post => {
+        const revertList = (prev: SocialPostWithDetails[]) => prev.map(post => {
           if (post.id === postId) {
             const revertedPost = structuredClone(post);
             revertedPost.bookmarks_count = isBookmarked ? post.bookmarks_count + 1 : post.bookmarks_count - 1;
@@ -602,12 +620,16 @@ export const useSocialActions = (
             return revertedPost;
           }
           return post;
-        }));
+        });
+
+        setPosts(revertList);
+        setTrendingPosts(revertList);
+        setUserPosts(revertList);
         toast.error(isBookmarked ? 'Failed to remove bookmark' : 'Failed to bookmark post');
       }
     } catch (error) {
       // Revert optimistic update on error
-      setPosts(prev => prev.map(post => {
+      const revertList = (prev: SocialPostWithDetails[]) => prev.map(post => {
         if (post.id === postId) {
           const revertedPost = structuredClone(post);
           revertedPost.bookmarks_count = isBookmarked ? post.bookmarks_count + 1 : post.bookmarks_count - 1;
@@ -615,7 +637,11 @@ export const useSocialActions = (
           return revertedPost;
         }
         return post;
-      }));
+      });
+
+      setPosts(revertList);
+      setTrendingPosts(revertList);
+      setUserPosts(revertList);
       toast.error('Failed to update bookmark');
     }
   };
@@ -710,7 +736,7 @@ export const useSocialActions = (
       if (!navigator.onLine) {
         // Optimistic update
         setPosts(prev => prev.filter(p => p.id !== postId));
-        
+
         await offlineStorage.addPendingSync('delete', STORES.SOCIAL_POSTS, { id: postId });
 
         toast.success('Post deleted offline');

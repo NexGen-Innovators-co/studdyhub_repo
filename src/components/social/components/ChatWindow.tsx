@@ -40,6 +40,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '../../ui/dialog';
+import { useConfirmDialog } from '../../ui/confirm-dialog';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { ChatSessionWithDetails, ChatMessageWithDetails } from '../types/social';
@@ -848,8 +849,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     //console.log('Copied message:', content);
   };
 
+  const { confirm: confirmAction, ConfirmDialogComponent } = useConfirmDialog();
+
   const confirmDelete = async (messageId: string) => {
-    if (!window.confirm('Delete this message? This cannot be undone.')) return;
+    const confirmed = await confirmAction({
+      title: 'Delete Message',
+      description: 'Delete this message? This cannot be undone.',
+      confirmLabel: 'Delete',
+      variant: 'destructive',
+    });
+    if (!confirmed) return;
     await deleteMessage(messageId);
   };
 
@@ -1131,6 +1140,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {ConfirmDialogComponent}
     </>
   );
 };

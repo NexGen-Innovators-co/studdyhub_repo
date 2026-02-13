@@ -228,7 +228,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     const {
       createPost, updateProfile, toggleLike, toggleBookmark, sharePost, toggleFollow,
       isUploading, createGroup, joinGroup, leaveGroup, deletePost, editPost,
-    } = useSocialActions(currentUser, posts, setPosts, setSuggestedUsers, groups, setGroups, setCurrentUser, refetchCurrentUser);
+    } = useSocialActions(currentUser, posts, setPosts, setSuggestedUsers, groups, setGroups, setTrendingPosts, setUserPosts, setCurrentUser, refetchCurrentUser);
 
     const {
       addComment, updateNewComment, togglePostExpanded, isPostExpanded,
@@ -397,7 +397,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
           setSelectedChatSession(sessionId);
           setShowChatList(true);
           await setActiveSession(sessionId);
-        } catch {}
+        } catch { }
       }
     }, [createP2PChatSession, refetchChatSessions, setActiveSession]);
 

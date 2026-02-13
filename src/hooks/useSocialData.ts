@@ -106,9 +106,9 @@ export const useSocialData = (
     if (!reset && (!hasMorePosts || isLoadingMorePosts)) return;
 
     if (!navigator.onLine) {
-        setIsLoading(false);
-        setIsLoadingMorePosts(false);
-        return;
+      setIsLoading(false);
+      setIsLoadingMorePosts(false);
+      return;
     }
 
     try {
@@ -175,14 +175,14 @@ export const useSocialData = (
     if (!reset && (!hasMoreTrendingPosts || isLoadingMorePosts)) return;
 
     if (!navigator.onLine) {
-        setIsLoading(false);
-        setIsLoadingMorePosts(false);
-        return;
+      setIsLoading(false);
+      setIsLoadingMorePosts(false);
+      return;
     }
 
     try {
       if (reset) {
-        setIsLoading(trendingPosts.length === 0); 
+        setIsLoading(trendingPosts.length === 0);
       }
       if (!reset) setIsLoadingMorePosts(true);
 
@@ -228,8 +228,8 @@ export const useSocialData = (
     if (!reset && (!hasMoreUserPosts || isLoadingUserPosts)) return;
 
     if (!navigator.onLine) {
-        setIsLoadingUserPosts(false);
-        return;
+      setIsLoadingUserPosts(false);
+      return;
     }
 
     try {
@@ -390,9 +390,9 @@ export const useSocialData = (
     const initializeSocialUser = async () => {
       try {
         if (!navigator.onLine) {
-            setIsLoading(false);
-            setIsLoadingGroups(false);
-            return;
+          setIsLoading(false);
+          setIsLoadingGroups(false);
+          return;
         }
 
         const { data: { user } } = await supabase.auth.getUser();
@@ -732,14 +732,14 @@ export const useSocialData = (
         prev.map(post => {
           if (post.id === postId) {
             const isCurrentUser = userId === currentUserIdRef.current;
-            
-            // If it's the current user, we skip the count increment because 
-            // it's already handled by the manual update in useSocialActions.toggleLike
-            const likesChange = isCurrentUser ? 0 : (eventType === 'INSERT' ? 1 : eventType === 'DELETE' ? -1 : 0);
+
+            // If it's the current user, we only update if it's NOT already in the desired state
+            // to avoid overwriting the manual optimistic update which is more immediate
+            const likesChange = eventType === 'INSERT' ? 1 : eventType === 'DELETE' ? -1 : 0;
 
             return {
               ...post,
-              likes_count: Math.max(0, post.likes_count + likesChange),
+              likes_count: Math.max(0, post.likes_count + (isCurrentUser ? 0 : likesChange)),
               is_liked: isCurrentUser ? eventType === 'INSERT' : post.is_liked
             };
           }
@@ -749,6 +749,8 @@ export const useSocialData = (
       setPosts(updatePostLikes);
       setTrendingPosts(updatePostLikes);
       setUserPosts(updatePostLikes);
+      setLikedPosts(updatePostLikes);
+      setBookmarkedPosts(updatePostLikes);
     }
   };
 
@@ -772,6 +774,8 @@ export const useSocialData = (
       setPosts(updatePostComments);
       setTrendingPosts(updatePostComments);
       setUserPosts(updatePostComments);
+      setLikedPosts(updatePostComments);
+      setBookmarkedPosts(updatePostComments);
     }
   };
 
@@ -807,16 +811,18 @@ export const useSocialData = (
             .from('social_likes')
             .select('id')
             .eq('user_id', currentUserIdRef.current)
-            .eq('post_id', postId),
+            .eq('post_id', postId)
+            .maybeSingle(),
           supabase
             .from('social_bookmarks')
             .select('id')
             .eq('user_id', currentUserIdRef.current)
             .eq('post_id', postId)
+            .maybeSingle()
         ]);
 
-        isLiked = !likesResult.error;
-        isBookmarked = !bookmarksResult.error;
+        isLiked = !!likesResult.data;
+        isBookmarked = !!bookmarksResult.data;
       }
 
       return {
@@ -855,7 +861,7 @@ export const useSocialData = (
     // setTrendingPosts([]);
     // setUserPosts([]);
     // setGroups([]);
-    
+
     setSuggestedUsers([]);
     // Clear any buffered new posts when resetting
     setNewPostsBuffer([]);
@@ -896,11 +902,11 @@ export const useSocialData = (
 
       try {
         if (reset) {
-             if (suggestedUsers.length === 0) setIsLoadingSuggestedUsers(true);
+          if (suggestedUsers.length === 0) setIsLoadingSuggestedUsers(true);
         } else {
-             setIsLoadingSuggestedUsers(true);
+          setIsLoadingSuggestedUsers(true);
         }
-        
+
         if (reset) {
           setSuggestedUsersOffset(0);
           setSuggestedUsers([]);

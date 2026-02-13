@@ -9,6 +9,7 @@ import { cn } from '../../../lib/utils';
 import { format, isSameMonth, isSameDay, isToday } from 'date-fns';
 import { formatTime } from '../utils/scheduleUtils';
 import { ScheduleEventCard } from './ScheduleEventCard';
+import { useMediaQuery } from 'usehooks-ts';
 
 interface CalendarViewProps {
   currentMonth: Date;
@@ -40,44 +41,49 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onDelete,
   scheduleCount
 }) => {
+  const isMobile = useMediaQuery('(max-width: 768px)');
+  
+  // For mobile, we might want to default to showing just the current week or a simplified view
+  // But for now, let's just make the grid more responsive and clean up the header
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-500">
       {/* Calendar Header */}
-      <div className="flex items-center justify-between bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-        <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
-          <h2 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-gray-100">
+      <div className="flex items-center justify-between bg-white/80 dark:bg-slate-800/80 backdrop-blur-md p-4 rounded-2xl shadow-sm border border-slate-200/50 dark:border-slate-700/50">
+        <div className="flex items-center gap-4">
+          <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-700 to-indigo-600 dark:from-blue-400 dark:to-indigo-300 bg-clip-text text-transparent">
             {format(currentMonth, 'MMMM yyyy')}
           </h2>
-          <div className="flex gap-1">
-            <Button variant="outline" size="icon" onClick={onPrevMonth} className="h-8 w-8">
-              <ChevronLeft className="h-4 w-4" />
+        </div>
+        
+        <div className="flex gap-2">
+           <Button variant="ghost" size="icon" onClick={onPrevMonth} className="h-9 w-9 rounded-full hover:bg-blue-50 dark:hover:bg-slate-700">
+              <ChevronLeft className="h-5 w-5 text-slate-600 dark:text-slate-300" />
             </Button>
-            <Button variant="outline" size="icon" onClick={onNextMonth} className="h-8 w-8">
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={onToday} className="ml-1">
+            <Button variant="ghost" size="sm" onClick={onToday} className="font-medium text-blue-600 dark:text-blue-400">
               Today
             </Button>
-          </div>
+            <Button variant="ghost" size="icon" onClick={onNextMonth} className="h-9 w-9 rounded-full hover:bg-blue-50 dark:hover:bg-slate-700">
+              <ChevronRight className="h-5 w-5 text-slate-600 dark:text-slate-300" />
+            </Button>
         </div>
       </div>
 
       <div className="flex flex-col gap-8">
         {/* Calendar Grid */}
-        <Card className="w-full border-none shadow-md overflow-hidden">
+        <Card className="w-full border-none shadow-lg overflow-hidden bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-2xl ring-1 ring-slate-200 dark:ring-slate-800">
           <CardContent className="p-0">
             {/* Days Header */}
-            <div className="grid grid-cols-7 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+            <div className="grid grid-cols-7 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                <div key={day} className="py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-slate-500 uppercase tracking-wider">
-                  <span className="hidden sm:inline">{day}</span>
-                  <span className="sm:hidden">{day.charAt(0)}</span>
+                <div key={day} className="py-3 text-center text-xs font-bold text-slate-400 uppercase tracking-widest">
+                  {isMobile ? day.charAt(0) : day}
                 </div>
               ))}
             </div>
 
             {/* Day Cells */}
-            <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 dark:bg-slate-700 gap-[1px]">
+            <div className="grid grid-cols-7 auto-rows-fr bg-slate-100 dark:bg-slate-800 gap-[1px]">
               {calendarDays.map((day) => {
                 const events = getEventsForDay(day);
                 const isSelected = selectedDate && isSameDay(day, selectedDate);
@@ -89,64 +95,65 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     key={day.toISOString()}
                     onClick={() => onSelectDate(day)}
                     className={cn(
-                      "min-h-[80px] sm:min-h-[120px] p-1 sm:p-2 bg-white dark:bg-slate-800 cursor-pointer transition-colors relative hover:bg-slate-50 dark:hover:bg-slate-800/80",
-                      !isCurrentMonth && "bg-slate-50 dark:bg-slate-900/20 text-slate-400",
-                      isSelected && "ring-2 ring-inset ring-blue-500 z-10"
+                      "min-h-[60px] sm:min-h-[120px] p-1 sm:p-2 bg-white dark:bg-slate-900/80 cursor-pointer transition-all duration-200 relative group",
+                      !isCurrentMonth && "bg-slate-50/30 dark:bg-slate-900/40 text-slate-300 dark:text-slate-600",
+                      isSelected && "bg-blue-50/50 dark:bg-blue-900/10 z-10",
+                      !isSelected && "hover:bg-slate-50 dark:hover:bg-slate-800"
                     )}
                   >
-                    <div className="flex justify-between items-start mb-1">
+                     {isSelected && (
+                        <div className="absolute inset-x-0 bottom-0 h-1 bg-blue-500 rounded-full mx-2 mb-1" />
+                     )}
+
+                    <div className="flex flex-col items-center sm:items-start justify-between h-full">
                       <span className={cn(
-                        "text-xs sm:text-sm font-medium h-5 w-5 sm:h-6 sm:w-6 flex items-center justify-center rounded-full",
+                        "text-xs sm:text-sm font-medium h-7 w-7 flex items-center justify-center rounded-full mb-1 transition-all",
                         isTodayDate
-                          ? "bg-blue-600 text-white"
-                          : "text-slate-700 dark:text-slate-300"
+                          ? "bg-blue-600 text-white shadow-md shadow-blue-500/30"
+                          : isSelected 
+                            ? "text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30"
+                            : "text-slate-700 dark:text-slate-400 group-hover:bg-slate-100 dark:group-hover:bg-slate-800"
                       )}>
                         {format(day, 'd')}
                       </span>
-                      {events.length > 0 && (
-                        <span className="text-[10px] sm:text-xs font-bold text-slate-400">
-                          {events.length}
-                        </span>
-                      )}
-                    </div>
 
-                    {/* Event Indicators */}
-                    <div className="mt-1 flex flex-wrap gap-0.5 sm:block sm:space-y-1">
-                      {/* Mobile: Dots */}
-                      <div className="flex flex-wrap gap-0.5 sm:hidden">
-                        {events.slice(0, 4).map((event, i) => (
-                          <div
-                            key={`${event.id}-dot-${i}`}
-                            className="h-1.5 w-1.5 rounded-full"
-                            style={{ backgroundColor: event.color }}
-                          />
-                        ))}
-                        {events.length > 4 && (
-                          <span className="text-[8px] text-slate-400 font-bold">+</span>
-                        )}
-                      </div>
+                      {/* Event Indicators */}
+                      <div className="w-full flex-1 flex flex-col justify-end gap-1">
+                        {/* Mobile: Dots */}
+                        <div className={cn("flex justify-center gap-1 flex-wrap", !isMobile && "hidden")}>
+                          {events.slice(0, 3).map((event, i) => (
+                            <div
+                              key={`${event.id}-dot-${i}`}
+                              className="h-1.5 w-1.5 rounded-full"
+                              style={{ backgroundColor: event.color }}
+                            />
+                          ))}
+                           {events.length > 3 && (
+                            <div className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+                          )}
+                        </div>
 
-                      {/* Desktop: Full Labels */}
-                      <div className="hidden sm:block space-y-1">
-                        {events.slice(0, 3).map((event, i) => (
-                          <div
-                            key={`${event.id}-${i}`}
-                            className="text-[9px] sm:text-xs truncate px-1 py-0.5 rounded border-l-2 opacity-90 leading-tight"
-                            style={{
-                              backgroundColor: `${event.color}20`,
-                              color: event.color,
-                              borderColor: event.color
-                            }}
-                          >
-                            <span className="hidden sm:inline">{formatTime(new Date(event.startTime))} </span>
-                            {event.title}
-                          </div>
-                        ))}
-                        {events.length > 3 && (
-                          <div className="text-[10px] text-slate-400 pl-1">
-                            + {events.length - 3} more
-                          </div>
-                        )}
+                        {/* Desktop: Full Labels */}
+                        <div className={cn("space-y-1 w-full", isMobile && "hidden")}>
+                          {events.slice(0, 3).map((event, i) => (
+                            <div
+                              key={`${event.id}-${i}`}
+                              className="text-[10px] truncate px-1.5 py-0.5 rounded-md border-l-2 font-medium leading-tight shadow-sm"
+                              style={{
+                                backgroundColor: `color-mix(in srgb, ${event.color} 10%, transparent)`,
+                                color: `color-mix(in srgb, ${event.color} 80%, black)`, // Darken text slightly
+                                borderColor: event.color,
+                              }}
+                            >
+                               {event.title}
+                            </div>
+                          ))}
+                          {events.length > 3 && (
+                            <div className="text-[10px] text-slate-400 pl-1 font-medium">
+                              + {events.length - 3} more
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

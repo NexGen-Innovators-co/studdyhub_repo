@@ -15,6 +15,7 @@ import { Badge } from '../ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { toast } from 'sonner';
+import { useConfirmDialog } from '../ui/confirm-dialog';
 import { supabase } from '../../integrations/supabase/client';
 import { Document } from '../../types/Document';
 import { useAuth } from '../../hooks/useAuth';
@@ -89,6 +90,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const { subscriptionLimits, forceRefreshDocuments } = useAppContext();
   const { canUploadDocuments } = useFeatureAccess();
 
+  const { confirm: confirmAction, ConfirmDialogComponent } = useConfirmDialog();
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [docUserId, setDocUserId] = useState<string | null>(null);
@@ -491,9 +493,13 @@ const lastDocumentElementRef = useCallback(
   }, [appOperations, user, loadDataIfNeeded]);
 
   const handleDeleteFolder = useCallback(async (folderId: string) => {
-    if (!window.confirm('Are you sure you want to delete this folder? Documents will not be deleted.')) {
-      return;
-    }
+    const confirmed = await confirmAction({
+      title: 'Delete Folder',
+      description: 'Are you sure you want to delete this folder? Documents will not be deleted.',
+      confirmLabel: 'Delete',
+      variant: 'destructive',
+    });
+    if (!confirmed) return;
 
     const success = await appOperations.deleteFolder(folderId);
     if (success) {
@@ -504,7 +510,7 @@ const lastDocumentElementRef = useCallback(
         await loadDataIfNeeded('folders');
       }
     }
-  }, [appOperations, selectedFolderId, user, loadDataIfNeeded]);
+  }, [appOperations, selectedFolderId, user, loadDataIfNeeded, confirmAction]);
 
   // Optimized initial data load with error handling
   useEffect(() => {
@@ -571,6 +577,7 @@ const lastDocumentElementRef = useCallback(
   }, [selectedFolderId, filteredAndSortedDocuments, folders]);
 
   return (
+    <>
     <div className="min-h-[50vh] max-w-7xl max-h-[90vh] overflow-auto mx-auto p-4 md:p-6 lg:p-8 shadow-sm">
         {/* Enhanced Header */}
         <div className="text-center mb-8 md:mb-12">
@@ -1170,8 +1177,14 @@ const lastDocumentElementRef = useCallback(
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
-                          if (confirm('Are you sure you want to delete this document?')) {
+                        onClick={async () => {
+                          const confirmed = await confirmAction({
+                            title: 'Delete Document',
+                            description: 'Are you sure you want to delete this document?',
+                            confirmLabel: 'Delete',
+                            variant: 'destructive',
+                          });
+                          if (confirmed) {
                             handleClosePreview();
                             handleDeleteDocument(selectedDocument.id, selectedDocument.file_url);
                           }
@@ -1340,8 +1353,14 @@ const lastDocumentElementRef = useCallback(
                         variant="destructive" 
                         size="sm"
                         className="col-span-2"
-                        onClick={() => {
-                          if (confirm('Delete this document?')) {
+                        onClick={async () => {
+                          const confirmed = await confirmAction({
+                            title: 'Delete Document',
+                            description: 'Are you sure you want to delete this document?',
+                            confirmLabel: 'Delete',
+                            variant: 'destructive',
+                          });
+                          if (confirmed) {
                             handleClosePreview();
                             handleDeleteDocument(selectedDocument.id, selectedDocument.file_url);
                           }
@@ -1360,5 +1379,7 @@ const lastDocumentElementRef = useCallback(
         )}
         
       </div>
+    {ConfirmDialogComponent}
+    </>
   );
 };

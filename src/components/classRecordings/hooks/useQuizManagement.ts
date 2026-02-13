@@ -7,6 +7,13 @@ import { ClassRecording, Quiz, QuizQuestion } from '../../../types/Class';
 import { QuizAttempt } from '../../../types/EnhancedClasses';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 
+interface ConfirmOptions {
+  title: string;
+  description: string;
+  confirmLabel?: string;
+  variant?: 'default' | 'destructive';
+}
+
 interface UseQuizManagementProps {
   onGenerateQuiz: (recording: ClassRecording, quiz: Quiz) => void;
   recordQuizAttempt: (
@@ -17,12 +24,14 @@ interface UseQuizManagementProps {
     timeTaken: number
   ) => Promise<QuizAttempt | null>;
   fetchUserStats: () => Promise<void>;
+  confirmAction?: (options: ConfirmOptions) => Promise<boolean>;
 }
 
 export const useQuizManagement = ({
   onGenerateQuiz,
   recordQuizAttempt,
-  fetchUserStats
+  fetchUserStats,
+  confirmAction
 }: UseQuizManagementProps) => {
   const [quizMode, setQuizMode] = useState<{ recording: ClassRecording; quiz: Quiz } | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -100,18 +109,19 @@ export const useQuizManagement = ({
 
       const quiz: Quiz = {
         id: generateId(),
-        classId: recording.id,
+        class_id: recording.id,
         title: data.title || recording.title,
         questions: data.questions,
-        userId: user.id,
-        created_at: new Date().toISOString()
+        user_id: user.id,
+        created_at: new Date().toISOString(),
+        source_type: 'recording'
       };
 
       const { error: insertError } = await supabase
         .from('quizzes')
         .insert({
           id: quiz.id,
-          class_id: quiz.classId,
+          class_id: quiz.class_id,
           title: quiz.title,
           questions: quiz.questions as any,
           user_id: user.id,
@@ -172,10 +182,19 @@ export const useQuizManagement = ({
 
     const unansweredCount = userAnswers.filter(answer => answer === null).length;
     if (unansweredCount > 0) {
-      const confirmed = window.confirm(
-        `You have ${unansweredCount} unanswered question(s). Submit anyway?`
-      );
-      if (!confirmed) return;
+      if (confirmAction) {
+        const confirmed = await confirmAction({
+          title: 'Unanswered Questions',
+          description: `You have ${unansweredCount} unanswered question(s). Submit anyway?`,
+          confirmLabel: 'Submit Anyway',
+        });
+        if (!confirmed) return;
+      } else {
+        const confirmed = window.confirm(
+          `You have ${unansweredCount} unanswered question(s). Submit anyway?`
+        );
+        if (!confirmed) return;
+      }
     }
 
     setIsSubmitting(true);
@@ -220,14 +239,24 @@ export const useQuizManagement = ({
     } finally {
       setIsSubmitting(false);
     }
-  }, [quizMode, userAnswers, quizStartTime, recordQuizAttempt, fetchUserStats, isSubmitting]);
+  }, [quizMode, userAnswers, quizStartTime, recordQuizAttempt, fetchUserStats, isSubmitting, confirmAction]);
 
-  const handleExitQuizMode = useCallback(() => {
+  const handleExitQuizMode = useCallback(async () => {
     if (!showResults && userAnswers.some(answer => answer !== null)) {
-      const confirmed = window.confirm(
-        'You have not submitted this quiz. Your progress will be lost. Continue?'
-      );
-      if (!confirmed) return;
+      if (confirmAction) {
+        const confirmed = await confirmAction({
+          title: 'Exit Quiz',
+          description: 'You have not submitted this quiz. Your progress will be lost. Continue?',
+          confirmLabel: 'Exit',
+          variant: 'destructive',
+        });
+        if (!confirmed) return;
+      } else {
+        const confirmed = window.confirm(
+          'You have not submitted this quiz. Your progress will be lost. Continue?'
+        );
+        if (!confirmed) return;
+      }
     }
 
     setQuizMode(null);
@@ -235,7 +264,7 @@ export const useQuizManagement = ({
     setUserAnswers([]);
     setShowResults(false);
     setQuizStartTime(null);
-  }, [showResults, userAnswers]);
+  }, [showResults, userAnswers, confirmAction]);
 
   const calculateScore = useCallback((): number => {
     if (!quizMode?.quiz?.questions?.length) return 0;

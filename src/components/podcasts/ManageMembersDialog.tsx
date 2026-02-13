@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useConfirmDialog } from '../ui/confirm-dialog';
 import { createPodcastNotification } from '@/services/notificationHelpers';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -60,6 +61,7 @@ export const ManageMembersDialog: React.FC<ManageMembersDialogProps> = ({
   podcastTitle,
   isOwner
 }) => {
+  const { confirm: confirmAction, ConfirmDialogComponent } = useConfirmDialog();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -134,7 +136,13 @@ export const ManageMembersDialog: React.FC<ManageMembersDialogProps> = ({
   };
 
   const handleRemoveMember = async (memberId: string, memberName: string) => {
-    if (!confirm(`Remove ${memberName} from this podcast?`)) return;
+    const confirmed = await confirmAction({
+      title: 'Remove Member',
+      description: `Remove ${memberName} from this podcast?`,
+      confirmLabel: 'Remove',
+      variant: 'destructive',
+    });
+    if (!confirmed) return;
 
     try {
       const { error } = await supabase
@@ -193,6 +201,7 @@ export const ManageMembersDialog: React.FC<ManageMembersDialogProps> = ({
   const listeners = members.filter(m => m.role === 'listener');
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[80vh]">
         <DialogHeader>
@@ -295,6 +304,8 @@ export const ManageMembersDialog: React.FC<ManageMembersDialogProps> = ({
         )}
       </DialogContent>
     </Dialog>
+    {ConfirmDialogComponent}
+    </>
   );
 };
 

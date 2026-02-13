@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { useConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Loader2, Plus, Trash2, BookOpen, FileText, UploadCloud, Link2, BrainCircuit, Headphones, NotebookPen, Mic, Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppContext } from '@/hooks/useAppContext';
@@ -19,6 +20,7 @@ import { useCourseResources } from '@/hooks/useCourseResources';
 import { AIGeneratedCourse, generateInlineContent } from '@/services/aiServices';
 
 const CourseManagement = () => {
+  const { confirm: confirmAction, ConfirmDialogComponent } = useConfirmDialog();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { userProfile } = useAppContext();
@@ -405,6 +407,7 @@ const CourseManagement = () => {
   };
 
   return (
+    <>
     <div className="space-y-6 p-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400">Course Management</h1>
@@ -502,9 +505,15 @@ const CourseManagement = () => {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-destructive hover:text-destructive/90"
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      if (confirm('Delete this course?')) deleteCourseMutation.mutate(course.id);
+                      const confirmed = await confirmAction({
+                        title: 'Delete Course',
+                        description: 'Are you sure you want to delete this course?',
+                        confirmLabel: 'Delete',
+                        variant: 'destructive',
+                      });
+                      if (confirmed) deleteCourseMutation.mutate(course.id);
                     }}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -682,8 +691,14 @@ const CourseManagement = () => {
                       variant="ghost"
                       size="icon"
                       className="text-destructive hover:text-destructive/90"
-                      onClick={() => {
-                        if (confirm('Delete this material?')) deleteMaterialMutation.mutate(material.id);
+                      onClick={async () => {
+                        const confirmed = await confirmAction({
+                          title: 'Delete Material',
+                          description: 'Are you sure you want to delete this material?',
+                          confirmLabel: 'Delete',
+                          variant: 'destructive',
+                        });
+                        if (confirmed) deleteMaterialMutation.mutate(material.id);
                       }}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -738,8 +753,14 @@ const CourseManagement = () => {
                             size="icon"
                             className="text-destructive hover:text-destructive/90"
                             disabled={removeResource.isPending}
-                            onClick={() => {
-                              if (confirm('Unlink this resource from the course?'))
+                            onClick={async () => {
+                              const confirmed = await confirmAction({
+                                title: 'Unlink Resource',
+                                description: 'Unlink this resource from the course?',
+                                confirmLabel: 'Unlink',
+                                variant: 'destructive',
+                              });
+                              if (confirmed)
                                 removeResource.mutate({ resourceId: resource.id, courseId: selectedCourseId });
                             }}
                           >
@@ -756,6 +777,8 @@ const CourseManagement = () => {
         </Card>
       </div>
     </div>
+    {ConfirmDialogComponent}
+    </>
   );
 };
 
