@@ -46,9 +46,14 @@ export const CourseLibrary: React.FC = () => {
     navigate('/library', { replace: true });
   }, [navigate]);
 
+  // Known tab names used by CourseList — anything else in params.tab is a course UUID
+  const LIBRARY_TAB_NAMES = new Set(['all', 'global', 'my-school']);
+
   // On mount or URL change, sync state with URL
   useEffect(() => {
-    const courseId = params.courseId;
+    // Route is /library/:tab — distinguish tab names from course UUIDs
+    const tabValue = params.tab;
+    const courseId = (tabValue && !LIBRARY_TAB_NAMES.has(tabValue)) ? tabValue : params.courseId;
     if (courseId) {
       // If courseId in URL, open dashboard view
       if (!selectedCourse || selectedCourse.id !== courseId) {
@@ -62,7 +67,7 @@ export const CourseLibrary: React.FC = () => {
     } else {
       setView('list');
     }
-  }, [params.courseId]);
+  }, [params.tab, params.courseId]);
 
   return (
     <div className="h-full p-6 bg-background">

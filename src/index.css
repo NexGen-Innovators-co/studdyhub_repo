@@ -560,6 +560,23 @@ All colors MUST be HSL.
   border-color: #374151;
 }
 
+/*
+ * Hide mermaid error nodes that leak into the document body.
+ * Mermaid v11 occasionally appends <svg> error markers directly
+ * to <body>, which pushes app content and breaks the layout.
+ */
+body > svg[id*="mermaid"],
+body > [aria-roledescription="error"],
+body > .error-icon,
+body > [id^="d"][id$="mermaid"] {
+  display: none !important;
+  position: absolute !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
 /* Smooth Scrolling */
 .ProseMirror {
   scroll-behavior: smooth;

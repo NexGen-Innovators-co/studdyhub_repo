@@ -1,6 +1,6 @@
 import React, { memo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Brain, BookOpen, Lightbulb, Database, ShieldCheck, Zap, Sparkles, CheckCircle2, Loader2 } from 'lucide-react';
+import { ChevronDown, Brain, BookOpen, Lightbulb, Database, ShieldCheck, Zap, Sparkles, CheckCircle2, Loader2, Tag, FileText, Target, MessageSquare, Hash } from 'lucide-react';
 import { ThinkingStep } from '@/types/Class';
 import { cn } from '@/lib/utils';
 
@@ -184,6 +184,66 @@ export const ThinkingStepsDisplay = memo(({ steps, isStreaming, className }: Thi
                                 {step.detail && (
                                     <div className="mt-1 text-xs text-slate-500 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded p-2 font-mono">
                                         {step.detail}
+                                    </div>
+                                )}
+                                {/* Metadata pills */}
+                                {step.metadata && typeof step.metadata === 'object' && Object.keys(step.metadata).length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-1.5">
+                                        {step.metadata.intent && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                                <Target className="h-3 w-3" />
+                                                {step.metadata.intent}
+                                            </span>
+                                        )}
+                                        {step.metadata.entities && Array.isArray(step.metadata.entities) && step.metadata.entities.length > 0 && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+                                                <Tag className="h-3 w-3" />
+                                                {step.metadata.entities.length} {step.metadata.entities.length === 1 ? 'entity' : 'entities'}
+                                            </span>
+                                        )}
+                                        {step.metadata.contextCount !== undefined && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+                                                <FileText className="h-3 w-3" />
+                                                {step.metadata.contextCount} {step.metadata.contextCount === 1 ? 'item' : 'items'}
+                                            </span>
+                                        )}
+                                        {step.metadata.topItems && Array.isArray(step.metadata.topItems) && step.metadata.topItems.length > 0 && (
+                                            step.metadata.topItems.map((item: string, i: number) => (
+                                                <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                                    {item}
+                                                </span>
+                                            ))
+                                        )}
+                                        {step.metadata.reasoningSteps && Array.isArray(step.metadata.reasoningSteps) && step.metadata.reasoningSteps.length > 0 && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                                <Hash className="h-3 w-3" />
+                                                {step.metadata.reasoningSteps.length} steps
+                                            </span>
+                                        )}
+                                        {step.metadata.msgCount !== undefined && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800">
+                                                <MessageSquare className="h-3 w-3" />
+                                                {step.metadata.msgCount} messages
+                                            </span>
+                                        )}
+                                        {step.metadata.factCount !== undefined && step.metadata.factCount > 0 && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                                <Brain className="h-3 w-3" />
+                                                {step.metadata.factCount} facts
+                                            </span>
+                                        )}
+                                        {step.metadata.actionCount !== undefined && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                                                <Zap className="h-3 w-3" />
+                                                {step.metadata.actionCount} actions
+                                            </span>
+                                        )}
+                                        {step.metadata.total !== undefined && step.metadata.index !== undefined && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                                                <Zap className="h-3 w-3" />
+                                                {step.metadata.index + 1}/{step.metadata.total}
+                                            </span>
+                                        )}
                                     </div>
                                 )}
                              </div>

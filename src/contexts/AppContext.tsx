@@ -148,6 +148,8 @@ interface AppContextType extends AppState {
   refreshSubscription: () => Promise<void>;
   daysRemaining: number;
   bonusAiCredits: number;
+  isAdmin: boolean;
+  isAdminLoading: boolean;
 }
 
 // Create context
@@ -268,8 +270,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
     checkAccess: checkSubscriptionAccess,
     refreshSubscription,
   } = useSubscription();
+
+  // Centralized admin check — one query shared by all consumers
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdminLoading, setIsAdminLoading] = useState(true);
+
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (!user) {
+        setIsAdmin(false);
+        setIsAdminLoading(false);
+        return;
+      }
+      if (!navigator.onLine) {
+        setIsAdminLoading(false);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from('admin_users')
+          .select('id, is_active')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .maybeSingle();
+        setIsAdmin(!error && !!data);
+      } catch {
+        setIsAdmin(false);
+      } finally {
+        setIsAdminLoading(false);
+      }
+    };
+    checkAdminStatus();
+  }, [user]);
   // Get all data from useAppData hook
-  const appData = useAppData();
+  const appData = useAppData(user);
   const {
     dataErrors,
     clearError,
@@ -322,11 +356,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       retryLoading(dataType);
   }, [retryLoading]);
 
+  // Ref to hold social refresh (set after socialData hook is created)
+  const socialRefreshRef = useRef<(() => void) | null>(null);
+
   const retryAllData = useCallback(() => {
     if (user?.id) {
+      retryLoading('profile');
       retryLoading('notes');
+      retryLoading('folders');
       retryLoading('documents');
+      retryLoading('recordings');
+      retryLoading('scheduleItems');
       retryLoading('quizzes');
+      // Also refresh social feed on reconnect
+      socialRefreshRef.current?.();
     }
   }, [user?.id, retryLoading]);
 
@@ -379,8 +422,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     checkSubscriptionAccess,
     refreshSubscription,
     refreshData: retryAllData,
+    isAdmin,
   });
   const socialData = useSocialData(userProfile, 'newest', 'all');
+
+  // Wire social refresh into the ref so retryAllData can trigger it
+  useEffect(() => {
+    socialRefreshRef.current = socialData.refetchPosts;
+  }, [socialData.refetchPosts]);
   const navigateToNote = useCallback((noteId: string | null) => {
     if (noteId) {
       navigate(`/notes/${noteId}`, { replace: true });
@@ -1046,20 +1095,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [user, loadChatSessions, state.chatSessionsLoadedCount]);
   // Add this effect to handle note ID from URL
   useEffect(() => {
-    if (user && notes.length > 0) {
+    if (user) {
       const pathParts = location.pathname.split('/');
       const isNotesRoute = pathParts[1] === 'notes' || pathParts[1] === 'note';
       const noteIdFromUrl = isNotesRoute && pathParts[2] ? pathParts[2] : null;
 
       if (noteIdFromUrl) {
-        // Find the note from the URL
+        // Try local state first (user's own notes)
         const noteFromUrl = notes.find(note => note.id === noteIdFromUrl);
         if (noteFromUrl && (!activeNote || activeNote.id !== noteIdFromUrl)) {
           setActiveNote(noteFromUrl);
-          //console.log('✅ Note loaded from URL:', noteIdFromUrl);
         } else if (!noteFromUrl) {
-          // Note not found, navigate to notes list
-          navigate('/notes', { replace: true });
+          // Note not in local state — could be a course note from another user.
+          // Fetch it directly (RLS allows enrolled users to read course notes).
+          (async () => {
+            try {
+              const { data, error } = await supabase
+                .from('notes')
+                .select('*')
+                .eq('id', noteIdFromUrl)
+                .maybeSingle();
+
+              if (data && !error) {
+                setActiveNote(data as Note);
+              } else {
+                // Truly not accessible — navigate away
+                navigate('/notes', { replace: true });
+              }
+            } catch {
+              navigate('/notes', { replace: true });
+            }
+          })();
         }
       }
     }
@@ -1274,6 +1340,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshSubscription,
     daysRemaining,
     bonusAiCredits,
+    isAdmin,
+    isAdminLoading,
     forceRefreshDocuments,
   };
 

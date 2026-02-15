@@ -7,6 +7,8 @@ import { InlineAIEditor } from './InlineAIEditor';
 import { NodeViewWrapper, NodeViewContent } from '@tiptap/react';
 import { motion, useAnimation } from 'framer-motion';
 import { toast } from 'sonner';
+import { supabase } from '../../../integrations/supabase/client';
+import { useAppContext } from '../../../hooks/useAppContext';
 
 interface DiagramWrapperProps {
   node: any;
@@ -23,12 +25,15 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
   deleteNode,
   selected,
 }) => {
+  const { userProfile } = useAppContext();
   const containerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<Chart | null>(null);
   const [editing, setEditing] = useState(false);
   const [aiFixing, setAiFixing] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState('');
+  const [aiFixLoading, setAiFixLoading] = useState(false);
+  const [aiFixError, setAiFixError] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
@@ -245,6 +250,7 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
             theme: 'default',
             securityLevel: 'loose',
             logLevel: 5, // 'fatal' level
+            suppressErrorRendering: true,
             fontFamily: 'system-ui, -apple-system, sans-serif',
             flowchart: { curve: 'basis' },
           });
@@ -282,9 +288,11 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
 
             setError(null);
           } catch (mermaidErr: any) {
-            // Cleanup any leftover global SVG nodes (Mermaid sometimes leaks)
-            Array.from(document.querySelectorAll('.mermaid, [id^="mermaid-"]')).forEach((el) => {
-              if (el.textContent?.includes('Syntax error')) el.remove();
+            // Cleanup ALL leftover global mermaid error nodes leaked into document body
+            document.querySelectorAll(
+              'body > .mermaid, body > [id^="mermaid-"], body > [id^="d"], body > svg[id*="mermaid"], body > .error-icon, body > [aria-roledescription="error"]'
+            ).forEach((el) => {
+              try { el.remove(); } catch { /* ignore */ }
             });
 
             // --- Graceful fallback UI ---
@@ -528,7 +536,8 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
           <button
             onClick={() => {
               setAiFixing(true);
-              setAiSuggestion(`The following diagram code caused a rendering error. Please correct the syntax for a ${type} diagram.\n\n${code}\n\nError: ${error || 'Unknown error or no error detected.'}`);
+              setAiSuggestion('');
+              setAiFixError(null);
             }}
             className="p-1.5 bg-blue-50 dark:bg-blue-900 border border-blue-300 dark:border-blue-700 rounded-md hover:bg-blue-100 dark:hover:bg-blue-800 shadow-sm text-blue-700 dark:text-blue-300"
             title="AI Fix Diagram"
@@ -644,25 +653,67 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
               selectionRange={{ from: 0, to: code.length }}
               actionType={type === 'mermaid' ? 'fix-mermaid' : type === 'dot' ? 'fix-dot' : 'fix-chartjs'}
               onAccept={() => {
-                // Only close if there is a suggestion
                 if (aiSuggestion && aiSuggestion !== code) {
                   setCode(aiSuggestion);
+                  // Persist to the editor node
+                  if (type === 'chartjs') {
+                    try {
+                      JSON.parse(aiSuggestion);
+                      updateAttributes({ config: aiSuggestion });
+                    } catch {
+                      // If it's not valid JSON, still set the code for manual editing
+                    }
+                  } else {
+                    updateAttributes({ code: aiSuggestion });
+                  }
                   setAiFixing(false);
+                  setAiSuggestion('');
                   setError(null);
+                  toast.success('Diagram fixed by AI');
                 }
               }}
               onReject={() => {
                 setAiFixing(false);
+                setAiSuggestion('');
+                setAiFixError(null);
               }}
               onGenerate={async (selectedText, actionType, customInstruction) => {
-                // Simulate AI fix (replace with actual AI call)
-                // For now, just set the suggestion to the original code
-                setAiSuggestion(selectedText);
+                setAiFixLoading(true);
+                setAiFixError(null);
+                try {
+                  const fixInstruction = customInstruction
+                    ? customInstruction
+                    : `Fix this ${type} diagram code. It has a rendering error: ${error || 'Unknown syntax error'}. Return ONLY the corrected ${type} code without any explanation or code fences.`;
+                  const { data, error: fnError } = await supabase.functions.invoke('generate-inline-content', {
+                    body: {
+                      selectedText: code,
+                      fullNoteContent: code,
+                      userProfile: userProfile || { id: 'anonymous' },
+                      actionType: actionType || 'fix-diagram',
+                      customInstruction: fixInstruction,
+                      attachedDocumentContent: '',
+                      selectionRange: null,
+                    },
+                  });
+                  if (fnError) throw new Error(fnError.message || 'AI fix failed');
+                  let fixedCode = data?.generatedContent || '';
+                  // Strip code fences if the AI wrapped them
+                  const fenceMatch = fixedCode.match(/```(?:mermaid|chartjs|dot|json)?\s*\n([\s\S]*?)\n?```/);
+                  if (fenceMatch) fixedCode = fenceMatch[1].trim();
+                  if (!fixedCode.trim()) throw new Error('AI returned empty content');
+                  setAiSuggestion(fixedCode);
+                } catch (e: any) {
+                  setAiFixError(e.message || 'Failed to fix diagram with AI');
+                  toast.error(e.message || 'Failed to fix diagram with AI');
+                } finally {
+                  setAiFixLoading(false);
+                }
               }}
               position={{ top: 100, left: 100 }}
               isVisible={true}
-              isLoading={false}
-              error={null}
+              isLoading={aiFixLoading}
+              error={aiFixError}
+              onClearError={() => setAiFixError(null)}
               generatedText={aiSuggestion}
               isTyping={false}
             />

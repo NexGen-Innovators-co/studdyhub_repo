@@ -436,7 +436,7 @@ You may perform INSERT, UPDATE, DELETE, and SELECT operations on the following t
     - user_id: uuid
     - title: text
     - subject: text
-    - type: schedule_item_type
+    - type: schedule_item_type (ENUM: 'class' | 'study' | 'assignment' | 'exam' | 'other')
     - start_time: timestamp
     - end_time: timestamp
     - location: text

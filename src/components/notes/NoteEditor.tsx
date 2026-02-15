@@ -8,8 +8,9 @@ import { Database } from '../../integrations/supabase/types';
 import { generateSpeech, playAudioContent } from '../../services/cloudTtsService';
 import mermaid from 'mermaid';
 import { Chart, registerables } from 'chart.js';
+import katex from 'katex';
 import { Button } from '../ui/button';
-import { Sparkles, RotateCw, Lightbulb } from 'lucide-react';
+import { Sparkles, RotateCw, Lightbulb, Eye } from 'lucide-react';
 
 Chart.register(...registerables);
 
@@ -32,12 +33,209 @@ declare global {
   }
 }
 
+// A4 = 210x297mm.  html2pdf margin = 10mm each side.
+// Content area = 190mm wide × 277mm tall.
+// At scale:2 html2canvas renders at 2× then downscales, so we set the
+// container width to the CSS-pixel equivalent of 190mm ≈ 718px.
+const PDF_CONTAINER_WIDTH_PX = 718;
+const PDF_PAGE_HEIGHT_PX     = 1047;  // 277mm × 3.78 px/mm ≈ 1047px
+
+const renderLatexInContainer = (root: HTMLElement | null) => {
+  if (!root) return;
+
+  const latexNodes = root.querySelectorAll('[data-latex]');
+  latexNodes.forEach((node) => {
+    const element = node as HTMLElement;
+    const latexSource = element.getAttribute('data-latex') || element.textContent || '';
+    if (!latexSource.trim()) return;
+
+    const displayAttr = element.getAttribute('data-display-mode');
+    const displayMode = displayAttr
+      ? displayAttr === 'true'
+      : element.tagName.toLowerCase() !== 'span';
+
+    try {
+      katex.render(latexSource, element, {
+        displayMode,
+        throwOnError: false,
+        strict: 'ignore',
+        trust: true,
+      });
+      element.classList.add(displayMode ? 'latex-block' : 'latex-inline');
+    } catch {
+      element.classList.add('latex-error-block');
+      element.textContent = latexSource;
+    }
+  });
+};
+
+/**
+ * Check if a DOM node is a "visual block" (diagram, chart, image, table, etc.)
+ * These should always be isolated in their own section so they never get
+ * grouped with text into a single break-inside:avoid block.
+ */
+const isVisualBlock = (node: Node): boolean => {
+  if (node.nodeType !== Node.ELEMENT_NODE) return false;
+  const el = node as HTMLElement;
+  const tag = el.tagName;
+  if (['IMG', 'SVG', 'CANVAS', 'TABLE', 'FIGURE'].includes(tag)) return true;
+  if (el.classList.contains('diagram-container')) return true;
+  if (el.hasAttribute('data-mermaid') || el.hasAttribute('data-chartjs') || el.hasAttribute('data-dot')) return true;
+  // Check first child too (wrapper divs around diagrams)
+  if (el.children.length === 1) return isVisualBlock(el.children[0]);
+  return false;
+};
+
+const wrapSectionsForPdf = (root: HTMLElement | null) => {
+  if (!root) return;
+  const contentRoot = root.querySelector('[data-note-body]');
+  if (!contentRoot) return;
+
+  const childNodes = Array.from(contentRoot.childNodes);
+  if (!childNodes.length) return;
+
+  const createSection = (cls = 'pdf-section') => {
+    const section = document.createElement('section');
+    section.className = cls;
+    return section;
+  };
+
+  let currentSection = createSection();
+  const sections: HTMLElement[] = [];
+  let lastWasHeading = false;
+
+  const flushCurrent = () => {
+    if (currentSection.childNodes.length) {
+      sections.push(currentSection);
+      currentSection = createSection();
+    }
+  };
+
+  childNodes.forEach((node) => {
+    const isElement = node.nodeType === Node.ELEMENT_NODE;
+    const isHeading = isElement && ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes((node as HTMLElement).tagName);
+    const isVisual  = isElement && isVisualBlock(node);
+
+    if (isHeading) {
+      // Flush text before the heading, then start a new section with the heading
+      flushCurrent();
+      currentSection.appendChild(node);
+      lastWasHeading = true;
+    } else if (isVisual) {
+      // If previous node was a heading, keep heading + visual together
+      if (lastWasHeading && currentSection.childNodes.length) {
+        // The heading is in currentSection, add the visual to it and flush as a visual section
+        currentSection.appendChild(node);
+        currentSection.classList.add('pdf-visual');
+        flushCurrent();
+      } else {
+        // Flush any text that precedes this visual
+        flushCurrent();
+        // Put the visual in its own dedicated section
+        const visualSection = createSection('pdf-section pdf-visual');
+        visualSection.appendChild(node);
+        sections.push(visualSection);
+      }
+      lastWasHeading = false;
+    } else {
+      // If the heading just started a section, keep at least the first
+      // content node together with it (so heading is never orphaned at
+      // the bottom of a page).
+      currentSection.appendChild(node);
+
+      // After adding one content node after a heading, flush so the
+      // section stays compact and measurable.  Subsequent nodes go into
+      // their own section which is allowed to break across pages.
+      if (lastWasHeading) {
+        lastWasHeading = false;
+        // Don't flush yet — keep heading + first block together.
+        // The next heading or visual will flush this section.
+      } else {
+        lastWasHeading = false;
+      }
+    }
+  });
+
+  flushCurrent();
+
+  contentRoot.innerHTML = '';
+  sections.forEach((section) => contentRoot.appendChild(section));
+};
+
+const applyPageBreakGuards = (root: HTMLElement | null) => {
+  if (!root) return;
+  const sections = Array.from(root.querySelectorAll('.pdf-section')) as HTMLElement[];
+  if (!sections.length) return;
+
+  // Minimum space a heading section needs at the bottom of a page.
+  // If there's less room than this, push the section to the next page
+  // so the heading + first paragraph aren't orphaned / cut.
+  const MIN_HEADING_ROOM = 120; // ~3 lines of text below heading
+
+  let usedHeight = 0;
+
+  sections.forEach((section) => {
+    section.classList.remove('page-break-before', 'allow-break');
+    const rect = section.getBoundingClientRect();
+    const height = rect?.height || 0;
+
+    if (!height) return;
+
+    const isVisual = section.classList.contains('pdf-visual');
+    const startsWithHeading = section.firstElementChild?.tagName?.match(/^H[1-6]$/);
+    const remainingOnPage = PDF_PAGE_HEIGHT_PX - usedHeight;
+
+    // If a single section is taller than one page
+    if (height > PDF_PAGE_HEIGHT_PX) {
+      if (isVisual) {
+        // Scale down oversized visuals to fit one page
+        const scale = (PDF_PAGE_HEIGHT_PX - 40) / height;
+        section.style.transform = `scale(${scale.toFixed(3)})`;
+        section.style.transformOrigin = 'top center';
+        section.style.marginBottom = `-${Math.round(height * (1 - scale))}px`;
+        if (usedHeight > 0) {
+          section.classList.add('page-break-before');
+        }
+        usedHeight = Math.round(height * scale);
+      } else {
+        // Long text: allow it to break across pages
+        // But if it starts with a heading and there isn't enough room,
+        // push to next page first.
+        if (startsWithHeading && remainingOnPage < MIN_HEADING_ROOM) {
+          section.classList.add('page-break-before');
+        }
+        section.classList.add('allow-break');
+        usedHeight = height % PDF_PAGE_HEIGHT_PX;
+      }
+      return;
+    }
+
+    // Would this section overflow the current page?
+    if (usedHeight + height > PDF_PAGE_HEIGHT_PX) {
+      section.classList.add('page-break-before');
+      usedHeight = height;
+    } else if (startsWithHeading && remainingOnPage < MIN_HEADING_ROOM + height) {
+      // Heading section technically fits, but would leave the heading
+      // near the very bottom of the page — push it to next page.
+      if (remainingOnPage < height + 60) {
+        section.classList.add('page-break-before');
+        usedHeight = height;
+      } else {
+        usedHeight += height;
+      }
+    } else {
+      usedHeight += height;
+    }
+  });
+};
+
 interface NoteEditorProps {
   note: Note;
   onNoteUpdate: (note: Note) => void;
   userProfile: UserProfile | null;
   onToggleNotesHistory?: () => void;
   isNotesHistoryOpen?: boolean;
+  readOnly?: boolean;
 }
 
 export const NoteEditor: React.FC<NoteEditorProps> = ({
@@ -45,7 +243,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   onNoteUpdate,
   userProfile,
   onToggleNotesHistory,
-  isNotesHistoryOpen
+  isNotesHistoryOpen,
+  readOnly = false
 }) => {
 
   const [title, setTitle] = useState(note.title);
@@ -206,6 +405,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   // Enhanced save handler
   // Enhanced save handler
   const handleSave = useCallback(() => {
+    if (readOnly) {
+      toast.info('This is a shared course note — you cannot edit it.');
+      return;
+    }
     // Use the markdown from the ref (which includes diagrams) or fallback to content state
     const markdownToSave = contentAreaRef.current?.getCurrentMarkdown() || content;
 
@@ -782,107 +985,124 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
     if (typeof window.html2pdf === 'undefined') {
       toast.error('PDF generation library not loaded. Please try again later.', { id: 'pdf-download' });
-      //console.error('html2pdf.js is not loaded. Please ensure it is included in your project.');
       return;
     }
 
-    // Create a temporary container for PDF generation
+    // ── Build an off-screen but fully-rendered container ──────────────
+    // html2canvas needs the element to:
+    //  1. Be in the DOM
+    //  2. Have full opacity (opacity < 1 makes the canvas content invisible)
+    //  3. NOT be visibility:hidden (html2canvas skips hidden elements)
+    //  4. NOT be position:fixed (html2canvas has bugs with fixed elements)
+    // We use a wrapper with overflow:hidden + height:0 that clips the
+    // visual output, and the inner container has normal flow so
+    // html2canvas can measure & render it at full fidelity.
+    const clipWrapper = document.createElement('div');
+    clipWrapper.style.cssText = 'overflow:hidden;height:0;position:relative;';
+
     const tempContainer = document.createElement('div');
-    tempContainer.style.left = '-9999px';
-    tempContainer.style.width = '210mm'; // A4 width
-    tempContainer.style.padding = '20mm';
+    tempContainer.style.width = `${PDF_CONTAINER_WIDTH_PX}px`;
+    tempContainer.style.maxWidth = `${PDF_CONTAINER_WIDTH_PX}px`;
+    tempContainer.style.padding = '0';  // html2pdf margins handle spacing
     tempContainer.style.fontFamily = 'system-ui, -apple-system, sans-serif';
     tempContainer.style.fontSize = '12pt';
     tempContainer.style.lineHeight = '1.6';
     tempContainer.style.color = '#000';
+    tempContainer.style.backgroundColor = '#fff';
+    tempContainer.style.overflowWrap = 'break-word';
+    tempContainer.style.wordBreak = 'break-word';
+    tempContainer.style.overflow = 'hidden';
 
-    // Add title and content with better styling
     tempContainer.innerHTML = `
     <style>
-      /* PDF-specific styles */
       * {
         box-sizing: border-box;
+        overflow-wrap: break-word;
+        word-wrap: break-word;
+        word-break: break-word;
+      }
+      /* Global text containment — nothing should exceed the page width */
+      div, p, span, li, td, th, blockquote, pre, code, h1, h2, h3, h4, h5, h6 {
+        max-width: 100%;
       }
       h1, h2, h3, h4, h5, h6 {
-        color: #000;
-        margin-top: 1em;
-        margin-bottom: 0.5em;
+        color: #000; margin-top: 1em; margin-bottom: 0.5em;
         font-weight: bold;
-        page-break-after: avoid;
-        break-after: avoid;
+        page-break-after: avoid; break-after: avoid;
+        page-break-inside: avoid; break-inside: avoid;
       }
-      h1 { font-size: 24pt; }
-      h2 { font-size: 20pt; }
-      h3 { font-size: 16pt; }
-      p { 
-        margin: 0.5em 0;
-        color: #000;
-        orphans: 3;
-        widows: 3;
-      }
+      /* Clamp heading sizes — prevent enormous user-styled headings */
+      h1 { font-size: min(24pt, 6vw); } h2 { font-size: min(20pt, 5vw); } h3 { font-size: min(16pt, 4.5vw); }
+      h4 { font-size: 14pt; } h5 { font-size: 12pt; } h6 { font-size: 11pt; }
+      p { margin: 0.5em 0; color: #000; orphans: 3; widows: 3; }
+      /* Clamp any inline font-size the user may have set */
+      [style*="font-size"] { font-size: clamp(8pt, 1em, 24pt) !important; }
       pre {
-        background: #f5f5f5;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        padding: 10px;
-        overflow-x: auto;
+        background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px;
+        padding: 10px; overflow-x: hidden; white-space: pre-wrap;
         font-family: 'Courier New', monospace;
-        font-size: 10pt;
-        margin: 1em 0;
-        page-break-inside: avoid;
-        break-inside: avoid;
+        font-size: 10pt; margin: 1em 0;
+        page-break-inside: avoid; break-inside: avoid;
       }
       code {
-        background: #f5f5f5;
-        padding: 2px 6px;
-        border-radius: 3px;
-        font-family: 'Courier New', monospace;
-        font-size: 10pt;
+        background: #f5f5f5; padding: 2px 6px; border-radius: 3px;
+        font-family: 'Courier New', monospace; font-size: 10pt;
+        white-space: pre-wrap; word-break: break-all;
       }
       table {
-        border-collapse: collapse;
-        width: 100%;
-        margin: 1em 0;
-        page-break-inside: avoid;
-        break-inside: avoid;
+        border-collapse: collapse; width: 100%; margin: 1em 0;
+        page-break-inside: avoid; break-inside: avoid;
+        table-layout: fixed;
       }
       th, td {
-        border: 1px solid #ddd;
-        padding: 8px;
-        text-align: left;
+        border: 1px solid #ddd; padding: 8px; text-align: left;
+        overflow-wrap: break-word; word-break: break-word;
       }
-      tr {
-        page-break-inside: avoid;
-        break-inside: avoid;
-      }
+      tr { page-break-inside: avoid; break-inside: avoid; }
       blockquote {
-        border-left: 4px solid #ddd;
-        padding-left: 1em;
-        margin: 1em 0;
-        color: #666;
-        page-break-inside: avoid;
-        break-inside: avoid;
+        border-left: 4px solid #ddd; padding-left: 1em; margin: 1em 0;
+        color: #666; page-break-inside: avoid; break-inside: avoid;
       }
       img, svg, canvas {
-        max-width: 100%;
-        height: auto;
-        margin: 1em 0;
-        page-break-inside: avoid;
-        break-inside: avoid;
+        max-width: 100%; height: auto; margin: 1em 0;
+        page-break-inside: avoid; break-inside: avoid;
       }
-      /* Ensure diagrams don't break across pages */
       .diagram-container {
-        page-break-inside: avoid !important;
-        break-inside: avoid !important;
-        display: block;
-        width: 100%;
-        margin: 1.5em 0;
-        position: relative;
+        page-break-inside: avoid !important; break-inside: avoid !important;
+        display: block; width: 100%; max-width: 100%; margin: 1.5em auto;
+        overflow: hidden; position: relative;
       }
-      a {
-        color: #0066cc;
-        text-decoration: underline;
+      .diagram-container svg,
+      .diagram-container canvas,
+      .diagram-container img {
+        display: block; max-width: 100%; height: auto; margin: 0 auto;
       }
+      div[data-mermaid], div[data-chartjs], div[data-dot] {
+        page-break-inside: avoid; break-inside: avoid;
+        max-width: 100%; overflow: hidden; margin: 1em 0;
+      }
+      .latex-block {
+        margin: 1em 0; padding: 0.5em 0.75em;
+        background: #f8fafc; border-radius: 4px;
+        page-break-inside: avoid; break-inside: avoid;
+        overflow-x: auto;
+      }
+      .latex-inline { padding: 0 0.25em; }
+      .latex-error-block { color: #b91c1c; font-family: 'Courier New', monospace; }
+      a { color: #0066cc; text-decoration: underline; word-break: break-all; }
+      .pdf-section {
+        page-break-inside: avoid; break-inside: avoid;
+        margin-bottom: 8px;
+      }
+      .pdf-section.pdf-visual {
+        page-break-inside: avoid; break-inside: avoid;
+        text-align: center; margin: 0.75em 0;
+        overflow: hidden;
+      }
+      .pdf-section.allow-break { page-break-inside: auto; break-inside: auto; }
+      .page-break-before { page-break-before: always; break-before: always; }
+      /* Ensure mermaid wrapper divs don't add extra spacing */
+      div[data-mermaid] { margin: 0; padding: 0; background: transparent; border: none; box-shadow: none; }
     </style>
     <div style="margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px;">
       <h1 style="font-size: 24pt; font-weight: bold; margin: 0 0 10px 0; color: #000;">
@@ -891,163 +1111,157 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       ${category !== 'general' ? `<p style="color: #666; font-size: 10pt; margin: 5px 0;">Category: ${category}</p>` : ''}
       ${tags ? `<p style="color: #666; font-size: 10pt; margin: 5px 0;">Tags: ${tags}</p>` : ''}
     </div>
-    <div style="color: #000;">
+    <div data-note-body style="color: #000;">
       ${htmlContent}
     </div>
-  `;
+    `;
 
-    document.body.appendChild(tempContainer);
+    clipWrapper.appendChild(tempContainer);
+    document.body.appendChild(clipWrapper);
+
+    // Render LaTeX nodes
+    renderLatexInContainer(tempContainer);
 
     // Process Chart.js diagrams
     const chartDivs = tempContainer.querySelectorAll('div[data-chartjs]');
-    if (chartDivs.length > 0) {
-      chartDivs.forEach((div) => {
-        const configStr = div.getAttribute('data-config');
-        if (configStr) {
-          try {
-            const config = JSON.parse(configStr);
-            const canvas = document.createElement('canvas');
-            
-            // Set resolution to match A4 width (approx 800px) for readable text
-            canvas.width = 800;
-            canvas.height = 450; // 16:9 aspect ratio
-            canvas.style.width = '100%';
-            canvas.style.height = 'auto';
-            
-            div.innerHTML = '';
-            // Wrap in diagram-container
-            const wrapper = document.createElement('div');
-            wrapper.className = 'diagram-container';
-            wrapper.appendChild(canvas);
-            div.appendChild(wrapper);
-            
-            // Disable animation and responsiveness for static PDF rendering
-            const pdfConfig = {
-              ...config,
-              options: {
-                ...config.options,
-                responsive: false,
-                animation: false,
-              }
-            };
-            
-            new Chart(canvas as any, pdfConfig);
-          } catch (e) {
-            // console.error('Chart.js rendering failed for PDF', e);
-            div.innerHTML = `<pre>Chart Error</pre>`;
-          }
+    chartDivs.forEach((div) => {
+      const configStr = div.getAttribute('data-config');
+      if (configStr) {
+        try {
+          const config = JSON.parse(configStr);
+          const canvas = document.createElement('canvas');
+          // Fit chart within the content area
+          const chartW = Math.min(PDF_CONTAINER_WIDTH_PX - 10, 700);
+          canvas.width = chartW;
+          canvas.height = Math.round(chartW * 0.56); // ~16:9
+          canvas.style.width = '100%';
+          canvas.style.height = 'auto';
+          div.innerHTML = '';
+          const wrapper = document.createElement('div');
+          wrapper.className = 'diagram-container';
+          wrapper.appendChild(canvas);
+          div.appendChild(wrapper);
+          new Chart(canvas as any, {
+            ...config,
+            options: { ...config.options, responsive: false, animation: false },
+          });
+        } catch {
+          div.innerHTML = `<pre>Chart Error</pre>`;
         }
-      });
-    }
+      }
+    });
 
     // Process Mermaid diagrams
     const mermaidDivs = tempContainer.querySelectorAll('div[data-mermaid]');
     if (mermaidDivs.length > 0) {
       try {
-        mermaid.initialize({ 
-          startOnLoad: false,
-          theme: 'default',
-          securityLevel: 'loose',
-          // Disable htmlLabels for better PDF compatibility (avoids foreignObject issues)
+        mermaid.initialize({
+          startOnLoad: false, theme: 'default', securityLevel: 'loose',
+          suppressErrorRendering: true, logLevel: 5,
           flowchart: { useMaxWidth: true, htmlLabels: false },
-        });
-        
-        await Promise.all(Array.from(mermaidDivs).map(async (div, index) => {
-          const code = div.getAttribute('data-code');
-          if (code) {
+        } as any);
+        await Promise.all(
+          Array.from(mermaidDivs).map(async (div, index) => {
+            const code = div.getAttribute('data-code');
+            if (!code) return;
             try {
               const id = `mermaid-pdf-${Date.now()}-${index}`;
-              // Render SVG
               const { svg } = await mermaid.render(id, code);
-              
-              // Wrap SVG in a container to control layout
-              // Added diagram-container class
-              div.innerHTML = `
-                <div class="diagram-container" style="width: 100%; display: flex; justify-content: center; margin: 10px 0;">
-                  ${svg}
-                </div>
-              `;
-              
-              // Fix SVG scaling for PDF
-              const svgElement = div.querySelector('svg');
-              if (svgElement) {
-                // Get natural dimensions from viewBox
-                const viewBox = svgElement.getAttribute('viewBox');
-                if (viewBox) {
-                  const parts = viewBox.split(/\s+|,/).filter(Boolean).map(parseFloat);
+              div.innerHTML = `<div class="diagram-container">${svg}</div>`;
+              const svgEl = div.querySelector('svg');
+              if (svgEl) {
+                // Constrain SVG to content width and let aspect ratio determine height
+                const vb = svgEl.getAttribute('viewBox');
+                if (vb) {
+                  const parts = vb.split(/[\s,]+/).filter(Boolean).map(parseFloat);
                   if (parts.length === 4) {
                     const [, , w, h] = parts;
-                    const maxWidth = 210;
-                        // Calculate aspect ratio
-                        const aspectRatio = h / w;
-                        const newHeight = maxWidth * aspectRatio;
-                        
-                        // Set explicit pixel dimensions for html2canvas
-                        svgElement.setAttribute('width', `${maxWidth}`);
-                        svgElement.setAttribute('height', `${newHeight}`);
-                        
-                        // Set CSS to enforce dimensions
-                        svgElement.style.width = `${maxWidth}px`;
-                        svgElement.style.height = `${newHeight}px`;
-                    
-                    // Ensure it scales properly without cropping
-                    svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-                    svgElement.style.maxWidth = '100%';
-                    svgElement.style.display = 'block';
+                    // Fit within container, leave 10px breathing room
+                    const fitW = Math.min(w, PDF_CONTAINER_WIDTH_PX - 10);
+                    const ar = h / w;
+                    svgEl.setAttribute('width', String(fitW));
+                    svgEl.setAttribute('height', String(fitW * ar));
+                    svgEl.style.width = `${fitW}px`;
+                    svgEl.style.height = `${fitW * ar}px`;
+                  }
                 }
+                svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+                svgEl.style.maxWidth = '100%';
+                svgEl.style.display = 'block';
+                svgEl.style.margin = '0 auto';
               }
+            } catch (mermaidErr: any) {
+              // Clean up any error nodes mermaid leaked into the document body
+              document.querySelectorAll(
+                'body > .mermaid, body > [id^="mermaid-"], body > [id^="d"], body > svg[id*="mermaid"], body > .error-icon, body > [aria-roledescription="error"]'
+              ).forEach((el) => { try { el.remove(); } catch { /* */ } });
+
+              const errMsg = (mermaidErr?.message || 'Invalid diagram syntax')
+                .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+              div.innerHTML = `
+                <div style="border:1px solid #ef4444;background:rgba(239,68,68,0.08);color:#b91c1c;padding:0.75rem 1rem;border-radius:0.5rem;font-size:0.85rem;font-family:system-ui,sans-serif;word-break:break-word;">
+                  <strong>\u26a0\ufe0f Diagram could not be rendered</strong><br/>${errMsg}
+                </div>`;
             }
-            } catch (err) {
-              // console.error('Mermaid rendering failed for PDF', err);
-              // Fallback to code block if rendering fails
-              div.innerHTML = `<pre class="mermaid-error">${code}</pre>`;
-            }
-          }
-        }));
-      } catch (e) {
-        // console.error('Error initializing mermaid for PDF', e);
+          })
+        );
+      } catch {
+        // mermaid init failed — continue without diagrams
       }
     }
 
-    window.html2pdf()
-      .from(tempContainer)
-      .set({
-        margin: [10, 10, 10, 10],
-        filename: `${(title || 'untitled-note').replace(/[^a-zA-Z0-9-_]/g, '_')}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: 1,
-          logging: false,
-          dpi: 192,
-          letterRendering: true,
-          backgroundColor: '#ffffff',
-          useCORS: true
-        },
-        jsPDF: {
-          unit: 'mm',
-          format: 'a4',
-          orientation: 'portrait',
-          compress: true
-        },
-        pagebreak: {
-          mode: ['css', 'legacy'],
-          before: '.page-break-before',
-          after: '.page-break-after',
-          avoid: ['.diagram-container', 'pre', 'code', 'table', 'tr', 'img', 'svg', 'canvas', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote']
-        }
-      })
-      .save()
-      .then(() => {
-        toast.success('Note downloaded as PDF!', { id: 'pdf-download' });
-        document.body.removeChild(tempContainer);
-      })
-      .catch((error: any) => {
-        toast.error('Failed to generate PDF.', { id: 'pdf-download' });
-        //console.error('Error generating PDF:', error);
-        if (document.body.contains(tempContainer)) {
-          document.body.removeChild(tempContainer);
-        }
-      });
+    // Section wrapping for pagination
+    wrapSectionsForPdf(tempContainer);
+
+    // Wait two frames so the browser computes layout for getBoundingClientRect
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+
+    applyPageBreakGuards(tempContainer);
+
+    // ── Generate PDF ─────────────────────────────────────────────────
+    try {
+      await window.html2pdf()
+        .from(tempContainer)
+        .set({
+          margin: [10, 10, 10, 10],
+          filename: `${(title || 'untitled-note').replace(/[^a-zA-Z0-9-_]/g, '_')}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: {
+            scale: 2,
+            logging: false,
+            dpi: 192,
+            letterRendering: true,
+            backgroundColor: '#ffffff',
+            useCORS: true,
+          },
+          jsPDF: {
+            unit: 'mm',
+            format: 'a4',
+            orientation: 'portrait',
+            compress: true,
+          },
+          pagebreak: {
+            mode: ['css', 'legacy'],
+            before: '.page-break-before',
+            after: '.page-break-after',
+            avoid: [
+              '.pdf-visual', '.diagram-container', 'pre', 'code',
+              'table', 'tr', 'img', 'svg', 'canvas',
+              'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote',
+              '.latex-block',
+            ],
+          },
+        })
+        .save();
+
+      toast.success('Note downloaded as PDF!', { id: 'pdf-download' });
+    } catch {
+      toast.error('Failed to generate PDF.', { id: 'pdf-download' });
+    } finally {
+      if (document.body.contains(clipWrapper)) {
+        document.body.removeChild(clipWrapper);
+      }
+    }
   };
 
   const handleCopyNoteContent = () => {
@@ -1346,6 +1560,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   // The component must return JSX here!
   return (
     <div className="flex bg-white flex-col h-full w-full dark:bg-gray-950">
+      {/* Read-only banner for shared course notes */}
+      {readOnly && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-4 py-2 flex items-center gap-2 text-amber-700 dark:text-amber-400 text-sm">
+          <Eye className="w-4 h-4 flex-shrink-0" />
+          <span>This is a shared course note — view only</span>
+        </div>
+      )}
+
       {/* Audio Options Section */}
       <AudioOptionsSection
         uploadedAudioDetails={uploadedAudioDetails}
@@ -1409,6 +1631,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               note={note}
               isLoading={isLoading}
               isSummaryVisible={isSummaryVisible}
+              readOnly={readOnly}
               // Add these missing props for empty state functionality:
               onCreateFirstNote={() => {
                 // Create a new empty note
@@ -1456,8 +1679,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               ai_summary={note.ai_summary}
               isSummaryVisible={isSummaryVisible}
               setIsSummaryVisible={setIsSummaryVisible}
-              onSummaryChange={handleSummaryChange}
-              onRegenerateSummary={handleRegenerateSummary}
+              onSummaryChange={readOnly ? undefined : handleSummaryChange}
+              onRegenerateSummary={readOnly ? undefined : handleRegenerateSummary}
               isGenerating={isGeneratingSummary}
             />
           )}

@@ -439,9 +439,10 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     }
   });
 
-  const isSocialOrPodcastActive = activeTab === 'social' || activeTab === 'podcasts';
-  const shouldRenderSocial = activeTab === 'social' || visitedTabs.has('social') || isSocialOrPodcastActive;
-  const shouldRenderPodcasts = activeTab === 'podcasts' || visitedTabs.has('podcasts') || isSocialOrPodcastActive;
+  const isSocialOrPodcastActive = activeTab === 'social' || activeTab === 'podcasts' || activeTab === 'library';
+  const shouldRenderSocial = activeTab === 'social' || visitedTabs.has('social');
+  const shouldRenderPodcasts = activeTab === 'podcasts' || visitedTabs.has('podcasts');
+  const shouldRenderLibrary = activeTab === 'library' || visitedTabs.has('library');
 
   return (
     <>
@@ -506,6 +507,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
                             userProfile={userProfile}
                             onToggleNotesHistory={onToggleNotesHistory}
                             isNotesHistoryOpen={isNotesHistoryOpen}
+                            readOnly={!!userProfile?.id && notesProps.activeNote.user_id !== userProfile.id}
                           />
                         ) : (
                           <div className="h-full flex items-center justify-center text-slate-400 p-4 dark:text-gray-500">
@@ -596,15 +598,6 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
                 </div>
               );
 
-            case 'library':
-              return (
-                <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
-                  <ErrorBoundary>
-                    <CourseLibrary />
-                  </ErrorBoundary>
-                </div>
-              );
-
             case 'settings':
               return (
                 <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
@@ -623,7 +616,15 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
         })()}
       </div>
 
-      {/* PERSISTENT VIEWS: Social & Podcasts (Load once, keep alive) */}
+      {/* PERSISTENT VIEWS: Social, Podcasts & Library (Load once, keep alive) */}
+      {shouldRenderLibrary && (
+        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent" style={{ display: activeTab === 'library' ? 'block' : 'none', height: activeTab === 'library' ? '100%' : '0px' }}>
+          <ErrorBoundary>
+            <CourseLibrary />
+          </ErrorBoundary>
+        </div>
+      )}
+
       {shouldRenderSocial && (
         <div className="flex-1 p-0 sm:p-0 overflow-y-scroll  modern-scrollbar dark:bg-transparent" style={{ display: activeTab === 'social' ? 'block' : 'none', height: activeTab === 'social' ? '100%' : '0px' }}>
           <ErrorBoundary>

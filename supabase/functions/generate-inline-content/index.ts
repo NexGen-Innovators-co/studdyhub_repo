@@ -28,7 +28,7 @@ TASK: ${actionType}
 
 	// Detect if user wants a diagram
 	let diagramRequested = false;
-	const diagramKeywords = /diagram|mermaid|flowchart|chart|graph|visualization|visual|uml|sequence|class diagram|entity relationship|mind map/i;
+	const diagramKeywords = /\b(diagram|mermaid|flowchart|create\s+(?:a\s+)?chart|draw\s+(?:a\s+)?graph|visualization|visualize|uml|sequence\s+diagram|class\s+diagram|entity\s+relationship|mind\s+map)\b/i;
 	
 	if (customInstruction && customInstruction.trim()) {
 		basePrompt += `\n\nCUSTOM USER INSTRUCTION (IMPORTANT - FOLLOW THIS CAREFULLY):\n${customInstruction}`;
@@ -112,15 +112,8 @@ TASK: ${actionType}
 		
 		basePrompt += `\n- Be helpful, clear, and concise.`;
 		basePrompt += `\n- Match the user's learning style and preferences.`;
-		basePrompt += `\n- IMPORTANT: If you mention or suggest visual aids, diagrams, flowcharts, or graphs, YOU MUST GENERATE the actual Mermaid.js code blocks for them.`;
-		basePrompt += `\n- Do not just describe what the diagrams would look like.`;
-        basePrompt += `\n- Insert the diagram code blocks directly into the text where they belong.`;
-        basePrompt += `\n- Ensure proper spacing (newlines) before and after each diagram block.`;
-        basePrompt += `\n- Example of multiple diagrams:`;
-        basePrompt += `\n  Text explanation...`;
-        basePrompt += `\n  \`\`\`mermaid graph TD; A-->B; \`\`\``;
-        basePrompt += `\n  More text...`;
-        basePrompt += `\n  \`\`\`mermaid graph TD; C-->D; \`\`\``;
+		basePrompt += `\n- Do NOT generate diagrams, flowcharts, mermaid code blocks, or chart code blocks unless the user explicitly asks for them in their custom instruction.`;
+		basePrompt += `\n- Focus on providing clear, well-structured TEXT content only.`;
 	}
 
 	return basePrompt;

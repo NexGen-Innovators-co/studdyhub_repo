@@ -689,7 +689,14 @@ const Index = () => {
     return `flex items-center ${isNotesTab ? '' : ''} justify-between w-full p-0 sm:p-0 shadow-none bg-white dark:bg-gray-600 border-none`;
   }, [currentActiveTab]);
 
-  if (!user) return null;
+  if (!user) return (
+    <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-700">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-10 w-10 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
+        <span className="text-sm text-slate-500 dark:text-slate-400">Loading your workspace...</span>
+      </div>
+    </div>
+  );
 
   // // Show error screen if critical data failed to load
   // if (dataErrors?.profile) {

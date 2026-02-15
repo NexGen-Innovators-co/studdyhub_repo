@@ -21,18 +21,8 @@ const ENHANCED_PROCESSING_CONFIG = {
   MAX_INPUT_TOKENS: 2 * 1024 * 1024,  // Full 2M context window
   MAX_OUTPUT_TOKENS: 8192,  // Optimal for quality responses
   MAX_CONVERSATION_HISTORY: 500,  // Full history for better understanding
-  CONTEXT_MEMORY_WINDOW: 100,  // Increased for better context
-  SUMMARY_THRESHOLD: 30,  // Balanced summarization
-  CONTEXT_RELEVANCE_SCORE: 0.6,
+  SUMMARY_THRESHOLD: 30,  // Generate summary after this many messages
   RETRY_ATTEMPTS: 3,  // More retries for reliability
-  INITIAL_RETRY_DELAY: 1000,
-  MAX_RETRY_DELAY: 5000,
-  EXPONENTIAL_BACKOFF_MULTIPLIER: 2,
-  RELEVANCE_SCORING_ENABLED: true,  // Enable for better context
-  RELEVANCE_TOP_K: 10,  // More relevant items
-  RELEVANCE_SIMILARITY_THRESHOLD: 0.7,
-  RELEVANCE_DECAY_FACTOR: 0.95
-  ,
   ACTION_FIX_ATTEMPTS: 3,
   ACTION_FIX_BACKOFF_MS: 1000
 };
@@ -54,6 +44,7 @@ const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
 if (!geminiApiKey) {
   throw new Error('Missing GEMINI_API_KEY environment variable');
 }
+const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY') || '';
 const agenticCore = new AgenticCore(supabaseUrl, supabaseServiceKey, geminiApiKey);
 
 // LIGHTWEIGHT token estimation - no heavy tokenizer library
@@ -78,6 +69,49 @@ async function truncateToTokenLimit(text: string, maxTokens: number): Promise<st
 function sleep(ms: number): Promise<void> {
   const jitter = Math.random() * 500;
   return new Promise((resolve) => setTimeout(resolve, ms + jitter));
+}
+
+// Slim down action results for Gemini context injection.
+// Keeps structure but truncates large data arrays and long string values
+// so we don't blow up the context window with raw DB records.
+const ACTION_RESULT_MAX_RECORDS = 20;  // Show at most 20 records in context
+const ACTION_RESULT_MAX_STR = 300;     // Truncate individual strings
+
+function truncateActionResults(actions: any[]): any[] {
+  return actions.map((action: any) => {
+    const slim: any = { type: action.type, success: action.success };
+    if (action.error) slim.error = action.error;
+
+    if (action.data) {
+      // If data contains a result array, slim it
+      const rawData = action.data.data || action.data;
+      if (Array.isArray(rawData)) {
+        const total = rawData.length;
+        const sliced = rawData.slice(0, ACTION_RESULT_MAX_RECORDS).map((row: any) => {
+          if (typeof row !== 'object' || row === null) return row;
+          const slimRow: any = {};
+          for (const [key, val] of Object.entries(row)) {
+            if (typeof val === 'string' && val.length > ACTION_RESULT_MAX_STR) {
+              slimRow[key] = val.substring(0, ACTION_RESULT_MAX_STR) + `... [${val.length} chars]`;
+            } else {
+              slimRow[key] = val;
+            }
+          }
+          return slimRow;
+        });
+        slim.data = { records: sliced, count: total };
+        // Forward pagination info if available
+        if (action.data.total_count) slim.data.total_count = action.data.total_count;
+        if (action.data.note) slim.data.note = action.data.note;
+        if (total > ACTION_RESULT_MAX_RECORDS) {
+          slim.data.truncated_note = `Showing ${ACTION_RESULT_MAX_RECORDS} of ${total} returned records in context.`;
+        }
+      } else {
+        slim.data = rawData;
+      }
+    }
+    return slim;
+  });
 }
 // ========== ACTION EXECUTION FUNCTION ==========
 async function executeAIActions(userId: string, sessionId: string, aiResponse: string): Promise<{
@@ -371,7 +405,7 @@ async function buildIntelligentContext(
   currentMessage: string,
   attachedDocumentIds: string[] = [],
   attachedNoteIds: string[] = [],
-  initialContextWindow: number = ENHANCED_PROCESSING_CONFIG.CONTEXT_MEMORY_WINDOW
+  initialContextWindow: number = 100
 ): Promise<{
   recentMessages: any[];
   relevantOlderMessages: any[];
@@ -1241,11 +1275,118 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string, conf
     }
   }
 
+  // ── OpenRouter Fallback ──
+  if (openRouterApiKey) {
+    console.log('[OpenRouter] All Gemini models failed. Falling back to OpenRouter...');
+    try {
+      const openRouterMessages = convertGeminiToOpenRouterMessages(contents, systemInstruction);
+      const orResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openRouterApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'openrouter/free',
+          messages: openRouterMessages,
+          max_tokens: Math.min(generationConfig.maxOutputTokens || 4096, 4096),
+          temperature: generationConfig.temperature ?? 0.7,
+          top_p: generationConfig.topP ?? 0.95,
+          transforms: ['middle-out'], // Auto-compress if still over limit
+        }),
+      });
+
+      if (orResponse.ok) {
+        const orData = await orResponse.json();
+        const orContent = orData.choices?.[0]?.message?.content;
+        if (orContent) {
+          console.log('[OpenRouter] Fallback succeeded, chars:', orContent.length);
+          return { success: true, content: orContent };
+        }
+        console.warn('[OpenRouter] Response had no content');
+      } else {
+        const errText = await orResponse.text();
+        console.error('[OpenRouter] Error', orResponse.status, errText.substring(0, 300));
+      }
+    } catch (orErr) {
+      console.error('[OpenRouter] Network error:', orErr);
+    }
+  }
+
   return {
     success: false,
     error: 'ALL_MODELS_FAILED',
     userMessage: 'I am currently experiencing heavy load across all AI services. Please try again in a minute.'
   };
+}
+
+// ── Helpers to convert Gemini format ↔ OpenRouter (OpenAI-compatible) format ──
+// OpenRouter free tier has a 262k token context limit. We aggressively truncate
+// to stay well within that budget (~200k tokens ≈ 800k chars to leave headroom).
+const OPENROUTER_MAX_CHARS = 800_000; // ~200k tokens at 4 chars/token
+const OPENROUTER_MAX_MSG_CHARS = 30_000; // Truncate individual messages beyond this
+
+function convertGeminiToOpenRouterMessages(contents: any[], systemInstruction?: any): Array<{role: string; content: string}> {
+  const messages: Array<{role: string; content: string}> = [];
+
+  // Add system instruction as a system message (truncated if huge)
+  if (systemInstruction) {
+    let sysText = '';
+    if (typeof systemInstruction === 'string') {
+      sysText = systemInstruction;
+    } else if (systemInstruction.parts) {
+      sysText = systemInstruction.parts.map((p: any) => p.text || '').join('\n');
+    }
+    if (sysText) {
+      // Keep system prompt but cap it
+      if (sysText.length > OPENROUTER_MAX_MSG_CHARS * 2) {
+        sysText = sysText.substring(0, OPENROUTER_MAX_MSG_CHARS * 2) + '\n... [system prompt truncated for context limit]';
+      }
+      messages.push({ role: 'system', content: sysText });
+    }
+  }
+
+  // Convert each Gemini content entry, truncating individual messages
+  const allConverted: Array<{role: string; content: string}> = [];
+  for (const entry of contents) {
+    const role = entry.role === 'model' ? 'assistant' : (entry.role || 'user');
+    const textParts = (entry.parts || []).map((p: any) => p.text || '').filter(Boolean);
+    if (textParts.length > 0) {
+      let content = textParts.join('\n');
+      if (content.length > OPENROUTER_MAX_MSG_CHARS) {
+        content = content.substring(0, OPENROUTER_MAX_MSG_CHARS) + '\n... [truncated]';
+      }
+      allConverted.push({ role, content });
+    }
+  }
+
+  // Budget check: keep system message chars, then fit conversation from the END
+  // (most recent messages are most important for the response)
+  const systemChars = messages.reduce((sum, m) => sum + m.content.length, 0);
+  let remainingBudget = OPENROUTER_MAX_CHARS - systemChars;
+
+  // Always keep the last message (the current user request)
+  const selectedFromEnd: Array<{role: string; content: string}> = [];
+  for (let i = allConverted.length - 1; i >= 0; i--) {
+    const msgLen = allConverted[i].content.length;
+    if (remainingBudget - msgLen < 0 && selectedFromEnd.length > 0) {
+      // No more budget — stop adding older messages
+      break;
+    }
+    remainingBudget -= msgLen;
+    selectedFromEnd.unshift(allConverted[i]);
+  }
+
+  const dropped = allConverted.length - selectedFromEnd.length;
+  if (dropped > 0) {
+    console.log(`[OpenRouter] Truncated conversation: dropped ${dropped} older messages to fit context window`);
+    // Add a note so the model knows context was trimmed
+    messages.push({ role: 'system', content: `[Note: ${dropped} earlier conversation messages were omitted to fit the context window. Focus on the recent messages below.]` });
+  }
+
+  messages.push(...selectedFromEnd);
+  console.log(`[OpenRouter] Final message count: ${messages.length}, estimated chars: ${messages.reduce((s, m) => s + m.content.length, 0)}`);
+  return messages;
 }
 
 // Streaming variant: forward incremental chunks to `onChunk` callback while
@@ -1335,6 +1476,85 @@ async function callEnhancedGeminiAPIStream(contents: any[], geminiApiKey: string
     } catch (err) {
       console.error('[GeminiAPI-Stream] Network/stream error:', err);
       continue;
+    }
+  }
+
+  // ── OpenRouter Streaming Fallback ──
+  if (openRouterApiKey) {
+    console.log('[OpenRouter-Stream] All Gemini models failed. Falling back to OpenRouter...');
+    const { systemInstruction: sysInstr, ...genConfig } = configOverrides;
+    try {
+      const openRouterMessages = convertGeminiToOpenRouterMessages(contents, sysInstr);
+      const orResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openRouterApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'openrouter/free',
+          messages: openRouterMessages,
+          max_tokens: Math.min(genConfig.maxOutputTokens || 4096, 4096),
+          temperature: genConfig.temperature ?? 0.7,
+          stream: true,
+          transforms: ['middle-out'], // Auto-compress if still over limit
+        }),
+      });
+
+      if (!orResp.ok) {
+        const errText = await orResp.text();
+        console.error('[OpenRouter-Stream] HTTP error:', orResp.status, errText.substring(0, 300));
+      } else {
+        const reader = orResp.body?.getReader();
+        if (reader) {
+          const decoder = new TextDecoder();
+          let accumulated = '';
+          let done = false;
+          let buffer = '';
+
+          while (!done) {
+            const { value, done: rdone } = await reader.read();
+            done = rdone;
+            if (value) {
+              buffer += decoder.decode(value, { stream: !done });
+              // Process SSE lines
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || ''; // keep incomplete line in buffer
+
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed === 'data: [DONE]') continue;
+                if (trimmed.startsWith('data: ')) {
+                  try {
+                    const json = JSON.parse(trimmed.slice(6));
+                    const delta = json.choices?.[0]?.delta?.content;
+                    if (delta) {
+                      accumulated += delta;
+                      try { await onChunk(delta); } catch (e) { console.warn('[OpenRouter-Stream] onChunk failed', e); }
+                    }
+                  } catch (_) { /* skip non-JSON lines */ }
+                }
+              }
+            }
+          }
+
+          if (accumulated) {
+            console.log('[OpenRouter-Stream] Fallback stream succeeded, chars:', accumulated.length);
+            return { success: true, content: accumulated };
+          }
+        } else {
+          // Non-streaming fallback
+          const orData = await orResp.json();
+          const orContent = orData.choices?.[0]?.message?.content;
+          if (orContent) {
+            await onChunk(orContent);
+            console.log('[OpenRouter-Stream] Fallback non-stream succeeded, chars:', orContent.length);
+            return { success: true, content: orContent };
+          }
+        }
+      }
+    } catch (orErr) {
+      console.error('[OpenRouter-Stream] Error:', orErr);
     }
   }
 
@@ -1733,6 +1953,7 @@ FOR DB_ACTION FORMATTING (Follow exactly):
 - params must include: table (string), operation (INSERT|UPDATE|DELETE|SELECT)
 - For UPDATE/DELETE, include filters object with specific conditions
 - For INSERT, include data object with row values
+- For schedule_items INSERT: "type" MUST be one of: 'class', 'study', 'assignment', 'exam', 'other'. "subject" is REQUIRED (non-null text).
 - Date/time range filters use comparison objects:
   "filters": { "start_time": { "gte": "2026-01-26T12:00:00Z", "lte": "2026-01-26T19:30:00Z" } }
 - Array-valued fields (like recurrence_days) must be actual JSON arrays:
@@ -1922,7 +2143,7 @@ NOW: Return ONLY the JSON action plan (nothing else, no markdown, no explanation
           const failures = executedActions.filter((a: any) => !a.success);
           if (failures.length === 0) {
             finalResponseContext += '\n\n=== EXECUTED ACTIONS RESULTS ===\n';
-            finalResponseContext += JSON.stringify(executedActions, null, 2);
+            finalResponseContext += JSON.stringify(truncateActionResults(executedActions), null, 2);
             handler.sendThinkingStep('action', 'Actions executed', `Successfully executed ${executedActions.length} actions.`, 'completed');
             break;
           }
@@ -1933,20 +2154,25 @@ NOW: Return ONLY the JSON action plan (nothing else, no markdown, no explanation
             console.error('[ActionPlanningLoop] Reached max fix attempts');
             handler.sendThinkingStep('action', 'Action Fix Failed', `Some actions failed after ${planningAttempt} attempts.`, 'completed');
             finalResponseContext += '\n\n=== EXECUTED ACTIONS RESULTS (WITH FAILURES) ===\n';
-            finalResponseContext += JSON.stringify(executedActions, null, 2);
+            finalResponseContext += JSON.stringify(truncateActionResults(executedActions), null, 2);
             break;
           }
 
-          // Prepare repair prompt
+          // Prepare repair prompt with schema hints so the AI learns from errors
           const repairInstruction = `The previous action plan produced failures. Here are the results:
 
 PLAN:
 ${actionResponse.content}
 
 EXECUTION_RESULTS:
-${JSON.stringify(executedActions, null, 2)}
+${JSON.stringify(truncateActionResults(executedActions), null, 2)}
 
-Please provide a corrected JSON action plan that fixes the errors above. Return JSON ONLY.`;
+COMMON FIXES:
+- schedule_items.type MUST be one of: 'class', 'study', 'assignment', 'exam', 'other' (NOT 'personal', 'event', etc.)
+- schedule_items.subject is REQUIRED (non-null text)
+- Always include all NOT NULL columns
+
+Please provide a corrected JSON action plan that ONLY re-does the FAILED actions (do not repeat actions that already succeeded). Return JSON ONLY.`;
 
           actionContents.push({ role: 'user', parts: [{ text: repairInstruction }] });
           await sleep(ENHANCED_PROCESSING_CONFIG.ACTION_FIX_BACKOFF_MS * planningAttempt);
@@ -1963,17 +2189,18 @@ Please provide a corrected JSON action plan that fixes the errors above. Return 
 
       const finalContents = [...conversationData.contents];
       if (executedActions.length > 0) {
+        const slimResults = truncateActionResults(executedActions);
         finalContents.push({
           role: 'user',
-          // 👇 UPDATED TEXT INSTRUCTION 👇
           parts: [{ text: `System Update: The following actions were executed successfully.
           
-          Results: ${JSON.stringify(executedActions)}
+          Results: ${JSON.stringify(slimResults)}
           
           CRITICAL INSTRUCTION FOR FINAL RESPONSE:
           1. The actions are DONE. Do NOT output any JSON, "DB_ACTION", or code blocks.
           2. Just confirm to the user naturally (e.g., "I've added the image to your note.").
-          3. Keep the response concise.` }]
+          3. If the results show a total_count higher than the records shown, tell the user how many total exist.
+          4. Keep the response concise.` }]
         });
       }
 
@@ -2005,42 +2232,8 @@ Please provide a corrected JSON action plan that fixes the errors above. Return 
         generatedText = streamResult.content;
         console.log('[Streaming] Completed streaming final response; total chars:', generatedText.length);
       }
-      // Finalize-check: ask the model if this reply is ready to send or needs more work
-      try {
-        const finalizeCheckPrompt = [
-          {
-            role: 'user',
-            parts: [{ text: `You just generated this assistant reply:
-\n${generatedText}
-\nDecide if this reply should be sent to the user as-final (no further action planning/execution required) or if additional action planning/fixes are necessary.
-Return JSON ONLY with the shape: { "final": true|false, "reason": "short reason", "fix_request": "optional concise instruction to fix actions" }` }]
-          }
-        ];
-
-        const finalizeResp = await callEnhancedGeminiAPI(finalizeCheckPrompt, geminiApiKey, { responseMimeType: 'application/json' });
-        if (finalizeResp.success && finalizeResp.content) {
-          let finalizeParsed: any = null;
-          try { finalizeParsed = JSON.parse(finalizeResp.content); } catch (e) {
-            const m = finalizeResp.content.match(/({[\s\S]*})/);
-            if (m) try { finalizeParsed = JSON.parse(m[0]); } catch (e) { finalizeParsed = null; }
-          }
-
-          if (finalizeParsed && finalizeParsed.final === false) {
-            handler.sendThinkingStep('verification', 'Verifying response', finalizeParsed.reason || 'Assistant requested further checks', 'in-progress');
-            console.log('[FinalizeCheck] Model requested further work:', finalizeParsed.reason || '(no reason)');
-            // Simple UX improvement: pause briefly to show the assistant is thinking.
-            await sleep(ENHANCED_PROCESSING_CONFIG.ACTION_FIX_BACKOFF_MS || 1000);
-            handler.sendThinkingStep('verification', 'Continuing', 'Resuming action planning or response refinement...', 'completed');
-          } else {
-            handler.sendThinkingStep('action', 'Response generated', 'Successfully generated response', 'completed');
-          }
-        } else {
-          handler.sendThinkingStep('action', 'Response generated', 'Successfully generated response', 'completed');
-        }
-      } catch (finalizeErr) {
-        console.error('[FinalizeCheck] Error during finalize check:', finalizeErr);
-        handler.sendThinkingStep('action', 'Response generated', 'Successfully generated response', 'completed');
-      }
+      // Skip finalize-check to conserve API quota — the response is already streamed to the user
+      handler.sendThinkingStep('action', 'Response generated', 'Successfully generated response', 'completed');
       console.log('✅ Action phase complete');
 
       console.log('✅ Actions executed (summary):', executedActions.length, 'actions');
@@ -2107,17 +2300,18 @@ Return JSON ONLY with the shape: { "final": true|false, "reason": "short reason"
       const finalResponseText = sanitizeAssistantOutput(generatedText);
 
       try {
-        console.log('SENT_DONE_PAYLOAD', JSON.stringify({
-          response: finalResponseText,
+        // Log a compact summary instead of the full payload to avoid bloating logs
+        const donePayloadSummary = {
+          response: finalResponseText.substring(0, 200) + (finalResponseText.length > 200 ? '...' : ''),
+          responseLength: finalResponseText.length,
           aiMessageId: savedAiMessage?.id,
-          aiMessageTimestamp: savedAiMessage?.timestamp,
           userMessageId,
-          userMessageTimestamp,
           sessionId,
           userId,
-          executedActions,
-          images,
-        }));
+          actionCount: executedActions.length,
+          imageCount: images.length,
+        };
+        console.log('SENT_DONE_PAYLOAD', JSON.stringify(donePayloadSummary));
       } catch (err) {
         console.error('Failed to serialize SENT_DONE_PAYLOAD', err);
       }
@@ -2130,7 +2324,7 @@ Return JSON ONLY with the shape: { "final": true|false, "reason": "short reason"
         userMessageTimestamp,
         sessionId,
         userId,
-        executedActions: executedActions,
+        executedActions: truncateActionResults(executedActions),
         images: images.length > 0 ? images : null,
         imageUrl: topLevelImageUrl,
         files_metadata: filesMetadata,
@@ -2139,6 +2333,13 @@ Return JSON ONLY with the shape: { "final": true|false, "reason": "short reason"
 
       handler.close();
       console.log('✅✅✅ Streaming response completed successfully! ✅✅✅');
+
+      // Fire-and-forget: generate conversation summary if enough messages
+      if (conversationData.contextInfo.recentMessages.length >= ENHANCED_PROCESSING_CONFIG.SUMMARY_THRESHOLD) {
+        updateConversationSummary(sessionId, userId, conversationData.contextInfo.recentMessages).catch(err =>
+          console.error('[Streaming] Error updating conversation summary:', err)
+        );
+      }
     } catch (error: any) {
       console.error('❌ FATAL ERROR in streaming handler:', error.message);
       console.error('❌ Stack trace:', error.stack);

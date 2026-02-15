@@ -121,7 +121,11 @@ lowlight.registerLanguage('json', json as any);
 lowlight.registerLanguage('css', css as any);
 
 Chart.register(...registerables);
-mermaid.initialize({ startOnLoad: false });
+mermaid.initialize({
+  startOnLoad: false,
+  suppressErrorRendering: true,
+  logLevel: 5, // fatal only
+} as any);
 
 /* ---------- Custom Tiptap Nodes for Visuals ---------- */
 import { Node, mergeAttributes } from '@tiptap/core';
@@ -290,6 +294,8 @@ const DotNode = Node.create({
 export { ChartJsNode, MermaidNode, DotNode };
 
 /* ---------- Component ---------- */
+type ExportIntent = 'markdown' | 'pdf' | 'html' | 'word' | 'txt';
+
 interface NoteContentAreaProps {
   content: string;
   setContent: (md: string) => void;
@@ -337,6 +343,7 @@ interface NoteContentAreaProps {
   onCreateFirstNote?: () => void;
   onCreateFromTemplate?: () => void;
   onCreateFromDocument?: () => void;
+  readOnly?: boolean;
 }
 
 export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
@@ -376,6 +383,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     onCreateFirstNote,
     onCreateFromTemplate,
     onCreateFromDocument,
+    readOnly = false,
   }, ref) => {
     // Add state to track if we're in empty state
     const [isEmptyState, setIsEmptyState] = useState(false);
@@ -398,6 +406,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
 
     // Then update the editor configuration:
     const editor = useEditor({
+      editable: !readOnly,
       extensions: [
         StarterKit.configure({
           codeBlock: false
@@ -457,6 +466,14 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         },
       },
     });
+
+    // Keep editable in sync with readOnly prop
+    useEffect(() => {
+      if (editor) {
+        editor.setEditable(!readOnly);
+      }
+    }, [editor, readOnly]);
+
     const handleStartTutorial = () => {
       startTutorial();
     };
@@ -726,10 +743,20 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
             div.innerHTML = svg;
             div.classList.remove('mermaid-error');
           } catch (err: any) {
+            // Clean up any error nodes mermaid leaked into the document body
+            document.querySelectorAll(
+              'body > .mermaid, body > [id^="mermaid-"], body > [id^="d"], body > svg[id*="mermaid"], body > .error-icon, body > [aria-roledescription="error"]'
+            ).forEach((el) => {
+              try { el.remove(); } catch { /* ignore */ }
+            });
+
+            const errMsg = err.message
+              ? err.message.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+              : 'Invalid Mermaid syntax.';
             div.innerHTML = `
               <div style="border: 1px solid #ef4444; background: rgba(239,68,68,0.1); color: #ef4444; padding: 0.75rem; border-radius: 0.5rem; font-size: 0.85rem; font-family: system-ui, sans-serif;">
                 <strong>⚠️ Mermaid Diagram Error</strong><br>
-                ${err.message ? err.message.replace(/</g, '&lt;').replace(/>/g, '&gt;') : 'Invalid Mermaid syntax.'}
+                ${errMsg}
               </div>
             `;
             div.classList.add('mermaid-error');
@@ -820,6 +847,17 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     const NOTE_EDITOR_TUTORIAL = getNoteEditorTutorial(isMobile, false);
     // Define your toolbar groups as React nodes
     const [showPodcastGenerator, setShowPodcastGenerator] = useState(false);
+    const [activeExport, setActiveExport] = useState<ExportIntent | null>(null);
+    const runExportWithLoader = async (type: ExportIntent, action: () => void | Promise<void>) => {
+      setActiveExport(type);
+      try {
+        await Promise.resolve(action());
+      } finally {
+        setTimeout(() => {
+          setActiveExport(prev => (prev === type ? null : prev));
+        }, 350);
+      }
+    };
 
     const handleOpenPodcastGenerator = () => {
       setShowPodcastGenerator(true);
@@ -1241,20 +1279,28 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
       // Export
       <React.Fragment key="export">
         <button
-          onClick={handleDownloadNote}
+          onClick={() => runExportWithLoader('markdown', handleDownloadNote)}
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
           title="Download Markdown"
           data-tutorial="download-markdown-button"
         >
-          <Download className="w-4 h-4" />
+          {activeExport === 'markdown' ? (
+            <RefreshCw className="w-4 h-4 animate-spin" />
+          ) : (
+            <Download className="w-4 h-4" />
+          )}
         </button>
         <button
-          onClick={handleDownloadPdf}
+          onClick={() => runExportWithLoader('pdf', handleDownloadPdf)}
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
           title="Download PDF"
           data-tutorial="download-pdf-button"
         >
-          <FileText className="w-4 h-4" />
+          {activeExport === 'pdf' ? (
+            <RefreshCw className="w-4 h-4 animate-spin" />
+          ) : (
+            <FileText className="w-4 h-4" />
+          )}
         </button>
         <button
           onClick={handleCopyNoteContent}
@@ -1342,6 +1388,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         />
 
         {/* ---------- RESPONSIVE FORMATTING TOOLBAR ---------- */}
+        {!readOnly && (
         <div className="flex-shrink-0 relative border-b border-gray-300 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 shadow-sm">
           {/* Desktop Toolbar - Hidden on mobile */}
           <div className="hidden lg:flex items-center gap-2 px-4 py-2 overflow-x-scroll modern-scrollbar transition-all duration-300">
@@ -1556,32 +1603,44 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => {
-                    handleDownloadNote();
+                    runExportWithLoader('markdown', handleDownloadNote);
                     setShowExportMenu(false);
                   }}
                   className="p-3 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex flex-col items-center justify-center"
                 >
-                  <Download className="w-4 h-4 mb-1" />
+                  {activeExport === 'markdown' ? (
+                    <RefreshCw className="w-4 h-4 mb-1 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 mb-1" />
+                  )}
                   <span className="text-xs">Markdown</span>
                 </button>
                 <button
                   onClick={() => {
-                    handleDownloadPdf();
+                    runExportWithLoader('pdf', handleDownloadPdf);
                     setShowExportMenu(false);
                   }}
                   className="p-3 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex flex-col items-center justify-center"
                 >
-                  <FileText className="w-4 h-4 mb-1" />
+                  {activeExport === 'pdf' ? (
+                    <RefreshCw className="w-4 h-4 mb-1 animate-spin" />
+                  ) : (
+                    <FileText className="w-4 h-4 mb-1" />
+                  )}
                   <span className="text-xs">PDF</span>
                 </button>
                 <button
                   onClick={() => {
-                    handleDownloadHTML();
+                    runExportWithLoader('html', handleDownloadHTML);
                     setShowExportMenu(false);
                   }}
                   className="p-3 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex flex-col items-center justify-center"
                 >
-                  <Code className="w-4 h-4 mb-1" />
+                  {activeExport === 'html' ? (
+                    <RefreshCw className="w-4 h-4 mb-1 animate-spin" />
+                  ) : (
+                    <Code className="w-4 h-4 mb-1" />
+                  )}
                   <span className="text-xs">HTML</span>
                 </button>
                 <button
@@ -1596,22 +1655,30 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
                 </button>
                 <button
                   onClick={() => {
-                    handleDownloadWord();
+                    runExportWithLoader('word', handleDownloadWord);
                     setShowExportMenu(false);
                   }}
                   className="p-3 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex flex-col items-center justify-center"
                 >
-                  <FileText className="w-4 h-4 mb-1" />
+                  {activeExport === 'word' ? (
+                    <RefreshCw className="w-4 h-4 mb-1 animate-spin" />
+                  ) : (
+                    <FileText className="w-4 h-4 mb-1" />
+                  )}
                   <span className="text-xs">DOCX</span>
                 </button>
                 <button
                   onClick={() => {
-                    handleDownloadNote();
+                    runExportWithLoader('markdown', handleDownloadNote);
                     setShowExportMenu(false);
                   }}
                   className="p-3 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex flex-col items-center justify-center"
                 >
-                  <FileText className="w-4 h-4 mb-1" />
+                  {activeExport === 'markdown' ? (
+                    <RefreshCw className="w-4 h-4 mb-1 animate-spin" />
+                  ) : (
+                    <FileText className="w-4 h-4 mb-1" />
+                  )}
                   <span className="text-xs">Notes</span>
                 </button>
               </div>
@@ -1698,6 +1765,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
             </div>
           )}
         </div>
+        )}
 
         {/* ---------- EDITOR CONTENT ---------- */}
         <div className="flex-1 max-h-[75vh] min-h-[75vh] pb-6 overflow-y-auto relative">

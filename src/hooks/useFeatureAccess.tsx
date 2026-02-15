@@ -1,7 +1,5 @@
 // hooks/useFeatureAccess.tsx
 import { useAppContext } from './useAppContext';
-import { supabase } from '../integrations/supabase/client';
-import { useEffect, useState } from 'react';
 
 // Define the feature names that should be checked
 export type FeatureName =
@@ -30,46 +28,9 @@ export const useFeatureAccess = () => {
         subscription,
         daysRemaining,
         bonusAiCredits,
-        user
+        isAdmin,
+        isAdminLoading: adminCheckLoading,
     } = useAppContext();
-
-    const [isAdmin, setIsAdmin] = useState(false);
-    const [adminCheckLoading, setAdminCheckLoading] = useState(true);
-
-    // Check if user is an admin
-    useEffect(() => {
-        const checkAdminStatus = async () => {
-            if (!user) {
-                setIsAdmin(false);
-                setAdminCheckLoading(false);
-                return;
-            }
-
-            if (!navigator.onLine) {
-                // If offline, default to false (safe) or maybe check local storage if critical?
-                // For now, fail safe.
-                setAdminCheckLoading(false);
-                return;
-            }
-
-            try {
-                const { data, error } = await supabase
-                    .from('admin_users')
-                    .select('id, is_active')
-                    .eq('user_id', user.id)
-                    .eq('is_active', true)
-                    .maybeSingle();
-
-                setIsAdmin(!error && !!data);
-            } catch {
-                setIsAdmin(false);
-            } finally {
-                setAdminCheckLoading(false);
-            }
-        };
-
-        checkAdminStatus();
-    }, [user]);
 
     // Helper to check if feature exists in limits
     const hasFeature = (feature: FeatureName): boolean => {

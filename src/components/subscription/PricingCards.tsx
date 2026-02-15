@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { usePaystackPayment } from 'react-paystack';
 import { useAuth } from '@/hooks/useAuth';
-import { useSubscription, PlanType } from '@/hooks/useSubscription';
+import { PlanType } from '@/hooks/useSubscription';
+import { useAppContext } from '@/hooks/useAppContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -141,7 +142,7 @@ function PaystackButton({ plan, email, onSuccess, isLoading }: PaystackButtonPro
 
 export function PricingCards() {
   const { user } = useAuth();
-  const { tier, refreshSubscription } = useSubscription();
+  const { subscriptionTier: tier, refreshSubscription } = useAppContext();
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handlePaymentSuccess = async (reference: string, planType: PlanType) => {

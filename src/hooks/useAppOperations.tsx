@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback } from 'react';
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message, Quiz } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
@@ -38,6 +38,7 @@ interface UseAppOperationsProps {
   subscriptionLimits: SubscriptionLimits;
   checkSubscriptionAccess: (feature: keyof SubscriptionLimits) => boolean;
   refreshSubscription: () => Promise<void>;
+  isAdmin: boolean;
 }
 
 export const useAppOperations = ({
@@ -65,37 +66,10 @@ export const useAppOperations = ({
   subscriptionLimits,
   checkSubscriptionAccess,
   refreshSubscription,
+  isAdmin,
 }: UseAppOperationsProps) => {
   const MAX_RETRIES = 3;
   const RETRY_DELAY = 1000;
-
-  // Check if user is admin
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    const checkAdminStatus = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setIsAdmin(false);
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from('admin_users')
-          .select('id, is_active')
-          .eq('user_id', user.id)
-          .eq('is_active', true)
-          .maybeSingle();
-
-        setIsAdmin(!error && !!data);
-      } catch {
-        setIsAdmin(false);
-      }
-    };
-
-    checkAdminStatus();
-  }, []);
 
   const withRetry = async <T extends any[]>(
     operation: (...args: T) => Promise<void>,

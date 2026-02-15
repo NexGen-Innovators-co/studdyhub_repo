@@ -395,9 +395,31 @@ export class StuddyHubActionsService {
             if (error) throw error;
             return { success: true, data: { status: 'deleted' } };
         } else if (operation === 'SELECT') {
-                // Prepare select query: call .select('*') immediately so order/limit
-                // methods are available on the builder, then apply filters.
-                let query = this.supabase.from(table).select('*');
+                // ── Smart column selection ──
+                // For listing queries (limit > 1), exclude heavy text columns
+                // to avoid returning megabytes of content data.
+                const HEAVY_COLUMNS: Record<string, string[]> = {
+                    notes: ['content'],
+                    documents: ['content_extracted'],
+                    chat_messages: ['content', 'conversation_context'],
+                };
+                const MAX_SELECT_LIMIT = 50; // hard ceiling
+                const effectiveLimit = Math.min(
+                    (limit !== null && limit !== undefined) ? Number(limit) : 10,
+                    MAX_SELECT_LIMIT
+                );
+                const isListing = effectiveLimit > 1;
+                const heavyCols = HEAVY_COLUMNS[table] || [];
+
+                // Use select('*') for single-record fetches; exclude heavy cols for listings
+                let selectCols = '*';
+                if (isListing && heavyCols.length > 0) {
+                    // We can't do "select all EXCEPT" in PostgREST, so we
+                    // still select('*') but will strip heavy fields after fetch.
+                    console.log(`[ActionsService] Listing mode for '${table}': will strip [${heavyCols.join(', ')}] from results`);
+                }
+
+                let query = this.supabase.from(table).select(selectCols);
                 query = applyFiltersToQuery(query, cleanFilters);
                 
                 // Apply ordering if specified
@@ -415,8 +437,8 @@ export class StuddyHubActionsService {
                             column = order;
                             ascending = true;
                         }
-                    } else if (typeof order === 'object' && order.column) {
-                        column = order.column;
+                    } else if (typeof order === 'object' && (order.column || order.field)) {
+                        column = order.column || order.field;
                         ascending = order.direction !== 'desc';
                     }
 
@@ -430,31 +452,59 @@ export class StuddyHubActionsService {
                     }
                 }
                 
-                // Apply limit (defensive)
-                try {
-                    console.log('[ActionsService] Type of query before limit:', typeof query, Object.keys(query || {}));
-                } catch (e) {}
-
-                const parsedLimit = (limit !== null && limit !== undefined) ? Number(limit) : 10;
-                if (!Number.isNaN(parsedLimit) && parsedLimit > 0) {
+                // Apply limit (capped at MAX_SELECT_LIMIT)
+                if (!Number.isNaN(effectiveLimit) && effectiveLimit > 0) {
                     if (query && typeof query.limit === 'function') {
-                        try { query.limit(parsedLimit); } catch (e) { console.error('[ActionsService] limit call failed', e); }
-                    } else {
-                        console.error('[ActionsService] query.limit is not a function; skipping limit application and logging query object for debugging.', { table, operation, limit, query });
+                        try { query.limit(effectiveLimit); } catch (e) { console.error('[ActionsService] limit call failed', e); }
                     }
                 } else {
-                    console.warn('[ActionsService] Invalid limit provided, using default 10', { limit });
-                    if (query && typeof query.limit === 'function') try { query.limit(10); } catch (e) { console.error('[ActionsService] default limit call failed', e); }
+                    if (query && typeof query.limit === 'function') try { query.limit(10); } catch (e) {}
                 }
 
                 try {
-                    // Execute the built query. The Postgrest builder is thenable, so
-                    // awaiting `query` yields the response ({ data, error }).
                     const execRes: any = await query;
-                    const result = execRes.data;
+                    let result = execRes.data;
                     const selectError = execRes.error;
                     if (selectError) throw selectError;
-                    return { success: true, data: result };
+
+                    // ── Post-fetch processing ──
+                    // 1. Strip heavy columns in listing mode
+                    if (isListing && heavyCols.length > 0 && Array.isArray(result)) {
+                        result = result.map((row: any) => {
+                            const slim = { ...row };
+                            for (const col of heavyCols) {
+                                if (slim[col] && typeof slim[col] === 'string') {
+                                    // Keep a short preview (first 150 chars)
+                                    slim[col] = slim[col].substring(0, 150) + (slim[col].length > 150 ? `... [${slim[col].length} chars total]` : '');
+                                }
+                            }
+                            return slim;
+                        });
+                    }
+
+                    // 2. If we hit the limit, run a COUNT to report total available
+                    let totalCount: number | null = null;
+                    if (Array.isArray(result) && result.length >= effectiveLimit) {
+                        try {
+                            let countQuery = this.supabase.from(table).select('*', { count: 'exact', head: true });
+                            countQuery = applyFiltersToQuery(countQuery, cleanFilters);
+                            const countRes: any = await countQuery;
+                            if (countRes.count !== null && countRes.count !== undefined) {
+                                totalCount = countRes.count;
+                                console.log(`[ActionsService] Total matching rows for ${table}: ${totalCount} (returned ${result.length})`);
+                            }
+                        } catch (countErr) {
+                            console.warn('[ActionsService] Count query failed (non-fatal):', countErr);
+                        }
+                    }
+
+                    const response: any = { success: true, data: result };
+                    if (totalCount !== null && totalCount > effectiveLimit) {
+                        response.total_count = totalCount;
+                        response.showing = effectiveLimit;
+                        response.note = `Showing ${effectiveLimit} of ${totalCount} total records. Ask the user if they want to see more.`;
+                    }
+                    return response;
                 } catch (e) {
                     console.error('[ActionsService] Error during SELECT execution after building query:', e, { table, operation, filters: cleanFilters, order, limit, query });
                     throw e;

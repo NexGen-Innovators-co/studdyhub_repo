@@ -92,7 +92,7 @@ const DiagramPreview: React.FC<{ type: 'mermaid' | 'chartjs' | 'dot'; code: stri
 
       try {
         if (type === 'mermaid') {
-          mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose', logLevel: 1 });
+          mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose', logLevel: 5 } as any);
           const id = `mermaid-preview-${Date.now()}`;
           const { svg } = await mermaid.render(id, code.trim());
           if (isMounted && containerRef.current) {

@@ -6,12 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { PricingCards } from '@/components/subscription/PricingCards';
 import { ReferralModal } from '@/components/subscription/ReferralModal';
-import { useSubscription } from '@/hooks/useSubscription';
+import { useAppContext } from '@/hooks/useAppContext';
 import { useNavigate } from 'react-router-dom';
 
 export function SubscriptionPage() {
   const navigate = useNavigate();
-  const { tier, daysRemaining, limits, bonusAiCredits } = useSubscription();
+  const { subscriptionTier: tier, daysRemaining, subscriptionLimits: limits, bonusAiCredits } = useAppContext();
   const [showReferralModal, setShowReferralModal] = useState(false);
 
   const tierConfig = {

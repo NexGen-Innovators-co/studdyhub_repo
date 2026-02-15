@@ -382,7 +382,7 @@ const useLoadingQueue = () => {
   return { addToQueue };
 };
 
-export const useAppData = () => {
+export const useAppData = (authUser?: any) => {
   // State management with lazy initialization
   const [notes, setNotes] = useState<Note[]>([]);
   const [recordings, setRecordings] = useState<ClassRecording[]>([]);
@@ -486,64 +486,14 @@ export const useAppData = () => {
     });
   }, []);
 
-  // Enhanced auth listener with cleanup and timeout
+  // Sync currentUser from the auth provider (eliminates redundant auth listener)
   useEffect(() => {
-    const authController = new AbortController();
-
-    const setupAuthListener = async () => {
-      try {
-        const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-          const newUser = session?.user || null;
-
-          // Only update if user actually changed
-          if (newUser?.id !== currentUser?.id) {
-            setCurrentUser(newUser);
-          }
-        });
-
-        // Initial check with error handling and timeout
-        let userUser = null;
-
-        if (!navigator.onLine) {
-          const { data: { session } } = await supabase.auth.getSession();
-          userUser = session?.user || null;
-        } else {
-          const getUserPromise = supabase.auth.getUser();
-          const timeoutPromise = new Promise<any>((_, reject) =>
-            setTimeout(() => reject(new Error('Auth check timeout')), API_TIMEOUT)
-          );
-
-          try {
-            const result = await Promise.race([getUserPromise, timeoutPromise]);
-            userUser = result.data?.user || null;
-          } catch (e) {
-            // Fallback to session on timeout
-            const { data: { session } } = await supabase.auth.getSession();
-            userUser = session?.user || null;
-          }
-        }
-
-        if (userUser?.id !== currentUser?.id) {
-          setCurrentUser(userUser || null);
-        }
-
-        return () => {
-          authListener.subscription.unsubscribe();
-        };
-      } catch (error) {
-        //console.error('Auth setup error:', error);
-        if (error instanceof Error && error.message.includes('timeout')) {
-          //console.warn('Auth check timed out, continuing with current state');
-        }
-      }
-    };
-
-    setupAuthListener();
-
-    return () => {
-      authController.abort();
-    };
-  }, [currentUser?.id]); // Only depend on user ID
+    if (authUser?.id && authUser.id !== currentUser?.id) {
+      setCurrentUser(authUser);
+    } else if (!authUser && currentUser) {
+      setCurrentUser(null);
+    }
+  }, [authUser?.id]);
 
   // Optimized user change detection with debouncing
   useEffect(() => {
@@ -1698,17 +1648,14 @@ export const useAppData = () => {
     setLoadingPhase({ phase: 'initial', progress: 10 });
 
     try {
-      // Phase 1: Critical data (profile MUST load first)
-      const profileResult = await loadUserProfile(user); // Use the existing function
-
-      setLoadingPhase({ phase: 'core', progress: 30 });
-
-      // Phase 2: Core content (notes are critical)
+      // Phase 1: Load profile + core content IN PARALLEL (not sequentially)
+      const profilePromise = loadUserProfile(user);
       const notesPromise = loadNotesPage(user.id, true);
       const foldersPromise = loadFolders(user.id, true);
 
+      // Wait for profile + notes + folders all at once
       await Promise.race([
-        Promise.all([notesPromise, foldersPromise]),
+        Promise.all([profilePromise, notesPromise, foldersPromise]),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Core data loading timeout')), API_TIMEOUT * 2)
         )

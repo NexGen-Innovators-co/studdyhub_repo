@@ -247,7 +247,7 @@ Here's the error message received: "${error}". Please provide only the corrected
           sequence: { useMaxWidth: true },
           gantt: { useMaxWidth: true },
           securityLevel: 'loose',
-          suppressErrorRendering: false,
+          suppressErrorRendering: true,
         });
 
         // Create a unique ID for each render

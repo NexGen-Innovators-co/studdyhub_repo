@@ -46,8 +46,10 @@ export async function runAction(actionsService: any, userId: string, sessionId: 
     console.log(`[ActionExecution] running action helper: ${actionType}`);
     try {
         if (actionType === 'DB_ACTION') {
-            const { table, operation, data, filters, order, limit } = params || {};
-            return await actionsService.executeDbAction(userId, table, (operation || 'SELECT').toUpperCase(), data || {}, filters || {}, order || null, limit || null);
+            const { table, operation, data, filters, order, order_by, limit } = params || {};
+            // Normalize: LLM sometimes generates "order_by" instead of "order"
+            const resolvedOrder = order || order_by || null;
+            return await actionsService.executeDbAction(userId, table, (operation || 'SELECT').toUpperCase(), data || {}, filters || {}, resolvedOrder, limit || null);
         }
 
         if (actionType === 'GENERATE_IMAGE') {

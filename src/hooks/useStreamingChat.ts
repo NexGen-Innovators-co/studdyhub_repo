@@ -248,9 +248,9 @@ export const useStreamingChat = (): StreamingChatHook => {
                   accumulatedDataRef.current.thinkingSteps.push(data);
                   params.onThinkingStep(data);
                   break;
-                case 'content':
-                  accumulatedDataRef.current.content += data.chunk;
-                  params.onContentChunk(data.chunk);
+                case 'content_chunk':
+                  accumulatedDataRef.current.content += (data.content || data.chunk || '');
+                  params.onContentChunk(data.content || data.chunk || '');
                   break;
                 case 'done':
                   accumulatedDataRef.current.isDone = true;
@@ -261,7 +261,7 @@ export const useStreamingChat = (): StreamingChatHook => {
                   stopStreaming();
                   return; // Important: loop ends successfully
                 case 'error':
-                  throw new Error(`Backend error: ${data.message || 'Unknown streaming error'}`);
+                  throw new Error(`Backend error: ${data.error || data.message || 'Unknown streaming error'}`);
               }
             } catch (e) {
               //console.error('❌ [Streaming] Event processing error:', e);

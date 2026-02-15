@@ -1,5 +1,5 @@
 // NotesList.tsx
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { Trash2, X, Edit, Save, X as CloseIcon, RefreshCw, Search, CheckSquare, Square, Podcast } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Note, NoteCategory } from '../../../types/Note';
@@ -64,6 +64,11 @@ export const NotesList: React.FC<NotesListProps> = ({
   const [showSelection, setShowSelection] = useState(false);
   const [noteSearch, setNoteSearch] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
+  const [remoteSearchResults, setRemoteSearchResults] = useState<Note[]>([]);
+  const [isDbSearching, setIsDbSearching] = useState(false);
+  const dbSearchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const dbSearchRequestIdRef = useRef(0);
+  const isRemoteSearchEnabled = typeof onSearchNotes === 'function';
 
   // Get current user for search
   const [userId, setUserId] = useState<string | null>(null);
@@ -76,21 +81,71 @@ export const NotesList: React.FC<NotesListProps> = ({
   }, []);
 
   // Use global search hook for notes
-  const { search, results: searchResults, isSearching } = useGlobalSearch(
+  const { search, results: searchResults, isSearching, clear: clearGlobalSearch } = useGlobalSearch(
     SEARCH_CONFIGS.notes,
     userId,
     { debounceMs: 500 }
   );
 
+  const triggerDatabaseSearch = useCallback((query: string) => {
+    if (!isRemoteSearchEnabled) {
+      setRemoteSearchResults([]);
+      setIsDbSearching(false);
+      return;
+    }
+
+    if (dbSearchTimerRef.current) {
+      clearTimeout(dbSearchTimerRef.current);
+    }
+
+    const trimmedQuery = query.trim();
+
+    if (trimmedQuery.length < 2) {
+      setRemoteSearchResults([]);
+      setIsDbSearching(false);
+      return;
+    }
+
+    dbSearchTimerRef.current = setTimeout(async () => {
+      const requestId = ++dbSearchRequestIdRef.current;
+      setIsDbSearching(true);
+      try {
+        const dbResults = await onSearchNotes!(trimmedQuery);
+        if (dbSearchRequestIdRef.current === requestId) {
+          setRemoteSearchResults(dbResults || []);
+        }
+      } catch (error) {
+        if (dbSearchRequestIdRef.current === requestId) {
+          setRemoteSearchResults([]);
+        }
+      } finally {
+        if (dbSearchRequestIdRef.current === requestId) {
+          setIsDbSearching(false);
+        }
+        dbSearchTimerRef.current = null;
+      }
+    }, 350);
+  }, [isRemoteSearchEnabled, onSearchNotes]);
+
   // Handle search input change
   const handleSearchInputChange = (value: string) => {
     setNoteSearch(value);
+    if (dbSearchTimerRef.current) {
+      clearTimeout(dbSearchTimerRef.current);
+      dbSearchTimerRef.current = null;
+    }
+
     if (!value.trim()) {
       setHasSearched(false);
-    } else {
-      setHasSearched(true);
-      search(value);
+      setRemoteSearchResults([]);
+      setIsDbSearching(false);
+      clearGlobalSearch();
+      return;
     }
+
+    setHasSearched(true);
+    search(value);
+    triggerDatabaseSearch(value);
   };
 
   // Reset hasInitialNotes when notes change
@@ -145,7 +200,9 @@ export const NotesList: React.FC<NotesListProps> = ({
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      // Component cleanup if needed
+      if (dbSearchTimerRef.current) {
+        clearTimeout(dbSearchTimerRef.current);
+      }
     };
   }, []);
 
@@ -244,9 +301,34 @@ export const NotesList: React.FC<NotesListProps> = ({
   // Handle null notes by providing default empty array
   const safeNotes = notes || [];
 
-  // Use search results if searching, otherwise use local filtering
-  const filteredNotes = hasSearched && noteSearch.trim() 
-    ? searchResults
+  const combinedSearchResults = useMemo(() => {
+    if (!noteSearch.trim()) return [] as Note[];
+
+    const unique = new Map<string, Note>();
+    const addNotes = (items?: Note[]) => {
+      if (!items) return;
+      items.forEach((note) => {
+        if (note && note.id && !unique.has(note.id)) {
+          unique.set(note.id, note);
+        }
+      });
+    };
+
+    if (isRemoteSearchEnabled) {
+      addNotes(remoteSearchResults);
+    }
+
+    addNotes(searchResults as Note[]);
+
+    return Array.from(unique.values());
+  }, [noteSearch, remoteSearchResults, searchResults, isRemoteSearchEnabled]);
+
+  const hasRemoteCapability = isRemoteSearchEnabled || Boolean(userId);
+  const isAnySearching = isSearching || isDbSearching;
+  const shouldUseSearchResults = noteSearch.trim().length > 0 && (hasRemoteCapability || isAnySearching);
+
+  const filteredNotes = shouldUseSearchResults
+    ? combinedSearchResults
     : noteSearch.trim()
     ? safeNotes.filter((note) => {
         const searchLower = noteSearch.toLowerCase();
@@ -271,7 +353,7 @@ export const NotesList: React.FC<NotesListProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h3 className="font-medium text-slate-800 text-sm sm:text-base dark:text-gray-100">
-              {showLoading ? 'Loading...' : isSearching ? 'Searching...' : `${filteredNotes.length} ${filteredNotes.length === 1 ? 'Note' : 'Notes'}`}
+              {showLoading ? 'Loading...' : isAnySearching ? 'Searching...' : `${filteredNotes.length} ${filteredNotes.length === 1 ? 'Note' : 'Notes'}`}
             </h3>
 
             {/* Manual Refresh Button */}
@@ -280,7 +362,7 @@ export const NotesList: React.FC<NotesListProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={handleRefresh}
-                disabled={isRefreshing || isLoadingMore || isSearching}
+                disabled={isRefreshing || isLoadingMore || isAnySearching}
                 className="h-6 w-6 p-0 hover:bg-slate-100 dark:hover:bg-gray-800 dark:text-gray-400"
                 title="Refresh notes list"
               >
@@ -342,12 +424,12 @@ export const NotesList: React.FC<NotesListProps> = ({
             placeholder="Search notes..."
             className="pl-9 pr-10"
           />
-          {isSearching && (
+          {isAnySearching && (
             <div className="absolute right-3 top-1/2 -translate-y-1/2">
               <div className="h-4 w-4 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
             </div>
           )}
-          {noteSearch && !isSearching && (
+          {noteSearch && !isAnySearching && (
             <Button
               variant="ghost"
               size="icon"
