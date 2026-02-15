@@ -17,6 +17,7 @@ STUDENT PROFILE:
 - Learning Style: ${userProfile.learning_style || 'balanced'}
 - Preferred Explanation Style: ${userProfile.learning_preferences?.explanation_style || 'balanced'}
 - Difficulty Level: ${difficulty}
+${userProfile.personal_context ? `\nPERSONAL CONTEXT (use to tailor flashcard language and examples):\n${userProfile.personal_context}` : ''}
 
 FLASHCARD CREATION GUIDELINES:
 

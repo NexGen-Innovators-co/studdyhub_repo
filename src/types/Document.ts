@@ -31,6 +31,7 @@ export interface UserProfile {
   is_public: boolean | null
   learning_preferences: any | null
   learning_style: string | null
+  personal_context: string | null
   points_balance: number | null
   quiz_preferences: any | null
   referral_code: string | null

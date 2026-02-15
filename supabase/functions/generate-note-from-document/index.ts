@@ -27,6 +27,7 @@ Please extract and synthesize information primarily from this section. If the se
 - Desired Explanation Style: ${userProfile.learning_preferences.explanation_style}
 - Needs Examples: ${userProfile.learning_preferences.examples ? 'Yes' : 'No'}
 - Desired Difficulty: ${userProfile.learning_preferences.difficulty}
+${userProfile.personal_context ? `\n**Personal Context (provided by the student — use to tailor the note):**\n${userProfile.personal_context}` : ''}
 
 **Crucial Instructions for AI Output Tailoring:**
 * **Explanation Style:** Adapt your explanations to be "${userProfile.learning_preferences.explanation_style}". For example:

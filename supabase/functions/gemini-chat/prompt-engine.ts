@@ -1122,6 +1122,22 @@ This shows how different services communicate while remaining independent!"
             sections.push(`👤 User: ${userContext.profile.full_name}`);
         }
 
+        if (userContext.profile?.personal_context) {
+            sections.push(`\n🧠 Personal Context (provided by the user — use this to personalize responses):`);
+            sections.push(userContext.profile.personal_context);
+        }
+
+        if (userContext.profile?.learning_style) {
+            sections.push(`📖 Learning Style: ${userContext.profile.learning_style}`);
+        }
+
+        if (userContext.profile?.learning_preferences) {
+            const prefs = userContext.profile.learning_preferences;
+            if (prefs.explanation_style) sections.push(`💬 Explanation Style: ${prefs.explanation_style}`);
+            if (prefs.difficulty) sections.push(`📊 Difficulty Level: ${prefs.difficulty}`);
+            if (prefs.examples !== undefined) sections.push(`💡 Include Examples: ${prefs.examples ? 'Yes' : 'No'}`);
+        }
+
         if (userContext.subscription) {
             sections.push(`💳 Subscription: ${userContext.subscription.plan_type?.toUpperCase() || 'FREE'} (Status: ${userContext.subscription.status})`);
         } else {

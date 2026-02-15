@@ -337,7 +337,7 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
 
       {/* Grid */}
       {!isLoading && groups.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 pb-32 md:pb-4">
           {groups.map((group: Group) => {
             const isPending = group.member_status === 'pending';
             const isActiveMember = group.is_member && group.member_status === 'active';

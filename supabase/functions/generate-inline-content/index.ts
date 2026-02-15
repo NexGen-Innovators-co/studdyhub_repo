@@ -22,6 +22,7 @@ function createInlineContentPrompt(
 USER PROFILE:
 - Learning Style: ${userProfile?.learning_style || 'balanced'}
 - Preferred Explanation Style: ${userProfile?.learning_preferences?.explanation_style || 'balanced'}
+${userProfile?.personal_context ? `\nPERSONAL CONTEXT (use this to personalize your response):\n${userProfile.personal_context}` : ''}
 
 TASK: ${actionType}
 `;

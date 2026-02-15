@@ -10,6 +10,8 @@ import {
   EyeOff,
   Upload,
   Check,
+  Loader2,
+  FileUp,
   AlertCircle,
   Volume2,
   Hand,
@@ -22,7 +24,8 @@ import {
   Download,
   Trash2,
   Calendar,
-  Bell
+  Bell,
+  Sparkles
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -97,7 +100,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 }) => {
   const { confirm: confirmAction, ConfirmDialogComponent } = useConfirmDialog();
   // Tab state
-  const [activeTab, setActiveTab] = useState<'profile' | 'learning' | 'goals' | 'achievements' | 'study' | 'privacy' | 'notifications' | 'security'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'learning' | 'personalization' | 'goals' | 'achievements' | 'study' | 'privacy' | 'notifications' | 'security'>('profile');
 
   // Original form states
   const [learningStyle, setLearningStyle] = useState<UserProfile['learning_style']>('visual');
@@ -120,6 +123,9 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [personalContext, setPersonalContext] = useState('');
+  const [contextFileLoading, setContextFileLoading] = useState(false);
+  const contextFileInputRef = React.useRef<HTMLInputElement>(null);
 
   // New feature states
   const [goals, setGoals] = useState<UserLearningGoal[]>([]);
@@ -200,6 +206,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       setDifficulty(profile.learning_preferences.difficulty);
       setFullName(profile.full_name || '');
       setAvatarUrl(profile.avatar_url || '');
+      setPersonalContext(profile.personal_context || '');
     }
   }, [profile]);
 
@@ -333,6 +340,100 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
     }
   };
 
+  // Handle file upload for AI context extraction
+  const handleContextFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Reset the input so the same file can be re-selected
+    event.target.value = '';
+
+    const allowedTypes = [
+      'text/plain',
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword',
+    ];
+    const allowedExtensions = ['.txt', '.pdf', '.docx', '.doc'];
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+
+    if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(ext)) {
+      toast.error('Unsupported file type. Please upload a .txt, .pdf, or .docx file.');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File too large. Maximum size is 10MB.');
+      return;
+    }
+
+    setContextFileLoading(true);
+
+    try {
+      let extractedText = '';
+
+      if (file.type === 'text/plain' || ext === '.txt') {
+        // Read text files directly on the client
+        extractedText = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error('Failed to read file'));
+          reader.readAsText(file);
+        });
+      } else {
+        // Use the document-processor edge function for PDF/DOCX
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string).split(',')[1]);
+          reader.onerror = () => reject(new Error('Failed to read file'));
+          reader.readAsDataURL(file);
+        });
+
+        const { data, error } = await supabase.functions.invoke('document-processor', {
+          body: {
+            userId: profile?.id,
+            files: [{ name: file.name, mimeType: file.type, data: base64, size: file.size }],
+          },
+        });
+
+        if (error) throw new Error(error.message);
+
+        const doc = data?.documents?.[0];
+        if (!doc || doc.processing_status === 'failed') {
+          throw new Error(doc?.processing_error || 'Failed to extract text from file');
+        }
+        extractedText = doc.content_extracted || '';
+      }
+
+      if (!extractedText.trim()) {
+        toast.error('No text could be extracted from the file.');
+        return;
+      }
+
+      // Trim to fit within the 2000 char limit
+      const remaining = 2000 - personalContext.length;
+      if (remaining <= 0) {
+        toast.error('Character limit reached. Remove some text first to make room.');
+        return;
+      }
+
+      const separator = personalContext.trim() ? '\n\n' : '';
+      const textToAppend = extractedText.trim().slice(0, remaining - separator.length);
+      setPersonalContext((prev) => (prev.trim() + separator + textToAppend).slice(0, 2000));
+
+      if (extractedText.trim().length > remaining - separator.length) {
+        toast.success('Text extracted and trimmed to fit the 2000-character limit.');
+      } else {
+        toast.success(`Extracted ${textToAppend.length} characters from ${file.name}`);
+      }
+    } catch (err: any) {
+      console.error('Context file upload error:', err);
+      toast.error(err.message || 'Failed to extract text from file.');
+    } finally {
+      setContextFileLoading(false);
+    }
+  };
+
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
@@ -390,6 +491,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
           learning_preferences: updatedPreferences,
           full_name: fullName,
           avatar_url: updatedAvatarUrl,
+          personal_context: personalContext,
           updated_at: new Date().toISOString(),
         })
         .eq('id', user.id)
@@ -652,6 +754,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
   const navItems = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'learning', label: 'Learning', icon: Brain },
+    { id: 'personalization', label: 'AI Context', icon: Sparkles },
     { id: 'goals', label: 'Goals', icon: Target },
     { id: 'achievements', label: 'Achievements', icon: Trophy },
     { id: 'study', label: 'Study', icon: Clock },
@@ -913,6 +1016,83 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                       onCheckedChange={setIncludeExamples}
                       className="bg-gray-600 data-[state=checked]:bg-blue-500"
                     />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          )}
+
+          {/* AI Personalization Section */}
+          {activeTab === 'personalization' && (
+            <CardContent className="p-8">
+              <div className="flex items-center gap-3 mb-2">
+                <Sparkles className="h-5 w-5 text-purple-500" />
+                <h2 className="text-xl font-semibold">AI Personalization Context</h2>
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                Tell the AI about yourself — your habits, interests, how you learn best, or anything you'd like it to keep in mind. This information is included in every AI interaction to make responses more relevant to you.
+              </p>
+
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      About You
+                    </Label>
+                    <div>
+                      <input
+                        ref={contextFileInputRef}
+                        type="file"
+                        accept=".txt,.pdf,.docx,.doc"
+                        onChange={handleContextFileUpload}
+                        className="hidden"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={contextFileLoading}
+                        onClick={() => contextFileInputRef.current?.click()}
+                        className="gap-2 text-xs"
+                      >
+                        {contextFileLoading ? (
+                          <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Extracting...</>
+                        ) : (
+                          <><FileUp className="h-3.5 w-3.5" /> Import from File</>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                  <textarea
+                    value={personalContext}
+                    onChange={(e) => setPersonalContext(e.target.value)}
+                    rows={8}
+                    maxLength={2000}
+                    className="w-full p-4 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 resize-y focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-sm leading-relaxed"
+                    placeholder={"Example:\n• I'm a 2nd-year computer science student\n• I study best in the morning and prefer short, focused sessions\n• I'm a visual learner who likes diagrams and code examples\n• I struggle with math-heavy topics — explain them step by step\n• I'm preparing for my AWS certification exam\n• I prefer responses in bullet points rather than long paragraphs"}
+                  />
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                      This is shared with the AI across all features — chat, note generation, flashcards, and more.
+                    </p>
+                    <span className={`text-xs ${personalContext.length > 1800 ? 'text-amber-500' : 'text-gray-400 dark:text-gray-500'}`}>
+                      {personalContext.length}/2000
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl border border-purple-100 dark:border-purple-900/30 bg-purple-50 dark:bg-purple-900/10">
+                  <div className="flex items-start gap-3">
+                    <Sparkles className="h-5 w-5 text-purple-500 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-purple-700 dark:text-purple-300 space-y-1">
+                      <p className="font-medium">How this helps the AI</p>
+                      <ul className="list-disc list-inside text-purple-600 dark:text-purple-400 space-y-0.5">
+                        <li>Generates notes and summaries tailored to your level</li>
+                        <li>Adjusts explanation complexity to your needs</li>
+                        <li>Aligns flashcard difficulty with your goals</li>
+                        <li>Provides examples relevant to your field</li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1391,7 +1571,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
             </CardContent>
           )}
 
-          {(activeTab === 'profile' || activeTab === 'learning' || activeTab === 'security') && (
+          {(activeTab === 'profile' || activeTab === 'learning' || activeTab === 'personalization' || activeTab === 'security') && (
             <CardContent className="px-8 pb-8">
               <div className="flex items-center gap-4">
                 <Button

@@ -148,6 +148,7 @@ const sectionTabs = {
   settings: [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'learning', label: 'Learning', icon: Brain },
+    { id: 'personalization', label: 'AI Context', icon: Sparkles },
     { id: 'goals', label: 'Goals', icon: Target },
     { id: 'achievements', label: 'Achievements', icon: Trophy },
     { id: 'study', label: 'Study', icon: Clock },
