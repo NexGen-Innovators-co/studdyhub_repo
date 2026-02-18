@@ -68,7 +68,7 @@ export const MoveDocumentDialog: React.FC<MoveDocumentDialogProps> = ({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="sm:max-w-lg md:max-w-xl max-h-[90vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Move Document</DialogTitle>
                     <DialogDescription>
@@ -76,23 +76,23 @@ export const MoveDocumentDialog: React.FC<MoveDocumentDialogProps> = ({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4">
+                <div className="flex-1 overflow-hidden space-y-4">
                     {/* Root folder option */}
                     <button
                         onClick={() => setSelectedFolderId(null)}
-                        className={`w-full text-left px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors ${selectedFolderId === null
-                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                            : ''
+                        className={`w-full text-left px-4 py-3 rounded-md border hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors ${selectedFolderId === null
+                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                            : 'border-transparent'
                             }`}
                     >
                         <div className="flex items-center gap-2">
                             <Home className="h-4 w-4" />
-                            <span>Root / No folder</span>
+                            <span className="font-medium">Root / No folder</span>
                         </div>
                     </button>
 
                     {/* Folder tree */}
-                    <div className="max-h-96 overflow-y-auto space-y-1 border-t pt-2">
+                    <div className="max-h-[50vh] min-h-[200px] overflow-y-auto space-y-1 border rounded-md p-2 bg-muted/10">
                         {folderTree.length > 0 ? (
                             renderFolderTree(folderTree)
                         ) : (
@@ -101,26 +101,26 @@ export const MoveDocumentDialog: React.FC<MoveDocumentDialogProps> = ({
                             </p>
                         )}
                     </div>
+                </div>
 
-                    {/* Action buttons */}
-                    <div className="flex justify-end gap-2 pt-4 border-t">
-                        <Button
-                            variant="outline"
-                            onClick={() => {
-                                onOpenChange(false);
-                                setSelectedFolderId(null);
-                            }}
-                            disabled={isMoving}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleMove}
-                            disabled={isMoving}
-                        >
-                            {isMoving ? 'Moving...' : 'Move Here'}
-                        </Button>
-                    </div>
+                {/* Action buttons */}
+                <div className="flex justify-end gap-2 pt-4 border-t mt-auto">
+                    <Button
+                        variant="ghost"
+                        onClick={() => {
+                            onOpenChange(false);
+                            setSelectedFolderId(null);
+                        }}
+                        disabled={isMoving}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleMove}
+                        disabled={isMoving}
+                    >
+                        {isMoving ? 'Moving...' : 'Move Here'}
+                    </Button>
                 </div>
             </DialogContent>
         </Dialog>

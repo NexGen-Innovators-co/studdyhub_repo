@@ -132,6 +132,22 @@ supabase db push
 supabase db push --file supabase/migrations/001_initial_schema.sql
 ```
 
+#### AI Feed Migration
+
+The AI-powered feed system requires a dedicated migration:
+
+```bash
+# Run the AI feed migration
+# File: sql/20260215_ai_feed_columns.sql
+# This adds:
+#   - ai_categories, ai_sentiment, ai_quality_score columns to social_posts
+#   - ai_preferred_categories, ai_preferred_authors, ai_profile_updated_at to social_users
+#   - social_user_signals table (with RLS)
+#   - 6 trigger functions for automatic signal recording
+```
+
+Run it via the Supabase SQL Editor or `psql` against the production database.
+
 ### 4. Verify Database Schema
 
 ```bash
@@ -235,6 +251,25 @@ supabase functions deploy document-extractor
 supabase functions deploy gemini-audio-processor
 # ... etc
 ```
+
+#### AI Feed Functions
+
+Deploy the AI feed edge functions (after running the AI feed migration):
+
+```bash
+# AI categorization service
+supabase functions deploy ai-categorize-post --no-verify-jwt
+
+# AI ranking service
+supabase functions deploy ai-rank-feed --no-verify-jwt
+
+# Updated social functions with AI integration
+supabase functions deploy get-social-feed --no-verify-jwt
+supabase functions deploy get-suggested-users --no-verify-jwt
+supabase functions deploy create-social-post --no-verify-jwt
+```
+
+> **Note**: These functions require the `GEMINI_API_KEY` secret to be set (see step 4 below). The shared utility `utils/gemini.ts` is automatically bundled with each function.
 
 ### 3. Verify Deployment
 

@@ -655,7 +655,77 @@ const { data } = await supabase.functions.invoke('follow-user', {
 - **Follow users** - Stay updated with their posts
 - **Followers** - See who follows you
 - **Following** - Manage who you follow
-- **Feed algorithm** - Personalized content
+- **Feed algorithm** - AI-powered personalized content ranking
+
+#### AI-Powered Feed System
+
+StuddyHub uses **Gemini AI** to deliver a truly personalized social feed experience. The system learns from every interaction to surface the most relevant content for each user.
+
+##### AI Content Categorization
+
+Every new post is automatically categorized using Gemini AI with a **45-category taxonomy** including:
+
+- `technology`, `programming`, `ai-ml`, `data-science`, `web-development`
+- `study-tips`, `exam-prep`, `note-taking`, `time-management`
+- `mathematics`, `physics`, `chemistry`, `biology`, `engineering`
+- `motivation`, `career-advice`, `internships`, `research`
+- `question`, `discussion`, `resource-sharing`, `tutorial`, `announcement`
+- And 20+ more domain-specific categories
+
+Each post receives:
+- **Categories** (`ai_categories`) — up to 3 relevant labels
+- **Sentiment** (`ai_sentiment`) — `positive`, `neutral`, `negative`, or `mixed`
+- **Quality Score** (`ai_quality_score`) — 1–10 rating based on educational value, depth, and clarity
+
+##### Signal-Based Preference Learning
+
+The system records user interaction signals and computes preferences with weighted scoring:
+
+| Signal | Weight | Description |
+|--------|--------|-------------|
+| Share | 3.0 | Strongest positive signal |
+| Bookmark | 2.0 | Strong interest indicator |
+| Comment | 1.5 | Active engagement |
+| Like | 1.0 | Passive approval |
+| View (>3s) | 0.3 | Mild interest |
+| Skip | -0.5 | Mild disinterest |
+| Hide | -3.0 | Strong negative signal |
+
+Signals are subject to **30-day exponential time decay**, so recent interactions matter more than old ones. Preferences are cached for 10 minutes and periodically persisted to the database.
+
+##### Personalized Feed Scoring
+
+Posts are scored across **6 dimensions** (0–100 total):
+
+| Dimension | Max Score | Description |
+|-----------|-----------|-------------|
+| Category Match | 30 | How well post categories align with user interests |
+| Author Affinity | 20 | History of engaging with this author |
+| Quality | 10 | AI-assigned quality score |
+| Engagement Momentum | 15 | Recent like/comment/share velocity |
+| Recency | 15 | Time-decay freshness bonus |
+| Novelty | 10 | Topic diversity to avoid echo chambers |
+
+##### Cold-Start Handling
+
+New users with fewer than 10 interactions receive **Gemini-powered interest matching**:
+- The AI analyzes the user's bio, selected interests, and academic level
+- Posts are semantically matched against the user's profile
+- As signals accumulate, the system transitions to data-driven ranking
+
+##### Cursor-Based Pagination
+
+The feed uses cursor-based pagination (keyed on `created_at` timestamps) to ensure:
+- **No duplicate posts** across pages
+- **No skipped posts** when new content is added
+- **Consistent ordering** regardless of concurrent activity
+
+##### AI-Enhanced Suggested Users
+
+Suggested user recommendations are powered by:
+- **Gemini semantic matching** — AI compares user bios, interests, and study fields for compatibility (up to 20 bonus points)
+- **Time-seeded pseudo-random variety** — recommendations rotate every 30 minutes
+- **Previously-shown exclusion** — avoids repeating suggestions within a session
 
 #### Study Groups
 
@@ -1118,6 +1188,14 @@ Track all admin actions for accountability.
 ---
 
 ## Coming Soon
+
+### Shipped Recently
+- [x] AI-powered feed ranking (Gemini AI)
+- [x] AI content categorization (45-category taxonomy)
+- [x] Signal-based preference learning
+- [x] Cold-start Gemini interest matching
+- [x] Cursor-based feed pagination
+- [x] AI-enhanced suggested users
 
 ### Q1 2025
 - [ ] Mobile apps (iOS/Android)

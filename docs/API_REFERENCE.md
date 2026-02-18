@@ -677,9 +677,164 @@ Create a new study group.
 
 ---
 
+### 19. Get Social Feed (AI-Ranked)
+
+Fetch the personalized, AI-ranked social feed.
+
+**Endpoint**: `POST /get-social-feed`
+
+**Request Body**:
+```json
+{
+  "mode": "feed|trending|user|liked|bookmarked" (required),
+  "limit": number (optional, default: 10),
+  "cursor": "ISO 8601 timestamp (optional, for pagination)",
+  "excludeIds": ["uuid"] (optional, already-seen post IDs),
+  "userId": "uuid (required for mode='user')"
+}
+```
+
+**Response**:
+```json
+{
+  "posts": [
+    {
+      "id": "uuid",
+      "content": "string",
+      "ai_categories": ["study-tips", "exam-prep"],
+      "ai_sentiment": "positive",
+      "ai_quality_score": 8,
+      "likesCount": number,
+      "commentsCount": number,
+      "createdAt": "timestamp"
+    }
+  ],
+  "hasMore": boolean,
+  "nextCursor": "ISO 8601 timestamp or null"
+}
+```
+
+**Notes**:
+- Uses cursor-based pagination — pass `nextCursor` from the previous response as `cursor`
+- In `feed` mode, posts are scored by AI across 6 dimensions (category match, author affinity, quality, engagement momentum, recency, novelty)
+- AI ranking is best-effort; falls back to chronological on failure
+- Cold-start users (<10 interactions) receive Gemini-powered interest matching
+
+---
+
+### 20. Get Suggested Users (AI-Enhanced)
+
+Get AI-powered user recommendations.
+
+**Endpoint**: `POST /get-suggested-users`
+
+**Request Body**:
+```json
+{
+  "limit": number (optional, default: 5),
+  "previouslyShownIds": ["uuid"] (optional, IDs to exclude)
+}
+```
+
+**Response**:
+```json
+{
+  "users": [
+    {
+      "id": "uuid",
+      "username": "string",
+      "avatar_url": "string",
+      "bio": "string",
+      "followers_count": number,
+      "score": number
+    }
+  ]
+}
+```
+
+**Notes**:
+- Gemini AI compares bios and interests for semantic compatibility (up to 20 bonus points)
+- Results rotate every 30 minutes via time-seeded pseudo-random variety
+- Pass `previouslyShownIds` to avoid repeating suggestions within a session
+
+---
+
+### 21. AI Categorize Post
+
+Categorize posts using Gemini AI.
+
+**Endpoint**: `POST /ai-categorize-post`
+
+**Request Body**:
+```json
+{
+  "postId": "uuid (for single post)",
+  "postIds": ["uuid"] (for batch mode),
+  "batchUncategorized": boolean (optional, process all uncategorized posts)
+}
+```
+
+**Response**:
+```json
+{
+  "results": [
+    {
+      "postId": "uuid",
+      "categories": ["programming", "tutorial"],
+      "sentiment": "positive",
+      "quality_score": 7
+    }
+  ]
+}
+```
+
+**Notes**:
+- Automatically called by `create-social-post` on new post creation (fire-and-forget)
+- Can be called manually for batch re-categorization
+- Uses a 45-category academic/social taxonomy
+
+---
+
+### 22. AI Rank Feed
+
+Standalone AI feed ranking service.
+
+**Endpoint**: `POST /ai-rank-feed`
+
+**Request Body**:
+```json
+{
+  "mode": "rank|profile|update-profile" (required),
+  "postIds": ["uuid"] (required for mode='rank'),
+  "userId": "uuid (optional, defaults to authenticated user)"
+}
+```
+
+**Response (mode=rank)**:
+```json
+{
+  "rankedPosts": [
+    { "postId": "uuid", "score": 78.5 }
+  ]
+}
+```
+
+**Response (mode=profile)**:
+```json
+{
+  "preferences": {
+    "categories": { "programming": 4.2, "study-tips": 3.1 },
+    "preferredAuthors": ["uuid1", "uuid2"],
+    "interactionCount": 47
+  }
+}
+```
+
+---
+
 ## Payment Functions
 
-### 19. Paystack Webhook
+### 23. Paystack Webhook
 
 Handle payment webhooks from Paystack.
 
@@ -710,7 +865,7 @@ Handle payment webhooks from Paystack.
 
 ## Utility Functions
 
-### 20. Generate Summary
+### 24. Generate Summary
 
 Generate summary from text.
 
@@ -733,7 +888,7 @@ Generate summary from text.
 
 ---
 
-### 21. Fix Diagram
+### 25. Fix Diagram
 
 Fix Mermaid diagram syntax.
 
@@ -757,7 +912,7 @@ Fix Mermaid diagram syntax.
 
 ---
 
-### 22. Generate Image from Text
+### 26. Generate Image from Text
 
 Generate images using AI (Gemini Imagen).
 
@@ -781,7 +936,7 @@ Generate images using AI (Gemini Imagen).
 
 ---
 
-### 23. Send Message
+### 27. Send Message
 
 Send internal messages between users.
 
@@ -812,7 +967,7 @@ Send internal messages between users.
 
 ---
 
-### 24. Generate Note from Document
+### 28. Generate Note from Document
 
 Create a note from document content.
 

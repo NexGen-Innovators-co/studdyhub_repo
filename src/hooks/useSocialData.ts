@@ -69,11 +69,14 @@ export const useSocialData = (
   const [isLoadingMoreGroups, setIsLoadingMoreGroups] = useState(false);
   const isFetchedRef = useRef(false); // Ref to track if data has already been fetched to prevent refetch on mount if data exists
 
-  const [postsOffset, setPostsOffset] = useState(0);
-  const [trendingPostsOffset, setTrendingPostsOffset] = useState(0);
-  const [userPostsOffset, setUserPostsOffset] = useState(0);
+  // Cursor-based pagination (ISO timestamp of last post's created_at)
+  const [postsCursor, setPostsCursor] = useState<string | null>(null);
+  const [trendingPostsCursor, setTrendingPostsCursor] = useState<string | null>(null);
+  const [userPostsCursor, setUserPostsCursor] = useState<string | null>(null);
   const [suggestedUsersOffset, setSuggestedUsersOffset] = useState(0);
   const [groupsOffset, setGroupsOffset] = useState(0);
+  // Track shown suggested user IDs for rotation
+  const [shownSuggestedUserIds, setShownSuggestedUserIds] = useState<string[]>([]);
 
   const [hasMorePosts, setHasMorePosts] = useState(true);
   const [hasMoreTrendingPosts, setHasMoreTrendingPosts] = useState(true);
@@ -101,7 +104,7 @@ export const useSocialData = (
 
 
 
-  // OPTIMIZED: Fetch posts via edge function (single API call replaces 5+ DB queries)
+  // OPTIMIZED: Fetch posts via edge function with cursor-based pagination
   const fetchPosts = useCallback(async (reset: boolean = false) => {
     if (!reset && (!hasMorePosts || isLoadingMorePosts)) return;
 
@@ -113,19 +116,24 @@ export const useSocialData = (
 
     try {
       if (reset) {
-        setIsLoading(posts.length === 0);
+        setIsLoading(true);
+      } else {
+        setIsLoadingMorePosts(true);
       }
-      if (!reset) setIsLoadingMorePosts(true);
 
-      const currentOffset = reset ? 0 : postsOffset;
+      const currentCursor = reset ? null : postsCursor;
+
+      // For popular sort, send loaded post IDs to exclude on server
+      const currentPostIds = reset ? [] : posts.map(p => p.id);
 
       const { data: response, error } = await supabase.functions.invoke('get-social-feed', {
         body: {
           mode: 'feed',
           sortBy,
-          offset: currentOffset,
+          cursor: currentCursor,
           limit: DEFAULT_LIMITS.POSTS_PER_PAGE,
           viewedPostIds: Array.from(viewedPostIds),
+          excludeIds: sortBy === 'popular' ? currentPostIds : [],
         },
       });
 
@@ -155,12 +163,12 @@ export const useSocialData = (
 
       if (reset) {
         setPosts(uniqueById(transformedPosts));
-        setPostsOffset(transformedPosts.length);
       } else {
         setPosts(prev => uniqueById([...prev, ...transformedPosts]));
-        setPostsOffset(prev => prev + transformedPosts.length);
       }
 
+      // Update cursor for next page
+      setPostsCursor(response?.nextCursor ?? null);
       setHasMorePosts(response?.hasMore ?? false);
     } catch (error) {
       toast.error('Failed to load posts');
@@ -168,7 +176,7 @@ export const useSocialData = (
       setIsLoading(false);
       setIsLoadingMorePosts(false);
     }
-  }, [sortBy, filterBy, hasMorePosts, isLoadingMorePosts, postsOffset, viewedPostIds]);
+  }, [sortBy, filterBy, hasMorePosts, isLoadingMorePosts, postsCursor, posts, viewedPostIds]);
 
   // OPTIMIZED: Trending posts via edge function
   const fetchTrendingPosts = useCallback(async (reset: boolean = false) => {
@@ -182,18 +190,21 @@ export const useSocialData = (
 
     try {
       if (reset) {
-        setIsLoading(trendingPosts.length === 0);
+        setIsLoading(true);
+      } else {
+        setIsLoadingMorePosts(true);
       }
-      if (!reset) setIsLoadingMorePosts(true);
 
-      const currentOffset = reset ? 0 : trendingPostsOffset;
+      // Send loaded trending post IDs to exclude on server
+      const currentTrendingIds = reset ? [] : trendingPosts.map(p => p.id);
 
       const { data: response, error } = await supabase.functions.invoke('get-social-feed', {
         body: {
           mode: 'trending',
-          offset: currentOffset,
+          cursor: reset ? null : trendingPostsCursor,
           limit: DEFAULT_LIMITS.POSTS_PER_PAGE,
           viewedPostIds: Array.from(viewedPostIds),
+          excludeIds: currentTrendingIds,
         },
       });
 
@@ -208,12 +219,11 @@ export const useSocialData = (
 
       if (reset) {
         setTrendingPosts(uniqueById(transformedPosts));
-        setTrendingPostsOffset(transformedPosts.length);
       } else {
         setTrendingPosts(prev => uniqueById([...prev, ...transformedPosts]));
-        setTrendingPostsOffset(prev => prev + transformedPosts.length);
       }
 
+      setTrendingPostsCursor(response?.nextCursor ?? null);
       setHasMoreTrendingPosts(response?.hasMore ?? false);
     } catch (error) {
       toast.error('Failed to load trending posts');
@@ -221,7 +231,7 @@ export const useSocialData = (
       setIsLoading(false);
       setIsLoadingMorePosts(false);
     }
-  }, [hasMoreTrendingPosts, isLoadingMorePosts, trendingPostsOffset, viewedPostIds]);
+  }, [hasMoreTrendingPosts, isLoadingMorePosts, trendingPostsCursor, trendingPosts, viewedPostIds]);
 
   // OPTIMIZED: User posts via edge function
   const fetchUserPosts = useCallback(async (reset: boolean = false) => {
@@ -234,15 +244,15 @@ export const useSocialData = (
 
     try {
       if (reset) {
-        setIsLoadingUserPosts(userPosts.length === 0);
+        setIsLoadingUserPosts(true);
       }
 
-      const currentOffset = reset ? 0 : userPostsOffset;
+      const currentCursor = reset ? null : userPostsCursor;
 
       const { data: response, error } = await supabase.functions.invoke('get-social-feed', {
         body: {
           mode: 'user',
-          offset: currentOffset,
+          cursor: currentCursor,
           limit: DEFAULT_LIMITS.POSTS_PER_PAGE,
         },
       });
@@ -259,19 +269,18 @@ export const useSocialData = (
 
       if (reset) {
         setUserPosts(uniqueById(transformedPosts));
-        setUserPostsOffset(transformedPosts.length);
       } else {
         setUserPosts(prev => uniqueById([...prev, ...transformedPosts]));
-        setUserPostsOffset(prev => prev + transformedPosts.length);
       }
 
+      setUserPostsCursor(response?.nextCursor ?? null);
       setHasMoreUserPosts(response?.hasMore ?? false);
     } catch (error) {
       toast.error('Failed to load user posts');
     } finally {
       setIsLoadingUserPosts(false);
     }
-  }, [hasMoreUserPosts, isLoadingUserPosts, userPostsOffset]);
+  }, [hasMoreUserPosts, isLoadingUserPosts, userPostsCursor]);
 
   // OPTIMIZED: Liked posts via edge function
   const fetchLikedPosts = useCallback(async () => {
@@ -547,11 +556,26 @@ export const useSocialData = (
   }, [sortBy, filterBy]);
 
   // Fetch data when currentUser becomes available for the first time
+  // Load viewedPostIds FIRST so the feed scoring can differentiate seen/unseen posts
   useEffect(() => {
     if (currentUser && !isInitializedRef.current) {
       isInitializedRef.current = true;
-      // **CRITICAL: Call resetAndFetchData after isInitializedRef is true**
-      resetAndFetchData();
+
+      const initWithViewed = async () => {
+        try {
+          const { data } = await supabase
+            .from('social_post_views')
+            .select('post_id')
+            .eq('user_id', currentUser.id);
+          if (data) {
+            setViewedPostIds(new Set(data.map((v: { post_id: string }) => v.post_id)));
+          }
+        } catch {}
+        // Now fetch feed data with viewedPostIds populated
+        resetAndFetchData();
+      };
+
+      initWithViewed();
       setupRealtimeListeners();
     }
   }, [currentUser]);
@@ -843,9 +867,10 @@ export const useSocialData = (
 
   const resetAndFetchData = () => {
 
-    setPostsOffset(0);
-    setTrendingPostsOffset(0);
-    setUserPostsOffset(0);
+    // Reset cursors (not offsets) for cursor-based pagination
+    setPostsCursor(null);
+    setTrendingPostsCursor(null);
+    setUserPostsCursor(null);
     setSuggestedUsersOffset(0);
     setGroupsOffset(0);
     groupPageRef.current = 0;
@@ -856,13 +881,13 @@ export const useSocialData = (
     setHasMoreSuggestedUsers(true);
     setHasMoreGroups(true);
 
-    // Don't clear posts immediately to avoid UI flash/loading state if we have cached data
-    // setPosts([]);
-    // setTrendingPosts([]);
-    // setUserPosts([]);
-    // setGroups([]);
+    // Clear stale data to prevent showing old posts
+    setPosts([]);
+    setTrendingPosts([]);
+    setUserPosts([]);
 
     setSuggestedUsers([]);
+    setShownSuggestedUserIds([]);
     // Clear any buffered new posts when resetting
     setNewPostsBuffer([]);
     setHasNewPosts(false);
@@ -893,7 +918,7 @@ export const useSocialData = (
     }
   };
 
-  // OPTIMIZED: Suggested users via edge function (5+ queries → 1 API call)
+  // OPTIMIZED: Suggested users via edge function with rotation support
   const fetchSuggestedUsers = useCallback(
     async (reset: boolean = false) => {
       if (!reset && (isLoadingSuggestedUsers || !hasMoreSuggestedUsers)) {
@@ -910,6 +935,7 @@ export const useSocialData = (
         if (reset) {
           setSuggestedUsersOffset(0);
           setSuggestedUsers([]);
+          setShownSuggestedUserIds([]);
           setHasMoreSuggestedUsers(true);
         }
 
@@ -917,7 +943,11 @@ export const useSocialData = (
         const limit = DEFAULT_LIMITS.SUGGESTED_USERS;
 
         const { data: response, error } = await supabase.functions.invoke('get-suggested-users', {
-          body: { offset: currentOffset, limit },
+          body: {
+            offset: currentOffset,
+            limit,
+            previouslyShownIds: reset ? [] : shownSuggestedUserIds,
+          },
         });
 
         if (error) throw error;
@@ -929,6 +959,10 @@ export const useSocialData = (
           setIsLoadingSuggestedUsers(false);
           return;
         }
+
+        // Track shown IDs for rotation
+        const newShownIds = paginatedUsers.map(u => u.id);
+        setShownSuggestedUserIds(prev => [...prev, ...newShownIds]);
 
         if (reset) {
           setSuggestedUsers(paginatedUsers);
@@ -945,7 +979,7 @@ export const useSocialData = (
         setIsLoadingSuggestedUsers(false);
       }
     },
-    [currentUser, suggestedUsersOffset, isLoadingSuggestedUsers, hasMoreSuggestedUsers]
+    [currentUser, suggestedUsersOffset, isLoadingSuggestedUsers, hasMoreSuggestedUsers, shownSuggestedUserIds]
   );
 
   const loadMorePosts = () => {

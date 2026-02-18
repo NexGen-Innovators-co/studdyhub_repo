@@ -51,19 +51,19 @@ export const MoveFolderDialog: React.FC<MoveFolderDialogProps> = ({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-lg md:max-w-xl max-h-[90vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Move Folder</DialogTitle>
                     <DialogDescription>
                         Select the new parent folder for <strong>{folder?.name}</strong>.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="newParentFolder" className="text-right">
-                            New Parent Folder
+                <div className="flex-1 overflow-hidden py-2">
+                    <div className="flex flex-col gap-3 h-full">
+                        <Label htmlFor="newParentFolder" className="text-left font-medium">
+                            Choose Destination:
                         </Label>
-                        <div className="col-span-3">
+                        <div className="border rounded-md p-3 bg-muted/10 overflow-y-auto min-h-[200px] max-h-[50vh]">
                             {/* Render folder tree here */}
                             {folderTree && folder && (
                                 <FolderTree

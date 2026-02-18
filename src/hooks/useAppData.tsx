@@ -600,13 +600,18 @@ export const useAppData = (authUser?: any) => {
   }, []);
 
   // Enhanced documents loading with retry logic
-  const loadDocumentsPage = useCallback(async (userId: string, isInitial = false) => {
-    if (dataLoading.documents || !dataPagination.documents.hasMore) return;
+  const loadDocumentsPage = useCallback(async (userId: string, isInitial = false, force = false) => {
+    if (dataLoading.documents || (!isInitial && !dataPagination.documents.hasMore)) return;
 
     setDataLoading('documents', true);
 
+    // If forced, clear loaded IDs to allow full refresh of first page
+    if (force) {
+      loadedIdsRef.current.documents.clear();
+    }
+
     // Optimistically load from offline storage for initial load
-    if (isInitial) {
+    if (isInitial && !force) {
       if (!navigator.onLine) {
         try {
           const offlineDocs = await offlineStorage.getAll<Document>(STORES.DOCUMENTS);
@@ -675,14 +680,14 @@ export const useAppData = (authUser?: any) => {
       }
 
       if (data) {
-        // Filter out duplicates before formatting
+        // Filter out duplicates only if not forced (force clears IDs so filter passes all)
         const newDocsData = data.filter(doc =>
           !loadedIdsRef.current.documents.has(doc.id)
         );
 
         const formattedDocuments: Document[] = newDocsData.map(doc => ({
           id: doc.id,
-          title: doc.title,
+          title: doc.title || 'Untitled Document',
           file_name: doc.file_name,
           file_type: doc.file_type,
           file_size: doc.file_size || 0,
@@ -694,7 +699,7 @@ export const useAppData = (authUser?: any) => {
           processing_error: doc.processing_error || null,
           created_at: doc.created_at,
           updated_at: doc.updated_at,
-          folder_ids: doc.folder_items?.map((item: any) => item.folder_id) || [],
+          folder_ids: doc?.folder_items?.map((item: any) => item.folder_id) || [],
           processing_started_at: doc.processing_started_at || null,
           processing_completed_at: doc.processing_completed_at || null,
           processing_metadata: doc.processing_metadata || null,
@@ -709,6 +714,7 @@ export const useAppData = (authUser?: any) => {
         offlineStorage.save(STORES.DOCUMENTS, formattedDocuments);
 
         if (isInitial) {
+          // If forced refresh of first page, replace state
           setDocuments(formattedDocuments);
         } else {
           setDocuments(prev => [...prev, ...formattedDocuments]);
@@ -1143,12 +1149,13 @@ export const useAppData = (authUser?: any) => {
   }, [dataLoading.quizzes, dataPagination.quizzes, setDataLoading, recordResponseTime]);
 
   // Optimized folder loading with retry logic
-  const loadFolders = useCallback(async (userId: string, isInitial = false) => {
-    if (dataLoading.folders) return;
+  const loadFolders = useCallback(async (userId: string, isInitial = false, force = false) => {
+    if (dataLoading.folders && !force) return;
 
     const cacheKey = `folders_${userId}`;
     const cached = getCachedData(cacheKey);
-    if (cached && isInitial) {
+    // Skip cache if forced
+    if (!force && cached && isInitial) {
       // Filter out duplicates
       const uniqueFolders = cached.folders.filter(folder =>
         !loadedIdsRef.current.folders.has(folder.id)
@@ -1165,8 +1172,13 @@ export const useAppData = (authUser?: any) => {
 
     setDataLoading('folders', true);
 
+    // If forced, clear loaded IDs to allow full refresh
+    if (force) {
+      loadedIdsRef.current.folders.clear();
+    }
+
     // Optimistically load from offline storage for initial load
-    if (isInitial && !cached) {
+    if (isInitial && !cached && !force) {
       if (!navigator.onLine) {
         try {
           const offlineFolders = await offlineStorage.getAll<DocumentFolder>(STORES.FOLDERS);
@@ -1237,7 +1249,8 @@ export const useAppData = (authUser?: any) => {
       }
 
       if (data) {
-        // Filter out duplicates before formatting
+        // Filter out duplicates ONLY if not forced (or clear loadedIds above effectively disables filter)
+        // Since we cleared loadedIds if forced, this filter will permit all new data
         const newFoldersData = data.filter(folder =>
           !loadedIdsRef.current.folders.has(folder.id)
         );
@@ -1373,6 +1386,7 @@ export const useAppData = (authUser?: any) => {
           referral_count: profileData.referral_count,
           school: profileData.school,
           username: profileData.username,
+          personal_context: profileData.personal_context || '',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
@@ -1397,6 +1411,7 @@ export const useAppData = (authUser?: any) => {
           referral_count: 0,
           school: null,
           username: null,
+          personal_context: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
@@ -1445,6 +1460,7 @@ export const useAppData = (authUser?: any) => {
         referral_count: 0,
         school: null,
         username: null,
+        personal_context: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -2155,17 +2171,21 @@ export const useAppData = (authUser?: any) => {
 
 
     // Lazy loading functions
-    loadDataIfNeeded: useCallback((dataType: keyof DataLoadingState) => {
-      if (!currentUser?.id || dataLoaded.has(dataType) || dataLoading[dataType]) return;
+    loadDataIfNeeded: useCallback((dataType: keyof DataLoadingState, force = false) => {
+      if (!currentUser?.id) return;
+      // If forced, bypass the loaded check. Also bypass loading check if forced? 
+      // Ideally yes, but we should be careful with race conditions.
+      // However loadFolders/loadDocumentsPage handle concurrency internally now if force is passed.
+      if (!force && (dataLoaded.has(dataType) || dataLoading[dataType])) return;
 
       const loaders = {
         recordings: () => loadRecordingsPage(currentUser.id, true),
-        scheduleItems: () => loadSchedulePage(currentUser.id, true),
-        documents: () => loadDocumentsPage(currentUser.id, true),
+        scheduleItems: () => loadSchedulePage(currentUser.id, true), // Does not support force yet
+        documents: () => loadDocumentsPage(currentUser.id, true, force),
         quizzes: () => loadQuizzesPage(currentUser.id, true),
         notes: () => loadNotesPage(currentUser.id, true),
         profile: () => !dataLoading.profile && loadUserProfile(currentUser),
-        folders: () => loadFolders(currentUser.id, true),
+        folders: () => loadFolders(currentUser.id, true, force),
       };
 
       if (loaders[dataType]) {

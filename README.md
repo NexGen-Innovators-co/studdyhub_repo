@@ -78,6 +78,10 @@ StuddyHub goes beyond traditional note-taking apps by providing an intelligent l
 - **Post Sharing** - Share insights and resources
 - **Comment & Discuss** - Engage with content
 - **Following System** - Build your learning network
+- **AI-Powered Feed** - Gemini AI ranks posts based on your interaction signals
+- **Smart Categorization** - Posts auto-tagged with a 45-category taxonomy
+- **AI Suggested Users** - Semantic matching for relevant peer recommendations
+- **Cursor-Based Pagination** - Seamless, duplicate-free infinite scroll
 
 #### 🎙️ AI Podcast Generation
 - **Automated Podcast Creation** - Transform study materials into engaging audio podcasts
@@ -788,6 +792,14 @@ We're grateful to these amazing projects and communities:
 - [x] Admin dashboard
 - [x] SEO optimization
 - [x] Responsive design
+
+### ✅ Completed (2025)
+- [x] AI-powered social feed ranking (Gemini AI)
+- [x] AI content categorization (45-category taxonomy)
+- [x] Signal-based preference learning with time decay
+- [x] Cold-start Gemini interest matching for new users
+- [x] Cursor-based feed pagination (no duplicates)
+- [x] AI-enhanced suggested users with semantic matching
 
 ### 🚀 Q1 2025 (January - March)
 - [ ] **Mobile App Launch** (React Native)

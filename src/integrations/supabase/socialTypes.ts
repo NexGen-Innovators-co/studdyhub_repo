@@ -18,6 +18,10 @@ export interface SocialUser {
     created_at: string;
     updated_at: string;
     email?: string;
+    // AI preference profile
+    ai_preferred_categories?: Record<string, number>;
+    ai_preferred_authors?: string[];
+    ai_profile_updated_at?: string;
 }
 
 export interface SocialPost {
@@ -34,6 +38,10 @@ export interface SocialPost {
     updated_at: string;
     views_count?: number;
     metadata?: any;
+    // AI-powered categorization
+    ai_categories?: string[];
+    ai_sentiment?: 'positive' | 'neutral' | 'negative' | 'mixed';
+    ai_quality_score?: number;
 }
 
 export interface SocialMedia {

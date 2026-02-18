@@ -195,7 +195,7 @@ const allDocuments = contextDocuments || documents;
     handleDeleteDocument
   } = useDocumentOperations({
     user,
-    documents,
+    documents: allDocuments,
     folders,
     onDocumentUpdated,
     onDocumentDeleted,

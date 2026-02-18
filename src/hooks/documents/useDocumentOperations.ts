@@ -11,7 +11,7 @@ interface UseDocumentOperationsProps {
   folders: DocumentFolder[];
   onDocumentUpdated: (document: Document) => void; 
   onDocumentDeleted: (documentId: string) => void;
-  loadDataIfNeeded: (type: any) => Promise<void> | void;
+  loadDataIfNeeded: (type: any, force?: boolean) => Promise<void> | void;
   processingDocuments: Set<string>;
 }
 
@@ -112,7 +112,7 @@ export const useDocumentOperations = ({
 
       const updatedDocument = { ...document, folder_ids: newFolderIds };
       onDocumentUpdated(updatedDocument);
-      await loadDataIfNeeded('documents');
+      await loadDataIfNeeded('documents', true);
       toast.success('Document added to folder!');
     } catch (error: any) {
       toast.error(`Failed to add document to folder: ${error.message}`);
@@ -141,7 +141,7 @@ export const useDocumentOperations = ({
 
       const updatedDocument = { ...document, folder_ids: newFolderIds };
       onDocumentUpdated(updatedDocument);
-      await loadDataIfNeeded('documents');
+      await loadDataIfNeeded('documents', true);
       toast.success('Document removed from folder!');
     } catch (error: any) {
       toast.error(`Failed to remove document from folder: ${error.message}`);
@@ -184,7 +184,7 @@ export const useDocumentOperations = ({
         throw error;
       }
 
-      await loadDataIfNeeded('folders');
+      await loadDataIfNeeded('folders', true);
       toast.success('Folder moved successfully!');
       setMoveFolderDialogOpen(false);
     } catch (error: any) {

@@ -747,6 +747,76 @@ Deno.serve(async (req) => {
 });
 ```
 
+#### AI Feed Functions
+
+The social feed is powered by a suite of AI edge functions that work together:
+
+##### Shared Gemini Utility (`utils/gemini.ts`)
+
+A shared helper used by all AI-powered functions. Provides:
+- **Model fallback chain**: `gemini-2.5-flash` → `2.0-flash` → `1.5-flash` → `2.5-pro` → `2.0-pro` → `1.5-pro`
+- **Retry logic**: automatic retries with exponential backoff
+- **JSON parsing**: strips code fences, handles malformed responses
+- Functions: `callGemini(prompt)` and `callGeminiJSON<T>(prompt, fallback)`
+
+##### `ai-categorize-post`
+
+Automatically categorizes new posts using Gemini AI:
+- **Trigger**: Fire-and-forget call from `create-social-post` on post creation
+- **Output**: `ai_categories` (up to 3 labels), `ai_sentiment`, `ai_quality_score` (1–10)
+- **Modes**: Single post (`postId`), batch (`postIds`), or `batchUncategorized`
+- 45-category taxonomy covering academics, tech, career, social, and more
+
+##### `ai-rank-feed`
+
+Standalone AI feed ranking service:
+- **Modes**: `rank` (score a set of posts), `profile` (get user preferences), `update-profile` (force refresh)
+- **Preference computation**: Aggregates `social_user_signals` with weighted scoring and 30-day time decay
+- **Cold-start handling**: Uses Gemini to semantically match user interest profiles for users with <10 interactions
+- **Caching**: In-memory preference cache with 10-minute TTL, periodic DB persistence
+
+##### `get-social-feed` (AI-enhanced)
+
+The main feed endpoint now includes inline AI ranking:
+- Computes user preferences from interaction signals
+- Scores posts across 6 dimensions: category match, author affinity, quality, engagement momentum, recency, novelty
+- Falls back gracefully to chronological ordering if AI ranking fails
+- Uses **cursor-based pagination** (keyed on `created_at`) to eliminate duplicate posts
+
+##### `get-suggested-users` (AI-enhanced)
+
+Suggested user recommendations now include:
+- **Gemini semantic matching**: AI compares bios, interests, and study fields for compatibility (up to 20 bonus points)
+- **Time-seeded pseudo-random variety**: Recommendations rotate every 30 minutes
+- **Previously-shown exclusion**: Avoids repeating suggestions within a session
+
+#### Database Schema: AI Feed Tables
+
+```sql
+-- AI columns on social_posts
+ALTER TABLE social_posts ADD COLUMN ai_categories text[];
+ALTER TABLE social_posts ADD COLUMN ai_sentiment text;
+ALTER TABLE social_posts ADD COLUMN ai_quality_score smallint;
+
+-- AI columns on social_users
+ALTER TABLE social_users ADD COLUMN ai_preferred_categories jsonb DEFAULT '{}';
+ALTER TABLE social_users ADD COLUMN ai_preferred_authors text[] DEFAULT '{}';
+ALTER TABLE social_users ADD COLUMN ai_profile_updated_at timestamptz;
+
+-- Interaction signals table
+CREATE TABLE social_user_signals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  post_id UUID NOT NULL REFERENCES social_posts(id) ON DELETE CASCADE,
+  signal_type TEXT NOT NULL, -- like, comment, share, bookmark, view, skip, hide
+  weight REAL NOT NULL DEFAULT 1.0,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(user_id, post_id, signal_type)
+);
+```
+
+Six database triggers automatically record signals on likes, unlikes, bookmarks, comments, shares, and views.
+
 ### Frontend Service Layer
 
 ```typescript

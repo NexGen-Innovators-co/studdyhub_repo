@@ -462,6 +462,17 @@ Respond in JSON format:
       }
     })();
 
+    // Fire-and-forget: AI categorize the post for personalized feed ranking
+    (async () => {
+      try {
+        await supabase.functions.invoke('ai-categorize-post', {
+          body: { postId: post.id, content: post.content },
+        });
+      } catch (err) {
+        // AI categorization is non-blocking, failures are silent
+      }
+    })();
+
     return new Response(JSON.stringify({
       success: true,
       post

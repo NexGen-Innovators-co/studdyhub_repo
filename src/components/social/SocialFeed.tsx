@@ -589,7 +589,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
 
       return () => observers.forEach(o => o.disconnect());
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeTab, isLoading, isRefreshing]);
+    }, [activeTab, isLoading, isRefreshing, posts.length > 0]);
 
     // Backup scroll-based load more
     useEffect(() => {

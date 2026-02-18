@@ -205,3 +205,64 @@ If you encounter errors during migration:
 **Status**: ⚠️ Migration Required
 **Priority**: 🔴 HIGH - Code references non-existent tables
 **Estimated Time**: 5-10 minutes
+
+---
+
+## AI Feed Migration
+
+### Migration File
+`sql/20260215_ai_feed_columns.sql`
+
+### Status: ⚠️ Pending
+
+### What Gets Created
+
+#### Columns Added to `social_posts`
+- `ai_categories text[]` — AI-assigned content categories (up to 3)
+- `ai_sentiment text` — positive, neutral, negative, or mixed
+- `ai_quality_score smallint` — 1–10 educational quality rating
+
+#### Columns Added to `social_users`
+- `ai_preferred_categories jsonb DEFAULT '{}'` — learned category preferences
+- `ai_preferred_authors text[] DEFAULT '{}'` — frequently engaged authors
+- `ai_profile_updated_at timestamptz` — last preference computation
+
+#### New Table: `social_user_signals`
+Tracks interaction signals for preference learning:
+- `id UUID PRIMARY KEY`
+- `user_id UUID` (FK → auth.users)
+- `post_id UUID` (FK → social_posts)
+- `signal_type TEXT` — like, comment, share, bookmark, view, skip, hide
+- `weight REAL DEFAULT 1.0`
+- `created_at TIMESTAMPTZ`
+- `UNIQUE(user_id, post_id, signal_type)`
+
+#### Indexes (3)
+- `idx_social_user_signals_user` — on `user_id`
+- `idx_social_user_signals_post` — on `post_id`
+- `idx_social_user_signals_created` — on `created_at DESC`
+
+#### Trigger Functions (6)
+- `record_like_signal()` — on social_post_likes INSERT
+- `record_unlike_signal()` — on social_post_likes DELETE
+- `record_bookmark_signal()` — on social_post_saves INSERT
+- `record_comment_signal()` — on social_post_comments INSERT
+- `record_share_signal()` — on social_post_shares INSERT
+- `record_view_signal()` — on social_post_views INSERT
+
+#### RLS Policies
+- Users can read their own signals
+- Users can insert their own signals
+- Users can update their own signals
+
+### How to Apply
+
+```sql
+-- Run via Supabase SQL Editor or psql
+-- File: sql/20260215_ai_feed_columns.sql
+```
+
+### Post-Migration Steps
+1. Deploy AI edge functions (`ai-categorize-post`, `ai-rank-feed`)
+2. Redeploy updated functions (`get-social-feed`, `get-suggested-users`, `create-social-post`)
+3. Optionally run batch categorization: call `ai-categorize-post` with `{ "batchUncategorized": true }`

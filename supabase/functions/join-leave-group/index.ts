@@ -50,6 +50,9 @@ serve(async (req) => {
       }
 
       // Insert membership
+      // The DB trigger _social_group_members_propagate automatically
+      // recalculates members_count on social_groups, so we do NOT
+      // manually increment it here.
       const { error: joinError } = await supabase
         .from('social_group_members')
         .insert({
@@ -60,25 +63,21 @@ serve(async (req) => {
 
       if (joinError) throw joinError;
 
-      // Update member count
-      const { data: group } = await supabase
+      // Read the trigger-updated count
+      const { data: groupAfterJoin } = await supabase
         .from('social_groups')
         .select('members_count')
         .eq('id', group_id)
         .single();
 
-      await supabase
-        .from('social_groups')
-        .update({ members_count: (group?.members_count || 0) + 1 })
-        .eq('id', group_id);
-
       return new Response(
-        JSON.stringify({ success: true, action: 'joined', members_count: (group?.members_count || 0) + 1 }),
+        JSON.stringify({ success: true, action: 'joined', members_count: groupAfterJoin?.members_count ?? 1 }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
 
     } else if (action === 'leave') {
       // Delete membership
+      // The DB trigger automatically recalculates members_count.
       const { error: leaveError } = await supabase
         .from('social_group_members')
         .delete()
@@ -87,21 +86,15 @@ serve(async (req) => {
 
       if (leaveError) throw leaveError;
 
-      // Update member count
-      const { data: group } = await supabase
+      // Read the trigger-updated count
+      const { data: groupAfterLeave } = await supabase
         .from('social_groups')
         .select('members_count')
         .eq('id', group_id)
         .single();
 
-      const newCount = Math.max(0, (group?.members_count || 1) - 1);
-      await supabase
-        .from('social_groups')
-        .update({ members_count: newCount })
-        .eq('id', group_id);
-
       return new Response(
-        JSON.stringify({ success: true, action: 'left', members_count: newCount }),
+        JSON.stringify({ success: true, action: 'left', members_count: groupAfterLeave?.members_count ?? 0 }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } else {

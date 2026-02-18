@@ -104,7 +104,7 @@ interface AppContextType extends AppState {
   setIsSidebarOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   setActiveTab: (tab: any) => void;
   setIsAILoading: (loading: boolean) => void;
-  loadDataIfNeeded: (dataType: string) => void;
+  loadDataIfNeeded: (dataType: string, force?: boolean) => void;
   loadMoreNotes: () => void;
   loadMoreRecordings: () => void;
   loadMoreDocuments: () => void;
