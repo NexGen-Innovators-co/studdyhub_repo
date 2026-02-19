@@ -1,14 +1,14 @@
 // hooks/useChunkedRecording.ts
 import { useState, useRef, useCallback, useEffect } from 'react';
 
-interface RecordingChunk {
+export interface RecordingChunk {
   index: number;
   blob: Blob;
   timestamp: number;
   duration: number;
 }
 
-interface ChunkedRecordingState {
+export interface ChunkedRecordingState {
   isRecording: boolean;
   isPaused: boolean;
   chunks: RecordingChunk[];
@@ -17,10 +17,11 @@ interface ChunkedRecordingState {
   error: string | null;
 }
 
-interface UseChunkedRecordingOptions {
+export interface UseChunkedRecordingOptions {
   chunkDurationMs?: number; // Default 5 minutes
   onChunkComplete?: (chunk: RecordingChunk) => void;
   onError?: (error: Error) => void;
+  onRecordingStateChange?: (state: { isRecording: boolean; isPaused: boolean }) => void;
   enableLocalBackup?: boolean;
 }
 
@@ -32,6 +33,7 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
     chunkDurationMs = CHUNK_DURATION_MS,
     onChunkComplete,
     onError,
+    onRecordingStateChange,
     enableLocalBackup = true
   } = options;
 
@@ -51,6 +53,12 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
   const chunkTimerRef = useRef<NodeJS.Timeout | null>(null);
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pausedAtRef = useRef<number | null>(null);
+  // Wall-clock based duration tracking (survives browser throttle / tab backgrounding)
+  const recordingStartWallRef = useRef<number>(0);
+  const accumulatedBeforePauseRef = useRef<number>(0);
+  const chunksRef = useRef<RecordingChunk[]>([]);
+  const onRecordingStateChangeRef = useRef(onRecordingStateChange);
+  onRecordingStateChangeRef.current = onRecordingStateChange;
 
   // Save chunks to local storage for backup
   const saveToLocalStorage = useCallback(async (chunks: RecordingChunk[]) => {
@@ -323,14 +331,18 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
       // Start chunk timer
       startChunkTimer();
 
-      // Start duration tracking
+      // Wall-clock based duration tracking – immune to browser timer throttling
+      recordingStartWallRef.current = Date.now();
+      accumulatedBeforePauseRef.current = 0;
       durationIntervalRef.current = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - recordingStartWallRef.current) / 1000) + accumulatedBeforePauseRef.current;
         setState(prev => ({
           ...prev,
-          totalDuration: prev.totalDuration + 1
+          totalDuration: elapsed
         }));
-      }, 1000);
+      }, 500); // 500ms for snappier UI updates even when throttled
 
+      chunksRef.current = [];
       setState(prev => ({
         ...prev,
         isRecording: true,
@@ -339,6 +351,8 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
         currentChunkIndex: 0,
         totalDuration: 0
       }));
+
+      onRecordingStateChangeRef.current?.({ isRecording: true, isPaused: false });
 
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to start recording');
@@ -352,6 +366,8 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
   const pauseRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === 'recording') {
       mediaRecorderRef.current.pause();
+      // Accumulate elapsed wall-clock time before this pause
+      accumulatedBeforePauseRef.current += Math.floor((Date.now() - recordingStartWallRef.current) / 1000);
       pausedAtRef.current = Date.now();
       
       if (chunkTimerRef.current) {
@@ -362,6 +378,7 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
       }
 
       setState(prev => ({ ...prev, isPaused: true }));
+      onRecordingStateChangeRef.current?.({ isRecording: true, isPaused: true });
     }
   }, []);
 
@@ -370,21 +387,30 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
     if (mediaRecorderRef.current?.state === 'paused') {
       mediaRecorderRef.current.resume();
       pausedAtRef.current = null;
+      // Reset wall-clock start so elapsed = now - start + accumulated
+      recordingStartWallRef.current = Date.now();
 
       // Resume chunk timer with remaining time
       startChunkTimer();
 
-      // Resume duration tracking
+      // Resume wall-clock based duration tracking
       durationIntervalRef.current = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - recordingStartWallRef.current) / 1000) + accumulatedBeforePauseRef.current;
         setState(prev => ({
           ...prev,
-          totalDuration: prev.totalDuration + 1
+          totalDuration: elapsed
         }));
-      }, 1000);
+      }, 500);
 
       setState(prev => ({ ...prev, isPaused: false }));
+      onRecordingStateChangeRef.current?.({ isRecording: true, isPaused: false });
     }
   }, [startChunkTimer]);
+
+  // Keep chunksRef in sync
+  useEffect(() => {
+    chunksRef.current = state.chunks;
+  }, [state.chunks]);
 
   // Stop recording
   const stopRecording = useCallback((): Promise<Blob> => {
@@ -399,43 +425,41 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
       if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
 
       mediaRecorderRef.current.onstop = () => {
-        // Finalize any remaining data
-        if (currentChunkDataRef.current.length > 0) {
-          finalizeCurrentChunk();
-        }
+        // Collect remaining data BEFORE finalizing (which clears the ref)
+        const remainingData = [...currentChunkDataRef.current];
+        const recorderMime = mediaRecorderRef.current?.mimeType || 'audio/webm';
+
+        // Build the final blob from all previously finalized chunks + remaining data
+        const previousChunkBlobs = chunksRef.current.map(c => c.blob);
+        const allBlobs = [...previousChunkBlobs, ...remainingData];
+        const finalBlob = new Blob(allBlobs, { type: recorderMime });
 
         // Stop all tracks
         streamRef.current?.getTracks().forEach(track => track.stop());
 
-        // Combine all chunks into final blob
-        setState(prev => {
-          const allChunks = prev.chunks;
-          const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
-          const finalBlob = new Blob(
-            allChunks.map(c => c.blob),
-            { type: mimeType }
-          );
+        // Clear local backup on successful stop
+        clearLocalBackup();
+        currentChunkDataRef.current = [];
 
-          // Clear local backup on successful stop
-          clearLocalBackup();
+        setState(prev => ({
+          ...prev,
+          isRecording: false,
+          isPaused: false
+        }));
 
-          return {
-            ...prev,
-            isRecording: false,
-            isPaused: false
-          };
-        });
-
-        // Return combined blob
-        const allBlobs = [...state.chunks.map(c => c.blob), ...currentChunkDataRef.current];
-        const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
-        resolve(new Blob(allBlobs, { type: mimeType }));
+        resolve(finalBlob);
       };
 
+      // If recorder was paused, resume before stopping so onstop fires
+      if (mediaRecorderRef.current.state === 'paused') {
+        mediaRecorderRef.current.resume();
+      }
       mediaRecorderRef.current.requestData();
       mediaRecorderRef.current.stop();
+
+      onRecordingStateChangeRef.current?.({ isRecording: false, isPaused: false });
     });
-  }, [state.chunks, finalizeCurrentChunk, clearLocalBackup]);
+  }, [finalizeCurrentChunk, clearLocalBackup]);
 
   // Cancel recording
   const cancelRecording = useCallback(() => {
@@ -443,11 +467,16 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
     if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      // Resume if paused so stop fires properly
+      if (mediaRecorderRef.current.state === 'paused') {
+        mediaRecorderRef.current.resume();
+      }
       mediaRecorderRef.current.stop();
     }
 
     streamRef.current?.getTracks().forEach(track => track.stop());
     clearLocalBackup();
+    chunksRef.current = [];
 
     setState({
       isRecording: false,
@@ -457,6 +486,7 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
       totalDuration: 0,
       error: null
     });
+    onRecordingStateChangeRef.current?.({ isRecording: false, isPaused: false });
   }, [clearLocalBackup]);
 
   // Check for interrupted recording on mount
@@ -464,6 +494,7 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
     const checkForBackup = async () => {
       const backup = await restoreFromLocalStorage();
       if (backup && backup.length > 0) {
+        chunksRef.current = backup;
         setState(prev => ({
           ...prev,
           chunks: backup,
@@ -479,6 +510,33 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
       if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
     };
   }, [restoreFromLocalStorage]);
+
+  // Warn user before leaving page during active recording
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (state.isRecording) {
+        e.preventDefault();
+        e.returnValue = 'You have an active recording. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [state.isRecording]);
+
+  // Handle page visibility changes – keep duration accurate
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden || !state.isRecording || state.isPaused) return;
+      // When page becomes visible again, force a duration recalculation
+      const elapsed = Math.floor((Date.now() - recordingStartWallRef.current) / 1000) + accumulatedBeforePauseRef.current;
+      setState(prev => ({ ...prev, totalDuration: elapsed }));
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [state.isRecording, state.isPaused]);
 
   return {
     ...state,

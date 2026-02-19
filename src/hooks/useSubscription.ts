@@ -6,6 +6,8 @@ import { supabase } from '@/integrations/supabase/client';
 export type PlanType = 'free' | 'scholar' | 'genius';
 export type SubscriptionStatus = 'active' | 'cancelled' | 'past_due' | 'expired';
 
+export type AiModelTier = 'standard' | 'enhanced' | 'pro';
+
 export interface SubscriptionLimits {
   maxAiMessages: number;
   maxNotes: number;
@@ -21,6 +23,8 @@ export interface SubscriptionLimits {
   maxScheduleItems: number; // Added
   maxDailyQuizzes: number; // Added
   maxPodcasts: number; // Added
+  aiModelTier: AiModelTier;
+  aiModelLabel: string; // User-facing label e.g. "Gemini Flash", "Gemini Pro"
 }
 
 export interface Subscription {
@@ -48,6 +52,8 @@ const PLAN_LIMITS: Record<PlanType, SubscriptionLimits> = {
     maxScheduleItems: 10,
     maxDailyQuizzes: 1,
     maxPodcasts: 1,
+    aiModelTier: 'standard',
+    aiModelLabel: 'Gemini Flash',
   },
   scholar: {
     maxAiMessages: 50,
@@ -64,6 +70,8 @@ const PLAN_LIMITS: Record<PlanType, SubscriptionLimits> = {
     maxScheduleItems: 50,
     maxDailyQuizzes: 10,
     maxPodcasts: 5,
+    aiModelTier: 'enhanced',
+    aiModelLabel: 'Gemini 2.5 Flash',
   },
   genius: {
     maxAiMessages: Infinity,
@@ -80,6 +88,8 @@ const PLAN_LIMITS: Record<PlanType, SubscriptionLimits> = {
     maxScheduleItems: Infinity,
     maxDailyQuizzes: 100,
     maxPodcasts: Infinity,
+    aiModelTier: 'pro',
+    aiModelLabel: 'Gemini Pro',
   },
 };
 

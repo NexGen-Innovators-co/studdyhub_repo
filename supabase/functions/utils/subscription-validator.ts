@@ -201,6 +201,79 @@ export class SubscriptionValidator {
   }
 
   /**
+   * Get AI model configuration based on user's subscription tier.
+   * Returns the prioritized model chain and a display label.
+   */
+  async getAiModelConfig(userId: string): Promise<{
+    tier: 'free' | 'scholar' | 'genius';
+    modelChain: string[];
+    streamingChain: string[];
+    displayLabel: string;
+  }> {
+    const isAdmin = await this.isAdmin(userId);
+    if (isAdmin) {
+      return {
+        tier: 'genius',
+        modelChain: [
+          'gemini-2.5-pro',
+          'gemini-3-pro-preview',
+          'gemini-2.5-flash',
+          'gemini-2.0-pro',
+          'gemini-2.0-flash',
+          'gemini-1.5-pro',
+        ],
+        streamingChain: ['gemini-2.5-pro', 'gemini-3-pro-preview', 'gemini-2.5-flash'],
+        displayLabel: 'Gemini Pro',
+      };
+    }
+
+    const subscription = await this.getUserSubscription(userId);
+
+    switch (subscription.subscription_tier) {
+      case 'genius':
+        return {
+          tier: 'genius',
+          modelChain: [
+            'gemini-2.5-pro',
+            'gemini-3-pro-preview',
+            'gemini-2.5-flash',
+            'gemini-2.0-pro',
+            'gemini-2.0-flash',
+            'gemini-1.5-pro',
+          ],
+          streamingChain: ['gemini-2.5-pro', 'gemini-3-pro-preview', 'gemini-2.5-flash'],
+          displayLabel: 'Gemini Pro',
+        };
+      case 'scholar':
+        return {
+          tier: 'scholar',
+          modelChain: [
+            'gemini-2.5-flash',
+            'gemini-3-pro-preview',
+            'gemini-2.0-flash',
+            'gemini-1.5-flash',
+            'gemini-2.5-pro',
+            'gemini-2.0-pro',
+          ],
+          streamingChain: ['gemini-2.5-flash', 'gemini-3-pro-preview', 'gemini-2.0-flash'],
+          displayLabel: 'Gemini 2.5 Flash',
+        };
+      default:
+        return {
+          tier: 'free',
+          modelChain: [
+            'gemini-2.0-flash',
+            'gemini-1.5-flash',
+            'gemini-2.0-flash-lite',
+            'gemini-1.5-flash',
+          ],
+          streamingChain: ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.0-flash-lite'],
+          displayLabel: 'Gemini Flash',
+        };
+    }
+  }
+
+  /**
    * Check if user exceeded notes limit
    */
   async checkNotesLimit(userId: string): Promise<ValidationResult> {

@@ -111,12 +111,20 @@ async function processAudioBackground(recordingId: string, fileUrl: string, targ
     // Using File API is safer for memory limits on Edge Functions
     let contentPart = {};
 
+    // Detect MIME type from file URL extension, default to audio/webm for recordings
+    const urlPath = fileUrl.split('?')[0].toLowerCase();
+    const detectedMime = urlPath.endsWith('.mp3') ? 'audio/mp3'
+      : urlPath.endsWith('.mp4') || urlPath.endsWith('.m4a') ? 'audio/mp4'
+      : urlPath.endsWith('.ogg') || urlPath.endsWith('.opus') ? 'audio/ogg'
+      : urlPath.endsWith('.wav') ? 'audio/wav'
+      : 'audio/webm'; // Default for .webm and fallback
+
     try {
         // Attempt to upload to Gemini File API to avoid memory limits
-        const fileUri = await uploadToGemini(fileUrl, 'audio/mp3'); // Defaulting/Detecting mime type is better
+        const fileUri = await uploadToGemini(fileUrl, detectedMime);
         contentPart = {
             fileData: {
-                mimeType: 'audio/mp3', // Gemini handles most audio
+                mimeType: detectedMime,
                 fileUri: fileUri
             }
         };
@@ -154,7 +162,30 @@ async function processAudioBackground(recordingId: string, fileUrl: string, targ
       contents: [{
         role: "user",
         parts: [
-          { text: "Transcribe the following audio into text. Provide a summary as well in JSON format: { \"transcript\": \"...\", \"summary\": \"...\", \"duration\": 0 }. The duration should be the estimated length of the audio in seconds." },
+          { text: `You are a professional lecture transcription assistant. Process this audio recording and return a JSON object with the following structure:
+
+{
+  "transcript": "...",
+  "summary": "...",
+  "duration": 0
+}
+
+Transcript guidelines:
+- Clean up filler words (um, uh, like, you know, right) and false starts
+- Organize into clear paragraphs by topic or speaker change
+- If multiple speakers are detected, label them (e.g., "**Lecturer:**", "**Student:**", "**Speaker 1:**")
+- Fix grammar and incomplete sentences while preserving the original meaning
+- Use proper punctuation and capitalization
+- Keep technical terms and proper nouns accurate
+- Break long monologues into logical paragraphs
+
+Summary guidelines:
+- Provide a structured summary with key points and takeaways
+- Use bullet points or numbered lists for main topics covered
+- Include any action items, assignments, or important dates mentioned
+- Keep it concise but comprehensive (aim for 150-300 words)
+
+The "duration" should be the estimated length of the audio in seconds.` },
           contentPart
         ],
       }],
@@ -266,124 +297,94 @@ serve(async (req) => {
         });
     }
 
-    // === OLD: Synchronous Path (Legacy Support) ===
+    // === Synchronous Path (Legacy Support – no recording_id) ===
     if (!file_url) throw new Error("File URL required for sync mode");
     
-    // 1. Fetch the audio file
-    const audioResponse = await fetch(file_url);
-    if (!audioResponse.ok) {
-      throw new Error(`Failed to fetch audio file from ${file_url}: ${audioResponse.statusText}`);
+    // 1. Upload audio to Gemini File API (safer for memory than inline base64)
+    const syncUrlPath = file_url.split('?')[0].toLowerCase();
+    const syncMime = syncUrlPath.endsWith('.mp3') ? 'audio/mp3'
+      : syncUrlPath.endsWith('.mp4') || syncUrlPath.endsWith('.m4a') ? 'audio/mp4'
+      : syncUrlPath.endsWith('.ogg') || syncUrlPath.endsWith('.opus') ? 'audio/ogg'
+      : syncUrlPath.endsWith('.wav') ? 'audio/wav'
+      : 'audio/webm';
+
+    let syncContentPart: any;
+    try {
+      const fileUri = await uploadToGemini(file_url, syncMime);
+      syncContentPart = { fileData: { mimeType: syncMime, fileUri } };
+    } catch {
+      // Fallback: inline base64
+      const audioResponse = await fetch(file_url);
+      if (!audioResponse.ok) throw new Error(`Failed to fetch audio file: ${audioResponse.statusText}`);
+      const audioBlob = await audioResponse.blob();
+      const base64Audio = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (typeof reader.result === 'string') resolve(reader.result.split(',')[1]);
+          else reject(new Error('FileReader did not return a string result.'));
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(audioBlob);
+      });
+      syncContentPart = { inlineData: { mimeType: audioBlob.type || syncMime, data: base64Audio } };
     }
-    const audioBlob = await audioResponse.blob();
 
-    // Convert Blob to Base64 efficiently for large files
-    const base64Audio = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          resolve(reader.result.split(',')[1]); // Get only the base64 part
-        } else {
-          reject(new Error("FileReader did not return a string result."));
-        }
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(audioBlob);
-    });
-
-    // 2. Transcribe Audio using Gemini
+    // 2. Transcribe Audio using Gemini model chain
     const transcriptionPayload = {
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: "Transcribe the following audio into text." },
-            {
-              inlineData: {
-                mimeType: audioBlob.type,
-                data: base64Audio,
-              },
-            },
-          ],
-        },
-      ],
+      contents: [{ role: 'user', parts: [
+        { text: `You are a professional lecture transcription assistant. Transcribe this audio recording with the following guidelines:
+
+- Clean up filler words (um, uh, like, you know, right) and false starts
+- Organize into clear paragraphs by topic or speaker change  
+- If multiple speakers are detected, label them (e.g., "Lecturer:", "Student:", "Speaker 1:")
+- Fix grammar and incomplete sentences while preserving the original meaning
+- Use proper punctuation and capitalization
+- Keep technical terms and proper nouns accurate
+- Break long monologues into logical paragraphs` },
+        syncContentPart
+      ]}],
     };
-
-    const transcriptionResponse = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(transcriptionPayload),
-    });
-
-    if (!transcriptionResponse.ok) {
-      const errorText = await transcriptionResponse.text();
-      throw new Error(`Gemini transcription failed: ${transcriptionResponse.status} - ${errorText}`);
-    }
-
-    const transcriptionResult = await transcriptionResponse.json();
+    const transcriptionResult = await callGeminiWithModelChain(transcriptionPayload, GEMINI_API_KEY);
     const transcript = transcriptionResult?.candidates?.[0]?.content?.parts?.[0]?.text || 'No transcription available.';
 
     // 3. Generate Summary from Transcript
     const summaryPayload = {
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: `Summarize the following text:\n\n${transcript}` },
-          ],
-        },
-      ],
+      contents: [{ role: 'user', parts: [
+        { text: `Create a structured, comprehensive summary of the following lecture transcript. Include:
+
+1. **Overview** - Brief description of the topic covered
+2. **Key Points** - Main topics and concepts discussed (use bullet points)
+3. **Important Details** - Technical terms, definitions, examples mentioned
+4. **Action Items** - Any assignments, deadlines, or tasks mentioned
+5. **Takeaways** - Key conclusions and lessons
+
+Keep it concise but comprehensive (150-300 words).\n\nTranscript:\n${transcript}` }
+      ]}],
     };
-
-    const summaryResponse = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(summaryPayload),
-    });
-
-    if (!summaryResponse.ok) {
-      const errorText = await summaryResponse.text();
-      throw new Error(`Gemini summary generation failed: ${summaryResponse.status} - ${errorText}`);
-    }
-
-    const summaryResult = await summaryResponse.json();
+    const summaryResult = await callGeminiWithModelChain(summaryPayload, GEMINI_API_KEY);
     const summary = summaryResult?.candidates?.[0]?.content?.parts?.[0]?.text || 'No summary available.';
 
     // 3.5. Estimate audio duration from transcript
-    // Average speaking rate is ~150 words per minute
     let estimatedDuration = 0;
     if (transcript && transcript !== 'No transcription available.') {
-      const wordCount = transcript.split(/\s+/).filter(word => word.length > 0).length;
+      const wordCount = transcript.split(/\s+/).filter((word: string) => word.length > 0).length;
       const estimatedMinutes = wordCount / 150;
-      estimatedDuration = Math.floor(estimatedMinutes * 60); // Convert to seconds
+      estimatedDuration = Math.floor(estimatedMinutes * 60);
     }
 
     // 4. Translate Transcript (if target_language is not English)
     let translatedContent = null;
     if (target_language && target_language.toLowerCase() !== 'en') {
-      const translationPayload = {
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { text: `Translate the following text to ${target_language}:\n\n${transcript}` },
-            ],
-          },
-        ],
-      };
-
-      const translationResponse = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(translationPayload),
-      });
-
-      if (!translationResponse.ok) {
-        const errorText = await translationResponse.text();
-        //console.error(`Gemini translation failed: ${translationResponse.status} - ${errorText}`);
-        // Don't throw, just log and proceed without translation
-      } else {
-        const translationResult = await translationResponse.json();
+      try {
+        const translationPayload = {
+          contents: [{ role: 'user', parts: [
+            { text: `Translate the following text to ${target_language}:\n\n${transcript}` }
+          ]}],
+        };
+        const translationResult = await callGeminiWithModelChain(translationPayload, GEMINI_API_KEY);
         translatedContent = translationResult?.candidates?.[0]?.content?.parts?.[0]?.text || 'No translation available.';
+      } catch {
+        // Translation failed, proceed without it
       }
     }
 

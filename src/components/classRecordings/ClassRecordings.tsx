@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { ClassRecording } from '../../types/Class';
 import { formatDate } from './utils/helpers';
-import { VoiceRecorder } from './components/VoiceRecorder';
+import { EnhancedVoiceRecorder } from './components/EnhancedVoiceRecorder';
 import { AudioUploadSection } from './components/AudioUploadSection';
 import { useAudioProcessing } from './hooks/useAudioProcessing';
 import { RecordingSidePanel } from './components/RecordingSidePanel';
@@ -66,8 +66,25 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
   const [activeContentTab, setActiveContentTab] = useState<'transcript' | 'summary'>('transcript');
   const [audioProgress, setAudioProgress] = useState(0);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [isCurrentlyRecording, setIsCurrentlyRecording] = useState(false);
+  const [isRecordingPaused, setIsRecordingPaused] = useState(false);
 
   const effectiveSearch = externalSearchQuery ?? internalSearch;
+
+  // Handle recording state changes from EnhancedVoiceRecorder
+  const handleRecordingStateChange = useCallback((state: { isRecording: boolean; isPaused: boolean }) => {
+    setIsCurrentlyRecording(state.isRecording);
+    setIsRecordingPaused(state.isPaused);
+  }, []);
+
+  // Safe tab switch – warn user if recording is in progress
+  const handleTabChange = useCallback((newTab: string) => {
+    if (isCurrentlyRecording && activeTab === 'record' && newTab !== 'record') {
+      // Allow switching but don't stop recording
+      toast.info('Recording continues in background. Switch back to the Record tab to manage it.', { duration: 3000 });
+    }
+    setActiveTab(newTab as typeof activeTab);
+  }, [isCurrentlyRecording, activeTab]);
 
   // Initialize global search hook
   const { search, results: searchResults, isSearching: isSearchingRecordings } = useGlobalSearch(
@@ -238,10 +255,13 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
     if (!audio) return;
 
     const handleTimeUpdate = () => {
-      if (audio.duration) {
+      if (audio.duration && isFinite(audio.duration)) {
         setAudioProgress((audio.currentTime / audio.duration) * 100);
       }
     };
+
+    // Reset progress when selected recording changes
+    setAudioProgress(0);
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
     return () => {
@@ -259,12 +279,12 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail;
       if (detail?.section === 'recordings' && detail?.tab) {
-        setActiveTab(detail.tab as any);
+        handleTabChange(detail.tab);
       }
     };
     window.addEventListener('section-tab-change', handler as EventListener);
     return () => window.removeEventListener('section-tab-change', handler as EventListener);
-  }, []);
+  }, [handleTabChange]);
 
 
   return (
@@ -443,15 +463,21 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
           </div>
 
           {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="space-y-4">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
             <TabsList className="w-full bg-muted/50 p-1 rounded-xl">
               <TabsTrigger value="all" className="flex-1 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <FileText className="h-4 w-4 mr-2" />
                 All Recordings
               </TabsTrigger>
-              <TabsTrigger value="record" className="flex-1 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <TabsTrigger value="record" className="flex-1 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm relative">
                 <Mic className="h-4 w-4 mr-2" />
                 Record
+                {isCurrentlyRecording && activeTab !== 'record' && (
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className={`relative inline-flex rounded-full h-3 w-3 ${isRecordingPaused ? 'bg-yellow-500' : 'bg-red-500'}`}></span>
+                  </span>
+                )}
               </TabsTrigger>
               <TabsTrigger value="upload" className="flex-1 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Upload className="h-4 w-4 mr-2" />
@@ -627,8 +653,20 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
               )}
             </TabsContent>
 
-            {/* Record Tab */}
-            <TabsContent value="record" className="mt-4">
+            {/* Record Tab - ALWAYS MOUNTED to preserve recording state across tab switches */}
+            <div className={`mt-4 ${activeTab === 'record' ? 'block' : 'hidden'}`}>
+              {/* Recording-in-background banner */}
+              {isCurrentlyRecording && activeTab === 'record' && (
+                <div className="mb-3 flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className={`relative inline-flex rounded-full h-3 w-3 ${isRecordingPaused ? 'bg-yellow-500' : 'bg-red-500'}`}></span>
+                  </span>
+                  <span className="text-sm font-medium text-red-700 dark:text-red-300">
+                    {isRecordingPaused ? 'Recording paused' : 'Recording in progress'} &mdash; switching tabs won't stop it
+                  </span>
+                </div>
+              )}
               <Card className="bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800">
                 <CardContent className="p-6">
                   <SubscriptionGuard
@@ -637,10 +675,15 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                     currentCount={recordings?.length || 0}
                     message="You've reached your recording limit. Upgrade to record more classes."
                   >
-                    <VoiceRecorder onRecordingComplete={handleRecordingComplete} />
-                  </SubscriptionGuard>                </CardContent>
+                    <EnhancedVoiceRecorder
+                      onRecordingComplete={handleRecordingComplete}
+                      userId={userId || ''}
+                      onRecordingStateChange={handleRecordingStateChange}
+                    />
+                  </SubscriptionGuard>
+                </CardContent>
               </Card>
-            </TabsContent>
+            </div>
 
             {/* Upload Tab */}
             <TabsContent value="upload" className="mt-4">
@@ -657,6 +700,26 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
               </Card>
             </TabsContent>
           </Tabs>
+
+          {/* Floating recording indicator when on non-record tabs */}
+          {isCurrentlyRecording && activeTab !== 'record' && (
+            <button
+              onClick={() => setActiveTab('record')}
+              className="fixed bottom-32 left-1/2 -translate-x-1/2 lg:bottom-20 z-50 flex items-center gap-2 px-4 py-2.5 
+                bg-red-600 hover:bg-red-700 text-white rounded-full shadow-xl transition-all 
+                animate-pulse cursor-pointer border-2 border-red-400"
+            >
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                <span className={`relative inline-flex rounded-full h-3 w-3 ${isRecordingPaused ? 'bg-yellow-300' : 'bg-white'}`}></span>
+              </span>
+              <Mic className="h-4 w-4" />
+              <span className="text-sm font-semibold">
+                {isRecordingPaused ? 'Recording Paused' : 'Recording...'}
+              </span>
+              <span className="text-xs opacity-80">Tap to view</span>
+            </button>
+          )}
         </main>
 
         {/* Right Sidebar - Selected Recording Details */}
@@ -711,11 +774,26 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                       {/* Audio Progress Bar */}
                       <div className="mt-2">
                         <div className="flex justify-between text-xs text-slate-500 mb-1">
-                          <span>0:00</span>
+                          <span>
+                            {audioPlayerRef.current && isFinite(audioPlayerRef.current.currentTime)
+                              ? formatDuration(Math.floor(audioPlayerRef.current.currentTime))
+                              : '0:00'}
+                          </span>
                           <span>{formatDuration(selectedRecording.duration || 0)}</span>
                         </div>
-                        <div className="h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                          <div className="h-full w-full bg-blue-500 transition-all duration-300"
+                        <div
+                          className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden cursor-pointer group"
+                          onClick={(e) => {
+                            const audio = audioPlayerRef.current;
+                            if (!audio || !audio.duration || !isFinite(audio.duration)) return;
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const x = e.clientX - rect.left;
+                            const pct = x / rect.width;
+                            audio.currentTime = pct * audio.duration;
+                            setAudioProgress(pct * 100);
+                          }}
+                        >
+                          <div className="h-full bg-blue-500 rounded-full transition-all duration-150 group-hover:bg-blue-400"
                             style={{ width: `${audioProgress}%` }}></div>
                         </div>
                       </div>

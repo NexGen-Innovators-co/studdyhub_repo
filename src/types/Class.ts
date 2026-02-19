@@ -68,6 +68,8 @@ export interface Message {
   thinking_steps?: ThinkingStep[];  // Agentic reasoning steps
   isStreaming?: boolean;  // Whether response is currently streaming
   isLoading?: boolean;
+  model?: string; // AI model used for this response (e.g. "gemini-2.5-pro")
+  modelLabel?: string; // User-facing model label (e.g. "Gemini Pro")
   image_url?: string; // Legacy image URL
   image_mime_type?: string; // Legacy image MIME type
   images?: string[];

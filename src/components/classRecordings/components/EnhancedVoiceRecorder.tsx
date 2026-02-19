@@ -21,13 +21,15 @@ import { useChunkedRecording } from '../hooks/useChunkedRecording';
 import { useStreamingUpload, formatBytes, formatDuration } from '../hooks/useStreamingUpload';
 
 interface EnhancedVoiceRecorderProps {
-  onRecordingComplete: (audioBlob: Blob, title: string, subject: string) => Promise<void>;
+  onRecordingComplete: (audioBlob: Blob, title: string, subject: string, durationSeconds?: number) => Promise<void>;
   userId: string;
+  onRecordingStateChange?: (state: { isRecording: boolean; isPaused: boolean }) => void;
 }
 
 export const EnhancedVoiceRecorder: React.FC<EnhancedVoiceRecorderProps> = ({
   onRecordingComplete,
-  userId
+  userId,
+  onRecordingStateChange
 }) => {
   const [recordingTitle, setRecordingTitle] = useState('');
   const [recordingSubject, setRecordingSubject] = useState('');
@@ -53,6 +55,7 @@ export const EnhancedVoiceRecorder: React.FC<EnhancedVoiceRecorderProps> = ({
   } = useChunkedRecording({
     chunkDurationMs: 5 * 60 * 1000, // 5 minutes
     enableLocalBackup: true,
+    onRecordingStateChange,
     onChunkComplete: (chunk) => {
       toast.info(`Chunk ${chunk.index + 1} saved (${formatDuration(chunk.duration / 1000)})`);
     },
@@ -166,7 +169,8 @@ export const EnhancedVoiceRecorder: React.FC<EnhancedVoiceRecorderProps> = ({
     try {
       const response = await fetch(audioUrl);
       const blob = await response.blob();
-      await onRecordingComplete(blob, recordingTitle, recordingSubject);
+      // Pass the accurate wall-clock tracked duration instead of relying on WebM metadata
+      await onRecordingComplete(blob, recordingTitle, recordingSubject, totalDuration);
       handleClear();
       toast.success('Recording saved and processing started!');
     } catch (err) {

@@ -98,7 +98,7 @@ const DocumentationPage: React.FC = () => {
         },
         {
             question: "What AI models does StuddyHub use?",
-            answer: "We use OpenAI models (GPT-4o-mini and GPT-4o) for chat and analysis, plus Whisper for audio transcription. Model selection depends on your subscription tier."
+            answer: "We use Google Gemini models for chat and analysis. Free users get Gemini Flash for fast responses, Scholar users get Gemini 2.5 Flash with enhanced reasoning, and Genius users get Gemini Pro for the most capable AI experience."
         },
         {
             question: "How do I contact support?",

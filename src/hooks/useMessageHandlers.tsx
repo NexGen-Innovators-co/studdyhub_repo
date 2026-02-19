@@ -398,7 +398,12 @@ export const useMessageHandlers = () => {
                 const mappedMessages = messages.map((msg: any) => ({
                   ...msg,
                   attachedDocumentIds: msg.attached_document_ids || [],
-                  attachedNoteIds: msg.attached_note_ids || []
+                  attachedNoteIds: msg.attached_note_ids || [],
+                  // Inject model info from backend response for assistant messages
+                  ...(msg.role === 'assistant' && finalData.modelLabel ? {
+                    model: finalData.modelUsed,
+                    modelLabel: finalData.modelLabel,
+                  } : {}),
                 }));
 
                 // Replace optimistic messages with real database messages
@@ -447,6 +452,8 @@ export const useMessageHandlers = () => {
                   session_id: currentSessionId,
                   has_been_displayed: false,
                   thinking_steps: accumulatedDataRef.current?.thinkingSteps || [],
+                  model: finalData.modelUsed,
+                  modelLabel: finalData.modelLabel,
                 };
 
                 setChatMessages(prev => {

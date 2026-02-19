@@ -1192,14 +1192,15 @@ async function buildEnhancedGeminiConversation(
   }
 }
 
-async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string, configOverrides: any = {}): Promise<{
+async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string, configOverrides: any = {}, tierModelChain?: string[]): Promise<{
   success: boolean;
   content?: string;
   error?: string;
   userMessage?: string;
+  modelUsed?: string;
 }> {
-  // 1. Define the Fallback Chain (Priority Order)
-  const MODEL_CHAIN = [
+  // 1. Define the Fallback Chain (Priority Order) — use tier-based chain if provided
+  const MODEL_CHAIN = tierModelChain || [
     'gemini-2.5-flash',
     'gemini-3-pro-preview',
     'gemini-2.0-flash',
@@ -1246,7 +1247,7 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string, conf
         const extractedContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
         if (extractedContent) {
-          return { success: true, content: extractedContent };
+          return { success: true, content: extractedContent, modelUsed: currentModel };
         } else {
           console.warn(`[GeminiAPI] Model ${currentModel} returned no content.`);
         }
@@ -1392,12 +1393,13 @@ function convertGeminiToOpenRouterMessages(contents: any[], systemInstruction?: 
 // Streaming variant: forward incremental chunks to `onChunk` callback while
 // accumulating the full text. Falls back to non-streaming behaviour if the
 // API does not stream.
-async function callEnhancedGeminiAPIStream(contents: any[], geminiApiKey: string, onChunk: (chunk: string) => Promise<void>, configOverrides: any = {}): Promise<{
+async function callEnhancedGeminiAPIStream(contents: any[], geminiApiKey: string, onChunk: (chunk: string) => Promise<void>, configOverrides: any = {}, tierModelChain?: string[]): Promise<{
   success: boolean;
   content?: string;
   error?: string;
+  modelUsed?: string;
 }> {
-  const MODEL_CHAIN = [
+  const MODEL_CHAIN = tierModelChain || [
     'gemini-2.5-flash',
     'gemini-3-pro-preview',
     'gemini-2.0-flash'
@@ -1444,7 +1446,7 @@ async function callEnhancedGeminiAPIStream(contents: any[], geminiApiKey: string
         const extracted = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (extracted) {
           await onChunk(extracted);
-          return { success: true, content: extracted };
+          return { success: true, content: extracted, modelUsed: currentModel };
         }
         continue;
       }
@@ -1468,10 +1470,10 @@ async function callEnhancedGeminiAPIStream(contents: any[], geminiApiKey: string
       try {
         const parsed = JSON.parse(accumulated);
         const extracted = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (extracted) return { success: true, content: extracted };
+        if (extracted) return { success: true, content: extracted, modelUsed: currentModel };
       } catch (e) {
         // Not JSON — return raw accumulated stream
-        return { success: true, content: accumulated };
+        return { success: true, content: accumulated, modelUsed: currentModel };
       }
     } catch (err) {
       console.error('[GeminiAPI-Stream] Network/stream error:', err);
@@ -1703,6 +1705,23 @@ async function handleStreamingResponse(
 
   // Start automatic heartbeat to prevent client timeout during long operations
   handler.startHeartbeat(15_000);
+
+  // Get tier-based AI model configuration for this user
+  const aiModelConfig = await (async () => {
+    try {
+      const validator = createSubscriptionValidator();
+      return await validator.getAiModelConfig(userId);
+    } catch (e) {
+      console.warn('[Streaming] Failed to get AI model config, using default chain:', e);
+      return {
+        tier: 'free' as const,
+        modelChain: ['gemini-2.0-flash', 'gemini-1.5-flash'],
+        streamingChain: ['gemini-2.0-flash', 'gemini-1.5-flash'],
+        displayLabel: 'Gemini Flash',
+      };
+    }
+  })();
+  console.log(`[Streaming] AI model tier: ${aiModelConfig.tier}, primary model: ${aiModelConfig.modelChain[0]}, label: ${aiModelConfig.displayLabel}`);
 
   // Start async processing
   (async () => {
@@ -2207,6 +2226,7 @@ Please provide a corrected JSON action plan that ONLY re-does the FAILED actions
       console.log('🤖 Calling Gemini API for Final Response...');
 
       let generatedText = '';
+      let modelUsed = aiModelConfig.displayLabel;
       // Stream tokens to the client as they arrive. This handler is only invoked
       // when the outer request enabled streaming, so we always attempt streaming.
       const streamResult = await callEnhancedGeminiAPIStream(finalContents, geminiApiKey, async (chunk: string) => {
@@ -2215,21 +2235,23 @@ Please provide a corrected JSON action plan that ONLY re-does the FAILED actions
         } catch (e) {
           console.warn('[Streaming] Failed to send content chunk:', e);
         }
-      }, { systemInstruction: conversationData.systemInstruction });
+      }, { systemInstruction: conversationData.systemInstruction }, aiModelConfig.streamingChain);
 
       if (!streamResult.success || !streamResult.content) {
         // Fallback to synchronous generation if streaming failed
         const finalResponse = await callEnhancedGeminiAPI(finalContents, geminiApiKey, {
           systemInstruction: conversationData.systemInstruction
-        });
+        }, aiModelConfig.modelChain);
         if (!finalResponse.success || !finalResponse.content) {
           throw new Error('Failed to generate final response');
         }
         generatedText = finalResponse.content;
+        if (finalResponse.modelUsed) modelUsed = finalResponse.modelUsed;
         handler.sendContentChunk(generatedText);
         console.log('[Streaming] Fallback full response sent; chars:', generatedText.length);
       } else {
         generatedText = streamResult.content;
+        if (streamResult.modelUsed) modelUsed = streamResult.modelUsed;
         console.log('[Streaming] Completed streaming final response; total chars:', generatedText.length);
       }
       // Skip finalize-check to conserve API quota — the response is already streamed to the user
@@ -2328,6 +2350,9 @@ Please provide a corrected JSON action plan that ONLY re-does the FAILED actions
         images: images.length > 0 ? images : null,
         imageUrl: topLevelImageUrl,
         files_metadata: filesMetadata,
+        modelUsed,
+        modelLabel: aiModelConfig.displayLabel,
+        modelTier: aiModelConfig.tier,
       });
       console.log('✅ Final response sent, closing stream');
 
@@ -2743,6 +2768,23 @@ serve(async (req) => {
     // ========== AGENTIC UNDERSTANDING PHASE ==========
     console.log('[Agentic] Starting advanced query understanding...');
 
+    // Get tier-based AI model configuration for this user (non-streaming path)
+    const aiModelConfig = await (async () => {
+      try {
+        const modelValidator = createSubscriptionValidator();
+        return await modelValidator.getAiModelConfig(userId);
+      } catch (e) {
+        console.warn('[NonStreaming] Failed to get AI model config, using default chain:', e);
+        return {
+          tier: 'free' as const,
+          modelChain: ['gemini-2.0-flash', 'gemini-1.5-flash'],
+          streamingChain: ['gemini-2.0-flash', 'gemini-1.5-flash'],
+          displayLabel: 'Gemini Flash',
+        };
+      }
+    })();
+    console.log(`[NonStreaming] AI model tier: ${aiModelConfig.tier}, primary model: ${aiModelConfig.modelChain[0]}`);
+
     // Get conversation history for context
     const conversationHistory = await getConversationHistory(userId, sessionId);
 
@@ -2915,7 +2957,7 @@ serve(async (req) => {
         topP: 0.95,
         maxOutputTokens: 8192
       }
-    });
+    }, aiModelConfig.modelChain);
 
     let generatedText = '';
     let apiCallSuccess = false;
@@ -3063,6 +3105,9 @@ serve(async (req) => {
       },
       processingResults,
       success: apiCallSuccess,
+      modelUsed: finalResponse.modelUsed || aiModelConfig.modelChain[0],
+      modelLabel: aiModelConfig.displayLabel,
+      modelTier: aiModelConfig.tier,
       executedActions: actionResult.executedActions.map((a: any) => ({
         type: a.type,
         success: a.success,

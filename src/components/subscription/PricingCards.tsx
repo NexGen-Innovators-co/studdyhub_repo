@@ -43,6 +43,7 @@ const plans: PricingPlan[] = [
     icon: <User className="h-6 w-6" />,
     features: [
       { text: '5 AI messages/day', included: true },
+      { text: 'Standard AI (Gemini Flash)', included: true },
       { text: '3 Notes maximum', included: true },
       { text: '5 Document uploads (5MB max)', included: true },
       { text: '1 Podcast generation', included: true },
@@ -64,6 +65,7 @@ const plans: PricingPlan[] = [
     paystackPlanCode: 'PLN_scholar_monthly',
     features: [
       { text: '50 AI messages/day', included: true },
+      { text: 'Enhanced AI (Gemini 2.5 Flash)', included: true },
       { text: 'Unlimited Notes', included: true },
       { text: '20 Document uploads (25MB max)', included: true },
       { text: '5 Podcast generations', included: true },
@@ -84,6 +86,7 @@ const plans: PricingPlan[] = [
     paystackPlanCode: 'PLN_genius_monthly',
     features: [
       { text: 'Unlimited AI messages', included: true },
+      { text: 'Pro AI (Gemini Pro)', included: true },
       { text: 'Unlimited Notes', included: true },
       { text: 'Unlimited uploads (100MB max)', included: true },
       { text: 'Unlimited Podcasts', included: true },

@@ -1,7 +1,7 @@
 import React, { memo, useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
-import { Copy, FileText, Image, RefreshCw, Trash2, Volume2, Pause, Square, X, Loader2, StickyNote, User, File, Download, Check, Paperclip, AlertTriangle, Pencil } from 'lucide-react';
+import { Copy, FileText, Image, RefreshCw, Trash2, Volume2, Pause, Square, X, Loader2, StickyNote, User, File, Download, Check, Paperclip, AlertTriangle, Pencil, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { MemoizedMarkdownRenderer } from './MarkdownRenderer';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
@@ -634,10 +634,16 @@ export const MessageList = memo(({
                         )}
 
                         {!message.isLoading && !(message.id.startsWith('optimistic-ai-') && !message.content) && (
-                            <div className={cn('flex gap-1 px-2 sm:px-4 pb-2 sm:pb-3', isUserMessage ? 'justify-end' : 'justify-start')}>
+                            <div className={cn('flex items-center gap-1.5 px-2 sm:px-4 pb-2 sm:pb-3', isUserMessage ? 'justify-end' : 'justify-start')}>
                                 <span className={cn('text-xs font-claude', isUserMessage ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-gray-400')}>
                                     {formatTime(message.timestamp)}
                                 </span>
+                                {!isUserMessage && message.modelLabel && (
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/40 dark:to-purple-950/40 text-blue-600 dark:text-blue-300 border border-blue-200/50 dark:border-blue-700/30">
+                                        <Sparkles className="h-2.5 w-2.5" />
+                                        {message.modelLabel}
+                                    </span>
+                                )}
                                 <div className="flex gap-0.5 sm:gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                     {message.role === 'user' && onEditClick && (
                                         <Button

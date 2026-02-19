@@ -455,7 +455,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
     }
   }, [onAddRecording, triggerAudioProcessing]);
 
-  const handleRecordingComplete = useCallback(async (audioBlob: Blob, title: string, subject: string) => {
+  const handleRecordingComplete = useCallback(async (audioBlob: Blob, title: string, subject: string, trackedDurationSeconds?: number) => {
     setIsProcessingAudio(true);
     const toastId = toast.loading('Saving recording and initiating AI processing...');
 
@@ -474,14 +474,29 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
         .from('documents')
         .getPublicUrl(fileName);
 
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-      const durationPromise = new Promise<number>((resolve) => {
-        audio.onloadedmetadata = () => resolve(audio.duration);
-        audio.onerror = () => resolve(0);
-      });
-      const duration = await durationPromise;
-      URL.revokeObjectURL(audioUrl);
+      // Use tracked wall-clock duration if provided (accurate for chunked recordings).
+      // Fall back to Audio element metadata only when no tracked duration is available,
+      // but note that WebM blobs from chunked MediaRecorder often report only the
+      // first chunk's duration, making this unreliable.
+      let duration = 0;
+      if (trackedDurationSeconds && trackedDurationSeconds > 0) {
+        duration = trackedDurationSeconds;
+      } else {
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        const metadataDuration = await new Promise<number>((resolve) => {
+          const timeout = setTimeout(() => resolve(0), 5000); // Don't wait forever
+          audio.onloadedmetadata = () => {
+            clearTimeout(timeout);
+            // Infinity/NaN is common with MediaRecorder WebM
+            const d = audio.duration;
+            resolve(isFinite(d) && d > 0 ? d : 0);
+          };
+          audio.onerror = () => { clearTimeout(timeout); resolve(0); };
+        });
+        URL.revokeObjectURL(audioUrl);
+        duration = metadataDuration;
+      }
 
       const newDocumentId = generateId();
       const { error: docError } = await supabase
