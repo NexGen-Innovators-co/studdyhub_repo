@@ -1,13 +1,16 @@
 // src/components/quizzes/Quizzes.tsx - REDESIGNED
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ClassRecording, Quiz } from '../../types/Class';
+import { QuizAttempt } from '../../types/EnhancedClasses';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { QuizHistory } from './components/QuizHistory';
 import { QuizModal } from './components/QuizModal';
+import { ExamModeSetup } from './components/ExamModeSetup';
+import { ExamModeQuiz } from './components/ExamModeQuiz';
 import { StatsPanel } from './components/StatsPanel';
 import { BadgesPanel } from './components/BadgesPanel';
 import { NotesQuizGenerator } from './components/NotesQuizGenerator';
@@ -45,6 +48,7 @@ import {
   Lightbulb,
 } from 'lucide-react';
 import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
+import { useFeatureAccess } from '../../hooks/useFeatureAccess';
 import { useDailyQuizTracker } from '../../hooks/useDailyQuizTracker';
 import { supabase } from '../../integrations/supabase/client';
 import { toast } from 'sonner';
@@ -151,11 +155,86 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
     handleExitQuizMode,
     calculateScore,
     setQuizMode,
+    setShowResults,
+    setUserAnswers,
+    setCurrentQuestionIndex,
   } = useQuizManagement({
     onGenerateQuiz,
     recordQuizAttempt,
     fetchUserStats,
   });
+
+  // ---- Exam Mode ----
+  const { hasExamMode: checkExamMode } = useFeatureAccess();
+  const hasExamAccess = checkExamMode();
+  const [examSetupQuiz, setExamSetupQuiz] = useState<Quiz | null>(null);
+  const [examActiveQuiz, setExamActiveQuiz] = useState<Quiz | null>(null);
+  const [examSettings, setExamSettings] = useState<import('./hooks/useExamMode').ExamModeSettings | null>(null);
+
+  const handleOpenExamSetup = useCallback((quiz: Quiz) => {
+    // Close the regular quiz modal first
+    setQuizMode(null);
+    setExamSetupQuiz(quiz);
+  }, [setQuizMode]);
+
+  const handleStartExam = useCallback((settings: import('./hooks/useExamMode').ExamModeSettings) => {
+    if (!examSetupQuiz) return;
+    setExamSettings(settings);
+    setExamActiveQuiz(examSetupQuiz);
+    setExamSetupQuiz(null);
+  }, [examSetupQuiz]);
+
+  const handleExamSubmit = useCallback(async (
+    answers: (number | null)[],
+    timeTaken: number,
+    tabSwitchCount: number,
+    isExamMode: boolean
+  ) => {
+    if (!examActiveQuiz) return;
+
+    const questions = examActiveQuiz.questions || [];
+    const totalQuestions = questions.length;
+    let score = 0;
+    const attemptAnswers: QuizAttempt['answers'] = [];
+
+    questions.forEach((question: any, index: number) => {
+      const isCorrect = answers[index] === question.correctAnswer;
+      if (isCorrect) score++;
+      attemptAnswers.push({
+        question_index: index,
+        selected_answer: answers[index] ?? -1,
+        correct_answer: question.correctAnswer,
+        is_correct: isCorrect,
+      });
+    });
+
+    await recordQuizAttempt(
+      examActiveQuiz.id!,
+      score,
+      totalQuestions,
+      attemptAnswers,
+      timeTaken,
+      true // isExamMode - 1.5x XP bonus
+    );
+
+    await fetchUserStats();
+
+    const percentage = Math.round((score / totalQuestions) * 100);
+    if (percentage >= 90) {
+      toast.success('🎯 Outstanding exam performance! 1.5x XP bonus! 🎉');
+    } else if (percentage >= 75) {
+      toast.success('💪 Great exam result! 1.5x XP bonus!');
+    } else if (percentage >= 60) {
+      toast.success('📚 Good effort on the exam! 1.5x XP bonus!');
+    } else {
+      toast.success('📖 Exam completed! Review answers to improve. 1.5x XP bonus applied!');
+    }
+  }, [examActiveQuiz, recordQuizAttempt, fetchUserStats]);
+
+  const handleExamExit = useCallback(() => {
+    setExamActiveQuiz(null);
+    setExamSettings(null);
+  }, []);
 
   useRealtimeSyncForQuizzes({
     userId,
@@ -947,6 +1026,8 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
                 onSelectQuiz={handleSelectQuiz} 
                 bestAttempts={bestAttempts}
                 onDeleteQuiz={handleDeleteQuiz}
+                hasExamAccess={hasExamAccess}
+                onStartExamMode={handleOpenExamSetup}
               />
             </CardContent>
           </Card>
@@ -1127,7 +1208,30 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
         onExitQuizMode={handleExitQuizMode}
         calculateScore={calculateScore}
         bestAttempts={bestAttempts}
+        hasExamAccess={hasExamAccess}
+        onStartExamMode={handleOpenExamSetup}
       />
+
+      {/* Exam Mode Setup Dialog */}
+      {examSetupQuiz && (
+        <ExamModeSetup
+          quiz={examSetupQuiz}
+          open={!!examSetupQuiz}
+          onClose={() => setExamSetupQuiz(null)}
+          onStartExam={handleStartExam}
+        />
+      )}
+
+      {/* Exam Mode Active (fullscreen overlay) */}
+      {examActiveQuiz && examSettings && (
+        <ExamModeQuiz
+          quiz={examActiveQuiz}
+          settings={examSettings}
+          onSubmit={handleExamSubmit}
+          onExit={handleExamExit}
+          bestAttempt={bestAttempts[examActiveQuiz.id!]}
+        />
+      )}
     </AppShell>
   );
 };

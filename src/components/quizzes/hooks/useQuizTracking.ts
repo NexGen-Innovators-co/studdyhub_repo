@@ -100,7 +100,8 @@ export const useQuizTracking = (userId: string) => {
     score: number,
     totalQuestions: number,
     answers: QuizAttempt['answers'],
-    timeTaken: number
+    timeTaken: number,
+    isExamMode: boolean = false
   ): Promise<QuizAttempt | null> => {
     if (!userId) return null;
 
@@ -112,9 +113,11 @@ export const useQuizTracking = (userId: string) => {
       const isNewBest = !existingBest || percentage > existingBest.percentage;
       
       // Only award XP if it's the first attempt or a new high score
-      // If it's a new high score, we award the difference or just the full amount?
-      // Let's award XP only if it's a new best score to keep it simple and fair.
-      const xpEarned = isNewBest ? calculateXP(score, totalQuestions, timeTaken) : 0;
+      // Apply 1.5x multiplier for exam mode
+      let xpEarned = isNewBest ? calculateXP(score, totalQuestions, timeTaken) : 0;
+      if (isExamMode && xpEarned > 0) {
+        xpEarned = Math.floor(xpEarned * 1.5);
+      }
 
       const attempt = {
         quiz_id: quizId,

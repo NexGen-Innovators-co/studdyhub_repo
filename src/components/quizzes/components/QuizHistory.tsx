@@ -4,7 +4,7 @@ import { Quiz } from '../../../types/Class';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { formatDate } from '../../classRecordings/utils/helpers';
-import { Lightbulb, BookOpen, FileText, Brain, Play, Trash2, MoreVertical } from 'lucide-react';
+import { Lightbulb, BookOpen, FileText, Brain, Play, Trash2, MoreVertical, GraduationCap } from 'lucide-react';
 import { Badge } from '../../ui/badge';
 import { QuizAttempt } from '../../../types/EnhancedClasses';
 import {
@@ -30,9 +30,11 @@ interface QuizHistoryProps {
   onDeleteQuiz?: (quizId: string) => Promise<void>;
   compact?: boolean;
   bestAttempts?: Record<string, QuizAttempt>;
+  hasExamAccess?: boolean;
+  onStartExamMode?: (quiz: Quiz) => void;
 }
 
-export const QuizHistory: React.FC<QuizHistoryProps> = ({ quizzes, onSelectQuiz, onDeleteQuiz, compact = false, bestAttempts = {} }) => {
+export const QuizHistory: React.FC<QuizHistoryProps> = ({ quizzes, onSelectQuiz, onDeleteQuiz, compact = false, bestAttempts = {}, hasExamAccess = false, onStartExamMode }) => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [quizToDelete, setQuizToDelete] = useState<Quiz | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -252,7 +254,20 @@ export const QuizHistory: React.FC<QuizHistoryProps> = ({ quizzes, onSelectQuiz,
                     </div>
 
                     {/* Action Button */}
-                    <div className="flex justify-end pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                      {hasExamAccess && onStartExamMode && (quiz.questions?.length || 0) >= 3 && (
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onStartExamMode(quiz);
+                          }}
+                          variant="outline"
+                          className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/20 flex items-center gap-2 w-full sm:w-auto justify-center"
+                        >
+                          <GraduationCap className="h-4 w-4" />
+                          <span className="text-sm">Exam Mode</span>
+                        </Button>
+                      )}
                       <Button
                         onClick={() => onSelectQuiz(quiz)}
                         className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white flex items-center gap-2 w-full sm:w-auto justify-center"

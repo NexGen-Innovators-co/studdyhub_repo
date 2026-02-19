@@ -62,7 +62,7 @@ export function SubscriptionPage() {
     {
       icon: <Shield className="h-6 w-6 text-blue-500" />,
       title: "Exam Mode",
-      description: "Focus mode for serious study sessions"
+      description: "Full-screen, timed quizzes with anti-cheat and 1.5x XP"
     },
     {
       icon: <Target className="h-6 w-6 text-blue-500" />,

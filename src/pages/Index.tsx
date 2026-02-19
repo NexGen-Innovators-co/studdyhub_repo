@@ -21,12 +21,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import AIBot from '@/components/ui/aibot';
 import { Helmet } from 'react-helmet-async';
 import { SubscriptionStatusBar } from '@/components/subscription/SubscriptionStatusBar';
-import { initializePushNotifications, getNotificationPermissionStatus, requestNotificationPermission } from '@/services/notificationInitService';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { useNotifications } from '@/hooks/useNotifications';
+import { initializePushNotifications } from '@/services/notificationInitService';
 import { Document } from '@/types/Document';
 import { supabase } from '@/integrations/supabase/client';
 import { MobileMenu } from '@/components/layout/MobileMenu';
+import { OnboardingWizard, isOnboardingComplete } from '@/components/onboarding/OnboardingWizard';
 
 const Index = () => {
   const isOnline = useOnlineStatus();
@@ -100,76 +99,25 @@ const Index = () => {
     refreshSubscription,
     daysRemaining,
     bonusAiCredits,
+    setUserProfile,
   } = useAppContext();
 
-  // Notifications modal state and logic (now inside Index to access 'user')
+  // ─── Onboarding Wizard ────────────────────────────────────────
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
-  const { preferences } = useNotifications();
-  // Onboarding modal controls: unified flow to request notifications, mic, camera
-  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
-  const [requestingPermission, setRequestingPermission] = useState(false);
-  const ONBOARDING_KEY = 'studdyhub_onboarding_completed_v1';
-
-  // Show unified onboarding modal when the user prefers notifications but hasn't
-  // completed onboarding. Persist in localStorage to avoid repeat prompts.
   useEffect(() => {
     if (!user) return;
-    try {
-      const done = localStorage.getItem(ONBOARDING_KEY);
-      if (done === '1') return; // already completed
-    } catch (e) {
-      // ignore localStorage errors
+    if (!isOnboardingComplete()) {
+      setShowOnboarding(true);
     }
+  }, [user]);
 
-    if (preferences?.push_notifications) {
-      const permission = getNotificationPermissionStatus();
-      if (permission === 'default') {
-        setShowOnboardingModal(true);
-      }
+  const handleOnboardingComplete = (updatedProfile?: any) => {
+    setShowOnboarding(false);
+    // If the wizard returned an updated profile, propagate it
+    if (updatedProfile) {
+      setUserProfile(updatedProfile);
     }
-  }, [user, preferences]);
-
-  // Unified handler: request notifications, microphone, and camera in sequence
-  const handleEnableAllPermissions = async () => {
-    setRequestingPermission(true);
-    try {
-      // Notifications
-      try {
-        await requestNotificationPermission();
-      } catch (e) {
-        // console.warn('Notification permission request failed', e);
-      }
-
-      // Microphone
-      try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          await navigator.mediaDevices.getUserMedia({ audio: true });
-        }
-      } catch (e) {
-        // // console.warn('Microphone permission request failed or denied', e);
-      }
-
-      // Camera
-      try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          await navigator.mediaDevices.getUserMedia({ video: true });
-        }
-      } catch (e) {
-        //console.warn('Camera permission request failed or denied', e);
-      }
-
-      // Optionally: request other permissions here (geolocation, clipboard, etc.)
-    } finally {
-      setRequestingPermission(false);
-      setShowOnboardingModal(false);
-      try { localStorage.setItem(ONBOARDING_KEY, '1'); } catch (e) { /* ignore */ }
-    }
-  };
-
-  // If the user dismisses onboarding, mark as completed for now so it doesn't retrigger immediately
-  const handleDismissOnboarding = () => {
-    try { localStorage.setItem(ONBOARDING_KEY, '1'); } catch (e) { /* ignore */ }
-    setShowOnboardingModal(false);
   };
 
   let activeSocialTab: string | undefined;
@@ -735,33 +683,15 @@ const Index = () => {
 
     <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
 
-      {/* Unified Onboarding Modal (Notifications + Microphone + Camera) */}
-      <Dialog open={showOnboardingModal} onOpenChange={setShowOnboardingModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Get the best StuddyHub experience</DialogTitle>
-            <DialogDescription>
-              To provide reminders, live audio features, and inline media, we'd like permission to send notifications and access your microphone and camera. You can change these later in Settings.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-4 space-y-2">
-            <div className="text-sm text-gray-600">What we'll request:</div>
-            <ul className="list-disc ml-5 text-sm text-gray-700">
-              <li>Push notifications for reminders and social updates</li>
-              <li>Microphone access for voice messages and recordings</li>
-              <li>Camera access for profile photos and live sessions</li>
-            </ul>
-          </div>
-          <DialogFooter>
-            <Button onClick={handleDismissOnboarding} variant="outline" disabled={requestingPermission}>
-              Not Now
-            </Button>
-            <Button onClick={handleEnableAllPermissions} disabled={requestingPermission}>
-              {requestingPermission ? 'Enabling...' : 'Enable All'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Onboarding Wizard (full-screen, multi-step) */}
+      {showOnboarding && user && (
+        <OnboardingWizard
+          userProfile={userProfile}
+          userId={user.id}
+          onComplete={handleOnboardingComplete}
+        />
+      )}
+
       {/* Smart Responsive Header */}
       {pageSEO && (
         <Helmet>

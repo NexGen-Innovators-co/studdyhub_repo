@@ -4,7 +4,7 @@ import { Quiz, QuizQuestion } from '../../../types/Class';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../ui/dialog';
 import { Button } from '../../ui/button';
 import { Card, CardContent } from '../../ui/card';
-import { CheckCircle, XCircle, ArrowLeft, ArrowRight, Trophy, Lightbulb, Info } from 'lucide-react';
+import { CheckCircle, XCircle, ArrowLeft, ArrowRight, Trophy, Lightbulb, Info, GraduationCap } from 'lucide-react';
 import { QuizAttempt } from '../../../types/EnhancedClasses';
 
 interface QuizModalProps {
@@ -18,6 +18,8 @@ interface QuizModalProps {
   onExitQuizMode: () => void;
   calculateScore: () => number;
   bestAttempts?: Record<string, QuizAttempt>;
+  hasExamAccess?: boolean;
+  onStartExamMode?: (quiz: Quiz) => void;
 }
 
 export const QuizModal: React.FC<QuizModalProps> = ({
@@ -31,6 +33,8 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   onExitQuizMode,
   calculateScore,
   bestAttempts = {},
+  hasExamAccess = false,
+  onStartExamMode,
 }) => {
   if (!quizMode) {
     return null;
@@ -82,6 +86,17 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 <Info className="h-3 w-3" />
                 <span>You've already attempted this quiz (Best: {bestAttempt.percentage}%). No new XP will be awarded unless you beat your high score.</span>
               </div>
+            )}
+            {hasExamAccess && onStartExamMode && !showResults && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onStartExamMode(quiz)}
+                className="mt-2 gap-1.5 text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/20"
+              >
+                <GraduationCap className="h-4 w-4" />
+                Switch to Exam Mode
+              </Button>
             )}
           </div>
         </DialogHeader>

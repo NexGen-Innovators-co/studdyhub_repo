@@ -21,7 +21,8 @@ interface UseQuizManagementProps {
     score: number,
     totalQuestions: number,
     answers: QuizAttempt['answers'],
-    timeTaken: number
+    timeTaken: number,
+    isExamMode?: boolean
   ) => Promise<QuizAttempt | null>;
   fetchUserStats: () => Promise<void>;
   confirmAction?: (options: ConfirmOptions) => Promise<boolean>;
@@ -483,5 +484,8 @@ export const useQuizManagement = ({
     handleSubmitQuiz,
     calculateScore,
     setQuizMode,
+    setShowResults,
+    setUserAnswers,
+    setCurrentQuestionIndex,
   };
 };
