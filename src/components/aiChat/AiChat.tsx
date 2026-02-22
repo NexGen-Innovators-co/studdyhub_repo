@@ -26,6 +26,7 @@ import { useSpeechRecognition } from './hooks/useSpeechRecognition';
 import { useTextToSpeech } from './hooks/useTextToSpeech';
 import { getFileType, validateFile, stripCodeBlocks, generateOptimisticId, overrideTsMimeType } from './utils/helpers';
 import { ContextBadges } from './Components/ContextBadges';
+import { EducationContextBadge } from './Components/EducationContextBadge';
 import { DragOverlay } from './Components/DragOverlay';
 import { AppContext } from '@/contexts/AppContext';
 import { initialAppState } from '@/contexts/appReducer';
@@ -1036,6 +1037,11 @@ const AIChat: React.FC<AIChatProps> = ({
           className={`flex flex-col h-full rounded-lg panel-transition bg-transparent dark:bg-transparent transition-all duration-300 relative ${isDiagramPanelOpen ? 'flex-shrink-0' : 'flex-1'} ${isPhone() ? 'fixed inset-0 z-30 rounded-none h-[100dvh] w-screen ' : ''} ${(!isDiagramPanelOpen && !activePodcast && !isPhone()) ? 'max-w-3xl mx-auto' : ''}`}
           style={isDiagramPanelOpen && !isPhone() ? { width: `calc(${100 - panelWidth}% - 1px)` } : isPhone() ? { width: '100vw', height: '100dvh', left: 0, top: 0 } : { flex: 1 }}
         >
+          {/* Education context indicator */}
+          <div className="flex items-center justify-end px-3 sm:px-6 pt-2">
+            <EducationContextBadge />
+          </div>
+
           {/* Enhanced Loading States */}
           {isLoadingSessionMessages && messages.length === 0 ? (
             <ChatLoadingIndicator

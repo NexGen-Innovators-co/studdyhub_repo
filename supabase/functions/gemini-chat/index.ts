@@ -2209,6 +2209,25 @@ Please provide a corrected JSON action plan that ONLY re-does the FAILED actions
       const finalContents = [...conversationData.contents];
       if (executedActions.length > 0) {
         const slimResults = truncateActionResults(executedActions);
+
+        // Collect image URLs from successful GENERATE_IMAGE actions to include in the instruction
+        const generatedImageUrls: string[] = [];
+        for (const ea of executedActions) {
+          if (ea.type === 'GENERATE_IMAGE' && ea.success && ea.data) {
+            const imgUrl = ea.data.imageUrl || ea.data.image_url || ea.data.url;
+            if (imgUrl) generatedImageUrls.push(imgUrl);
+          }
+        }
+
+        let imageInstruction = '';
+        if (generatedImageUrls.length > 0) {
+          imageInstruction = `\n          5. For generated images, include them in your response using markdown image syntax: ![description](url). Here are the generated image URLs:\n`;
+          for (const url of generatedImageUrls) {
+            imageInstruction += `             - ${url}\n`;
+          }
+          imageInstruction += `          You MUST include each image URL in your response using ![description](url) format so the user can see them.`;
+        }
+
         finalContents.push({
           role: 'user',
           parts: [{ text: `System Update: The following actions were executed successfully.
@@ -2216,10 +2235,10 @@ Please provide a corrected JSON action plan that ONLY re-does the FAILED actions
           Results: ${JSON.stringify(slimResults)}
           
           CRITICAL INSTRUCTION FOR FINAL RESPONSE:
-          1. The actions are DONE. Do NOT output any JSON, "DB_ACTION", or code blocks.
-          2. Just confirm to the user naturally (e.g., "I've added the image to your note.").
+          1. The actions are DONE. Do NOT output any raw JSON action objects, "DB_ACTION", or action code blocks.
+          2. Just confirm to the user naturally (e.g., "I've created your note." or "Here's the image you requested.").
           3. If the results show a total_count higher than the records shown, tell the user how many total exist.
-          4. Keep the response concise.` }]
+          4. Keep the response concise.${imageInstruction}` }]
         });
       }
 
@@ -2284,8 +2303,32 @@ Please provide a corrected JSON action plan that ONLY re-does the FAILED actions
 
       console.log('💾 Saving AI message...');
       const { cleaned, images } = extractImageBlocks(generatedText);
+
+      // Also collect images from successfully executed GENERATE_IMAGE actions
+      // (the model may not embed ```image blocks, so we extract them directly)
+      for (const ea of executedActions) {
+        if (ea.type === 'GENERATE_IMAGE' && ea.success && ea.data) {
+          const imgUrl = ea.data.imageUrl || ea.data.image_url || ea.data.url;
+          if (imgUrl && !images.some(img => img.url === imgUrl)) {
+            images.push({ url: imgUrl, alt: ea.data.prompt || ea.data.message || 'Generated image' });
+            console.log(`[ImageExtraction] Added image from GENERATE_IMAGE action: ${imgUrl}`);
+          }
+        }
+      }
+
       // Sanitize assistant output to remove any embedded action JSON/code blocks
-      const sanitizedCleaned = sanitizeAssistantOutput(cleaned);
+      let sanitizedCleaned = sanitizeAssistantOutput(cleaned);
+
+      // If we have generated images but the response text doesn't reference them,
+      // append markdown image tags so the user sees them inline
+      if (images.length > 0) {
+        const hasImageRef = images.some(img => sanitizedCleaned.includes(img.url));
+        if (!hasImageRef) {
+          const imageMd = images.map(img => `\n\n![${(img.alt || 'Generated image').replace(/[[\]()]/g, '')}](${img.url})`).join('');
+          sanitizedCleaned = sanitizedCleaned.trimEnd() + imageMd;
+          console.log(`[ImageExtraction] Appended ${images.length} image(s) as markdown to response`);
+        }
+      }
 
       const aiMessageData: any = {
         userId,
@@ -2319,7 +2362,8 @@ Please provide a corrected JSON action plan that ONLY re-does the FAILED actions
       const filesMetadata = images.length > 0 ? JSON.stringify(images) : undefined;
 
       // Sanitize final outgoing response to avoid leaking action JSON/code
-      const finalResponseText = sanitizeAssistantOutput(generatedText);
+      // Use sanitizedCleaned which already has image markdown appended
+      const finalResponseText = sanitizedCleaned;
 
       try {
         // Log a compact summary instead of the full payload to avoid bloating logs
@@ -2999,6 +3043,28 @@ serve(async (req) => {
     // Ensure final assistant text does not contain any leftover action blocks
     generatedText = sanitizeAssistantOutput(generatedText);
 
+    // Extract images from successfully executed GENERATE_IMAGE actions (non-streaming path)
+    const nonStreamImages: Array<{ url: string; alt?: string }> = [];
+    for (const ea of actionResult.executedActions) {
+      if (ea.type === 'GENERATE_IMAGE' && ea.success && ea.data) {
+        const imgUrl = ea.data.imageUrl || ea.data.image_url || ea.data.url;
+        if (imgUrl) {
+          nonStreamImages.push({ url: imgUrl, alt: ea.data.prompt || ea.data.message || 'Generated image' });
+          console.log(`[ImageExtraction][NonStream] Added image from GENERATE_IMAGE action: ${imgUrl}`);
+        }
+      }
+    }
+
+    // Append image markdown to response if images exist but aren't referenced
+    if (nonStreamImages.length > 0) {
+      const hasImageRef = nonStreamImages.some(img => generatedText.includes(img.url));
+      if (!hasImageRef) {
+        const imageMd = nonStreamImages.map(img => `\n\n![${(img.alt || 'Generated image').replace(/[[\]()]/g, '')}](${img.url})`).join('');
+        generatedText = generatedText.trimEnd() + imageMd;
+        console.log(`[ImageExtraction][NonStream] Appended ${nonStreamImages.length} image(s) as markdown to response`);
+      }
+    }
+
 
     if (apiCallSuccess && generatedText) {
       try {
@@ -3031,8 +3097,9 @@ serve(async (req) => {
       role: 'assistant',
       attachedDocumentIds: allDocumentIds.length > 0 ? allDocumentIds : null,
       attachedNoteIds: attachedNoteIds.length > 0 ? attachedNoteIds : null,
-      imageUrl: userMessageImageUrl || imageUrl,
-      imageMimeType: userMessageImageMimeType || imageMimeType,
+      imageUrl: nonStreamImages.length > 0 ? nonStreamImages[0].url : (userMessageImageUrl || imageUrl),
+      imageMimeType: nonStreamImages.length > 0 ? (nonStreamImages[0].url.endsWith('.png') ? 'image/png' : 'image/jpeg') : (userMessageImageMimeType || imageMimeType),
+      filesMetadata: nonStreamImages.length > 0 ? nonStreamImages.map(img => ({ type: 'image', url: img.url, alt: img.alt })) : null,
       isError: !apiCallSuccess,
       conversationContext: {
         totalMessages: (conversationData.contextInfo?.totalMessages || 0) + 1,
@@ -3112,7 +3179,10 @@ serve(async (req) => {
         type: a.type,
         success: a.success,
         timestamp: a.timestamp
-      }))
+      })),
+      images: nonStreamImages.length > 0 ? nonStreamImages : null,
+      imageUrl: nonStreamImages.length > 0 ? nonStreamImages[0].url : undefined,
+      files_metadata: nonStreamImages.length > 0 ? JSON.stringify(nonStreamImages) : undefined
     }), {
       headers: {
         'Content-Type': 'application/json',

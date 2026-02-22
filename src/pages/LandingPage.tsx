@@ -5,7 +5,8 @@ import { motion } from 'framer-motion';
 import { Button } from '../components/ui/button';
 import { Sparkles, ArrowRight, Play, Shield, Globe, Award, Users, FileText, TrendingUp, Star, Zap, ChevronLeft, ChevronRight, Loader2, Mic, MessageSquare, Brain, LayoutDashboard, ArrowUp } from 'lucide-react';
 import { supabase } from '../integrations/supabase/client';
-import { AppLayout, ContentContainer } from '../components/layout/LayoutComponents'
+import { AppLayout, ContentContainer } from '../components/layout/LayoutComponents';
+import { RateAppDialog } from '../components/ratings/RateAppDialog';
 // Update src/pages/LandingPage.tsx - Add this after features section
 import { ScreenshotGallery } from '../components/layout/ScreenshotGallery';
 const appScreenshots = [
@@ -78,6 +79,8 @@ const LandingPage: React.FC = () => {
   });
   const [loadingStats, setLoadingStats] = useState(true);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [liveTestimonials, setLiveTestimonials] = useState<any[]>([]);
+  const [liveRatingStats, setLiveRatingStats] = useState<{ average: number; count: number } | null>(null);
   const carouselRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -172,7 +175,8 @@ const LandingPage: React.FC = () => {
     fetchAppStats();
   }, []);
 
-  const testimonials = [
+  // Static fallback testimonials (shown when no approved user testimonials exist)
+  const staticTestimonials = [
     {
       name: "Doris",
       role: "SHS student",
@@ -201,6 +205,67 @@ const LandingPage: React.FC = () => {
       imageUrl: '/testimonial2.jpg'
     },
   ];
+
+  // Merge: approved user testimonials first, then static fallbacks
+  const testimonials = [
+    ...liveTestimonials,
+    ...staticTestimonials,
+  ];
+
+  // Fetch approved testimonials and live rating stats
+  useEffect(() => {
+    const fetchLiveData = async () => {
+      try {
+        // Fetch approved testimonials with user profile info
+        const { data: testimonialData } = await supabase
+          .from('app_testimonials')
+          .select('content, rating, user_id, created_at')
+          .eq('is_approved', true)
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (testimonialData && testimonialData.length > 0) {
+          // Fetch profile names for testimonial authors
+          const userIds = testimonialData.map(t => t.user_id);
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url')
+            .in('id', userIds);
+
+          const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+
+          const mapped = testimonialData.map(t => {
+            const profile = profileMap.get(t.user_id);
+            const name = profile?.full_name || 'StuddyHub User';
+            const initials = name.split(' ').map((w: string) => w[0]).join('').substring(0, 2).toUpperCase();
+            return {
+              name,
+              role: 'Verified User',
+              avatar: initials,
+              content: t.content,
+              rating: t.rating,
+              verified: true,
+              imageUrl: profile?.avatar_url || '',
+            };
+          });
+          setLiveTestimonials(mapped);
+        }
+
+        // Fetch aggregate rating stats
+        const { data: ratingData } = await supabase.rpc('get_app_rating_stats');
+        if (ratingData) {
+          setLiveRatingStats({
+            average: ratingData.average_rating || 0,
+            count: ratingData.total_ratings || 0,
+          });
+        }
+      } catch (err) {
+        // Silently fail — static fallbacks will show
+      }
+    };
+
+    fetchLiveData();
+  }, []);
 
   const nextTestimonial = () => {
     setCurrentTestimonialIndex((prevIndex) => (prevIndex + 1) % testimonials.length);
@@ -412,8 +477,14 @@ const LandingPage: React.FC = () => {
                 <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-yellow-100 text-yellow-600 rounded-full mb-4 dark:bg-yellow-900/30 dark:text-yellow-400 group-hover:scale-110 transition-transform duration-300 shadow-sm">
                   <Star className="h-6 w-6 md:h-7 md:w-7" />
                 </div>
-                <div className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">{appStats.userRating}</div>
-                <div className="text-gray-600 dark:text-gray-400 font-medium">User Rating</div>
+                <div className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">
+                  {liveRatingStats && liveRatingStats.count > 0
+                    ? `${liveRatingStats.average}/5`
+                    : appStats.userRating}
+                </div>
+                <div className="text-gray-600 dark:text-gray-400 font-medium">
+                  User Rating{liveRatingStats && liveRatingStats.count > 0 ? ` (${liveRatingStats.count})` : ''}
+                </div>
               </div>
             </motion.div>
           )}
@@ -556,6 +627,22 @@ const LandingPage: React.FC = () => {
             >
               Hear directly from students and professionals who are transforming their productivity with StuddyHub AI.
             </motion.p>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.3 }}
+              className="mt-4"
+            >
+              <RateAppDialog
+                trigger={
+                  <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full px-6">
+                    <Star className="h-4 w-4" />
+                    Share Your Experience
+                  </Button>
+                }
+              />
+            </motion.div>
           </div>
 
           <div className="relative max-w-5xl mx-auto px-4 sm:px-12">

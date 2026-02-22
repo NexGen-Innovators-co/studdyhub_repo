@@ -17,7 +17,8 @@ import {
   List,
   Image,
   Headphones,
-  WifiOff
+  WifiOff,
+  GraduationCap,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../ui/button';
@@ -147,6 +148,7 @@ const sectionTabs = {
   ],
   settings: [
     { id: 'profile', label: 'Profile', icon: User },
+    { id: 'education', label: 'Education', icon: GraduationCap },
     { id: 'learning', label: 'Learning', icon: Brain },
     { id: 'personalization', label: 'AI Context', icon: Sparkles },
     { id: 'goals', label: 'Goals', icon: Target },

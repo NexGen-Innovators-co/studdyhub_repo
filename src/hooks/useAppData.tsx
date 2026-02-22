@@ -1727,7 +1727,11 @@ export const useAppData = (authUser?: any) => {
       setLoadingPhase({ phase: 'complete', progress: 100 });
     }
   }, [loadUserProfile, loadNotesPage, loadDocumentsPage, loadFolders, loadRecordingsPage, loadSchedulePage, loadQuizzesPage, getConnectionQuality]);// Enhanced loading state computation
-  const enhancedLoading = loading || loadingPhase.phase !== 'complete';
+  // Only report loading=true when startProgressiveDataLoading has actually begun.
+  // Previously `loadingPhase.phase !== 'complete'` caused loading to be true on
+  // initial mount (phase starts as 'initial') which blocked tab-level data loading
+  // and caused a long perceived delay navigating to the dashboard after auth.
+  const enhancedLoading = loading;
   const loadingProgress = loadingPhase.progress;
   const loadingMessage = {
     'initial': 'Connecting to your account...',

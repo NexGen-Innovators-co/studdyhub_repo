@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { AdminUser, AdminRole } from '../../integrations/supabase/admin';
-import { Shield, Crown, UserCheck, UserX, Clock, Mail, Plus, Filter, Search } from 'lucide-react';
+import { Shield, Crown, UserCheck, UserX, Clock, Mail, Plus, Filter, Search, Copy, CheckCheck } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip as RechartsTooltip } from 'recharts';
 
 const AdminManagement = () => {
@@ -26,6 +26,8 @@ const AdminManagement = () => {
     const [userSearchTerm, setUserSearchTerm] = useState(''); // new state
     const [searchResults, setSearchResults] = useState<any[]>([]); // new state
     const [selectedUser, setSelectedUser] = useState<any | null>(null); // new state
+    const [createdPassword, setCreatedPassword] = useState<string | null>(null);
+    const [passwordCopied, setPasswordCopied] = useState(false);
 
     useEffect(() => {
         fetchAdmins();
@@ -129,7 +131,8 @@ const AdminManagement = () => {
                 });
                 if (error) throw error;
 
-                toast.success('Admin created invite sent.');
+                toast.success('Admin created successfully.');
+                setCreatedPassword(generatedPassword);
             } else {
                 // Select existing user to become an admin
                 if (!selectedUser) {
@@ -573,6 +576,50 @@ const AdminManagement = () => {
                     </div>
                 </CardContent>
             </Card>
+
+            {/* Password Display Dialog */}
+            <Dialog open={!!createdPassword} onOpenChange={() => { setCreatedPassword(null); setPasswordCopied(false); }}>
+                <DialogContent className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800">
+                    <DialogHeader>
+                        <DialogTitle className="text-gray-900 dark:text-white">Admin Created Successfully</DialogTitle>
+                        <DialogDescription className="text-gray-600 dark:text-gray-400">
+                            Copy the temporary password below. It will not be shown again.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div>
+                            <Label className="text-gray-700 dark:text-gray-300">Email</Label>
+                            <p className="text-gray-900 dark:text-white font-medium mt-1">{newAdminEmail}</p>
+                        </div>
+                        <div>
+                            <Label className="text-gray-700 dark:text-gray-300">Temporary Password</Label>
+                            <div className="flex items-center gap-2 mt-1">
+                                <code className="flex-1 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm font-mono text-gray-900 dark:text-white break-all">
+                                    {createdPassword}
+                                </code>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        if (createdPassword) {
+                                            navigator.clipboard.writeText(createdPassword);
+                                            setPasswordCopied(true);
+                                            toast.success('Password copied to clipboard');
+                                            setTimeout(() => setPasswordCopied(false), 2000);
+                                        }
+                                    }}
+                                    className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700"
+                                >
+                                    {passwordCopied ? <CheckCheck className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                                </Button>
+                            </div>
+                        </div>
+                        <p className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                            ⚠️ This password is shown only once. Please copy and share it securely with the new admin.
+                        </p>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

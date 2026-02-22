@@ -1177,6 +1177,24 @@ This shows how different services communicate while remaining independent!"
             }
         }
 
+        // Education context (country, curriculum, exam, subjects)
+        if (userContext.educationContext) {
+            const edu = userContext.educationContext;
+            sections.push(`\n🎓 Education Context:`);
+            if (edu.country) sections.push(`  • Country: ${edu.country}`);
+            if (edu.educationLevel) sections.push(`  • Level: ${edu.educationLevel}`);
+            if (edu.curriculum) sections.push(`  • Curriculum: ${edu.curriculum}`);
+            if (edu.targetExam) {
+                const examLine = edu.examDate
+                    ? `  • Target Exam: ${edu.targetExam} (${edu.examDate})`
+                    : `  • Target Exam: ${edu.targetExam}`;
+                sections.push(examLine);
+            }
+            if (edu.institution) sections.push(`  • School: ${edu.institution}`);
+            if (edu.yearOrGrade) sections.push(`  • Year/Grade: ${edu.yearOrGrade}`);
+            if (edu.subjects?.length > 0) sections.push(`  • Subjects: ${edu.subjects.join(', ')}`);
+        }
+
         return sections.join('\n');
     }
 }

@@ -28,6 +28,7 @@ import {
   requestNotificationPermission,
 } from '@/services/notificationInitService';
 import { UserProfile } from '@/types/Document';
+import { EducationContextStep, type EducationStepData } from './steps/EducationContextStep';
 
 // ─── Types ────────────────────────────────────────────────────
 interface OnboardingWizardProps {
@@ -36,8 +37,8 @@ interface OnboardingWizardProps {
   userId: string;
 }
 
-type Step = 'welcome' | 'profile' | 'learning' | 'personalization' | 'permissions';
-const STEPS: Step[] = ['welcome', 'profile', 'learning', 'personalization', 'permissions'];
+type Step = 'welcome' | 'education' | 'profile' | 'learning' | 'personalization' | 'permissions';
+const STEPS: Step[] = ['welcome', 'education', 'profile', 'learning', 'personalization', 'permissions'];
 
 const ONBOARDING_KEY = 'studdyhub_onboarding_completed_v2';
 
@@ -102,6 +103,18 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const [currentStep, setCurrentStep] = useState<Step>('welcome');
   const [direction, setDirection] = useState(1);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Education step state
+  const [educationData, setEducationData] = useState<EducationStepData>({
+    countryId: null,
+    countryCode: null,
+    educationLevelId: null,
+    curriculumId: null,
+    examinationId: null,
+    selectedSubjectIds: [],
+    institutionName: userProfile?.school || '',
+    yearOrGrade: '',
+  });
 
   // Profile step state
   const [fullName, setFullName] = useState(userProfile?.full_name || '');
@@ -280,7 +293,55 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         }
       }
 
-      // 4. Mark complete & notify parent
+      // 4. Save education context (if user filled it in)
+      if (educationData.countryId) {
+        try {
+          // Upsert education profile
+          const { data: eduProfile, error: eduErr } = await supabase
+            .from('user_education_profiles')
+            .upsert({
+              user_id: userId,
+              country_id: educationData.countryId,
+              education_level_id: educationData.educationLevelId,
+              curriculum_id: educationData.curriculumId,
+              target_examination_id: educationData.examinationId,
+              institution_name: educationData.institutionName.trim() || null,
+              year_or_grade: educationData.yearOrGrade.trim() || null,
+            }, { onConflict: 'user_id' })
+            .select('id')
+            .single();
+
+          if (!eduErr && eduProfile && educationData.selectedSubjectIds.length > 0) {
+            // Delete existing user_subjects then insert new ones
+            await supabase
+              .from('user_subjects')
+              .delete()
+              .eq('user_education_profile_id', eduProfile.id);
+
+            await supabase
+              .from('user_subjects')
+              .insert(
+                educationData.selectedSubjectIds.map((subjectId) => ({
+                  user_education_profile_id: eduProfile.id,
+                  subject_id: subjectId,
+                }))
+              );
+          }
+        } catch {
+          // Education data save is non-blocking — user can fix later in Settings
+        }
+      }
+
+      // Also sync school field from education step if not already filled
+      if (!school.trim() && educationData.institutionName.trim()) {
+        // Already saved via profile update above, but update local too
+        await supabase
+          .from('profiles')
+          .update({ school: educationData.institutionName.trim() })
+          .eq('id', userId);
+      }
+
+      // 5. Mark complete & notify parent
       markComplete();
       const updatedProfile: UserProfile = {
         ...userProfile,
@@ -679,10 +740,16 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     </div>
   );
 
+  const renderEducation = () => (
+    <EducationContextStep data={educationData} onChange={setEducationData} />
+  );
+
   const renderStep = () => {
     switch (currentStep) {
       case 'welcome':
         return renderWelcome();
+      case 'education':
+        return renderEducation();
       case 'profile':
         return renderProfile();
       case 'learning':

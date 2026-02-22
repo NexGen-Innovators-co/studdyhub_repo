@@ -2,12 +2,13 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.24.1';
 import { createSubscriptionValidator, createErrorResponse } from '../utils/subscription-validator.ts';
+import { getEducationContext, formatEducationContextForPrompt } from '../_shared/educationContext.ts';
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
-const createFlashcardPrompt = (content, userProfile, numberOfCards = 10, difficulty = 'medium', focusAreas)=>{
+const createFlashcardPrompt = (content, userProfile, numberOfCards = 10, difficulty = 'medium', focusAreas, educationBlock = '')=>{
   const focusSection = focusAreas && focusAreas.length > 0 ? `\n\nFOCUS AREAS: Prioritize creating flashcards about: ${focusAreas.join(', ')}` : '';
   return `You are an expert educational content creator specializing in creating effective flashcards for learning and retention.
 
@@ -18,6 +19,7 @@ STUDENT PROFILE:
 - Preferred Explanation Style: ${userProfile.learning_preferences?.explanation_style || 'balanced'}
 - Difficulty Level: ${difficulty}
 ${userProfile.personal_context ? `\nPERSONAL CONTEXT (use to tailor flashcard language and examples):\n${userProfile.personal_context}` : ''}
+${educationBlock ? `\n${educationBlock}\nAlign flashcard content, terminology, and examples to this student's curriculum and exam requirements.\n` : ''}
 
 FLASHCARD CREATION GUIDELINES:
 
@@ -224,7 +226,18 @@ serve(async (req)=>{
     }
     // Generate flashcards with AI (using retry mechanism)
     try {
-      const prompt = createFlashcardPrompt(noteContent, userProfile, numberOfCards, difficulty, focusAreas);
+      // Fetch education context for curriculum-aligned flashcards
+      let educationBlock = '';
+      try {
+        const eduCtx = await getEducationContext(supabaseClient, user.id);
+        if (eduCtx) {
+          educationBlock = formatEducationContextForPrompt(eduCtx);
+        }
+      } catch (_eduErr) {
+        // Non-critical — continue without education context
+      }
+
+      const prompt = createFlashcardPrompt(noteContent, userProfile, numberOfCards, difficulty, focusAreas, educationBlock);
       // console.log(`Generating ${numberOfCards} flashcards for user ${user.id}`);
       const result = await generateFlashcardsWithRetry(prompt);
       const response = await result.response;

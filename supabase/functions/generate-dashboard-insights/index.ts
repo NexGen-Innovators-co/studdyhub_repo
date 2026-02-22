@@ -1,5 +1,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.24.1';
+import { getEducationContext, formatEducationContextForPrompt } from '../_shared/educationContext.ts';
 
 // CORS headers for browser access
 const CORS_HEADERS = {
@@ -21,6 +23,27 @@ serve(async (req) => {
       throw new Error('Missing stats data');
     }
 
+    // Fetch education context if auth is available
+    let educationBlock = '';
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      const authHeader = req.headers.get('Authorization');
+      if (supabaseUrl && supabaseServiceKey && authHeader) {
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        const token = authHeader.replace('Bearer ', '');
+        const { data: { user } } = await supabase.auth.getUser(token);
+        if (user) {
+          const eduCtx = await getEducationContext(supabase, user.id);
+          if (eduCtx) {
+            educationBlock = `\n\n${formatEducationContextForPrompt(eduCtx)}\nUse this education context to make insights curriculum-specific and exam-relevant.\n`;
+          }
+        }
+      }
+    } catch (_eduErr) {
+      // Non-critical — continue without education context
+    }
+
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
     if (!geminiApiKey) {
       throw new Error('Server configuration error: GEMINI_API_KEY not set');
@@ -38,6 +61,7 @@ serve(async (req) => {
       
       USER PROFILE:
       ${JSON.stringify(userProfile || {}, null, 2)}
+      ${educationBlock}
       
       OUTPUT REQUIREMENTS:
       - Return ONLY a valid JSON array.

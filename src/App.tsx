@@ -16,6 +16,13 @@ import { OfflineIndicator } from "./components/layout/OfflineIndicator";
 import ErrorBoundary from "./components/layout/ErrorBoundary";
 import ModernPremiumLoader from "./components/ui/ModernPremiumLoader";
 
+// Minimal spinner for public/static pages (no framer-motion, instant render)
+const MinimalPageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">
+    <div className="h-8 w-8 rounded-full border-3 border-blue-500 border-t-transparent animate-spin" />
+  </div>
+);
+
 // ─── Lazy-loaded pages (code-split per route) ───
 const Index = lazy(() => import("./pages/Index"));
 const Auth = lazy(() => import("./pages/Auth"));
@@ -45,6 +52,10 @@ const ActivityLogs = lazy(() => import("./components/admin/ActivityLogs"));
 const CourseManagement = lazy(() => import("./components/admin/CourseManagement"));
 const CourseDashboard = lazy(() => import("./pages/CourseDashboard"));
 
+// Lazy load educator components
+const EducatorLayout = lazy(() => import("./components/educator/EducatorLayout"));
+const EducatorDashboard = lazy(() => import("./components/educator/EducatorDashboard"));
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -72,7 +83,7 @@ const AppWithSEO = () => {
     const appShellRoutes = [
       '/dashboard', '/notes', '/note', '/recordings', '/schedule',
       '/chat', '/documents', '/settings', '/quizzes', '/library',
-      '/podcasts', '/social'
+      '/podcasts', '/social', '/educator'
     ];
 
     // Check if current path matches any app shell route
@@ -92,21 +103,21 @@ const AppWithSEO = () => {
       <ErrorBoundary>
         <Suspense fallback={<Fallback />}>
           <Routes location={location}>
-            {/* ==== PUBLIC ROUTES ==== */}
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-            <Route path="/about-us" element={<AboutUs />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/blogs" element={<Blog />} />
-            <Route path="/integrations" element={<Integrations />} />
-            <Route path="/terms-of-service" element={<TermsOfService />} />
-            <Route path="/careers" element={<Careers />} />
-            <Route path="/api" element={<APIPage />} />
-            <Route path="/documentation-page" element={<DocumentationPage />} />
-            <Route path="/user-guide-page" element={<UserGuidePage />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/calendar-callback" element={<CalendarCallback />} />
+            {/* ==== PUBLIC ROUTES (lightweight Suspense — no premium loader) ==== */}
+            <Route path="/" element={<Suspense fallback={<MinimalPageLoader />}><LandingPage /></Suspense>} />
+            <Route path="/privacy-policy" element={<Suspense fallback={<MinimalPageLoader />}><PrivacyPolicy /></Suspense>} />
+            <Route path="/about-us" element={<Suspense fallback={<MinimalPageLoader />}><AboutUs /></Suspense>} />
+            <Route path="/contact" element={<Suspense fallback={<MinimalPageLoader />}><Contact /></Suspense>} />
+            <Route path="/blogs" element={<Suspense fallback={<MinimalPageLoader />}><Blog /></Suspense>} />
+            <Route path="/integrations" element={<Suspense fallback={<MinimalPageLoader />}><Integrations /></Suspense>} />
+            <Route path="/terms-of-service" element={<Suspense fallback={<MinimalPageLoader />}><TermsOfService /></Suspense>} />
+            <Route path="/careers" element={<Suspense fallback={<MinimalPageLoader />}><Careers /></Suspense>} />
+            <Route path="/api" element={<Suspense fallback={<MinimalPageLoader />}><APIPage /></Suspense>} />
+            <Route path="/documentation-page" element={<Suspense fallback={<MinimalPageLoader />}><DocumentationPage /></Suspense>} />
+            <Route path="/user-guide-page" element={<Suspense fallback={<MinimalPageLoader />}><UserGuidePage /></Suspense>} />
+            <Route path="/auth" element={<Suspense fallback={<MinimalPageLoader />}><Auth /></Suspense>} />
+            <Route path="/reset-password" element={<Suspense fallback={<MinimalPageLoader />}><ResetPassword /></Suspense>} />
+            <Route path="/calendar-callback" element={<Suspense fallback={<MinimalPageLoader />}><CalendarCallback /></Suspense>} />
 
             {/* ==== AUTHENTICATED APP ROUTES (Non-Social) ==== */}
             <Route path="/dashboard" element={<Index />} />
@@ -145,6 +156,15 @@ const AppWithSEO = () => {
             <Route path="/social/post/:postId" element={<Index />} />
             <Route path="/social/group/:groupId" element={<Index />} />
             <Route path="/social/profile/:userId" element={<Index />} />
+
+            {/* ==== EDUCATOR ROUTES - Protected by EducatorGuard ==== */}
+            <Route element={<Suspense fallback={<Fallback />}><EducatorLayout /></Suspense>}>
+              <Route path="/educator" element={<EducatorDashboard />} />
+              <Route path="/educator/courses" element={<EducatorDashboard />} />
+              <Route path="/educator/students" element={<EducatorDashboard />} />
+              <Route path="/educator/analytics" element={<EducatorDashboard />} />
+              <Route path="/educator/settings" element={<EducatorDashboard />} />
+            </Route>
 
             {/* ==== ADMIN ROUTES - Protected by AdminLayout ==== */}
             <Route element={<AdminLayout />}>

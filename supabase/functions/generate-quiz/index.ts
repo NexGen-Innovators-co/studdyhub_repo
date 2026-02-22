@@ -1,6 +1,8 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { createSubscriptionValidator, createErrorResponse, extractUserIdFromAuth } from '../utils/subscription-validator.ts';
+import { getEducationContext, formatEducationContextForPrompt } from '../_shared/educationContext.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -40,6 +42,19 @@ serve(async (req)=>{
     if (!transcript || transcript.trim().length < 100) {
       throw new Error('Transcript too short or missing. Need at least 100 characters for quiz generation.');
     }
+
+    // Fetch education context for curriculum-aligned quiz generation
+    let educationBlock = '';
+    try {
+      const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
+      const eduCtx = await getEducationContext(supabase, userId);
+      if (eduCtx) {
+        educationBlock = `\n\n${formatEducationContextForPrompt(eduCtx)}\nAlign questions to this student's curriculum, exam format, and subject focus where relevant.\n`;
+      }
+    } catch (_eduErr) {
+      // Non-critical — continue without education context
+    }
+
     // Use GEMINI_API_KEY for Gemini 2.0
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
     if (!geminiApiKey) {
@@ -51,7 +66,7 @@ serve(async (req)=>{
 2. Have 4 answer options (A, B, C, D)
 3. Have exactly one correct answer (the correctAnswer field should be 0, 1, 2, or 3 corresponding to the option's index)
 4. Include a brief explanation for the correct answer
-
+${educationBlock}
 Transcript:
 "${transcript.substring(0, 3000)}"
 

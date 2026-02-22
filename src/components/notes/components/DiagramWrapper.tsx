@@ -250,7 +250,6 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
             theme: 'default',
             securityLevel: 'loose',
             logLevel: 5, // 'fatal' level
-            suppressErrorRendering: true,
             fontFamily: 'system-ui, -apple-system, sans-serif',
             flowchart: { curve: 'basis' },
           });

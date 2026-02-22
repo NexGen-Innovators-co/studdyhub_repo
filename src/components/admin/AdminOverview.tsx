@@ -39,7 +39,7 @@ interface ChartData {
   activityTrend: Array<{ day: string; posts: number; comments: number; notes: number }>;
 }
 
-const AdminOverview = () => {
+const AdminOverview = ({ onNavigate }: { onNavigate?: (tab: string) => void }) => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [chartData, setChartData] = useState<ChartData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -118,29 +118,57 @@ const AdminOverview = () => {
   const fetchChartData = async () => {
     try {
       const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90;
+      const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+      const startISO = startDate.toISOString();
 
-      // Fetch user growth data
+      // Batch fetch: all users with created_at in range for growth chart
+      const [usersInRange, activeUsersInRange, postsInRange, commentsInRange, notesInRange] = await Promise.all([
+        supabase.from('profiles').select('created_at').gte('created_at', startISO).order('created_at'),
+        supabase.from('profiles').select('updated_at').gte('updated_at', startISO).order('updated_at'),
+        supabase.from('social_posts').select('created_at')
+          .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+        supabase.from('social_comments').select('created_at')
+          .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+        supabase.from('notes').select('created_at')
+          .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+      ]);
+
+      // Also get total users before the range for cumulative count
+      const { count: usersBeforeRange } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .lt('created_at', startISO);
+
+      // Build user growth data by grouping on client side
+      const usersByDate: Record<string, number> = {};
+      (usersInRange.data || []).forEach((u: any) => {
+        const dateStr = u.created_at?.split('T')[0];
+        if (dateStr) usersByDate[dateStr] = (usersByDate[dateStr] || 0) + 1;
+      });
+
+      const activeByDate: Record<string, Set<string>> = {};
+      (activeUsersInRange.data || []).forEach((u: any) => {
+        const dateStr = u.updated_at?.split('T')[0];
+        if (dateStr) {
+          if (!activeByDate[dateStr]) activeByDate[dateStr] = new Set();
+          activeByDate[dateStr].add(JSON.stringify(u));
+        }
+      });
+
+      let cumulativeUsers = usersBeforeRange || 0;
       const userGrowthData = [];
       for (let i = days - 1; i >= 0; i--) {
         const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
         const dateStr = date.toISOString().split('T')[0];
-
-        const [users, activeUsers] = await Promise.all([
-          supabase.from('profiles').select('*', { count: 'exact', head: true })
-            .lte('created_at', date.toISOString()),
-          supabase.from('profiles').select('*', { count: 'exact', head: true })
-            .gte('updated_at', new Date(date.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString())
-            .lte('updated_at', date.toISOString())
-        ]);
-
+        cumulativeUsers += (usersByDate[dateStr] || 0);
         userGrowthData.push({
           date: dateStr,
-          users: users.count || 0,
-          active: activeUsers.count || 0
+          users: cumulativeUsers,
+          active: activeByDate[dateStr]?.size || 0
         });
       }
 
-      // Content distribution
+      // Content distribution from stats
       const contentDistribution = [
         { name: 'Posts', value: stats?.totalPosts || 0 },
         { name: 'Comments', value: stats?.totalComments || 0 },
@@ -149,32 +177,33 @@ const AdminOverview = () => {
         { name: 'Groups', value: stats?.totalGroups || 0 },
       ];
 
-      // Activity trend (last 7 days)
+      // Activity trend (last 7 days) - group fetched data by day
+      const postsByDay: Record<string, number> = {};
+      const commentsByDay: Record<string, number> = {};
+      const notesByDay: Record<string, number> = {};
+
+      (postsInRange.data || []).forEach((p: any) => {
+        const dateStr = p.created_at?.split('T')[0];
+        if (dateStr) postsByDay[dateStr] = (postsByDay[dateStr] || 0) + 1;
+      });
+      (commentsInRange.data || []).forEach((c: any) => {
+        const dateStr = c.created_at?.split('T')[0];
+        if (dateStr) commentsByDay[dateStr] = (commentsByDay[dateStr] || 0) + 1;
+      });
+      (notesInRange.data || []).forEach((n: any) => {
+        const dateStr = n.created_at?.split('T')[0];
+        if (dateStr) notesByDay[dateStr] = (notesByDay[dateStr] || 0) + 1;
+      });
+
       const activityTrend = [];
       for (let i = 6; i >= 0; i--) {
         const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-        const startDate = new Date(date);
-        startDate.setHours(0, 0, 0, 0);
-        const endDate = new Date(date);
-        endDate.setHours(23, 59, 59, 999);
-
-        const [posts, comments, notes] = await Promise.all([
-          supabase.from('social_posts').select('*', { count: 'exact', head: true })
-            .gte('created_at', startDate.toISOString())
-            .lte('created_at', endDate.toISOString()),
-          supabase.from('social_comments').select('*', { count: 'exact', head: true })
-            .gte('created_at', startDate.toISOString())
-            .lte('created_at', endDate.toISOString()),
-          supabase.from('notes').select('*', { count: 'exact', head: true })
-            .gte('created_at', startDate.toISOString())
-            .lte('created_at', endDate.toISOString())
-        ]);
-
+        const dateStr = date.toISOString().split('T')[0];
         activityTrend.push({
           day: date.toLocaleDateString('en-US', { weekday: 'short' }),
-          posts: posts.count || 0,
-          comments: comments.count || 0,
-          notes: notes.count || 0
+          posts: postsByDay[dateStr] || 0,
+          comments: commentsByDay[dateStr] || 0,
+          notes: notesByDay[dateStr] || 0
         });
       }
 
@@ -514,17 +543,17 @@ const AdminOverview = () => {
           <CardTitle className="text-gray-900 dark:text-white">Quick Actions</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button className="p-6 bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 border border-red-200 dark:border-red-800/50 hover:from-red-100 hover:to-red-200 dark:hover:from-red-900/30 dark:hover:to-red-800/30 rounded-xl text-left transition-all duration-200 group">
+          <button onClick={() => onNavigate?.('moderation')} className="p-6 bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 border border-red-200 dark:border-red-800/50 hover:from-red-100 hover:to-red-200 dark:hover:from-red-900/30 dark:hover:to-red-800/30 rounded-xl text-left transition-all duration-200 group">
             <AlertTriangle className="h-8 w-8 text-red-600 dark:text-red-400 mb-3 group-hover:scale-110 transition-transform" />
             <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Review Reports</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">{stats?.pendingReports || 0} pending reports</p>
           </button>
-          <button className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800/50 hover:from-blue-100 hover:to-blue-200 dark:hover:from-blue-900/30 dark:hover:to-blue-800/30 rounded-xl text-left transition-all duration-200 group">
+          <button onClick={() => onNavigate?.('users')} className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800/50 hover:from-blue-100 hover:to-blue-200 dark:hover:from-blue-900/30 dark:hover:to-blue-800/30 rounded-xl text-left transition-all duration-200 group">
             <Users className="h-8 w-8 text-blue-600 dark:text-blue-400 mb-3 group-hover:scale-110 transition-transform" />
             <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Manage Users</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">{stats?.totalUsers || 0} total users</p>
           </button>
-          <button className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800/50 hover:from-blue-100 hover:to-blue-200 dark:hover:from-blue-900/30 dark:hover:to-blue-800/30 rounded-xl text-left transition-all duration-200 group">
+          <button onClick={() => onNavigate?.('settings')} className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800/50 hover:from-blue-100 hover:to-blue-200 dark:hover:from-blue-900/30 dark:hover:to-blue-800/30 rounded-xl text-left transition-all duration-200 group">
             <Shield className="h-8 w-8 text-blue-600 dark:text-blue-400 mb-3 group-hover:scale-110 transition-transform" />
             <h3 className="font-semibold text-gray-900 dark:text-white mb-1">System Settings</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">Configure platform</p>

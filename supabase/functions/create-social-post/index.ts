@@ -6,6 +6,7 @@ import {
   createErrorResponse, 
   extractUserIdFromAuth 
 } from '../utils/subscription-validator.ts';
+import { getEducationContext } from '../_shared/educationContext.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -306,6 +307,23 @@ Respond in JSON format:
     }
     // ===== END CONTENT MODERATION =====
 
+    // Auto-tag post with author's education context for feed affinity scoring
+    let enrichedMetadata = metadata || {};
+    try {
+      const eduCtx = await getEducationContext(supabase, userId);
+      if (eduCtx) {
+        enrichedMetadata = {
+          ...enrichedMetadata,
+          education_context: {
+            country: eduCtx.country,
+            education_level: eduCtx.educationLevel,
+            curriculum: eduCtx.curriculum,
+            subjects: eduCtx.subjects,
+          },
+        };
+      }
+    } catch { /* non-critical — don't block post creation */ }
+
     // Create the social post (without media_urls - that column doesn't exist)
     const { data: post, error } = await supabase
       .from('social_posts')
@@ -314,7 +332,7 @@ Respond in JSON format:
         content,
         privacy,
         group_id,
-        metadata,
+        metadata: enrichedMetadata,
         created_at: new Date().toISOString(),
         likes_count: 0,
         comments_count: 0

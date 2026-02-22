@@ -47,6 +47,7 @@ export interface AudioSegment {
   audio_url?: string;
   start_time?: number;
   end_time?: number;
+  imageUrl?: string | null;
 }
 
 export interface VisualAsset {
@@ -57,6 +58,11 @@ export interface VisualAsset {
   timestamp: number | null;
   segmentIndex?: number;
   segmentIndices?: number[]; // Support multiple segments for a visual asset
+  // Video clip fields (from Veo generation)
+  transcript?: string;
+  hasAudio?: boolean;
+  order?: number;
+  duration?: number;
 }
 
 export interface PodcastData {
@@ -168,8 +174,8 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
       value: 'video',
       icon: Video,
       label: 'Video Podcast',
-      description: 'Full video with animated visuals and slides',
-      badge: 'AI Generated',
+      description: 'AI-generated cinematic video clips with built-in audio — like a real video',
+      badge: 'AI Video',
       color: 'from-orange-500 to-red-500'
     },
     {
@@ -1276,7 +1282,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
                   {isGenerating ? (
                     <>
                       <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Generating...
+                      {podcastType === 'video' ? 'Generating video clips...' : 'Generating...'}
                     </>
                   ) : (
                     <>

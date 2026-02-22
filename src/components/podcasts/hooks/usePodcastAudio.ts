@@ -1,5 +1,5 @@
 // usePodcastAudio.ts - Audio playback hook extracted from PodcastPanel
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { useOnlineStatus } from '../../../hooks/useOnlineStatus';
 import { resolveSignedUrl, deriveFullAudioUrl } from '../podcastUtils';
@@ -67,6 +67,10 @@ export interface UsePodcastAudioReturn {
   handleShare: () => Promise<void>;
   // Cleanup
   cleanupAudio: () => void;
+  // Video flow
+  isVideoFlow: boolean;
+  videoClips: VisualAsset[];
+  videoTotalDuration: number;
 }
 
 export function usePodcastAudio({ podcast, isOpen, isSegmentsLoaded, loadedCount }: UsePodcastAudioOptions): UsePodcastAudioReturn {
@@ -100,6 +104,31 @@ export function usePodcastAudio({ podcast, isOpen, isSegmentsLoaded, loadedCount
   const audioStaleRef = useRef(false);
 
   const derivedUrl = deriveFullAudioUrl(podcast);
+
+  // ── Video Flow Detection ──
+  // For 'video' podcast type with Veo-generated clips that have built-in audio,
+  // playback is driven through the <video> element instead of <audio>.
+  const isVideoFlow = useMemo(() => {
+    if (!podcast || podcast.podcast_type !== 'video') return false;
+    const clips = (podcast.visual_assets || []).filter((a: any) => a.type === 'video' && a.hasAudio);
+    return clips.length > 0;
+  }, [podcast?.id, podcast?.podcast_type, podcast?.visual_assets]);
+
+  const videoClips = useMemo(() => {
+    if (!podcast?.visual_assets) return [];
+    // For video flow: only video clips, sorted by order
+    // For non-video flow: return empty (images handled elsewhere)
+    if (!isVideoFlow) return [];
+    return [...podcast.visual_assets]
+      .filter((a: any) => a.type === 'video')
+      .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
+  }, [isVideoFlow, podcast?.visual_assets]);
+
+  // Total video duration (sum of all clip durations, if known)
+  const videoTotalDuration = useMemo(() => {
+    if (!isVideoFlow || videoClips.length === 0) return 0;
+    return videoClips.reduce((sum, c) => sum + (c.duration || 0), 0);
+  }, [isVideoFlow, videoClips]);
 
   // Detect single audio
   useEffect(() => {
@@ -262,42 +291,7 @@ export function usePodcastAudio({ podcast, isOpen, isSegmentsLoaded, loadedCount
     try {
       const resolved = await resolveSignedUrl(derivedUrl, signedUrlCacheRef.current);
 
-      // VIDEO flow
-      if (podcast?.podcast_type === 'video') {
-        setPlaybackSrc(resolved || null);
-        if (audioRef.current) { try { audioRef.current.pause(); } catch (_e) {} audioRef.current = null; }
-        const vid = videoRef.current;
-        if (!vid) throw new Error('Video element not available');
-        vid.src = resolved || '';
-        vid.playbackRate = playbackSpeed;
-        vid.muted = isMuted;
-        vid.onloadedmetadata = () => { setFullAudioDuration(vid.duration || 0); setDuration(vid.duration || 0); setLoadingAudio(false); setMediaLoading(false); };
-        vid.ontimeupdate = () => {
-          const cur = vid.currentTime;
-          setCurrentTime(cur); setFullAudioProgress(cur);
-          if (vid.duration > 0) {
-            setProgress((cur / vid.duration) * 100);
-            if (podcast.audioSegments?.length > 0) setCurrentSegmentIndex(Math.floor((cur / vid.duration) * podcast.audioSegments.length));
-          }
-        };
-        vid.onended = () => { setIsPlaying(false); setProgress(100); setCurrentTime(vid.duration || 0); setFullAudioProgress(vid.duration || 0); setReplay(true); };
-        vid.onerror = () => {
-          if (!switchingPodcastRef.current.active) toast.error('Video unavailable');
-          setLoadingAudio(false); setMediaLoading(false); setIsPlaying(false);
-        };
-        try { await vid.play(); } catch (_err) {
-          const resp = await fetch(resolved as string, { mode: 'cors' });
-          if (!resp.ok) throw new Error('Fetch failed');
-          const blob = await resp.blob();
-          const objectUrl = URL.createObjectURL(blob);
-          vid.src = objectUrl; (vid as any)._objectUrl = objectUrl;
-          await vid.play();
-        }
-        setIsPlaying(true);
-        return;
-      }
-
-      // AUDIO flow
+      // AUDIO flow (used for all podcast types — video podcasts play audio here, visuals are handled separately in PodcastPanel)
       const audioEl = getOrCreateAudioEl();
       try { audioEl.pause(); } catch (_e) {}
       audioEl.src = resolved as string;
@@ -345,6 +339,81 @@ export function usePodcastAudio({ podcast, isOpen, isSegmentsLoaded, loadedCount
   // Play segment (for segmented audio)
   const playSegment = useCallback(async (segmentIndex: number, opts?: { autoAdvance?: boolean }) => {
     if (!isOnline) { toast.error('No internet connection'); return; }
+
+    // ── VIDEO FLOW: play video clip via <video> element ──
+    if (isVideoFlow && videoClips.length > 0) {
+      const clip = videoClips[segmentIndex];
+      if (!clip) { toast.error('Video clip not available'); return; }
+      if (!opts?.autoAdvance) { setLoadingAudio(true); setMediaLoading(true); }
+      setCurrentTime(0); setProgress(0);
+      // Only reset duration for non-auto-advance to avoid progress bar flicker
+      if (!opts?.autoAdvance) setDuration(0);
+
+      const vid = videoRef.current;
+      if (!vid) { toast.error('Video player not ready'); setLoadingAudio(false); setMediaLoading(false); return; }
+
+      // Remove any previous event listeners to prevent stale handler leaks
+      vid.onloadedmetadata = null;
+      vid.ontimeupdate = null;
+      vid.onended = null;
+      vid.onerror = null;
+
+      try { vid.pause(); } catch (_e) {}
+      vid.src = clip.url;
+      vid.muted = isMuted;
+      vid.playbackRate = playbackSpeed;
+
+      vid.onloadedmetadata = () => {
+        setDuration(vid.duration); setLoadingAudio(false); setMediaLoading(false);
+        if (audioLoadTimeoutRef.current) { window.clearTimeout(audioLoadTimeoutRef.current); audioLoadTimeoutRef.current = null; }
+      };
+      vid.ontimeupdate = () => {
+        setCurrentTime(vid.currentTime);
+        if (vid.duration > 0) setProgress((vid.currentTime / vid.duration) * 100);
+      };
+      vid.onended = () => {
+        setProgress(100); setCurrentTime(vid.duration);
+        if (segmentIndex < videoClips.length - 1) {
+          autoAdvancingRef.current = true;
+          // Short delay for smooth transition, then advance to next clip
+          setTimeout(() => {
+            setCurrentSegmentIndex(segmentIndex + 1);
+            playSegment(segmentIndex + 1, { autoAdvance: true }).catch(console.error).finally(() => {
+              window.setTimeout(() => { autoAdvancingRef.current = false; }, 400);
+            });
+          }, 150);
+        } else { setIsPlaying(false); setReplay(true); }
+      };
+      vid.onerror = (e) => {
+        console.error('Video clip error:', e);
+        if (!switchingPodcastRef.current.active) toast.error('Failed to load video clip');
+        setLoadingAudio(false); setMediaLoading(false); setIsPlaying(false);
+        if (audioLoadTimeoutRef.current) { window.clearTimeout(audioLoadTimeoutRef.current); audioLoadTimeoutRef.current = null; }
+      };
+      setCurrentSegmentIndex(segmentIndex); setReplay(false);
+      try { await vid.play(); } catch (_err) {
+        // Fallback: fetch as blob and try again (handles CORS/signed URL edge cases)
+        try {
+          const resp = await fetch(clip.url, { mode: 'cors' });
+          if (!resp.ok) throw new Error('Video fetch failed');
+          const blob = await resp.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          // Revoke previous object URL if any
+          if ((vid as any)._objectUrl) { try { URL.revokeObjectURL((vid as any)._objectUrl); } catch (_e) {} }
+          vid.src = objectUrl; (vid as any)._objectUrl = objectUrl;
+          await vid.play();
+        } catch (fetchErr) {
+          console.error('Video blob fallback failed:', fetchErr);
+          throw fetchErr;
+        }
+      }
+      if (audioLoadTimeoutRef.current) window.clearTimeout(audioLoadTimeoutRef.current);
+      audioLoadTimeoutRef.current = window.setTimeout(() => { setLoadingAudio(false); setMediaLoading(false); }, 2000) as unknown as number;
+      setIsPlaying(true);
+      return;
+    }
+
+    // ── AUDIO FLOW (original) ──
     if (loadedCount === 0) { toast.error('Audio segments are still loading. Please wait.'); return; }
     if (!podcast?.audioSegments[segmentIndex]) { toast.error('Segment not available'); return; }
     if (!opts?.autoAdvance) setLoadingAudio(true);
@@ -362,40 +431,7 @@ export function usePodcastAudio({ podcast, isOpen, isSegmentsLoaded, loadedCount
       }
       const resolved = await resolveSignedUrl(sourceUrl, signedUrlCacheRef.current);
 
-      // VIDEO segment
-      if (podcast?.podcast_type === 'video') {
-        const vid = videoRef.current;
-        if (!vid) throw new Error('Video element not available');
-        setPlaybackSrc(resolved || null);
-        vid.src = resolved || ''; vid.playbackRate = playbackSpeed; vid.muted = isMuted;
-        vid.onloadedmetadata = () => { setDuration(vid.duration || 0); setLoadingAudio(false); };
-        vid.ontimeupdate = () => { setCurrentTime(vid.currentTime); if (vid.duration > 0) setProgress((vid.currentTime / vid.duration) * 100); };
-        vid.onended = () => {
-          setProgress(100); setCurrentTime(vid.duration || 0);
-          if (segmentIndex < (podcast.audioSegments?.length || 0) - 1) {
-            autoAdvancingRef.current = true;
-            setTimeout(() => {
-              setCurrentSegmentIndex(segmentIndex + 1);
-              playSegment(segmentIndex + 1, { autoAdvance: true }).catch(console.error).finally(() => { window.setTimeout(() => { autoAdvancingRef.current = false; }, 700); });
-            }, 500);
-          } else { setIsPlaying(false); setReplay(true); }
-        };
-        vid.onerror = () => {
-          if (!switchingPodcastRef.current.active) toast.error('Video unavailable');
-          setLoadingAudio(false); setIsPlaying(false);
-        };
-        setCurrentSegmentIndex(segmentIndex); setReplay(false);
-        try { await vid.play(); } catch (_err) {
-          const resp = await fetch(resolved as string, { mode: 'cors' });
-          if (!resp.ok) throw new Error('Fetch failed');
-          const blob = await resp.blob();
-          const objectUrl = URL.createObjectURL(blob);
-          vid.src = objectUrl; (vid as any)._objectUrl = objectUrl; await vid.play();
-        }
-        setIsPlaying(true); return;
-      }
-
-      // AUDIO segment
+      // AUDIO segment (used for all podcast types — video visual clips are handled separately in PodcastPanel)
       const audioEl = getOrCreateAudioEl();
       try { audioEl.pause(); } catch (_e) {}
       audioEl.src = resolved as string; audioEl.playbackRate = playbackSpeed; audioEl.muted = isMuted;
@@ -432,10 +468,24 @@ export function usePodcastAudio({ podcast, isOpen, isSegmentsLoaded, loadedCount
       if (!switchingPodcastRef.current.active) toast.error('Failed to play media: ' + (error.message || 'Unknown error'));
       setLoadingAudio(false); setIsPlaying(false);
     }
-  }, [podcast, playbackSpeed, isMuted, loadedCount, isOnline]);
+  }, [podcast, playbackSpeed, isMuted, loadedCount, isOnline, isVideoFlow, videoClips]);
 
   // Handle play/pause
   const handlePlayPause = useCallback(() => {
+    // ── VIDEO FLOW ──
+    if (isVideoFlow && videoClips.length > 0) {
+      if (replay) { setReplay(false); playSegment(0); return; }
+      const vid = videoRef.current;
+      if (!vid || !vid.src || vid.src === window.location.href) {
+        playSegment(currentSegmentIndex);
+        return;
+      }
+      if (isPlaying) { vid.pause(); setIsPlaying(false); }
+      else { vid.play().catch(() => { playSegment(currentSegmentIndex); }); setIsPlaying(true); }
+      return;
+    }
+
+    // ── AUDIO FLOW (original) ──
     if (loadedCount === 0) { toast.error('Audio segments are still loading. Please wait.'); return; }
     if (replay) {
       setReplay(false);
@@ -452,10 +502,17 @@ export function usePodcastAudio({ podcast, isOpen, isSegmentsLoaded, loadedCount
       // Source became stale – re-trigger proper playback
       if (isSingleAudio) { playFullAudio(); } else { playSegment(currentSegmentIndex); }
     }); setIsPlaying(true); }
-  }, [loadedCount, replay, isSingleAudio, isPlaying, currentSegmentIndex, playFullAudio, playSegment]);
+  }, [loadedCount, replay, isSingleAudio, isPlaying, currentSegmentIndex, playFullAudio, playSegment, isVideoFlow, videoClips]);
 
   // Handle next/previous segment
   const handleNextSegment = useCallback(() => {
+    // ── VIDEO FLOW ──
+    if (isVideoFlow && videoClips.length > 0) {
+      if (currentSegmentIndex < videoClips.length - 1) { playSegment(currentSegmentIndex + 1); }
+      else { toast.info('This is the last clip'); }
+      return;
+    }
+    // ── AUDIO FLOW ──
     if (loadedCount === 0) { toast.error('Audio segments are still loading. Please wait.'); return; }
     if (isSingleAudio) {
       if (audioRef.current && fullAudioDuration > 0) {
@@ -467,9 +524,16 @@ export function usePodcastAudio({ podcast, isOpen, isSegmentsLoaded, loadedCount
     } else if (podcast && currentSegmentIndex < podcast.audioSegments.length - 1) {
       playSegment(currentSegmentIndex + 1);
     } else { toast.info('This is the last segment'); }
-  }, [loadedCount, isSingleAudio, fullAudioDuration, podcast, currentSegmentIndex, playSegment]);
+  }, [loadedCount, isSingleAudio, fullAudioDuration, podcast, currentSegmentIndex, playSegment, isVideoFlow, videoClips]);
 
   const handlePreviousSegment = useCallback(() => {
+    // ── VIDEO FLOW ──
+    if (isVideoFlow && videoClips.length > 0) {
+      if (currentSegmentIndex > 0) { playSegment(currentSegmentIndex - 1); }
+      else { toast.info('This is the first clip'); }
+      return;
+    }
+    // ── AUDIO FLOW ──
     if (loadedCount === 0) { toast.error('Audio segments are still loading. Please wait.'); return; }
     if (isSingleAudio) {
       if (audioRef.current && fullAudioDuration > 0) {
@@ -481,27 +545,43 @@ export function usePodcastAudio({ podcast, isOpen, isSegmentsLoaded, loadedCount
     } else if (currentSegmentIndex > 0) {
       playSegment(currentSegmentIndex - 1);
     } else { toast.info('This is the first segment'); }
-  }, [loadedCount, isSingleAudio, fullAudioDuration, podcast, currentSegmentIndex, playSegment]);
+  }, [loadedCount, isSingleAudio, fullAudioDuration, podcast, currentSegmentIndex, playSegment, isVideoFlow, videoClips]);
 
   // Speed change
   const handleSpeedChange = useCallback(() => {
-    if (loadedCount === 0) { toast.error('Audio segments are still loading. Please wait.'); return; }
+    if (!isVideoFlow && loadedCount === 0) { toast.error('Audio segments are still loading. Please wait.'); return; }
     const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
     const idx = speeds.indexOf(playbackSpeed);
     const newSpeed = speeds[(idx + 1) % speeds.length];
     setPlaybackSpeed(newSpeed);
-    if (audioRef.current) audioRef.current.playbackRate = newSpeed;
+    if (isVideoFlow && videoRef.current) videoRef.current.playbackRate = newSpeed;
+    else if (audioRef.current) audioRef.current.playbackRate = newSpeed;
     toast.info(`Playback speed: ${newSpeed}x`);
-  }, [loadedCount, playbackSpeed]);
+  }, [loadedCount, playbackSpeed, isVideoFlow]);
 
   // Toggle mute
   const handleToggleMute = useCallback(() => {
-    if (loadedCount === 0) { toast.error('Audio segments are still loading. Please wait.'); return; }
-    if (audioRef.current) { audioRef.current.muted = !isMuted; setIsMuted(!isMuted); }
-  }, [loadedCount, isMuted]);
+    if (!isVideoFlow && loadedCount === 0) { toast.error('Audio segments are still loading. Please wait.'); return; }
+    const newMuted = !isMuted;
+    if (isVideoFlow && videoRef.current) { videoRef.current.muted = newMuted; }
+    if (audioRef.current) { audioRef.current.muted = newMuted; }
+    setIsMuted(newMuted);
+  }, [loadedCount, isMuted, isVideoFlow]);
 
   // Progress bar click
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // ── VIDEO FLOW ──
+    if (isVideoFlow && videoClips.length > 0) {
+      const vid = videoRef.current;
+      if (vid && vid.duration > 0) {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const percentage = (e.clientX - rect.left) / rect.width;
+        vid.currentTime = percentage * vid.duration;
+        setCurrentTime(vid.currentTime); setProgress(percentage * 100);
+      }
+      return;
+    }
+    // ── AUDIO FLOW ──
     if (loadedCount === 0) { toast.error('Audio segments are still loading. Please wait.'); return; }
     if (!audioRef.current || !duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -515,10 +595,16 @@ export function usePodcastAudio({ podcast, isOpen, isSegmentsLoaded, loadedCount
       const segIdx = Math.floor(percentage * segCount);
       if (segIdx < segCount) playSegment(segIdx);
     }
-  }, [loadedCount, duration, isSingleAudio, fullAudioDuration, podcast, playSegment]);
+  }, [loadedCount, duration, isSingleAudio, fullAudioDuration, podcast, playSegment, isVideoFlow, videoClips]);
 
   // Segment progress click
   const handleSegmentProgressClick = useCallback((segmentIndex: number) => {
+    // ── VIDEO FLOW ──
+    if (isVideoFlow && videoClips.length > 0) {
+      if (segmentIndex >= 0 && segmentIndex < videoClips.length) playSegment(segmentIndex);
+      return;
+    }
+    // ── AUDIO FLOW ──
     if (loadedCount === 0) { toast.error('Audio segments are still loading. Please wait.'); return; }
     if (isSingleAudio) {
       if (audioRef.current && fullAudioDuration > 0) {
@@ -529,7 +615,7 @@ export function usePodcastAudio({ podcast, isOpen, isSegmentsLoaded, loadedCount
         setCurrentTime(startTime); setFullAudioProgress(startTime); setProgress((startTime / fullAudioDuration) * 100);
       }
     } else { playSegment(segmentIndex); }
-  }, [loadedCount, isSingleAudio, fullAudioDuration, podcast, playSegment]);
+  }, [loadedCount, isSingleAudio, fullAudioDuration, podcast, playSegment, isVideoFlow, videoClips]);
 
   // Share
   const handleShare = useCallback(async () => {
@@ -554,6 +640,11 @@ export function usePodcastAudio({ podcast, isOpen, isSegmentsLoaded, loadedCount
     }
     if (videoRef.current) {
       try { videoRef.current.pause(); } catch (_e) {}
+      // Remove event handlers to prevent stale callbacks after cleanup
+      videoRef.current.onloadedmetadata = null;
+      videoRef.current.ontimeupdate = null;
+      videoRef.current.onended = null;
+      videoRef.current.onerror = null;
       try { const obj = (videoRef.current as any)?._objectUrl; if (obj) URL.revokeObjectURL(obj); } catch (_e) {}
       try { videoRef.current.src = ''; } catch (_e) {}
       videoRef.current = null;
@@ -577,5 +668,6 @@ export function usePodcastAudio({ podcast, isOpen, isSegmentsLoaded, loadedCount
     playFullAudio, playSegment, handlePlayPause, handleNextSegment, handlePreviousSegment,
     handleSpeedChange, handleToggleMute, handleProgressClick, handleSegmentProgressClick,
     handleShare, cleanupAudio,
+    isVideoFlow, videoClips, videoTotalDuration,
   };
 }

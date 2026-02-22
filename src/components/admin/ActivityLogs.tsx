@@ -20,11 +20,31 @@ const ActivityLogs = () => {
   const [filterAction, setFilterAction] = useState<'all' | string>('all');
   const [selectedLog, setSelectedLog] = useState<AdminActivityLog | null>(null);
   const [page, setPage] = useState(1);
+  const [adminLookup, setAdminLookup] = useState<Record<string, string>>({});
   const pageSize = 50;
 
   useEffect(() => {
     fetchLogs();
+    fetchAdminLookup();
   }, [page]);
+
+  const fetchAdminLookup = async () => {
+    try {
+      const { data } = await supabase
+        .from('admin_users')
+        .select('user_id, email');
+      if (data) {
+        const lookup: Record<string, string> = {};
+        data.forEach((a: any) => { if (a.user_id) lookup[a.user_id] = a.email; });
+        setAdminLookup(lookup);
+      }
+    } catch { /* non-critical */ }
+  };
+
+  const getAdminDisplayName = (adminId: string | null) => {
+    if (!adminId) return 'N/A';
+    return adminLookup[adminId] || adminId.slice(0, 8) + '...';
+  };
 
   const fetchLogs = async () => {
     try {
@@ -101,7 +121,7 @@ const ActivityLogs = () => {
       ['Timestamp', 'Admin', 'Action', 'Target Type', 'Target ID', 'IP Address'],
       ...filteredLogs.map(log => [
         new Date(log.created_at).toLocaleString(),
-        log.admin_id || 'N/A',
+        getAdminDisplayName(log.admin_id),
         log.action,
         log.target_type || 'N/A',
         log.target_id || 'N/A',
@@ -320,8 +340,8 @@ const ActivityLogs = () => {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <User className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-                        <span className="text-gray-700 dark:text-gray-300 font-mono text-sm">
-                          {log.admin_id ? log.admin_id.slice(0, 8) + '...' : 'N/A'}
+                        <span className="text-gray-700 dark:text-gray-300 text-sm" title={log.admin_id || ''}>
+                          {getAdminDisplayName(log.admin_id)}
                         </span>
                       </div>
                     </TableCell>
@@ -415,9 +435,9 @@ const ActivityLogs = () => {
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Admin ID</p>
-                  <p className="text-gray-900 dark:text-white font-mono text-sm mt-1">
-                    {selectedLog.admin_id || 'N/A'}
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Admin</p>
+                  <p className="text-gray-900 dark:text-white text-sm mt-1" title={selectedLog.admin_id || ''}>
+                    {getAdminDisplayName(selectedLog.admin_id)}
                   </p>
                 </div>
                 <div>

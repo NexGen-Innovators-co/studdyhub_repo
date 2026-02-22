@@ -28,6 +28,8 @@ import { clearCache } from '../utils/socialCache'
 import { PlanType, SubscriptionLimits, Subscription, useSubscription, } from '@/hooks/useSubscription';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { offlineStorage, STORES } from '@/utils/offlineStorage';
+import { useEducationContext } from '../hooks/useEducationContext';
+import type { UserEducationContext } from '../types/Education';
 
 // Context interface
 interface AppContextType extends AppState {
@@ -150,6 +152,9 @@ interface AppContextType extends AppState {
   bonusAiCredits: number;
   isAdmin: boolean;
   isAdminLoading: boolean;
+  educationContext: UserEducationContext | null;
+  educationLoading: boolean;
+  refetchEducation: () => Promise<void>;
 }
 
 // Create context
@@ -425,6 +430,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isAdmin,
   });
   const socialData = useSocialData(userProfile, 'newest', 'all');
+
+  // Education context — loaded once per auth session
+  const {
+    educationContext,
+    isLoading: educationLoading,
+    refetch: refetchEducation,
+  } = useEducationContext();
 
   // Wire social refresh into the ref so retryAllData can trigger it
   useEffect(() => {
@@ -1343,6 +1355,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isAdmin,
     isAdminLoading,
     forceRefreshDocuments,
+    educationContext,
+    educationLoading,
+    refetchEducation,
   };
 
   return (

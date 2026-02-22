@@ -12,6 +12,7 @@ export interface AudioSegment {
   index: number;
   start_time?: number;
   end_time?: number;
+  imageUrl?: string | null;
 }
 
 // Progressive loading segment state
@@ -29,6 +30,12 @@ export interface VisualAsset {
   concept: string;
   segmentIndex?: number; // legacy support
   segmentIndices?: number[]; // NEW: supports multiple segments
+  // Video clip fields (from Veo generation)
+  transcript?: string;
+  description?: string;
+  hasAudio?: boolean;
+  order?: number;
+  duration?: number;
 }
 
 export interface PodcastPanelProps {

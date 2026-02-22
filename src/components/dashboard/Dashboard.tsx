@@ -28,6 +28,8 @@ import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 import { RecentPodcasts } from './RecentPodcasts';
 import { RecentActivityFeed } from './RecentActivityFeed';
 import { AIInsights } from './AIInsights';
+import { EducationWidgets } from './widgets/EducationWidgets';
+import { useEducationContext } from '@/hooks/useEducationContext';
 
 const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
 const GRADIENT_ID = 'engagementGradient';
@@ -41,6 +43,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onCreateNew }) => {
     const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'activity'>('overview');
     const { stats, loading, error, refresh, isCached } = useDashboardStats(userProfile?.id);
+    const { educationContext } = useEducationContext();
 
     // Trigger an initial load only when we don't already have cached stats for
     // this user. This prevents repeated refetches when the Dashboard remounts.
@@ -236,6 +239,13 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                     }}
                 />
             </div>
+
+            {/* Education Context Widgets */}
+            {educationContext && (
+                <div className="mb-8">
+                    <EducationWidgets educationContext={educationContext} />
+                </div>
+            )}
 
             {/* Quick Stats Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8 mt-4">

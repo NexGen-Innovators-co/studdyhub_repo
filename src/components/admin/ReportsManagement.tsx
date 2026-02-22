@@ -189,13 +189,13 @@ export const ReportsManagement: React.FC = () => {
       // Calculate ban end date
       const banEndDate = new Date();
       banEndDate.setDate(banEndDate.getDate() + parseInt(banDuration));
+      const isPermanent = parseInt(banDuration) >= 99999;
 
-      // Update user status (you may need to add a banned_until field to social_users table)
+      // Suspend the user (using is_verified as active flag)
       const { error: userError } = await supabase
         .from('social_users')
         .update({
-          status: 'suspended',
-          // banned_until: banEndDate.toISOString(), // Add this field if needed
+          is_verified: false,
         })
         .eq('id', selectedReport.reported_user_id);
 
@@ -212,6 +212,21 @@ export const ReportsManagement: React.FC = () => {
         .eq('id', selectedReport.id);
 
       if (reportError) throw reportError;
+
+      // Log ban details with duration in activity logs for audit trail
+      await supabase.from('admin_activity_logs').insert({
+        admin_id: user.id,
+        action: 'ban_user',
+        target_type: 'user',
+        target_id: selectedReport.reported_user_id,
+        details: {
+          report_id: selectedReport.id,
+          ban_duration_days: parseInt(banDuration),
+          ban_until: isPermanent ? 'permanent' : banEndDate.toISOString(),
+          reason: actionNote || 'No reason provided',
+          reported_user_name: selectedReport.reported_user?.display_name || 'Unknown',
+        },
+      });
 
       toast({
         title: 'User Banned',

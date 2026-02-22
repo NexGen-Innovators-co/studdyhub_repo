@@ -4,6 +4,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
 import { fetchPostsWithRelations, scoreAndSortPosts } from '../utils/post-helpers.ts';
 import { callGeminiJSON } from '../utils/gemini.ts';
+import { getEducationContext, type ServerEducationContext } from '../_shared/educationContext.ts';
 
 // Signal weights for AI preference computation
 const SIGNAL_WEIGHTS: Record<string, number> = {
@@ -24,7 +25,8 @@ async function aiRankPosts(
   userId: string,
   posts: any[],
   supabaseUrl: string,
-  supabaseServiceKey: string
+  supabaseServiceKey: string,
+  educationContext?: ServerEducationContext | null
 ): Promise<any[]> {
   // Get or compute user preferences
   const preferences = await getUserPreferences(supabase, userId);
@@ -68,6 +70,25 @@ async function aiRankPosts(
     const authorRank = preferences.preferred_authors.indexOf(post.author_id);
     if (authorRank >= 0) score += Math.max(0, 10 - authorRank);
 
+    // Education context affinity (0-15)
+    if (educationContext) {
+      const postMeta = post.metadata || {};
+      const postCategories = post.ai_categories || [];
+      const postContent = ((post.content || '') as string).toLowerCase();
+      // Boost posts matching user's curriculum/subjects
+      if (educationContext.curriculum && postContent.includes(educationContext.curriculum.toLowerCase())) score += 8;
+      if (educationContext.targetExam && postContent.includes(educationContext.targetExam.toLowerCase())) score += 10;
+      for (const subj of educationContext.subjects) {
+        if (postContent.includes(subj.toLowerCase()) || postCategories.some((c: string) => c.toLowerCase().includes(subj.toLowerCase()))) {
+          score += 5;
+          break;
+        }
+      }
+      // Boost posts from same education level/country
+      if (postMeta.education_level === educationContext.educationLevel) score += 3;
+      if (postMeta.country === educationContext.country) score += 2;
+    }
+
     // Quality (0-10)
     score += post.ai_quality_score || 5;
 
@@ -97,7 +118,10 @@ async function aiRankPosts(
         categories: p.ai_categories || [],
       }));
 
-      const prompt = `A student is interested in: ${preferences.user_interests.join(', ')}
+      const eduInfo = educationContext
+        ? `\nTheir education: ${educationContext.curriculum || ''} ${educationContext.educationLevel || ''}, studying: ${educationContext.subjects.join(', ')}`
+        : '';
+      const prompt = `A student is interested in: ${preferences.user_interests.join(', ')}${eduInfo}
 
 Rank relevance of these posts (0-10 each):
 ${postSummaries.map((p: any) => `[${p.idx}] "${p.preview}" (${p.categories.join(', ')})`).join('\n')}
@@ -441,7 +465,12 @@ serve(async (req) => {
     // AI-powered re-ranking for feed mode
     if (mode === 'feed' && selectedPosts.length > 0) {
       try {
-        selectedPosts = await aiRankPosts(supabase, userId, selectedPosts, supabaseUrl, supabaseServiceKey);
+        // Fetch user's education context for affinity scoring
+        let eduCtx: ServerEducationContext | null = null;
+        try {
+          eduCtx = await getEducationContext(supabase, userId);
+        } catch { /* non-critical */ }
+        selectedPosts = await aiRankPosts(supabase, userId, selectedPosts, supabaseUrl, supabaseServiceKey, eduCtx);
       } catch (aiErr) {
         // AI ranking is best-effort — fall back to standard scoring
         console.error('AI ranking fallback:', aiErr);

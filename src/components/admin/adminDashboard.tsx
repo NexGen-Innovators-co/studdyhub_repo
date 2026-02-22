@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Skeleton } from '../ui/skeleton';
 import { LayoutDashboard, Users, Shield, AlertTriangle, Settings, FileText, Flag, Sparkles } from 'lucide-react';
@@ -23,6 +23,7 @@ const LoadingFallback = () => (
 
 const AdminDashboard = () => {
   const { permissions } = useAdminAuth();
+  const [activeTab, setActiveTab] = useState('overview');
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard, component: AdminOverview, perm: true },
@@ -42,7 +43,7 @@ const AdminDashboard = () => {
         <p className="text-gray-400 mt-1">Manage your platform with full control</p>
       </div>
 
-      <Tabs defaultValue="overview" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 w-full mb-8 bg-gray-800 p-1 rounded-lg">
           {tabs.map(({ id, label, icon: Icon }) => (
             <TabsTrigger
@@ -59,7 +60,7 @@ const AdminDashboard = () => {
         <Suspense fallback={<LoadingFallback />}>
           {tabs.map(({ id, component: Component }) => (
             <TabsContent key={id} value={id} className="mt-0">
-              <Component />
+              <Component {...(id === 'overview' ? { onNavigate: setActiveTab } : {})} />
             </TabsContent>
           ))}
         </Suspense>

@@ -51,14 +51,32 @@ const ContentModeration = () => {
 
   const handleAction = async (id: string, action: 'approve' | 'remove' | 'dismiss') => {
     try {
-      const newStatus = action === 'approve' ? 'resolved' : action === 'remove' ? 'resolved' : 'dismissed';
+      const item = items.find(i => i.id === id);
+      const newStatus = action === 'dismiss' ? 'dismissed' : 'resolved';
       const { error } = await supabase
         .from('content_moderation_queue')
-        .update({ status: newStatus, moderator_notes: notes, resolved_at: new Date().toISOString() })
+        .update({
+          status: newStatus,
+          moderator_notes: `[${action.toUpperCase()}] ${notes}`.trim(),
+          resolved_at: new Date().toISOString()
+        })
         .eq('id', id);
       if (error) throw error;
 
-      toast.success(`Item ${action}d`);
+      // If action is 'remove', also delete the actual content
+      if (action === 'remove' && item) {
+        if (item.content_type === 'post' && item.content_id) {
+          await supabase.from('social_posts').delete().eq('id', item.content_id);
+        } else if (item.content_type === 'comment' && item.content_id) {
+          await supabase.from('social_comments').delete().eq('id', item.content_id);
+        }
+      }
+
+      toast.success(
+        action === 'approve' ? 'Content approved — marked as safe'
+        : action === 'remove' ? 'Content removed and report resolved'
+        : 'Report dismissed'
+      );
       fetchItems();
       setSelected(null);
       setNotes('');

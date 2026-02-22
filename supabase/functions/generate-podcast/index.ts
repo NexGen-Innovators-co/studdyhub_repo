@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { getEducationContext, formatEducationContextForPrompt } from '../_shared/educationContext.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -243,7 +244,18 @@ serve(async (req) => {
 
     // 2. Generate podcast script using Gemini
 
-    const scriptPrompt = generateScriptPrompt(content, sources, style, duration, hosts.map(h => h.name));
+    // Fetch education context for curriculum-aware podcast script
+    let educationBlock = '';
+    try {
+      const eduCtx = await getEducationContext(supabase, user.id);
+      if (eduCtx) {
+        educationBlock = formatEducationContextForPrompt(eduCtx);
+      }
+    } catch (_eduErr) {
+      // Non-critical — continue without education context
+    }
+
+    const scriptPrompt = generateScriptPrompt(content, sources, style, duration, hosts.map(h => h.name), educationBlock);
 
     const geminiData = await callGeminiWithModelChain({
       contents: [{ parts: [{ text: scriptPrompt }] }],
@@ -300,7 +312,76 @@ Title:`;
     // 3. Parse script into segments (Host A and Host B)
     const segments = parseScript(script, hosts.map(h => h.name));
 
-    // 4. Generate audio for each segment using Google TTS
+    // Flag: use dedicated video flow (Veo clips with AI audio) for video podcast type
+    const useVideoFlow = podcastType === 'video' && !!accessToken;
+
+    // ── Shared Veo helpers (used by video flow) ──
+    async function pollVeoOperation(operationName: string, token: string, maxWaitMs = 120_000): Promise<any> {
+      const modelEndpoint = operationName.split('/operations/')[0];
+      const pollUrl = `https://us-central1-aiplatform.googleapis.com/v1/${modelEndpoint}:fetchPredictOperation`;
+      const startTime = Date.now();
+      let delay = 10_000;
+      while (Date.now() - startTime < maxWaitMs) {
+        await new Promise(r => setTimeout(r, delay));
+        const res = await fetch(pollUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ operationName })
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          console.error(`[Podcast] Poll error (${res.status}):`, errText.substring(0, 300));
+          if (res.status === 404 && Date.now() - startTime < maxWaitMs / 2) { delay = Math.min(delay + 5_000, 15_000); continue; }
+          return null;
+        }
+        const data = await res.json();
+        if (data.done) return data;
+        console.log(`[Podcast] Veo not done, polling in ${delay / 1000}s...`);
+        delay = Math.min(delay + 5_000, 15_000);
+      }
+      console.warn(`[Podcast] Veo timed out after ${maxWaitMs}ms`);
+      return null;
+    }
+
+    function extractVideoBytes(result: any): string | undefined {
+      if (!result) return undefined;
+      const resp = result.response || result.result || {};
+      console.log(`[Podcast] Veo done response keys:`, Object.keys(resp));
+      const generatedSamples = resp.generatedSamples || resp.generated_samples || resp.generateVideoResponse?.generatedSamples;
+      const videos = resp.videos || resp.generatedVideos || resp.generated_videos;
+      const predictions = resp.predictions || resp.value?.predictions;
+      if (generatedSamples?.[0]) {
+        const s = generatedSamples[0];
+        return s.video?.bytesBase64Encoded || s.bytesBase64Encoded;
+      }
+      if (videos?.[0]) {
+        const v = videos[0].video || videos[0];
+        return v.bytesBase64Encoded || v.bytes_base64_encoded || v.videoBytes;
+      }
+      if (predictions?.[0]) {
+        const p = predictions[0];
+        return p.bytesBase64Encoded || p.video?.bytesBase64Encoded;
+      }
+      console.warn(`[Podcast] Unknown Veo response. Keys:`, Object.keys(resp));
+      return undefined;
+    }
+
+    async function uploadVideoClip(videoBase64: string, userId: string, clipIndex: number): Promise<string | null> {
+      try {
+        const binaryStr = atob(videoBase64);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let j = 0; j < binaryStr.length; j++) bytes[j] = binaryStr.charCodeAt(j);
+        const fileName = `video_${Date.now()}_${clipIndex}.mp4`;
+        const filePath = `${userId}/${fileName}`;
+        const { error: uploadErr } = await supabase.storage.from('generatedimages').upload(filePath, bytes, { contentType: 'video/mp4', upsert: true });
+        if (uploadErr) { console.error('[Podcast] Upload error:', uploadErr.message); return null; }
+        const { data: urlData } = supabase.storage.from('generatedimages').getPublicUrl(filePath);
+        return urlData?.publicUrl || null;
+      } catch (e) { console.error('[Podcast] Upload exception:', e); return null; }
+    }
+
+    // 4. Generate audio for each segment
+    // Video type: text-only segments (audio comes from Veo clips) | Others: TTS
     const audioSegments = await Promise.all(
       segments.map(async (segment, index) => {
         // Pick voice based on provided hosts mapping (case-insensitive), fallback to defaults
@@ -343,6 +424,12 @@ Title:`;
         // If text is empty after cleaning, skip it
         if (!cleanedText) {
           return null;
+        }
+
+        // Video type: skip TTS entirely — audio comes from Veo video clips
+        // Return text-only segment for transcript
+        if (useVideoFlow) {
+          return { speaker: segment.speaker, text: cleanedText, index };
         }
 
         const ttsResponse = await fetch(
@@ -393,7 +480,245 @@ Title:`;
     let visualAssets: any[] = [];
     let coverImageUrl = providedCoverImageUrl || '';
 
-    if (!coverImageUrl && (podcastType === 'image-audio' || podcastType === 'video' || podcastType === 'live-stream')) {
+    // ══════════════════════════════════════════════════════════════
+    // VIDEO FLOW: Generate AI video clips with built-in audio
+    // ══════════════════════════════════════════════════════════════
+    if (useVideoFlow) {
+      const videoFlowStart = Date.now();
+      const VIDEO_BUDGET_MS = 240_000; // 240s hard budget for entire video flow (Supabase allows up to 300s)
+
+      // Generate cover image
+      if (!coverImageUrl) {
+        try {
+          const coverPrompt = `A vibrant, professional educational podcast cover about ${sources.join(", ") || 'the topic'}, modern design, clean typography, bright gradients, cinematic composition`;
+          const coverRes = await fetch(`${supabaseUrl}/functions/v1/generate-image-from-text`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${supabaseKey}` },
+            body: JSON.stringify({ description: coverPrompt, userId: user.id })
+          });
+          if (coverRes.ok) { coverImageUrl = (await coverRes.json()).imageUrl; }
+        } catch (e) { console.error('[Podcast] Cover image error:', e); }
+      }
+
+      try {
+        // Determine how many clips to generate based on segment count.
+        // Each Veo clip is ~8 seconds with audio. Aim for 1 clip per 2-3 segments
+        // so the video covers the full conversation. All clips launch in parallel,
+        // so more clips doesn't significantly increase wall-clock time.
+        const sceneCount = Math.min(Math.max(Math.ceil(segments.length / 2), 4), 12);
+        const hostNames = hosts.map(h => h.name).join(' and ');
+        console.log(`[Podcast] Planning ${sceneCount} video scenes for ${segments.length} segments`);
+        const scenePrompt = `Based on this podcast script between ${hostNames}, create exactly ${sceneCount} cinematic video scenes.
+Each scene will become an 8 second AI-generated video clip WITH spoken audio/dialogue.
+The scenes together should cover the ENTIRE podcast conversation from start to finish.
+
+For each scene return:
+- "concept": Brief scene title
+- "description": Detailed cinematic video prompt (setting, camera angles, lighting, action, visual style). Be very specific and visual.
+- "dialogue": The actual dialogue or narration for this scene. This WILL be spoken aloud in the generated video. Include 2-3 sentences that faithfully represent the script content for the covered segments (~8 seconds of speech).
+- "segmentIndices": Array of 0-based script segment indices this scene covers (each scene should cover 1-3 consecutive segments)
+- "duration": 8
+
+IMPORTANT:
+- Every segment from 0 to ${segments.length - 1} MUST be covered by exactly one scene.
+- Scenes must be in chronological order.
+- Distribute segments as evenly as possible across all ${sceneCount} scenes.
+- The dialogue should capture the key points and natural conversation flow.
+
+Script (${segments.length} segments):
+${script.substring(0, 6000)}
+
+Return ONLY valid JSON array: [{"concept":"...", "description":"...", "dialogue":"...", "segmentIndices":[0,1], "duration":8}]`;
+
+        const sceneData = await callGeminiWithModelChain({
+          contents: [{ parts: [{ text: scenePrompt }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 16384 }
+        }, geminiApiKey);
+
+        let scenes: any[] = [];
+        const sceneText = sceneData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const jsonMatch = sceneText.match(/\[[\s\S]*\]/);
+        if (jsonMatch) scenes = JSON.parse(jsonMatch[0]);
+        if (scenes.length === 0) throw new Error('No scenes extracted from script');
+        // Hard cap at 12 scenes (12 × 8s = 96s of video, all generated in parallel)
+        scenes = scenes.slice(0, 12);
+
+        console.log(`[Podcast] Extracted ${scenes.length} video scenes, launching ALL Veo operations in parallel...`);
+
+        // ── Phase 1: Fire ALL Veo requests simultaneously ──
+        const VEO_MODELS = ['veo-3.0-generate-001', 'veo-2.0-generate-001'];
+        let currentVeoModel = VEO_MODELS[0];
+        let veoSupportsAudio = true;
+
+        interface PendingOp {
+          clipIndex: number;
+          scene: any;
+          operationName: string | null;
+          videoPrompt: string;
+          done: boolean;
+          result: any;
+        }
+
+        const pendingOps: PendingOp[] = [];
+
+        // Fire requests for all scenes at once
+        // NOTE: We serialize launches to avoid race conditions with model fallback.
+        // Each launch is fast (~1-2s), so serial is acceptable.
+        for (let clipIndex = 0; clipIndex < scenes.length; clipIndex++) {
+          const scene = scenes[clipIndex];
+          const videoPrompt = scene.dialogue
+            ? `${scene.description}. The narrator says: "${scene.dialogue}". Professional cinematic educational style, high quality.`
+            : `${scene.description}. Professional cinematic educational style, high quality.`;
+
+          const op: PendingOp = { clipIndex, scene, operationName: null, videoPrompt, done: false, result: null };
+          pendingOps.push(op);
+
+          try {
+            const veoRes = await fetch(
+              `https://us-central1-aiplatform.googleapis.com/v1/projects/${gcpProjectId}/locations/us-central1/publishers/google/models/${currentVeoModel}:predictLongRunning`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+                body: JSON.stringify({
+                  instances: [{ prompt: videoPrompt }],
+                  parameters: {
+                    sampleCount: 1,
+                    aspectRatio: "16:9",
+                    durationSeconds: scene.duration || 8,
+                    ...(veoSupportsAudio ? { generateAudio: true } : {})
+                  }
+                })
+              }
+            );
+            if (!veoRes.ok) {
+              const errText = (await veoRes.text()).substring(0, 200);
+              console.error(`[Podcast] Veo ${currentVeoModel} clip ${clipIndex} (${veoRes.status}): ${errText}`);
+              // If clip fails with Veo 3, switch model for this + remaining clips
+              if (currentVeoModel === VEO_MODELS[0] && (veoRes.status === 404 || veoRes.status === 400)) {
+                currentVeoModel = VEO_MODELS[1];
+                veoSupportsAudio = false;
+                console.log(`[Podcast] Switching to ${currentVeoModel} for remaining clips`);
+                // Retry this clip with Veo 2
+                const retryRes = await fetch(
+                  `https://us-central1-aiplatform.googleapis.com/v1/projects/${gcpProjectId}/locations/us-central1/publishers/google/models/${currentVeoModel}:predictLongRunning`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+                    body: JSON.stringify({
+                      instances: [{ prompt: videoPrompt }],
+                      parameters: { sampleCount: 1, aspectRatio: "16:9", durationSeconds: scene.duration || 8 }
+                    })
+                  }
+                );
+                if (retryRes.ok) {
+                  const retryData = await retryRes.json();
+                  if (retryData.name) {
+                    op.operationName = retryData.name;
+                    console.log(`[Podcast] Clip ${clipIndex}: operation ${retryData.name.split('/').pop()}`);
+                  }
+                }
+              }
+              continue;
+            }
+            const data = await veoRes.json();
+            if (data.name) {
+              op.operationName = data.name;
+              console.log(`[Podcast] Clip ${clipIndex}: operation ${data.name.split('/').pop()}`);
+            }
+          } catch (err) {
+            console.error(`[Podcast] Clip ${clipIndex} launch error:`, err);
+          }
+        }
+
+        const launchedCount = pendingOps.filter(o => o.operationName).length;
+        console.log(`[Podcast] Launched ${launchedCount}/${scenes.length} Veo operations, polling all together...`);
+
+        // ── Phase 2: Unified polling loop — check ALL operations each cycle ──
+        const POLL_INTERVAL = 6_000;  // Fixed 6s poll interval (Veo usually takes 30-90s)
+        const INITIAL_WAIT = 15_000;  // Wait 15s before first poll (let Veo start processing)
+        let firstPoll = true;
+
+        while (true) {
+          const elapsed = Date.now() - videoFlowStart;
+          if (elapsed >= VIDEO_BUDGET_MS) {
+            console.warn(`[Podcast] Video budget exhausted (${Math.round(elapsed / 1000)}s). Saving ${visualAssets.length} completed clips.`);
+            break;
+          }
+
+          const stillPending = pendingOps.filter(o => o.operationName && !o.done);
+          if (stillPending.length === 0) break;
+
+          // Wait before polling — longer initial wait, then fixed interval
+          const waitMs = firstPoll ? INITIAL_WAIT : POLL_INTERVAL;
+          firstPoll = false;
+          await new Promise(r => setTimeout(r, waitMs));
+
+          // Poll all pending ops in parallel
+          await Promise.all(stillPending.map(async (op) => {
+            try {
+              const modelEndpoint = op.operationName!.split('/operations/')[0];
+              const pollUrl = `https://us-central1-aiplatform.googleapis.com/v1/${modelEndpoint}:fetchPredictOperation`;
+              const res = await fetch(pollUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+                body: JSON.stringify({ operationName: op.operationName })
+              });
+              if (!res.ok) {
+                const errText = await res.text();
+                console.error(`[Podcast] Poll clip ${op.clipIndex} (${res.status}):`, errText.substring(0, 200));
+                // On persistent 404 after 90s, mark as done (failed)
+                if (res.status === 404 && elapsed > 90_000) { op.done = true; }
+                return;
+              }
+              const data = await res.json();
+              if (data.done) {
+                op.done = true;
+                op.result = data;
+                const videoBytes = extractVideoBytes(data);
+                if (videoBytes) {
+                  const videoUrl = await uploadVideoClip(videoBytes, user.id, op.clipIndex);
+                  if (videoUrl) {
+                    console.log(`[Podcast] Video clip ${op.clipIndex + 1}/${scenes.length}: ${videoUrl} (${Math.round(elapsed / 1000)}s)`);
+                    visualAssets.push({
+                      type: 'video',
+                      concept: op.scene.concept,
+                      description: op.scene.description,
+                      transcript: op.scene.dialogue || '',
+                      url: videoUrl,
+                      segmentIndices: op.scene.segmentIndices || [],
+                      order: op.clipIndex,
+                      duration: op.scene.duration || 8,
+                      hasAudio: veoSupportsAudio
+                    });
+                  }
+                } else {
+                  console.warn(`[Podcast] Clip ${op.clipIndex}: done but no video bytes`);
+                }
+              }
+            } catch (err) {
+              console.error(`[Podcast] Poll clip ${op.clipIndex} error:`, err);
+            }
+          }));
+
+          const doneCount = pendingOps.filter(o => o.done).length;
+          const remaining = pendingOps.filter(o => o.operationName && !o.done).length;
+          if (remaining > 0) {
+            console.log(`[Podcast] Progress: ${doneCount}/${launchedCount} done, ${remaining} pending (${Math.round((Date.now() - videoFlowStart) / 1000)}s elapsed)`);
+          }
+        }
+
+        // Sort visual assets by order
+        visualAssets.sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
+        console.log(`[Podcast] Generated ${visualAssets.length}/${scenes.length} video clips (audio: ${veoSupportsAudio})`);
+      } catch (sceneErr) {
+        console.error('[Podcast] Video flow error:', sceneErr);
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // IMAGE-AUDIO FLOW: TTS audio + generated images (existing)
+    // ══════════════════════════════════════════════════════════════
+    if (!coverImageUrl && !useVideoFlow && (podcastType === 'image-audio' || podcastType === 'video' || podcastType === 'live-stream')) {
       // Generate a cover image for the podcast (use first concept or a summary prompt)
       try {
         let coverPrompt = '';
@@ -423,21 +748,31 @@ Title:`;
       try {
         // Dynamically determine how many visual concepts are appropriate based on segments and detected insights
 
-        const conceptPrompt = `Based on this podcast script, determine the optimal number of key visual concepts (images) needed to best illustrate the content, but do not exceed 12 total concepts. For each concept, return:
+        const totalSegments = segments.length;
+        // Allow more concepts for longer podcasts (up to 20), ensuring better visual coverage
+        const maxConcepts = Math.min(Math.max(Math.ceil(totalSegments / 3), 6), 20);
+        const conceptPrompt = `Based on this podcast script, determine the optimal number of key visual concepts (images) needed to best illustrate the content.
+
+IMPORTANT RULES:
+- There are exactly ${totalSegments} segments (indices 0 to ${totalSegments - 1}).
+- Return up to ${maxConcepts} concepts.
+- EVERY segment index from 0 to ${totalSegments - 1} MUST appear in at least one concept's segmentIndices. No segment should be left uncovered.
+- Distribute segment indices evenly across concepts. Each concept should cover a contiguous range of segments.
+- Adjacent segments about the same topic should share the same concept.
+
+For each concept return:
   - "concept": a brief title
   - "description": a detailed visual description for image generation
-  - "segmentIndices": an array of 0-based segment indices (e.g. [0,1,2,3]) indicating which segments this image should be shown for. You may assign a concept to multiple segments if relevant, and segments may share images. Ensure all segments are covered by at least one concept.
+  - "segmentIndices": an array of 0-based segment indices this image should be shown for
 
-You must decide how many visuals are needed for this script, but never return more than 12 concepts. If fewer are sufficient, return only as many as needed.
-
-Script excerpt:
-${script.substring(0, 2000)}
+Script (${totalSegments} segments):
+${script.substring(0, 4000)}
 
 Format: [{"concept": "brief title", "description": "detailed visual description", "segmentIndices": [0,1,2]}]`;
 
         const conceptData = await callGeminiWithModelChain({
           contents: [{ parts: [{ text: conceptPrompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 10048 }
+          generationConfig: { temperature: 0.7, maxOutputTokens: 16384 }
         }, geminiApiKey);
 
         if (!conceptData) {
@@ -467,11 +802,17 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
           }
         } catch (e) {
           // console.error("[Podcast] Failed to parse concepts:", e);
-          concepts = [{
-            concept: "Main Topic",
-            description: `A professional educational illustration about ${sources.join(", ")} , featuring modern design elements, clean typography, and vibrant colors`,
-            segmentIndices: Array.from({length: segments.length}, (_, i) => i)
-          }];
+          // Fallback: create evenly-spaced concepts covering all segments
+          const fallbackCount = Math.min(Math.ceil(segments.length / 4), 8);
+          concepts = Array.from({length: fallbackCount}, (_, ci) => {
+            const start = Math.floor(ci * segments.length / fallbackCount);
+            const end = Math.floor((ci + 1) * segments.length / fallbackCount);
+            return {
+              concept: `Topic ${ci + 1}`,
+              description: `A professional educational illustration about ${sources.join(", ")} , featuring modern design elements, clean typography, and vibrant colors`,
+              segmentIndices: Array.from({length: end - start}, (_, j) => start + j)
+            };
+          });
         }
 
 
@@ -516,20 +857,76 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
 
         // console.log(`[Podcast] Generated ${visualAssets.length} visual assets`);
 
-        // For video podcast type, generate video clips using Veo 3
+        // For video podcast type, generate video clips using Veo 2
         if (podcastType === 'video' && visualAssets.length > 0 && accessToken) {
-          // console.log(`[Podcast] Generating video clips with Veo 3...`);
+          console.log(`[Podcast] Generating video clips with Veo 2...`);
+
+          // Helper: poll a Vertex AI LRO via fetchPredictOperation (POST) until done or timeout
+          async function pollOperation(operationName: string, token: string, maxWaitMs = 120_000): Promise<any> {
+            // Use fetchPredictOperation endpoint — the correct way to poll publisher model operations
+            // POST /v1/{endpoint}:fetchPredictOperation with body { operationName: "..." }
+            const modelPath = `projects/${gcpProjectId}/locations/us-central1/publishers/google/models/veo-2.0-generate-001`;
+            const pollUrl = `https://us-central1-aiplatform.googleapis.com/v1/${modelPath}:fetchPredictOperation`;
+            const startTime = Date.now();
+            let delay = 10_000; // Veo takes 15-60s typically; start polling after 10s
+            while (Date.now() - startTime < maxWaitMs) {
+              await new Promise(r => setTimeout(r, delay));
+              const res = await fetch(pollUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({ operationName })
+              });
+              if (!res.ok) {
+                const errText = await res.text();
+                console.error(`[Podcast] Poll error (${res.status}):`, errText.substring(0, 300));
+                // On 404 or 400 the operation may not exist yet — retry a couple times
+                if (res.status === 404 && Date.now() - startTime < maxWaitMs / 2) {
+                  delay = Math.min(delay + 5_000, 15_000);
+                  continue;
+                }
+                return null;
+              }
+              const data = await res.json();
+              if (data.done) return data;
+              console.log(`[Podcast] Veo operation not done yet, polling again in ${delay / 1000}s...`);
+              // Increase delay, cap at 15s
+              delay = Math.min(delay + 5_000, 15_000);
+            }
+            console.warn(`[Podcast] Veo operation timed out after ${maxWaitMs}ms: ${operationName}`);
+            return null;
+          }
+
+          // Helper: upload video bytes to Supabase Storage and return public URL
+          async function uploadVideoToStorage(videoBase64: string, userId: string, index: number): Promise<string | null> {
+            try {
+              const binaryStr = atob(videoBase64);
+              const bytes = new Uint8Array(binaryStr.length);
+              for (let j = 0; j < binaryStr.length; j++) bytes[j] = binaryStr.charCodeAt(j);
+              const fileName = `video_${Date.now()}_${index}.mp4`;
+              const filePath = `${userId}/${fileName}`;
+              const { error: uploadErr } = await supabase.storage
+                .from('generatedimages')
+                .upload(filePath, bytes, { contentType: 'video/mp4', upsert: true });
+              if (uploadErr) { console.error('[Podcast] Video upload error:', uploadErr.message); return null; }
+              const { data: urlData } = supabase.storage.from('generatedimages').getPublicUrl(filePath);
+              return urlData?.publicUrl || null;
+            } catch (e) {
+              console.error('[Podcast] Video upload exception:', e);
+              return null;
+            }
+          }
 
           try {
-            // Generate maximum 2 videos to avoid timeout (each takes ~8-10 seconds)
+            // Generate maximum 2 videos to stay within timeout
             for (let i = 0; i < Math.min(concepts.length, 2); i++) {
               const concept = concepts[i];
-              const videoPrompt = `Professional educational video: ${concept.description}. Modern design, clean typography, smooth animations. Educational style.`;
+              const videoPrompt = `Professional educational video: ${concept.description}. Modern design, clean typography, smooth animations. Educational style, 5 seconds.`;
 
-              // Replace this line in your code:
               const veoResponse = await fetch(
-                `https://us-central1-aiplatform.googleapis.com/v1/projects/${gcpProjectId}/locations/us-central1/publishers/google/models/veo-3.1-fast-preview:predict`,
-                // Changed from veo-3.0-generate-001 to veo-3.1-fast-preview
+                `https://us-central1-aiplatform.googleapis.com/v1/projects/${gcpProjectId}/locations/us-central1/publishers/google/models/veo-2.0-generate-001:predictLongRunning`,
                 {
                   method: "POST",
                   headers: {
@@ -538,13 +935,11 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
                   },
                   body: JSON.stringify({
                     instances: [{
-                      text_prompt: {
-                        prompt: videoPrompt
-                      }
+                      prompt: videoPrompt
                     }],
                     parameters: {
-                      response_count: 1,
-                      duration: 4  // 4 seconds for faster generation
+                      sampleCount: 1,
+                      aspectRatio: "16:9"
                     }
                   })
                 }
@@ -552,37 +947,82 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
 
               if (veoResponse.ok) {
                 const veoData = await veoResponse.json();
-                // console.log(`[Podcast] Veo response:`, JSON.stringify(veoData).substring(0, 200));
+                console.log(`[Podcast] Veo response:`, JSON.stringify(veoData).substring(0, 300));
 
-                // Check if this is a long-running operation
-                if (veoData.name && veoData.name.includes('operations')) {
-                  // console.log(`[Podcast] Veo returned operation ID: ${veoData.name} - skipping (long-running)`);
-                } else if (veoData.predictions && veoData.predictions[0]) {
-                  const prediction = veoData.predictions[0];
-                  const videoBase64 = prediction.bytesBase64Encoded ||
-                    prediction.video_bytes ||
-                    prediction.generatedVideo?.bytesBase64Encoded;
+                let videoBase64: string | undefined;
 
-                  if (videoBase64) {
+                // Veo 2 always returns a long-running operation — poll until complete
+                if (veoData.name) {
+                  console.log(`[Podcast] Veo returned operation: ${veoData.name} — polling...`);
+                  const result = await pollOperation(veoData.name, accessToken!, 120_000);
+                  if (result?.done) {
+                    // Log the full done response structure to understand the format
+                    const respStr = JSON.stringify(result).substring(0, 1000);
+                    console.log(`[Podcast] Veo done response:`, respStr);
+
+                    // Try all known response shapes:
+                    // Shape 1: result.response.predictions[0].bytesBase64Encoded (legacy predict)
+                    // Shape 2: result.response.generatedSamples[0].video.bytesBase64Encoded (Veo2 predictLongRunning)
+                    // Shape 3: result.response.generatedSamples[0].video.uri (GCS URI)
+                    // Shape 4: result.response.videos[0].bytesBase64Encoded
+                    // Shape 5: result.metadata.generatedSamples (sometimes in metadata)
+                    const resp = result.response || result.result || {};
+                    const predictions = resp.predictions || resp.value?.predictions;
+                    const generatedSamples = resp.generatedSamples || resp.generated_samples || resp.generateVideoResponse?.generatedSamples;
+                    const videos = resp.videos || resp.generatedVideos || resp.generated_videos;
+
+                    if (generatedSamples?.[0]) {
+                      const sample = generatedSamples[0];
+                      videoBase64 = sample.video?.bytesBase64Encoded || sample.bytesBase64Encoded || sample.video?.bytes_base64_encoded;
+                      if (!videoBase64 && sample.video?.uri) {
+                        console.log(`[Podcast] Veo returned GCS URI: ${sample.video.uri} — skipping (GCS fetch not implemented)`);
+                      }
+                      if (!videoBase64) console.warn(`[Podcast] generatedSamples found but no bytes. Sample keys:`, Object.keys(sample), 'video keys:', Object.keys(sample.video || {}));
+                    } else if (videos?.[0]) {
+                      const vid = videos[0];
+                      const vidContent = vid.video || vid;
+                      videoBase64 = vidContent.bytesBase64Encoded || vidContent.bytes_base64_encoded || vidContent.videoBytes;
+                      if (!videoBase64 && (vidContent.uri || vidContent.video_bytes)) {
+                        console.log(`[Podcast] Veo video URI/bytes field:`, Object.keys(vidContent));
+                      }
+                    } else if (predictions?.[0]) {
+                      const prediction = predictions[0];
+                      videoBase64 = prediction.bytesBase64Encoded || prediction.video?.bytesBase64Encoded;
+                    } else {
+                      console.warn(`[Podcast] Completed but unknown response structure. Response keys:`, Object.keys(resp));
+                    }
+                  } else if (result?.error) {
+                    console.error(`[Podcast] Veo operation error:`, JSON.stringify(result.error));
+                  } else {
+                    console.warn(`[Podcast] Veo operation returned null (timed out or poll failed)`);
+                  }
+                } else if (veoData.predictions?.[0]) {
+                  // Direct response (unlikely for Veo 2 but handle just in case)
+                  videoBase64 = veoData.predictions[0].bytesBase64Encoded;
+                }
+
+                if (videoBase64) {
+                  // Upload to Supabase Storage instead of storing data URI
+                  const videoUrl = await uploadVideoToStorage(videoBase64, user.id, i);
+                  if (videoUrl) {
                     visualAssets.push({
                       type: 'video',
                       concept: concept.concept,
                       description: concept.description,
-                      url: `data:video/mp4;base64,${videoBase64}`,
+                      url: videoUrl,
+                      segmentIndices: Array.isArray(concept.segmentIndices) ? concept.segmentIndices : [],
                       timestamp: Math.floor((i / Math.min(concepts.length, 2)) * estimateDuration(segments) * 60)
                     });
-                    // console.log(`[Podcast] Generated video ${i + 1}`);
-                  } else {
-                    // console.log(`[Podcast] No video bytes in prediction:`, Object.keys(prediction));
+                    console.log(`[Podcast] Generated & uploaded video ${i + 1}: ${videoUrl}`);
                   }
                 }
               } else {
                 const errorText = await veoResponse.text();
-                // console.error(`[Podcast] Veo error (${veoResponse.status}):`, errorText);
+                console.error(`[Podcast] Veo error (${veoResponse.status}):`, errorText);
               }
             }
           } catch (error) {
-            // console.error("[Podcast] Video generation error:", error);
+            console.error("[Podcast] Video generation error:", error);
           }
         }
 
@@ -612,10 +1052,20 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
           }
         }
       });
-      // Fallback: if any segment is still missing an image, assign the first image
+      // Fallback: if any segment is still missing an image, assign the nearest available image
+      // (spread them out instead of always using the first one)
       for (let i = 0; i < segmentImageMap.length; i++) {
-        if (!segmentImageMap[i] && visualAssets[0]) {
-          segmentImageMap[i] = visualAssets[0].url;
+        if (!segmentImageMap[i]) {
+          // Find the closest segment that has an image
+          let nearest = -1;
+          let minDist = Infinity;
+          for (let j = 0; j < segmentImageMap.length; j++) {
+            if (segmentImageMap[j] && Math.abs(j - i) < minDist) {
+              minDist = Math.abs(j - i);
+              nearest = j;
+            }
+          }
+          segmentImageMap[i] = nearest >= 0 ? segmentImageMap[nearest] : (visualAssets[0]?.url || '');
         }
       }
     }
@@ -629,16 +1079,18 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
     const optimizedVisualAssets = visualAssets.length > 0 ? visualAssets.map(asset => {
       if (asset.url.startsWith('data:')) {
         return {
-          type: asset.type,
-          concept: asset.concept,
-          description: asset.description,
+          ...asset, // Preserve segmentIndices and all other fields
           url: `https://placehold.co/1792x1024/6366f1/white?text=${encodeURIComponent(asset.concept)}`,
-          timestamp: asset.timestamp,
           generated: true
         };
       }
       return asset;
     }) : null;
+
+    // For video flow, compute actual duration from video clip durations instead of text estimate
+    const actualDurationMinutes = (useVideoFlow && visualAssets.length > 0)
+      ? Math.max(1, Math.round(visualAssets.reduce((sum: number, a: any) => sum + (a.duration || 8), 0) / 60))
+      : estimateDuration(segments);
 
     const { data: podcast, error: insertError } = await supabase
       .from("ai_podcasts")
@@ -648,7 +1100,7 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
         sources: sources,
         script: script,
         audio_segments: audioSegmentsWithImages,
-        duration_minutes: estimateDuration(segments),
+        duration_minutes: actualDurationMinutes,
         style: style,
         podcast_type: podcastType,
         visual_assets: optimizedVisualAssets,
@@ -687,7 +1139,7 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
   }
 });
 
-function generateScriptPrompt(content: string, sources: string[], style: string, duration: string, hostNames: string[] = ['Thomas', 'Isabel']): string {
+function generateScriptPrompt(content: string, sources: string[], style: string, duration: string, hostNames: string[] = ['Thomas', 'Isabel'], educationBlock: string = ''): string {
   const durationMap = {
     'short': '5-7 minutes',
     'medium': '12-15 minutes',
@@ -703,10 +1155,14 @@ function generateScriptPrompt(content: string, sources: string[], style: string,
   const hostsList = hostNames.join(' and ');
   const exampleFormat = hostNames.map(n => `${n.toUpperCase()}: [their dialogue]`).join('\n   ');
 
+  const educationSection = educationBlock
+    ? `\n**${educationBlock}**\nTailor the discussion to be relevant to this student's curriculum, exam, and subject focus. Use appropriate terminology and examples for their education level.\n`
+    : '';
+
   return `You are creating a podcast script for an AI-generated audio show. Create a natural, engaging conversation between hosts (${hostsList}) discussing the following content.
 
 **Sources:** ${sources.join(", ")}
-
+${educationSection}
 **Content:**
 ${content.substring(0, 10000)} ${content.length > 10000 ? '...(truncated)' : ''}
 

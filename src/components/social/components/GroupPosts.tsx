@@ -52,6 +52,8 @@ export const GroupPosts: React.FC<GroupPostsProps> = ({ groupId, currentUser }) 
     () => { }, // setSuggestedUsers - not needed here
     [], // groups
     () => { }, // setGroups
+    () => { }, // setTrendingPosts - not needed here
+    () => { }, // setUserPosts - not needed here
     () => { }  // setCurrentUser
   );
 

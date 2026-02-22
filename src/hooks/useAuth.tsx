@@ -37,38 +37,59 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const queryClient = useQueryClient();
 
   useEffect(() => {
+    let resolved = false;
+    const resolveAuth = (s: Session | null) => {
+      if (resolved) return;
+      resolved = true;
+      setSession(s);
+      setUser(s?.user ?? null);
+      setLoading(false);
+    };
+
+    // Safety timeout — if Supabase hangs (common on iOS Safari / service-worker
+    // issues), force-resolve loading after 8 seconds so the UI is never stuck.
+    const safetyTimeout = setTimeout(() => {
+      if (!resolved) {
+        console.warn('[useAuth] Auth loading safety timeout (8 s) — resolving with no session');
+        resolveAuth(null);
+      }
+    }, 8000);
+
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
+        resolveAuth(session);
+        // Also handle subsequent auth changes after initial resolve
+        if (resolved) {
+          setSession(session);
+          setUser(session?.user ?? null);
+        }
 
         // Clear cache when user signs out
         if (event === 'SIGNED_OUT') {
-          ////console.log('🔴 Auth state: SIGNED_OUT - clearing cache');
           clearCache();
           resetPushInitialization();
-          // Clear offline IndexedDB stores
           try {
-            //console.log('[useAuth] SIGNED_OUT detected - clearing offline storage');
-            offlineStorage.clearAll()
+            offlineStorage.clearAll();
           } catch (e) {
-            //console.warn('[useAuth] offlineStorage.clearAll threw synchronously', e);
+            // non-blocking
           }
         }
-
       }
     );
 
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+      resolveAuth(session);
+    }).catch(() => {
+      // If getSession throws (network error, etc.), resolve with no session
+      resolveAuth(null);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(safetyTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {

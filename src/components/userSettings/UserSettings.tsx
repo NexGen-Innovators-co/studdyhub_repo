@@ -25,7 +25,8 @@ import {
   Trash2,
   Calendar,
   Bell,
-  Sparkles
+  Sparkles,
+  GraduationCap,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -45,6 +46,7 @@ import { StatsCard } from '../layout/StatsCard';
 import { requestNotificationPermission, getPushService } from '@/services/notificationInitService';
 import { CalendarIntegrationSettings } from '../settings/CalendarIntegrationSettings';
 import { Separator } from '../ui/separator';
+import { EducationSettingsTab } from './EducationSettingsTab';
 
 interface UserSettingsProps {
   profile: UserProfile | null;
@@ -100,7 +102,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 }) => {
   const { confirm: confirmAction, ConfirmDialogComponent } = useConfirmDialog();
   // Tab state
-  const [activeTab, setActiveTab] = useState<'profile' | 'learning' | 'personalization' | 'goals' | 'achievements' | 'study' | 'privacy' | 'notifications' | 'security'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'education' | 'learning' | 'personalization' | 'goals' | 'achievements' | 'study' | 'privacy' | 'notifications' | 'security'>('profile');
 
   // Original form states
   const [learningStyle, setLearningStyle] = useState<UserProfile['learning_style']>('visual');
@@ -753,6 +755,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 
   const navItems = [
     { id: 'profile', label: 'Profile', icon: User },
+    { id: 'education', label: 'Education', icon: GraduationCap },
     { id: 'learning', label: 'Learning', icon: Brain },
     { id: 'personalization', label: 'AI Context', icon: Sparkles },
     { id: 'goals', label: 'Goals', icon: Target },
@@ -913,6 +916,11 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                 </div>
               </div>
             </CardContent>
+          )}
+
+          {/* Education Section */}
+          {activeTab === 'education' && (
+            <EducationSettingsTab />
           )}
 
           {/* Learning Section */}

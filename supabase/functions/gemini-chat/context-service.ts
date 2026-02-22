@@ -1,5 +1,6 @@
 // context-service.ts
 import { createClient } from 'npm:@supabase/supabase-js@2.92.0';
+import { getEducationContext, type ServerEducationContext } from '../_shared/educationContext.ts';
 
 export class UserContextService {
     supabase;
@@ -663,7 +664,8 @@ async getUserContext(userId: string): Promise<any> {
             recentRecordings,
             documentFolders,
             recentQuizzes,
-            subscription
+            subscription,
+            educationContext
         ] = await Promise.all([
             // Notes
             this.supabase.from('notes')
@@ -746,7 +748,10 @@ async getUserContext(userId: string): Promise<any> {
             this.supabase.from('subscriptions')
                 .select('*')
                 .eq('user_id', userId)
-                .maybeSingle()
+                .maybeSingle(),
+
+            // Education context (country, curriculum, exam, subjects)
+            getEducationContext(this.supabase, userId)
         ]);
 
         // Analyze learning patterns
@@ -796,7 +801,8 @@ async getUserContext(userId: string): Promise<any> {
             learningPatterns,
             studyHabits,
             topicMastery,
-            totalCounts
+            totalCounts,
+            educationContext: educationContext || null
         };
     } catch (error) {
         console.error('[ContextService] Error getting user context:', error);

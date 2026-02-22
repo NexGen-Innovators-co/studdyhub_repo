@@ -90,6 +90,11 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   const videoAreaRef = useRef<HTMLDivElement>(null);
   const mainContainerRef = useRef<HTMLDivElement>(null);
 
+  // Gapless preloading: hidden <video> element for next clip
+  const preloadVideoRef = useRef<HTMLVideoElement | null>(null);
+  // Gapless preloading: hidden <audio> element for next audio segment
+  const preloadAudioRef = useRef<HTMLAudioElement | null>(null);
+
   // Transcript auto-scroll
   const transcriptContainerRef = useRef<HTMLDivElement | null>(null);
   const segmentRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -116,6 +121,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     handleSegmentProgressClick, handleShare, playSegment, playFullAudio,
     cleanupAudio,
     setFullAudioDuration, setDuration,
+    isVideoFlow, videoClips, videoTotalDuration,
   } = audio;
 
   const {
@@ -170,28 +176,55 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     }
   }, [isOpen, podcast?.id, podcast?.visual_assets]);
 
-  // Update image on segment change (segmented audio)
+  // Update visual on segment change (segmented audio) — handles both image and video assets
   useEffect(() => {
     if (!isOpen) return;
+
+    // VIDEO FLOW: hook drives videoRef.src — only update metadata state (no displayedVisualAsset/key changes)
+    // The hook already set vid.src before changing currentSegmentIndex, so we must NOT
+    // touch displayedVisualAsset (which would change the <video> key and destroy the element).
+    if (isVideoFlow && videoClips.length > 0) {
+      // Just update currentImage for transcript highlighting (doesn't affect videoRef)
+      const clip = videoClips[currentSegmentIndex];
+      if (clip) {
+        setCurrentImage(clip);
+        setImageReady(true);
+      }
+      return;
+    }
+
+    // AUDIO FLOW (original): match visual assets by segment index
     if (!isSingleAudio && podcast?.visual_assets && podcast.visual_assets.length > 0) {
-      const imageAssets = podcast.visual_assets.filter(a => a.type === 'image' && (a.segmentIndex !== undefined || Array.isArray(a.segmentIndices)));
-      const matching = imageAssets.find(a =>
+      // Find any asset (image or video) matching the current segment
+      const allMapped = podcast.visual_assets.filter(a => a.segmentIndex !== undefined || Array.isArray(a.segmentIndices));
+      // Prefer video assets for video podcast type, then fall back to images
+      const matching = allMapped.find(a =>
+        (a.type === 'video') &&
+        ((Array.isArray(a.segmentIndices) && a.segmentIndices.includes(currentSegmentIndex)) || a.segmentIndex === currentSegmentIndex)
+      ) || allMapped.find(a =>
         (Array.isArray(a.segmentIndices) && a.segmentIndices.includes(currentSegmentIndex)) ||
         a.segmentIndex === currentSegmentIndex
       );
-      if (matching) {
+
+      // Fallback: use the imageUrl from the audio segment if no visual asset matches
+      const fallbackAsset = !matching && podcast.audioSegments?.[currentSegmentIndex]?.imageUrl
+        ? { type: 'image' as const, url: podcast.audioSegments[currentSegmentIndex].imageUrl, concept: '' }
+        : null;
+
+      const assetToShow = matching || fallbackAsset;
+      if (assetToShow) {
         const currentUrl = currentImage?.url;
-        if (matching.url && matching.url !== currentUrl) {
+        if (assetToShow.url && assetToShow.url !== currentUrl) {
           setPrevVisualAsset(displayedVisualAsset);
-          setDisplayedVisualAsset(matching);
-          setCurrentImage(matching);
+          setDisplayedVisualAsset(assetToShow);
+          setCurrentImage(assetToShow);
           setCurrentImageVisible(false);
           setImageReady(false);
           window.setTimeout(() => setPrevVisualAsset(null), 650);
         }
       }
     }
-  }, [isOpen, currentSegmentIndex, podcast?.visual_assets, isSingleAudio]);
+  }, [isOpen, currentSegmentIndex, podcast?.visual_assets, isSingleAudio, isVideoFlow, videoClips]);
 
   // Preload all visual images
   useEffect(() => {
@@ -214,16 +247,83 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     setAudioReady(false);
     const url = displayedVisualAsset?.url;
     if (url && preloadedImagesRef.current.has(url)) setImageReady(true);
+    // For video assets, mark imageReady immediately (no preload needed)
+    else if (displayedVisualAsset?.type === 'video') setImageReady(true);
     else setImageReady(false);
   }, [currentSegmentIndex, displayedVisualAsset?.url]);
 
+  // Sync video clip play/pause with audio playback (non-video-flow only — hook handles video flow)
+  useEffect(() => {
+    if (isVideoFlow) return; // Hook manages videoRef for video flow
+    const vid = videoRef.current;
+    if (!vid || displayedVisualAsset?.type !== 'video') return;
+    if (isPlaying) { vid.play().catch(() => {}); }
+    else { vid.pause(); }
+  }, [isPlaying, displayedVisualAsset?.type, isVideoFlow]);
+
   // Progressive play: only play when both audio and image are ready
   useEffect(() => {
+    if (isVideoFlow) return; // Video flow handles its own play
     if (audioReady && imageReady && audioRef.current && audioRef.current.paused && !isPlaying) {
       audioRef.current.play();
       audio.setIsPlaying(true);
     }
-  }, [audioReady, imageReady]);
+  }, [audioReady, imageReady, isVideoFlow]);
+
+  // ── Gapless preload: preload NEXT video clip while current plays ──
+  useEffect(() => {
+    if (!isOpen || !isVideoFlow || videoClips.length === 0) return;
+    const nextIdx = currentSegmentIndex + 1;
+    if (nextIdx >= videoClips.length) return;
+    const nextClip = videoClips[nextIdx];
+    if (!nextClip?.url) return;
+    // Create or reuse hidden video element for preloading
+    if (!preloadVideoRef.current) {
+      preloadVideoRef.current = document.createElement('video');
+      preloadVideoRef.current.preload = 'auto';
+      preloadVideoRef.current.muted = true;
+      preloadVideoRef.current.style.display = 'none';
+    }
+    if (preloadVideoRef.current.src !== nextClip.url) {
+      preloadVideoRef.current.src = nextClip.url;
+      preloadVideoRef.current.load();
+    }
+    return () => {
+      // Cleanup on unmount
+      if (preloadVideoRef.current) {
+        try { preloadVideoRef.current.src = ''; } catch (_e) {}
+      }
+    };
+  }, [isOpen, isVideoFlow, currentSegmentIndex, videoClips]);
+
+  // ── Gapless preload: preload NEXT audio segment while current plays (image-audio flow) ──
+  useEffect(() => {
+    if (!isOpen || isVideoFlow || isSingleAudio) return;
+    if (!podcast?.audioSegments || podcast.audioSegments.length === 0) return;
+    const nextIdx = currentSegmentIndex + 1;
+    if (nextIdx >= podcast.audioSegments.length) return;
+    const nextSeg = podcast.audioSegments[nextIdx];
+    if (!nextSeg) return;
+    const nextUrl = nextSeg.audio_url || (nextSeg.audioContent ? `data:audio/mp3;base64,${nextSeg.audioContent.replace(/\`/g, '').trim()}` : null);
+    if (!nextUrl) return;
+    if (!preloadAudioRef.current) {
+      preloadAudioRef.current = new Audio();
+      preloadAudioRef.current.preload = 'auto';
+    }
+    if (preloadAudioRef.current.src !== nextUrl) {
+      preloadAudioRef.current.src = nextUrl;
+      preloadAudioRef.current.load();
+    }
+    // Also preload next image if present
+    const nextImg = nextSeg.imageUrl || podcast.visual_assets?.find(a =>
+      a.type === 'image' && (Array.isArray(a.segmentIndices) ? a.segmentIndices.includes(nextIdx) : a.segmentIndex === nextIdx)
+    )?.url;
+    if (nextImg && !preloadedImagesRef.current.has(nextImg)) {
+      const img = new Image();
+      img.onload = () => preloadedImagesRef.current.add(nextImg);
+      img.src = nextImg;
+    }
+  }, [isOpen, isVideoFlow, isSingleAudio, currentSegmentIndex, podcast?.audioSegments, podcast?.visual_assets]);
 
   // ──── Transcript scroll listeners ────
   useEffect(() => {
@@ -285,9 +385,13 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     try {
       setIsClosing(true);
       cleanupAudio();
+      // Cleanup preload elements
+      if (preloadVideoRef.current) { try { preloadVideoRef.current.src = ''; } catch (_e) {} preloadVideoRef.current = null; }
+      if (preloadAudioRef.current) { try { preloadAudioRef.current.src = ''; } catch (_e) {} preloadAudioRef.current = null; }
       if (controlsTimeoutRef.current) { window.clearTimeout(controlsTimeoutRef.current); controlsTimeoutRef.current = null; }
       if (userInteractTimeoutRef.current) { window.clearTimeout(userInteractTimeoutRef.current); userInteractTimeoutRef.current = null; }
-      setIsPodcastDataLoaded(false);
+      // NOTE: Do NOT reset isPodcastDataLoaded here — the component is about to unmount.
+      // Resetting it causes a flash of the loading overlay before navigation completes.
       preloadedImagesRef.current.clear();
       setShowTranscript(false);
       setShowControls(false);
@@ -334,6 +438,10 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   // ──── Derived display values ────
   const audioSegments = podcast?.audioSegments || [];
 
+  // Effective segment count & loaded count for video flow (video clips are always "loaded")
+  const effectiveSegmentCount = isVideoFlow ? videoClips.length : audioSegments.length;
+  const effectiveLoadedCount = isVideoFlow ? videoClips.length : loadedCount;
+
   const hasSegmentImages = Array.isArray(podcast?.visual_assets)
     ? podcast!.visual_assets.some(a => a?.type === 'image')
     : false;
@@ -356,7 +464,14 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   // Compute display durations
   let displayTotalDuration = 0;
   let displayCurrent = 0;
-  if (!isSingleAudio && segmentsProgress && segmentsProgress.length > 0) {
+  if (isVideoFlow && videoClips.length > 0) {
+    // VIDEO FLOW: compute total from clip durations or fallback to podcast metadata
+    displayTotalDuration = videoTotalDuration > 0 ? videoTotalDuration : (podcast?.duration ? podcast.duration * 60 : duration || 0);
+    // Current position = sum of previous clip durations + current time in active clip
+    const prevClipsDuration = videoClips.slice(0, currentSegmentIndex).reduce((sum, c) => sum + (c.duration || 0), 0);
+    displayCurrent = prevClipsDuration + (isFinite(currentTime) ? currentTime : 0);
+    displayCurrent = Math.min(displayCurrent, displayTotalDuration);
+  } else if (!isSingleAudio && segmentsProgress && segmentsProgress.length > 0) {
     const maxEnd = Math.max(...segmentsProgress.map(s => s.end || 0));
     displayTotalDuration = maxEnd > 0 ? maxEnd : (segmentsProgress.reduce((sum, s) => sum + (s.end - s.start), 0) || (podcast?.duration ? podcast.duration * 60 : duration) || 0);
     const segIdx = Math.min(Math.max(currentSegmentIndex, 0), segmentsProgress.length - 1);
@@ -375,18 +490,18 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   const MobileControls = () => (
     <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-black border-t border-gray-300 dark:border-gray-800">
       <div className="flex flex-col items-start gap-1 min-w-[70px]">
-        <Button variant="ghost" size="icon" onClick={handleSpeedChange} className="h-8 w-8 dark:text-white text-dark" disabled={loadedCount === 0}>
+        <Button variant="ghost" size="icon" onClick={handleSpeedChange} className="h-8 w-8 dark:text-white text-dark" disabled={effectiveLoadedCount === 0}>
           <span className="text-xs font-semibold">{playbackSpeed}x</span>
         </Button>
       </div>
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={handlePreviousSegment} disabled={!podcast || loadingAudio || loadedCount === 0} className="h-8 w-8 text-dark dark:text-white">
+        <Button variant="ghost" size="icon" onClick={handlePreviousSegment} disabled={!podcast || loadingAudio || effectiveLoadedCount === 0} className="h-8 w-8 text-dark dark:text-white">
           <SkipBack className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" onClick={handlePlayPause} className="h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-800 text-dark dark:text-white" disabled={loadingAudio || loadedCount === 0}>
+        <Button variant="ghost" size="icon" onClick={handlePlayPause} className="h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-800 text-dark dark:text-white" disabled={loadingAudio || effectiveLoadedCount === 0}>
           {loadingAudio ? <Loader2 className="h-6 w-6 animate-spin" /> : replay ? <RefreshCcw className="h-6 w-6" /> : isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6 ml-0.5" />}
         </Button>
-        <Button variant="ghost" size="icon" onClick={handleNextSegment} disabled={!podcast || loadingAudio || loadedCount === 0} className="h-8 w-8 text-dark dark:text-white">
+        <Button variant="ghost" size="icon" onClick={handleNextSegment} disabled={!podcast || loadingAudio || effectiveLoadedCount === 0} className="h-8 w-8 text-dark dark:text-white">
           <SkipForward className="h-4 w-4" />
         </Button>
         {podcast?.is_live && (
@@ -398,8 +513,8 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
       <div className="flex flex-col items-end gap-1 min-w-[70px]">
         <span className="dark:text-white text-dark text-xs font-semibold leading-tight">{mediaTypeLabel}</span>
         <div className="flex items-center gap-2">
-          <span className="dark:text-white text-dark text-sm">{currentSegmentIndex + 1}/{audioSegments.length || 0}</span>
-          <Button variant="ghost" size="icon" onClick={handleToggleMute} className="h-8 w-8 dark:text-white text-dark" disabled={loadedCount === 0}>
+          <span className="dark:text-white text-dark text-sm">{currentSegmentIndex + 1}/{effectiveSegmentCount || 0}</span>
+          <Button variant="ghost" size="icon" onClick={handleToggleMute} className="h-8 w-8 dark:text-white text-dark" disabled={effectiveLoadedCount === 0}>
             {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
           </Button>
         </div>
@@ -408,7 +523,42 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   );
 
   const SegmentedProgressBar = () => {
-    const segmentCount = audioSegments.length || 1;
+    const segmentCount = effectiveSegmentCount || 1;
+
+    // VIDEO FLOW: compute segments from video clips
+    if (isVideoFlow && videoClips.length > 0) {
+      const total = videoTotalDuration > 0 ? videoTotalDuration : (podcast?.duration ? podcast.duration * 60 : duration || 0);
+      const prevClipsDuration = videoClips.slice(0, currentSegmentIndex).reduce((sum, c) => sum + (c.duration || 0), 0);
+      const overallCurrent = prevClipsDuration + (isFinite(currentTime) ? currentTime : 0);
+      const pct = total > 0 ? (Math.min(overallCurrent, total) / total) * 100 : 0;
+
+      // Build segment boundaries from clip durations
+      let cumulative = 0;
+      const clipSegments = videoClips.map(c => {
+        const start = cumulative;
+        cumulative += (c.duration || 0);
+        return { start, end: cumulative };
+      });
+
+      return (
+        <div className="relative h-2 w-full bg-gray-600 rounded-full overflow-hidden">
+          <div className="absolute h-full bg-red-600 z-20" style={{ left: '0%', right: `${100 - pct}%` }} />
+          {clipSegments.map((seg, index) => {
+            if (!total) return null;
+            const markerPosition = (seg.end / total) * 100;
+            return <div key={index} className="absolute top-0 h-full w-px bg-white/30 z-10 pointer-events-none" style={{ left: `${markerPosition}%`, transform: 'translateX(-50%)' }} />;
+          })}
+          {clipSegments.map((seg, index) => {
+            if (!total) return null;
+            const leftPct = (seg.start / total) * 100;
+            const widthPct = ((seg.end - seg.start) / total) * 100;
+            return <button key={index} className="absolute top-0 h-full z-30" style={{ left: `${leftPct}%`, width: `${widthPct}%` }} onClick={() => handleSegmentProgressClick(index)} title={`Jump to clip ${index + 1}`} />;
+          })}
+        </div>
+      );
+    }
+
+    // AUDIO FLOW (original)
     let totalDuration = 0;
     if (isSingleAudio) { totalDuration = fullAudioDuration || 0; }
     else if (segmentsProgress && segmentsProgress.length > 0) {
@@ -482,21 +632,19 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
 
           {/* Video/Image Content */}
           <div className="w-full h-full flex items-center justify-center">
-            {(currentVisualAsset || podcast?.podcast_type === 'video') ? (
+            {currentVisualAsset ? (
               <div className="w-full h-full relative">
-                {(currentVisualAsset?.type === 'video' || podcast?.podcast_type === 'video') ? (
+                {(isVideoFlow || currentVisualAsset.type === 'video') ? (
                   <video
                     ref={videoRef}
-                    src={podcast?.podcast_type === 'video' ? (playbackSrc || (currentVisualAsset?.type === 'video' ? currentVisualAsset.url : '')) : currentVisualAsset?.url}
+                    {...(isVideoFlow ? {} : { src: currentVisualAsset.url })}
                     className="w-full h-full object-contain"
-                    loop={podcast?.podcast_type !== 'video'}
-                    muted={isMuted}
+                    loop={!isVideoFlow}
+                    {...(isVideoFlow ? {} : { muted: true })}
                     playsInline
-                    key={(podcast?.podcast_type === 'video' ? (playbackSrc || (currentVisualAsset?.type === 'video' ? currentVisualAsset.url : '')) : currentVisualAsset?.url) || 'video'}
-                    autoPlay={false}
-                    onCanPlay={() => { if (videoRef.current && !videoRef.current.paused && !isPlaying) { videoRef.current.play(); audio.setIsPlaying(true); } }}
-                    onPlay={() => audio.setIsPlaying(true)}
-                    onPause={() => audio.setIsPlaying(false)}
+                    key={isVideoFlow ? 'videoflow-player' : (currentVisualAsset.url || 'video')}
+                    autoPlay={!isVideoFlow && isPlaying}
+                    onCanPlay={() => { if (!isVideoFlow && videoRef.current && isPlaying) { videoRef.current.play().catch(() => {}); } }}
                   />
                 ) : (
                   <div className="w-full h-full relative bg-black">
@@ -531,7 +679,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                 <div className="text-center"><Loader2 className="h-12 w-12 md:h-16 md:w-16 animate-spin text-black dark:text-white mx-auto mb-4" /><p className="text-black dark:text-white text-sm">Loading podcast...</p></div>
               </div>
             )}
-            {isPodcastDataLoaded && !isClosing && (loadingAudio || mediaLoading || (hasAudioSource && loadedCount === 0 && isBatchLoading && !podcast?.is_live) || (hasSegmentImages && !!currentVisualAsset && !imageReady)) && (
+            {isPodcastDataLoaded && !isClosing && (loadingAudio || mediaLoading || (hasAudioSource && effectiveLoadedCount === 0 && isBatchLoading && !podcast?.is_live) || (!isVideoFlow && hasSegmentImages && !!currentVisualAsset && !imageReady)) && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20">
                 <div className="text-center"><Loader2 className="h-10 w-10 md:h-12 md:w-12 animate-spin text-white mx-auto mb-2" /><p className="text-white text-sm">Loading segments...</p></div>
               </div>
@@ -550,7 +698,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                 </div>
               </div>
             )}
-            {isPodcastDataLoaded && loadedCount === 0 && !podcast?.is_live && mediaLoading && (
+            {isPodcastDataLoaded && effectiveLoadedCount === 0 && !podcast?.is_live && mediaLoading && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/70 dark:bg-black/70 z-20">
                 <div className="text-center">
                   {!isOnline ? (
@@ -571,12 +719,12 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
             )}
 
             {/* Hidden audio element – no src here; playSegment / playFullAudio set it after resolving signed URLs */}
-            <audio ref={audioRef} className="hidden" onCanPlay={() => setAudioReady(true)} />
+            {!isVideoFlow && <audio ref={audioRef} className="hidden" onCanPlay={() => setAudioReady(true)} />}
 
             {/* Center Play Button (Desktop) */}
-            {(!isPodcastDataLoaded || loadedCount === 0) ? null : (
+            {(!isPodcastDataLoaded || effectiveLoadedCount === 0) ? null : (
               (!isPlaying || showControls) && !loadingAudio && !autoAdvancingRef.current ? (
-                <button onClick={handlePlayPause} className="absolute inset-0 hidden md:flex items-center justify-center group" disabled={loadedCount === 0}>
+                <button onClick={handlePlayPause} className="absolute inset-0 hidden md:flex items-center justify-center group" disabled={effectiveLoadedCount === 0}>
                   <div className="bg-black/50 group-hover:bg-black/70 rounded-full p-6 md:p-8 transition-all transform group-hover:scale-110">
                     {replay ? <RefreshCcw className="h-12 w-12 md:h-20 md:w-20 text-white" /> : isPlaying ? <Pause className="h-12 w-12 md:h-20 md:w-20 text-white" /> : <Play className="h-12 w-12 md:h-20 md:w-20 text-white ml-2 md:ml-3" />}
                   </div>
@@ -586,7 +734,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
 
             {/* Desktop Bottom Controls */}
             <div
-              className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-3 md:p-4 transition-all duration-300 hidden md:block ${showControls && loadedCount > 0 ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
+              className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-3 md:p-4 transition-all duration-300 hidden md:block ${showControls && effectiveLoadedCount > 0 ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
               onClick={(e) => e.stopPropagation()}
               onMouseEnter={handleControlsMouseEnter}
               onMouseLeave={handleControlsMouseLeave}
@@ -600,20 +748,20 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 md:gap-4">
-                  <Button variant="ghost" size="icon" onClick={handlePreviousSegment} disabled={loadingAudio || loadedCount === 0} className="text-white hover:bg-white/20 h-7 w-7 md:h-8 md:w-8"><SkipBack className="h-3 w-3 md:h-4 md:w-4" /></Button>
-                  <Button variant="ghost" size="icon" onClick={handlePlayPause} className="text-white hover:bg-white/20 h-8 w-8 md:h-10 md:w-10" disabled={loadingAudio || loadedCount === 0}>
+                  <Button variant="ghost" size="icon" onClick={handlePreviousSegment} disabled={loadingAudio || effectiveLoadedCount === 0} className="text-white hover:bg-white/20 h-7 w-7 md:h-8 md:w-8"><SkipBack className="h-3 w-3 md:h-4 md:w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={handlePlayPause} className="text-white hover:bg-white/20 h-8 w-8 md:h-10 md:w-10" disabled={loadingAudio || effectiveLoadedCount === 0}>
                     {loadingAudio ? <Loader2 className="h-4 w-4 md:h-5 md:w-5 animate-spin" /> : replay ? <RefreshCcw className="h-4 w-4 md:h-5 md:w-5" /> : isPlaying ? <Pause className="h-4 w-4 md:h-5 md:w-5" /> : <Play className="h-4 w-4 md:h-5 md:w-5 ml-0.5" />}
                   </Button>
-                  <Button variant="ghost" size="icon" onClick={handleNextSegment} disabled={!podcast || loadingAudio || loadedCount === 0} className="text-white hover:bg-white/20 h-7 w-7 md:h-8 md:w-8"><SkipForward className="h-3 w-3 md:h-4 md:w-4" /></Button>
-                  <Button variant="ghost" size="icon" onClick={handleToggleMute} className="text-white hover:bg-white/20 h-7 w-7 md:h-8 md:w-8" disabled={loadedCount === 0}>{isMuted ? <VolumeX className="h-3 w-3 md:h-4 md:w-4" /> : <Volume2 className="h-3 w-3 md:h-4 md:w-4" />}</Button>
-                  <div className="text-white text-xs md:text-sm ml-1 md:ml-2">{loadedCount > 0 ? `${currentSegmentIndex + 1} / ${audioSegments.length}` : (isBatchLoading ? 'Loading...' : '')}</div>
+                  <Button variant="ghost" size="icon" onClick={handleNextSegment} disabled={!podcast || loadingAudio || effectiveLoadedCount === 0} className="text-white hover:bg-white/20 h-7 w-7 md:h-8 md:w-8"><SkipForward className="h-3 w-3 md:h-4 md:w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={handleToggleMute} className="text-white hover:bg-white/20 h-7 w-7 md:h-8 md:w-8" disabled={effectiveLoadedCount === 0}>{isMuted ? <VolumeX className="h-3 w-3 md:h-4 md:w-4" /> : <Volume2 className="h-3 w-3 md:h-4 md:w-4" />}</Button>
+                  <div className="text-white text-xs md:text-sm ml-1 md:ml-2">{effectiveLoadedCount > 0 ? `${currentSegmentIndex + 1} / ${effectiveSegmentCount}` : (isBatchLoading ? 'Loading...' : '')}</div>
                 </div>
                 <div className="flex items-center gap-1 md:gap-2">
-                  <Button variant="ghost" size="icon" onClick={() => setShowTranscript(!showTranscript)} className={`text-white hover:bg-white/20 h-7 w-7 md:h-8 md:w-8 ${showTranscript ? 'bg-white/20' : ''}`} disabled={loadedCount === 0}><Captions className="h-3 w-3 md:h-4 md:w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => setShowTranscript(!showTranscript)} className={`text-white hover:bg-white/20 h-7 w-7 md:h-8 md:w-8 ${showTranscript ? 'bg-white/20' : ''}`} disabled={effectiveLoadedCount === 0}><Captions className="h-3 w-3 md:h-4 md:w-4" /></Button>
                   {podcast?.is_live && (
                     <Button variant={showLiveCaptions ? 'secondary' : 'ghost'} size="icon" onClick={() => setShowLiveCaptions(v => !v)} className={showLiveCaptions ? 'bg-blue-600 text-white' : ''} title={showLiveCaptions ? 'Hide Live Captions' : 'Show Live Captions'}><Captions className="h-3 w-3 md:h-4 md:w-4" /></Button>
                   )}
-                  <Button variant="ghost" size="icon" onClick={handleSpeedChange} className="text-white hover:bg-white/20 h-7 w-7 md:h-8 md:w-8" disabled={loadedCount === 0}><span className="text-xs">{playbackSpeed}x</span></Button>
+                  <Button variant="ghost" size="icon" onClick={handleSpeedChange} className="text-white hover:bg-white/20 h-7 w-7 md:h-8 md:w-8" disabled={effectiveLoadedCount === 0}><span className="text-xs">{playbackSpeed}x</span></Button>
                 </div>
                 {showLiveCaptions && podcast?.is_live && (
                   <div className="pointer-events-none fixed left-0 right-0 bottom-24 md:bottom-12 z-[100] flex flex-col items-center px-2 md:px-0">
@@ -631,15 +779,15 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
             </div>
 
             {/* Segment indicator */}
-            {loadedCount > 0 && audioSegments.length > 1 && (
-              <div className="absolute top-3 left-3 bg-black/80 text-white px-2 py-1 rounded-full text-xs md:text-sm backdrop-blur-sm">Segment {currentSegmentIndex + 1} of {audioSegments.length}</div>
+            {effectiveLoadedCount > 0 && effectiveSegmentCount > 1 && (
+              <div className="absolute top-3 left-3 bg-black/80 text-white px-2 py-1 rounded-full text-xs md:text-sm backdrop-blur-sm">{isVideoFlow ? 'Clip' : 'Segment'} {currentSegmentIndex + 1} of {effectiveSegmentCount}</div>
             )}
-            {loadedCount === 0 && isBatchLoading && (
+            {effectiveLoadedCount === 0 && isBatchLoading && (
               <div className="absolute top-3 left-3 bg-black/80 text-white px-2 py-1 rounded-full text-xs md:text-sm backdrop-blur-sm"><Loader2 className="h-3 w-3 inline mr-1 animate-spin" />Loading segments...</div>
             )}
 
             {/* Mobile Progress Bar */}
-            {loadedCount > 0 && (
+            {effectiveLoadedCount > 0 && (
               <div className="absolute bottom-16 left-0 right-0 px-4 md:hidden">
                 <div className="flex items-center justify-between text-xs text-gray-300 mb-1">
                   <span>{formatTime(isSingleAudio ? fullAudioProgress : displayCurrent)}</span>
@@ -707,8 +855,9 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                       const isLoaded = state?.loaded;
                       const isLoading = state?.loading;
 
-                      // Skeleton placeholder for not-yet-loaded segments
-                      if (!isLoaded) {
+                      // In video flow, all transcript segments are always "loaded" (audio is embedded in video)
+                      // Skeleton placeholder for not-yet-loaded segments (audio flow only)
+                      if (!isLoaded && !isVideoFlow) {
                         return (
                           <div key={index} className="p-3 rounded-lg bg-gray-100 dark:bg-gray-900 mb-2 animate-pulse">
                             <div className="flex items-start gap-2">
@@ -729,11 +878,24 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                         <div
                           key={index}
                           ref={(el) => { segmentRefs.current[index] = el; }}
-                          className={`p-3 rounded-lg cursor-pointer transition-all duration-300 mb-2 ${index === currentSegmentIndex ? 'bg-gray-200 dark:bg-gray-800' : 'hover:bg-gray-100 dark:hover:bg-gray-900'}`}
-                          onClick={() => isSingleAudio ? handleSegmentProgressClick(index) : playSegment(index)}
+                          className={`p-3 rounded-lg cursor-pointer transition-all duration-300 mb-2 ${
+                            (isVideoFlow && videoClips.length > 0
+                              ? Array.isArray(videoClips[currentSegmentIndex]?.segmentIndices) && videoClips[currentSegmentIndex].segmentIndices!.includes(index)
+                              : index === currentSegmentIndex)
+                              ? 'bg-gray-200 dark:bg-gray-800' : 'hover:bg-gray-100 dark:hover:bg-gray-900'}`}
+                          onClick={() => {
+                            if (isVideoFlow && videoClips.length > 0) {
+                              const clipIdx = videoClips.findIndex(c => Array.isArray(c.segmentIndices) && c.segmentIndices.includes(index));
+                              playSegment(clipIdx >= 0 ? clipIdx : 0);
+                            } else if (isSingleAudio) {
+                              handleSegmentProgressClick(index);
+                            } else {
+                              playSegment(index);
+                            }
+                          }}
                         >
                           <div className="flex items-start gap-2">
-                            <div className={`h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 ${index === currentSegmentIndex ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-700'}`}><Play className="h-3 w-3 text-white" /></div>
+                            <div className={`h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 ${(isVideoFlow && videoClips.length > 0 ? Array.isArray(videoClips[currentSegmentIndex]?.segmentIndices) && videoClips[currentSegmentIndex].segmentIndices!.includes(index) : index === currentSegmentIndex) ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-700'}`}><Play className="h-3 w-3 text-white" /></div>
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1"><span className="text-sm font-medium text-black dark:text-white">{segment.speaker}</span><span className="text-xs text-gray-600 dark:text-gray-400">#{index + 1}</span></div>
                               <div>
@@ -861,7 +1023,8 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                       const isLoaded = state?.loaded;
                       const isLoadingSeg = state?.loading;
 
-                      if (!isLoaded) {
+                      // In video flow, all transcript segments are always "loaded" (audio is embedded in video)
+                      if (!isLoaded && !isVideoFlow) {
                         return (
                           <div key={index} className="p-3 rounded-lg bg-gray-100 dark:bg-gray-900 mb-2 animate-pulse">
                             <div className="flex items-start gap-2">
@@ -878,9 +1041,23 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
                       }
 
                       return (
-                        <div key={index} className={`p-3 rounded-lg cursor-pointer transition-all duration-300 mb-2 ${index === currentSegmentIndex ? 'bg-gray-200 dark:bg-gray-800' : 'hover:bg-gray-100 dark:hover:bg-gray-900'}`} onClick={() => isSingleAudio ? handleSegmentProgressClick(index) : playSegment(index)}>
+                        <div key={index} className={`p-3 rounded-lg cursor-pointer transition-all duration-300 mb-2 ${
+                          (isVideoFlow && videoClips.length > 0
+                            ? Array.isArray(videoClips[currentSegmentIndex]?.segmentIndices) && videoClips[currentSegmentIndex].segmentIndices!.includes(index)
+                            : index === currentSegmentIndex)
+                            ? 'bg-gray-200 dark:bg-gray-800' : 'hover:bg-gray-100 dark:hover:bg-gray-900'}`}
+                          onClick={() => {
+                            if (isVideoFlow && videoClips.length > 0) {
+                              const clipIdx = videoClips.findIndex(c => Array.isArray(c.segmentIndices) && c.segmentIndices.includes(index));
+                              playSegment(clipIdx >= 0 ? clipIdx : 0);
+                            } else if (isSingleAudio) {
+                              handleSegmentProgressClick(index);
+                            } else {
+                              playSegment(index);
+                            }
+                          }}>
                           <div className="flex items-start gap-2">
-                            <div className={`h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 ${index === currentSegmentIndex ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-700'}`}><Play className="h-3 w-3 text-white" /></div>
+                            <div className={`h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 ${(isVideoFlow && videoClips.length > 0 ? Array.isArray(videoClips[currentSegmentIndex]?.segmentIndices) && videoClips[currentSegmentIndex].segmentIndices!.includes(index) : index === currentSegmentIndex) ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-700'}`}><Play className="h-3 w-3 text-white" /></div>
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1"><span className="text-sm font-medium text-black dark:text-white">{segment.speaker}</span><span className="text-xs text-gray-600 dark:text-gray-400">#{index + 1}</span></div>
                               <p className="text-gray-700 dark:text-gray-300 text-sm">{segment.text}</p>

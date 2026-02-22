@@ -102,7 +102,25 @@ const UserManagement = () => {
         .update({ is_verified: makeActive }) // using is_verified as active flag
         .eq('id', userId);
       if (error) throw error;
+
+      // Log the action with suspend reason in activity logs
+      const { data: { user: adminUser } } = await supabase.auth.getUser();
+      if (adminUser) {
+        await supabase.from('admin_activity_logs').insert({
+          admin_id: adminUser.id,
+          action: makeActive ? 'activate_user' : 'suspend_user',
+          target_type: 'user',
+          target_id: userId,
+          details: {
+            reason: suspendReason || 'No reason provided',
+            previous_status: makeActive ? 'suspended' : 'active',
+            new_status: makeActive ? 'active' : 'suspended',
+          },
+        });
+      }
+
       toast({ title: 'Success', description: makeActive ? 'User activated' : 'User suspended' });
+      setSuspendReason('');
       fetchUsers();
     } catch (err) {
       toast({ title: 'Error', description: `${err}`, variant: 'destructive' });
