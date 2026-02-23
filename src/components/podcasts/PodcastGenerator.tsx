@@ -30,13 +30,18 @@ import {
   Upload,
   Play,
   Wand2,
-  Info
+  Info,
+  RefreshCcw,
+  Music2,
+  Coins,
+  ShoppingCart
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { checkPodcastCreationEligibility } from '@/services/podcastModerationService';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { usePodcastCredits, PODCAST_CREDIT_COSTS } from '@/hooks/usePodcastCredits';
 
 // Unified types matching database schema
 export interface AudioSegment {
@@ -100,6 +105,41 @@ interface PodcastGeneratorProps {
   onPodcastGenerated?: (podcast: PodcastData) => void;
 }
 
+// ── Video generation mode types ──────────────────────────────────────────────
+export type VideoGenerationMode = 'embedded-audio' | 'looping-visual';
+
+interface VideoModeOption {
+  value: VideoGenerationMode;
+  icon: React.ElementType;
+  label: string;
+  description: string;
+  pros: string[];
+  cons: string[];
+  badge?: string;
+}
+
+const videoModeOptions: VideoModeOption[] = [
+  {
+    value: 'embedded-audio',
+    icon: Video,
+    label: 'Embedded Audio',
+    description: 'Veo generates video with audio baked in — each clip is a self-contained scene.',
+    pros: ['Natural lip-sync & ambient audio', 'Authentic cinematic feel'],
+    cons: ['8-second clips per scene', 'Audio may not fully cover longer segments'],
+    badge: 'Current default',
+  },
+  {
+    value: 'looping-visual',
+    icon: RefreshCcw,
+    label: 'Looping Visual',
+    description: 'Silent video loops as background while TTS audio plays — full-duration coverage.',
+    pros: ['Video fills entire segment duration', 'No audio mismatch or cutoffs'],
+    cons: ['No ambient video audio', 'Visual repeats for long segments'],
+    badge: 'Recommended',
+  },
+];
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
   selectedNoteIds = [],
   selectedDocumentIds = [],
@@ -110,6 +150,8 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
   const [style, setStyle] = useState<'casual' | 'educational' | 'deep-dive'>('educational');
   const [duration, setDuration] = useState<'short' | 'medium' | 'long'>('medium');
   const [podcastType, setPodcastType] = useState<'audio' | 'image-audio' | 'video' | 'live-stream'>('audio');
+  // ── NEW: video generation mode ──
+  const [videoGenerationMode, setVideoGenerationMode] = useState<VideoGenerationMode>('looping-visual');
   const [coverImage, setCoverImage] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isGeneratingAiCover, setIsGeneratingAiCover] = useState(false);
@@ -140,6 +182,10 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
     { name: 'Thomas', voice: 'en-US-Neural2-D' },
     { name: 'Isabel', voice: 'en-US-Neural2-C' }
   ]);
+
+  // ─── Podcast credits ─────────────────────────────────────────────────
+  const { balance: creditBalance, canAfford, getCost, isLoading: creditsLoading, monthlyGrant, refreshCredits, claimMonthlyGrant } = usePodcastCredits();
+  const currentCost = getCost(podcastType);
 
   const voiceOptions = [
     { value: 'en-US-Neural2-A', label: 'Neural2 A', gender: 'male' },
@@ -438,30 +484,75 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const response = await supabase.functions.invoke('generate-podcast', {
-        body: {
-          noteIds: localSelectedNoteIds,
-          documentIds: localSelectedDocumentIds,
-          style,
-          duration,
-          podcastType,
-          cover_image_url: coverImage,
-          numberOfHosts,
-          hosts,
+      let result: any;
+      try {
+        const response = await supabase.functions.invoke('generate-podcast', {
+          body: {
+            noteIds: localSelectedNoteIds,
+            documentIds: localSelectedDocumentIds,
+            style,
+            duration,
+            podcastType,
+            // ── Pass videoGenerationMode only for video podcasts ──
+            ...(podcastType === 'video' && { videoGenerationMode }),
+            cover_image_url: coverImage,
+            numberOfHosts,
+            hosts,
+          }
+        });
+
+        if (response.error) {
+          throw response.error;
         }
-      });
+        result = response.data;
+      } catch (fetchErr: any) {
+        // On 504 / timeout, check if the podcast was early-saved in the DB
+        const errMsg = fetchErr?.message || fetchErr?.toString() || '';
+        if (errMsg.includes('504') || errMsg.includes('Gateway') || errMsg.includes('ERR_FAILED') || errMsg.includes('TimeoutError')) {
+          console.warn('[Podcast] Request timed out, checking for early-saved podcast...');
+          await new Promise(r => setTimeout(r, 2000));
+          const { data: recentPodcast } = await supabase
+            .from('ai_podcasts')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('podcast_type', podcastType)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
-      if (response.error) {
-        throw new Error(response.error.message || 'Failed to generate podcast');
+          if (recentPodcast?.created_at) {
+            const createdAt = new Date(recentPodcast.created_at).getTime();
+            if (createdAt > Date.now() - 6 * 60 * 1000) {
+              result = { success: true, podcast: recentPodcast };
+            }
+          }
+          if (!result) {
+            throw new Error('Generation timed out. Please try again — your credits will be refunded.');
+          }
+        } else {
+          throw fetchErr;
+        }
       }
-
-      const result = response.data;
 
       if (!result) {
         throw new Error('No response data received from server');
       }
 
+      // Handle insufficient credits response
+      if (result.error === 'insufficient_credits') {
+        await refreshCredits();
+        toast.error(result.message || `Insufficient credits. You need ${result.required} but have ${result.balance}.`, {
+          action: {
+            label: 'Buy Credits',
+            onClick: () => { window.location.href = '/subscription'; },
+          },
+        });
+        return;
+      }
+
       if (result.success) {
+        // Refresh credit balance after successful generation
+        await refreshCredits();
         const backendPodcast = result.podcast;
         
         let audioSegments: AudioSegment[] = [];
@@ -512,6 +603,13 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
         };
 
         toast.success('Podcast generated successfully!', { icon: '🎙️' });
+        // For video podcasts, video loops are enhanced in the background
+        if (podcastType === 'video') {
+          toast.info('Video loops are being generated in the background. Refresh the podcast later for enhanced visuals.', {
+            icon: '🎬',
+            duration: 6000,
+          });
+        }
         onPodcastGenerated?.(podcast);
         onClose?.();
       } else {
@@ -585,6 +683,24 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
                     <span className="hidden sm:inline text-sm font-medium">{step}</span>
                   </div>
                 ))}
+              </div>
+
+              {/* ── Credit Balance Bar ── */}
+              <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-950/40 dark:to-yellow-950/40 border border-amber-200 dark:border-amber-800">
+                <div className="flex items-center gap-2 text-sm">
+                  <Coins className="h-4 w-4 text-amber-600" />
+                  <span className="font-medium text-amber-900 dark:text-amber-100">
+                    {creditsLoading ? '...' : creditBalance} credits
+                  </span>
+                  <span className="text-amber-600 dark:text-amber-400">|</span>
+                  <span className="text-amber-700 dark:text-amber-300">
+                    Cost: <strong>{currentCost}</strong> for {podcastType}
+                  </span>
+                </div>
+                <Link to="/subscription" className="text-xs text-amber-700 dark:text-amber-300 hover:underline flex items-center gap-1">
+                  <ShoppingCart className="h-3 w-3" />
+                  Buy More
+                </Link>
               </div>
             </>
           )}
@@ -866,11 +982,19 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
                                     <Icon className="h-5 w-5" />
                                     {type.label}
                                   </div>
-                                  {type.badge && (
-                                    <Badge variant={type.badge === 'Premium' ? 'destructive' : 'secondary'} className="text-xs">
-                                      {type.badge}
+                                  <div className="flex items-center gap-1.5">
+                                    <Badge variant="outline" className={`text-xs ${
+                                      canAfford(type.value) ? 'border-emerald-400 text-emerald-600' : 'border-red-400 text-red-600'
+                                    }`}>
+                                      <Coins className="h-3 w-3 mr-1" />
+                                      {PODCAST_CREDIT_COSTS[type.value] ?? 1}
                                     </Badge>
-                                  )}
+                                    {type.badge && (
+                                      <Badge variant={type.badge === 'Premium' ? 'destructive' : 'secondary'} className="text-xs">
+                                        {type.badge}
+                                      </Badge>
+                                    )}
+                                  </div>
                                 </CardTitle>
                                 <CardDescription className={podcastType === type.value ? 'text-white/80' : ''}>
                                   {type.description}
@@ -882,6 +1006,108 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
                       })}
                     </div>
                   </div>
+
+                  {/* ── Video Generation Mode (only shown when Video Podcast is selected) ── */}
+                  <AnimatePresence>
+                    {podcastType === 'video' && (
+                      <motion.div
+                        key="video-mode-picker"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.25 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="space-y-3 pt-2">
+                          <div className="flex items-center gap-2">
+                            <Label className="text-base font-semibold text-gray-900 dark:text-white">
+                              Video Generation Mode
+                            </Label>
+                            <Badge variant="outline" className="text-xs text-orange-600 border-orange-400">
+                              Video only
+                            </Badge>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {videoModeOptions.map((mode) => {
+                              const Icon = mode.icon;
+                              const isSelected = videoGenerationMode === mode.value;
+                              return (
+                                <motion.div
+                                  key={mode.value}
+                                  whileHover={{ scale: 1.03 }}
+                                  whileTap={{ scale: 0.97 }}
+                                >
+                                  <Card
+                                    className={`cursor-pointer transition-all h-full ${
+                                      isSelected
+                                        ? 'ring-2 ring-orange-500 bg-orange-50 dark:bg-orange-950 border-orange-300 dark:border-orange-700'
+                                        : 'hover:shadow-md border-gray-200 dark:border-gray-700'
+                                    }`}
+                                    onClick={() => setVideoGenerationMode(mode.value)}
+                                  >
+                                    <CardHeader className="pb-2">
+                                      <CardTitle className="flex items-center justify-between text-sm">
+                                        <div className="flex items-center gap-2">
+                                          <div className={`p-1.5 rounded-lg ${isSelected ? 'bg-orange-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
+                                            <Icon className="h-4 w-4" />
+                                          </div>
+                                          <span className={`font-semibold ${isSelected ? 'text-orange-700 dark:text-orange-300' : 'text-gray-900 dark:text-white'}`}>
+                                            {mode.label}
+                                          </span>
+                                        </div>
+                                        {mode.badge && (
+                                          <Badge
+                                            variant="secondary"
+                                            className={`text-xs ${
+                                              mode.badge === 'Recommended'
+                                                ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                                                : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                            }`}
+                                          >
+                                            {mode.badge}
+                                          </Badge>
+                                        )}
+                                      </CardTitle>
+                                      <CardDescription className="text-xs mt-1">
+                                        {mode.description}
+                                      </CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="pt-0 pb-3">
+                                      <div className="space-y-1.5">
+                                        {mode.pros.map((pro) => (
+                                          <div key={pro} className="flex items-start gap-1.5 text-xs text-green-700 dark:text-green-400">
+                                            <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                                            {pro}
+                                          </div>
+                                        ))}
+                                        {mode.cons.map((con) => (
+                                          <div key={con} className="flex items-start gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                            <XCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-gray-400" />
+                                            {con}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                </motion.div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Context note */}
+                          <div className="flex items-start gap-3 p-3 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-xl">
+                            <Info className="h-4 w-4 text-orange-600 flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-orange-800 dark:text-orange-200">
+                              {videoGenerationMode === 'embedded-audio'
+                                ? 'Veo will generate short cinematic clips (~8s each) with audio baked in. The player will stitch them together. Audio may not perfectly match longer script segments.'
+                                : 'Veo will generate silent background video. Your hosts\' TTS voices play over the looping visuals — full-duration coverage with no audio gaps.'}
+                            </p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   {/* Style */}
                   <div className="space-y-4">
@@ -1227,6 +1453,22 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
                           {podcastType.replace('-', ' ')}
                         </Badge>
                       </div>
+                      {/* ── Show video mode in summary only when relevant ── */}
+                      {podcastType === 'video' && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600 dark:text-gray-400">Video mode:</span>
+                          <Badge
+                            variant="secondary"
+                            className={`capitalize ${
+                              videoGenerationMode === 'looping-visual'
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                                : 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'
+                            }`}
+                          >
+                            {videoGenerationMode === 'looping-visual' ? 'Looping Visual' : 'Embedded Audio'}
+                          </Badge>
+                        </div>
+                      )}
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-gray-600 dark:text-gray-400">Style:</span>
                         <Badge variant="secondary" className="capitalize">
@@ -1275,7 +1517,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
               ) : (
                 <Button
                   onClick={generatePodcast}
-                  disabled={isGenerating}
+                  disabled={isGenerating || !canAfford(podcastType)}
                   className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-8"
                   size="lg"
                 >
@@ -1284,10 +1526,15 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
                       <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                       {podcastType === 'video' ? 'Generating video clips...' : 'Generating...'}
                     </>
+                  ) : !canAfford(podcastType) ? (
+                    <>
+                      <Coins className="mr-2 h-5 w-5" />
+                      Need {currentCost} Credits
+                    </>
                   ) : (
                     <>
                       <Podcast className="mr-2 h-5 w-5" />
-                      Generate Podcast
+                      Generate ({currentCost} credit{currentCost !== 1 ? 's' : ''})
                     </>
                   )}
                 </Button>

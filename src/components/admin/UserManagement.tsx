@@ -32,6 +32,9 @@ const UserManagement = () => {
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
   const [upgradePlan, setUpgradePlan] = useState<'scholar' | 'genius'>('scholar');
   const [isUpgrading, setIsUpgrading] = useState(false);
+  // Credit amounts by plan (matches MONTHLY_CREDIT_GRANTS)
+  const PLAN_CREDITS: Record<string, number> = { scholar: 5, genius: 15 };
+
   // Manual upgrade handler
   const handleManualUpgrade = async () => {
     if (!selectedUser) return;
@@ -48,7 +51,30 @@ const UserManagement = () => {
           paystack_sub_code: null
         }, { onConflict: 'user_id' });
       if (error) throw error;
-      toast({ title: 'Success', description: `User upgraded to ${upgradePlan} plan and activated.` });
+
+      // Grant podcast credits for the new tier
+      const creditAmount = PLAN_CREDITS[upgradePlan] ?? 0;
+      if (creditAmount > 0) {
+        const { error: creditError } = await supabase.rpc('add_podcast_credits' as any, {
+          p_user_id: selectedUser.id,
+          p_amount: creditAmount,
+          p_type: 'admin_adjustment',
+          p_description: `Admin granted ${upgradePlan} tier credits (${creditAmount} credits)`,
+        });
+        if (creditError) {
+          console.error('Credit grant error:', creditError);
+          // Non-fatal — subscription upgrade succeeded, log but don't block
+          toast({
+            title: 'Partial Success',
+            description: `User upgraded to ${upgradePlan} but credit grant failed: ${creditError.message}`,
+            variant: 'destructive',
+          });
+          setIsUpgradeOpen(false);
+          return;
+        }
+      }
+
+      toast({ title: 'Success', description: `User upgraded to ${upgradePlan} plan with ${creditAmount} podcast credits.` });
       setIsUpgradeOpen(false);
     } catch (err) {
       toast({ title: 'Error upgrading user', description: `${err}`, variant: 'destructive' });

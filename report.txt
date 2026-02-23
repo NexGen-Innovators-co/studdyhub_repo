@@ -1,0 +1,2294 @@
+﻿========== accept-institution-invite ==========
+IMPORTS (first 15 lines):
+// supabase/functions/accept-institution-invite/index.ts
+// Edge function for accepting an institution invitation via token.
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+---
+createClient:
+  L5: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L30: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error: any) {
+    return new Response(JSON.stringify({ error: error.message || 'Internal server error' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
+
+
+========== admin-ai-insights ==========
+IMPORTS (first 15 lines):
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+---
+createClient:
+  L2: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L22: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error: any) {
+    return new Response(JSON.stringify({
+      error: error.message || 'Internal server error',
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
+
+
+========== ai-categorize-post ==========
+IMPORTS (first 15 lines):
+// supabase/functions/ai-categorize-post/index.ts
+// AI-powered post categorization using Gemini
+// Called automatically when a new post is created, or can batch-categorize existing posts
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+import { callGeminiJSON } from '../utils/gemini.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+---
+createClient:
+  L6: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L42: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('ai-categorize-post error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+async function categorizeContent(content: string): Promise<CategorizeResult | null> {
+  if (!content || content.trim().length < 5) {
+    return { categories: ['discussion'], sentiment: 'neutral', quality_score: 3 };
+  }
+
+  const prompt = `Analyze this social media post from an educational/study platform and categorize it.
+
+========== ai-rank-feed ==========
+IMPORTS (first 15 lines):
+// supabase/functions/ai-rank-feed/index.ts
+// AI-powered personalized feed ranking using user interaction signals + Gemini
+// Builds a preference profile per user and scores posts against it
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+import { callGeminiJSON } from '../utils/gemini.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+---
+createClient:
+  L6: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L73: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('ai-rank-feed error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+/**
+ * Get user preferences (from cache, DB, or compute fresh)
+ */
+async function getUserPreferences(supabase: any, userId: string): Promise<UserPreferences> {
+  // Check in-memory cache
+  const cached = preferencesCache.get(userId);
+
+========== analyze-document-structure ==========
+IMPORTS (first 15 lines):
+import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+
+// Model fallback chain for quota/rate-limit resilience
+const MODEL_CHAIN = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-2.5-pro',
+    'gemini-3-pro-preview',
+];
+const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS'
+};
+---
+createClient:
+  (none)
+---
+CATCH BLOCK:
+    } catch (error) {
+        //console.error('Error analyzing document structure:', error.message);
+        return new Response(JSON.stringify({
+            error: error.message
+        }), {
+            status: 500,
+            headers: {
+                ...corsHeaders,
+                'Content-Type': 'application/json'
+            }
+        });
+    }
+});
+
+
+========== calendar-auth ==========
+IMPORTS (first 15 lines):
+// Supabase Edge Function: calendar-auth
+// Generates OAuth authorization URLs for Google Calendar and Outlook Calendar
+
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
+
+const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID')!
+const GOOGLE_REDIRECT_URI = Deno.env.get('GOOGLE_REDIRECT_URI')!
+
+const MICROSOFT_CLIENT_ID = Deno.env.get('MICROSOFT_CLIENT_ID')!
+const MICROSOFT_REDIRECT_URI = Deno.env.get('MICROSOFT_REDIRECT_URI')!
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+---
+createClient:
+  (none)
+---
+CATCH BLOCK:
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+})
+
+
+========== calendar-callback ==========
+IMPORTS (first 15 lines):
+// Supabase Edge Function: calendar-callback
+// Handles OAuth callback from Google Calendar and Outlook Calendar
+
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+
+const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID')!
+const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET')!
+const GOOGLE_REDIRECT_URI = Deno.env.get('GOOGLE_REDIRECT_URI')!
+
+const MICROSOFT_CLIENT_ID = Deno.env.get('MICROSOFT_CLIENT_ID')!
+const MICROSOFT_CLIENT_SECRET = Deno.env.get('MICROSOFT_CLIENT_SECRET')!
+const MICROSOFT_REDIRECT_URI = Deno.env.get('MICROSOFT_REDIRECT_URI')!
+interface TokenResponse {
+  access_token: string
+---
+createClient:
+  L5: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+  L175: const supabaseClient = createClient(
+---
+CATCH BLOCK:
+  } catch (error) {
+    // console.error('Error in calendar-callback function:', error)
+    return new Response(
+      `
+      <!DOCTYPE html>
+      <html>
+        <head><title>Calendar Connection Failed</title></head>
+        <body>
+          <script>
+            window.opener?.postMessage({ 
+              type: 'calendar-auth-error', 
+              error: '${error.message}' 
+            }, '*');
+            window.close();
+          </script>
+
+========== check-schedule-reminders ==========
+IMPORTS (first 15 lines):
+// Supabase Edge Function: check-schedule-reminders
+// Scans for upcoming schedule items and triggers push notifications
+// Run via pg_cron every minute
+
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+---
+createClient:
+  L6: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+  L23: const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('Error in check-schedule-reminders:', error)
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+})
+
+
+========== cloud-tts ==========
+IMPORTS (first 15 lines):
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+interface TtsRequest {
+  text: string;
+  // voice can be 'male'|'female' for legacy usage or a specific TTS voice name like 'en-US-Neural2-D'
+  voice?: 'male' | 'female' | string;
+  rate?: number;
+  pitch?: number;
+}
+
+---
+createClient:
+  (none)
+---
+CATCH BLOCK:
+  } catch (error: any) {
+    // console.error("[CloudTTS] Error:", error);
+    return new Response(
+      JSON.stringify({ success: false, error: error.message }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+});
+
+
+
+========== comment-on-post ==========
+IMPORTS (first 15 lines):
+import { serve } from "https://deno.land/std@0.170.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { 
+  createSubscriptionValidator, 
+  createErrorResponse as createSubErrorResponse, 
+  extractUserIdFromAuth 
+} from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS'
+};
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+---
+createClient:
+  L2: import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+  L97: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    // console.error("Unexpected error:", error);
+    return createSubErrorResponse("Internal server error", 500);
+  }
+});
+
+
+
+========== complete-podcast-chunks ==========
+IMPORTS (first 15 lines):
+// Edge Function: complete-podcast-chunks
+// Validates uploaded chunks for a session, assembles into a final file, and triggers transcription.
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+  'Access-Control-Allow-Credentials': 'true',
+};
+
+serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L21: const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, { auth: { persistSession: false } });
+---
+CATCH BLOCK:
+  } catch (e: any) {
+    console.error('complete-podcast-chunks error:', e);
+    return new Response(JSON.stringify({ success: false, error: e?.message || String(e), stack: e?.stack }), { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+  }
+});
+
+
+
+========== content-moderation ==========
+IMPORTS (first 15 lines):
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+
+// Model fallback chain for quota/rate-limit resilience
+const MODEL_CHAIN = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-pro',
+  'gemini-3-pro-preview',
+];
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+---
+createClient:
+  L2: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+  L45: const supabase = createClient(
+---
+CATCH BLOCK:
+  } catch (error: any) {
+    // console.error('Content moderation error:', error);
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      approved: false,
+      reason: 'Moderation service error'
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500
+    });
+  }
+});
+
+
+
+========== context-service ==========
+IMPORTS (first 15 lines):
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+export class UserContextService {
+  private supabase;
+  
+  constructor(supabaseUrl: string, supabaseKey: string) {
+    this.supabase = createClient(supabaseUrl, supabaseKey);
+  }
+
+  async getUserContext(userId: string) {
+    try {
+      const [
+        profileResult,
+        statsResult,
+        recentNotesResult,
+---
+createClient:
+  L1: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L7: this.supabase = createClient(supabaseUrl, supabaseKey);
+---
+CATCH BLOCK:
+    } catch (error) {
+      // console.error('Error recording topic connection:', error);
+    }
+  }
+}
+
+
+========== create-chat-session ==========
+IMPORTS (first 15 lines):
+// supabase/functions/create-chat-session/index.ts
+// Consolidates: search existing P2P session + create new one (2 queries ΓåÆ 1 call)
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L38: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('create-chat-session error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+
+========== create-institution ==========
+IMPORTS (first 15 lines):
+// supabase/functions/create-institution/index.ts
+// Edge function for creating a new institution with the creator as owner.
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+---
+createClient:
+  L5: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L31: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error: any) {
+    return new Response(JSON.stringify({ error: error.message || 'Internal server error' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
+
+
+========== create-social-post ==========
+IMPORTS (first 15 lines):
+// supabase/functions/create-social-post/index.ts
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { 
+  SubscriptionValidator, 
+  createErrorResponse, 
+  extractUserIdFromAuth 
+} from '../utils/subscription-validator.ts';
+import { getEducationContext } from '../_shared/educationContext.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS'
+};
+---
+createClient:
+  L3: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L73: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    // console.error('Error in create-social-post:', error);
+    return createErrorResponse('Internal server error', 500);
+  }
+});
+
+
+
+========== create-study-group ==========
+IMPORTS (first 15 lines):
+// supabase/functions/create-study-group/index.ts
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { 
+  SubscriptionValidator, 
+  createErrorResponse, 
+  extractUserIdFromAuth 
+} from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS'
+};
+
+---
+createClient:
+  L3: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L66: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    // console.error('Error in create-study-group:', error);
+    return createErrorResponse('Internal server error', 500);
+  }
+});
+
+
+
+========== delete-chat-message ==========
+IMPORTS (first 15 lines):
+// supabase/functions/delete-chat-message/index.ts
+// Consolidates: delete media, resources, and message in one call
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L34: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('delete-chat-message error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+
+========== delete-group ==========
+IMPORTS (first 15 lines):
+// supabase/functions/delete-group/index.ts
+// Consolidates: cascade delete group members, posts, events, chat messages, then group (5 queries ΓåÆ 1 call)
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L32: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('Error in delete-group:', error);
+    return createErrorResponse(error.message || 'Internal server error', 500);
+  }
+});
+
+
+========== delete-social-post ==========
+IMPORTS (first 15 lines):
+// supabase/functions/delete-social-post/index.ts
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+---
+createClient:
+  L3: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L33: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('delete-social-post error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+
+========== document-extractor ==========
+IMPORTS (first 15 lines):
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import mammoth from 'https://esm.sh/mammoth@1.6.0';
+import * as XLSX from 'https://esm.sh/xlsx@0.18.5';
+import JSZIP from 'https://esm.sh/jszip@3.10.1';
+import xml2js from 'https://esm.sh/xml2js@0.5.0';
+import Papa from 'https://esm.sh/papaparse@5.4.1';
+import cheerio from 'https://esm.sh/cheerio@1.0.0-rc.12';
+import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.min.js';
+// Define CORS headers for cross-origin requests
+const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS'
+};
+---
+createClient:
+  L2: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L619: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+    } catch (error) {
+        const processingTime = Date.now() - startTime;
+        //console.error('Error in enhanced document-processor function:', error);
+        return new Response(JSON.stringify({
+            error: error.message || 'Internal Server Error',
+            processingTime,
+            filesProcessedCount: files.length,
+            processingResults: files.map((f) => ({
+                id: f.id,
+                name: f.name,
+                type: f.type,
+                mimeType: f.mimeType,
+                status: f.processing_status || 'failed',
+                error: f.processing_error || error.message,
+                fileUrl: f.file_url,
+
+========== document-parser ==========
+IMPORTS (first 15 lines):
+import "https://deno.land/x/xhr@0.2.0/mod.ts";
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { pdfText } from "jsr:@pdf/pdftext@1.3.2"; // Switched to @pdf/pdftext from JSR
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+---
+createClient:
+  (none)
+---
+CATCH BLOCK:
+  } catch (error) {
+    // console.error('Document Parser Edge Function Error:', error.message);
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500,
+    });
+  }
+});
+
+
+
+========== document-processor ==========
+IMPORTS (first 15 lines):
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import mammoth from 'https://esm.sh/mammoth@1.6.0';
+import * as XLSX from 'https://esm.sh/xlsx@0.18.5';
+import JSZIP from 'https://esm.sh/jszip@3.10.1';
+import xml2js from 'https://esm.sh/xml2js@0.5.0';
+import Papa from 'https://esm.sh/papaparse@5.4.1';
+import cheerio from 'https://esm.sh/cheerio@1.0.0-rc.12';
+import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.min.js';
+
+// Define CORS headers for cross-origin requests
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS'
+---
+createClient:
+  L2: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L635: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    const processingTime = Date.now() - startTime;
+    // console.error('Error in enhanced document-processor function:', error);
+    return new Response(JSON.stringify({
+      error: error.message || 'Internal Server Error',
+      processingTime,
+      filesProcessedCount: files.length,
+      processingResults: files.map((f)=>({
+          id: f.id,
+          name: f.name,
+          type: f.type,
+          mimeType: f.mimeType,
+          status: f.processing_status || 'failed',
+          error: f.processing_error || error.message,
+          fileUrl: f.file_url,
+
+========== edit-social-post ==========
+IMPORTS (first 15 lines):
+// supabase/functions/edit-social-post/index.ts
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+function extractHashtags(content: string): string[] {
+  const regex = /#(\w+)/g;
+  const matches: string[] = [];
+  let match: RegExpExecArray | null;
+---
+createClient:
+  L3: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L49: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('edit-social-post error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+
+========== fix-diagram ==========
+IMPORTS (first 15 lines):
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+// Model fallback chain for quota/rate-limit resilience
+const MODEL_CHAIN = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-pro',
+  'gemini-3-pro-preview',
+];
+---
+createClient:
+  (none)
+---
+CATCH BLOCK:
+  } catch (error) {
+    //console.error('Error in fix-diagram function:', error)
+
+    return new Response(
+      JSON.stringify({
+        error: error.message,
+        fixedContent: '',
+        explanation: 'Unable to process fix request',
+        suggestions: ['Please try again or check the content manually']
+      }),
+      {
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+
+========== follow-user ==========
+IMPORTS (first 15 lines):
+import { serve } from "https://deno.land/std@0.170.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { corsHeaders } from "../_shared/cors.ts";
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+interface FollowRequest {
+  targetUserId: string;
+}
+
+interface ErrorResponse {
+  error: string;
+}
+
+---
+createClient:
+  L2: import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+  L60: const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+---
+CATCH BLOCK:
+  } catch (error) {
+    // console.error("Unexpected error:", error);
+    return createErrorResponse("Internal server error", 500);
+  }
+});
+
+
+
+========== gemini-audio-processor ==========
+IMPORTS (first 15 lines):
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.0';
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+
+// Define the expected request body structure
+interface RequestBody {
+  file_url?: string;
+  recording_id?: string; // If provided, uses async background processing
+  target_language?: string; 
+}
+
+// Initialize Supabase client
+const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!; 
+
+const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
+---
+createClient:
+  L1: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.0';
+  L15: const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
+---
+CATCH BLOCK:
+  } catch (error: any) { // Explicitly type error as 'any' for easier access to .message
+    //console.error('Error processing audio:', error);
+    return new Response(JSON.stringify({ error: error.message || 'An unknown error occurred' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500,
+    });
+  }
+});
+
+
+
+========== gemini-document-extractor ==========
+IMPORTS (first 15 lines):
+// supabase/functions/gemini-document-extractor/index.ts
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.43.2';
+import { createSubscriptionValidator, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS'
+};
+
+const SUPPORTED_MIME_TYPES = [
+    'application/pdf',
+    'text/plain',
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.43.2';
+  L280: supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
+---
+CATCH BLOCK:
+        } catch (updateErr) {
+            // console.error("Failed to update document status to failed:", updateErr);
+        }
+
+        return new Response(JSON.stringify({
+            success: false,
+            error: errorMessage,
+            documentId: documentId,
+            status: 'failed'
+        }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 500
+        });
+    }
+});
+
+========== generate-dashboard-insights ==========
+IMPORTS (first 15 lines):
+import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getEducationContext, formatEducationContextForPrompt } from '../_shared/educationContext.ts';
+
+// CORS headers for browser access
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS'
+};
+
+// Model fallback chain for quota/rate-limit resilience
+const MODEL_CHAIN = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+---
+createClient:
+  L2: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L99: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('Error in generate-dashboard-insights:', error);
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { 
+        status: 500, 
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+      }
+    );
+  }
+});
+
+
+========== generate-flashcards ==========
+IMPORTS (first 15 lines):
+import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createSubscriptionValidator, createErrorResponse } from '../utils/subscription-validator.ts';
+import { getEducationContext, formatEducationContextForPrompt } from '../_shared/educationContext.ts';
+
+// Model fallback chain for quota/rate-limit resilience
+const MODEL_CHAIN = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-pro',
+  'gemini-3-pro-preview',
+];
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+---
+createClient:
+  L2: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L180: const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+---
+CATCH BLOCK:
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    // console.error('Flashcard generation error:', error);
+    return new Response(JSON.stringify({
+      error: 'Failed to generate flashcards',
+      details: errorMessage,
+      timestamp: new Date().toISOString()
+    }), {
+      status: 500,
+      headers: {
+        ...CORS_HEADERS,
+        'Content-Type': 'application/json'
+      }
+    });
+  }
+
+========== generate-image-from-text ==========
+IMPORTS (first 15 lines):
+import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { decodeBase64 } from 'https://deno.land/std@0.224.0/encoding/base64.ts';
+// import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.24.1';
+
+const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+    if (req.method === 'OPTIONS') {
+        return new Response('ok', { headers: corsHeaders });
+    }
+---
+createClient:
+  L2: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L34: const supabaseClient = createClient(
+---
+CATCH BLOCK:
+    } catch (error) {
+        // console.error('Edge function error in generate-image-from-text:', error.message);
+        return new Response(JSON.stringify({ error: error.message }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+    }
+});
+
+
+========== generate-inline-content ==========
+IMPORTS (first 15 lines):
+import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createSubscriptionValidator, createErrorResponse } from '../utils/subscription-validator.ts';
+
+// Model fallback chain for quota/rate-limit resilience
+const MODEL_CHAIN = [
+	'gemini-2.5-flash',
+	'gemini-2.0-flash',
+	'gemini-2.0-flash-lite',
+	'gemini-2.5-pro',
+	'gemini-3-pro-preview',
+];
+
+const CORS_HEADERS = {
+	'Access-Control-Allow-Origin': '*',
+---
+createClient:
+  L2: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+---
+CATCH BLOCK:
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+		// console.error('[generate-inline-content] Unexpected error:', errorMessage);
+		// console.error('[generate-inline-content] Error stack:', error instanceof Error ? error.stack : 'No stack');
+		
+		return new Response(JSON.stringify({ 
+			error: 'Failed to generate inline content', 
+			details: errorMessage 
+		}), {
+			status: 500,
+			headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+		});
+	}
+});
+
+
+========== generate-note-from-document ==========
+IMPORTS (first 15 lines):
+import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createSubscriptionValidator, createErrorResponse as createSubErrorResponse } from '../utils/subscription-validator.ts';
+
+// Model fallback chain for quota/rate-limit resilience
+const MODEL_CHAIN = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-pro',
+  'gemini-3-pro-preview',
+];
+
+async function callGeminiWithModelChain(prompt: string, apiKey: string): Promise<string> {
+  const requestBody = {
+---
+createClient:
+  L2: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L297: const supabaseClient = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_ANON_KEY'), {
+  L306: const supabaseServiceRoleClient = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'));
+---
+CATCH BLOCK:
+    } catch (error) {
+        //console.error('Edge function error:', error.message);
+        return new Response(JSON.stringify({
+            error: error.message
+        }), {
+            status: 500,
+            headers: {
+                ...corsHeaders,
+                'Content-Type': 'application/json'
+            }
+        });
+    }
+});
+
+
+========== generate-summary ==========
+IMPORTS (first 15 lines):
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createSubscriptionValidator, createErrorResponse, extractUserIdFromAuth } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+---
+createClient:
+  (none)
+---
+CATCH BLOCK:
+  } catch (error) {
+    // console.error('Error in generate-summary function:', error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
+
+
+========== get-chat-messages ==========
+IMPORTS (first 15 lines):
+// supabase/functions/get-chat-messages/index.ts
+// Consolidates: messages + media + resources in one call
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+const canDisplayDocumentInline = (doc: any): boolean => {
+  if (!doc?.content_extracted) return false;
+  return (
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L147: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('get-chat-messages error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+
+========== get-chat-sessions ==========
+IMPORTS (first 15 lines):
+// supabase/functions/get-chat-sessions/index.ts
+// Fixes N+1 problem: single query instead of 2 queries per session
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L27: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('get-chat-sessions error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+
+========== get-comments ==========
+IMPORTS (first 15 lines):
+// supabase/functions/get-comments/index.ts
+// Fetches comments for a post with author details in a single server-side call
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L34: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('get-comments error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+
+========== get-institution-analytics ==========
+IMPORTS (first 15 lines):
+// supabase/functions/get-institution-analytics/index.ts
+// Edge function for fetching institution-level analytics.
+// Returns member counts, course stats, activity trends.
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+---
+createClient:
+  L6: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L31: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error: any) {
+    return new Response(JSON.stringify({ error: error.message || 'Internal server error' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
+
+
+========== get-social-feed ==========
+IMPORTS (first 15 lines):
+// supabase/functions/get-social-feed/index.ts
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+import { fetchPostsWithRelations, scoreAndSortPosts } from '../utils/post-helpers.ts';
+import { callGeminiJSON } from '../utils/gemini.ts';
+import { getEducationContext, type ServerEducationContext } from '../_shared/educationContext.ts';
+
+// Signal weights for AI preference computation
+const SIGNAL_WEIGHTS: Record<string, number> = {
+  like: 1.0, comment: 1.5, bookmark: 2.0, share: 3.0, view: 0.3, skip: -0.5, hide: -3.0,
+};
+
+// In-memory preference cache (per function instance, ~10 min TTL)
+const preferencesCache = new Map<string, { data: any; expires: number }>();
+---
+createClient:
+  L3: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L288: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('get-social-feed error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+
+========== get-social-groups ==========
+IMPORTS (first 15 lines):
+// supabase/functions/get-social-groups/index.ts
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+---
+createClient:
+  L3: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L29: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('get-social-groups error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+
+========== get-suggested-users ==========
+IMPORTS (first 15 lines):
+// supabase/functions/get-suggested-users/index.ts
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+import { callGeminiJSON } from '../utils/gemini.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+---
+createClient:
+  L3: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L30: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('get-suggested-users error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+
+========== get-user-posts-metadata ==========
+IMPORTS (first 15 lines):
+// supabase/functions/get-user-posts-metadata/index.ts
+// Consolidates: fetch user posts + hashtags + tags + like status + bookmark status (5 queries ΓåÆ 1 call)
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L37: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('Error in get-user-posts-metadata:', error);
+    return createErrorResponse(error.message || 'Internal server error', 500);
+  }
+});
+
+
+========== get-user-resources ==========
+IMPORTS (first 15 lines):
+// supabase/functions/get-user-resources/index.ts
+// Consolidates: fetch user notes + documents + class_recordings (3 parallel queries ΓåÆ 1 call)
+// Supports pagination via offset/limit
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+---
+createClient:
+  L5: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L42: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('Error in get-user-resources:', error);
+    return createErrorResponse(error.message || 'Internal server error', 500);
+  }
+});
+
+
+========== image-search-proxy ==========
+IMPORTS (first 15 lines):
+import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS'
+};
+
+serve(async (req) => {
+  // Handle CORS preflight request
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', {
+      headers: corsHeaders
+    });
+  }
+---
+createClient:
+  (none)
+---
+CATCH BLOCK:
+  } catch (error: any) {
+    // console.error('Edge function error in image-search-proxy:', error.message);
+    return new Response(JSON.stringify({
+      error: error.message
+    }), {
+      status: 500,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json'
+      }
+    });
+  }
+});
+
+
+
+========== join-leave-group ==========
+IMPORTS (first 15 lines):
+// supabase/functions/join-leave-group/index.ts
+// Consolidates: check membership, insert/delete, update members_count
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L34: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('join-leave-group error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+
+========== like-post ==========
+IMPORTS (first 15 lines):
+import { serve } from "https://deno.land/std@0.170.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+interface LikePostRequest {
+  postId: string;
+  isLiked: boolean;
+}
+---
+createClient:
+  L2: import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+  L80: const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+---
+CATCH BLOCK:
+  } catch (error) {
+    // console.error("Unexpected error:", error);
+    return createErrorResponse("Internal server error", 500);
+  }
+});
+
+
+
+========== live-quiz ==========
+IMPORTS (first 15 lines):
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Content-Type': 'application/json',
+};
+
+// Helper: Generate random join code
+function generateJoinCode(): string {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+---
+createClient:
+  L2: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+  L137: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error: any) {
+    // console.error('Unexpected error:', error);
+    return new Response(
+      JSON.stringify({ 
+        error: 'Internal server error', 
+        details: error.message 
+      }),
+      { status: 500, headers: corsHeaders }
+    );
+  }
+});
+
+
+========== manage-event ==========
+IMPORTS (first 15 lines):
+// supabase/functions/manage-event/index.ts
+// Consolidates: create event + auto RSVP, update RSVP (upsert), delete event + attendees ΓåÆ 1 call
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L34: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('Error in manage-event:', error);
+    return createErrorResponse(error.message || 'Internal server error', 500);
+  }
+});
+
+
+========== manage-group-member ==========
+IMPORTS (first 15 lines):
+// supabase/functions/manage-group-member/index.ts
+// Consolidates: approve member (RPC + count update), reject member (delete + notification) ΓåÆ 1 call
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L37: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('Error in manage-group-member:', error);
+    return createErrorResponse(error.message || 'Internal server error', 500);
+  }
+});
+
+
+========== manage-institution-members ==========
+IMPORTS (first 15 lines):
+// supabase/functions/manage-institution-members/index.ts
+// Edge function for managing institution members ΓÇö invite, remove, update role, list.
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+type Action = 'list' | 'invite' | 'remove' | 'update-role' | 'list-invites';
+
+serve(async (req) => {
+---
+createClient:
+  L5: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L32: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error: any) {
+    return new Response(JSON.stringify({ error: error.message || 'Internal server error' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
+
+
+========== manage-notifications ==========
+IMPORTS (first 15 lines):
+// supabase/functions/manage-notifications/index.ts
+// Consolidates: markAsRead, markAllAsRead, deleteNotification
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L35: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('manage-notifications error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+
+========== paystack-webhook ==========
+IMPORTS (first 15 lines):
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'';
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-paystack-signature',
+};
+
+serve(async (req) => {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+---
+createClient:
+  L1: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'';
+  L54: const supabase = createClient(supabaseUrl, supabaseKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    // console.error('Webhook error:', error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500,
+    });
+  }
+});
+
+
+
+========== podcast-transcribe ==========
+IMPORTS (first 15 lines):
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'npm:@supabase/supabase-js@2.92.0';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
+  try {
+    const body = await req.json()
+---
+createClient:
+  L2: import { createClient } from 'npm:@supabase/supabase-js@2.92.0';
+  L39: const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
+---
+CATCH BLOCK:
+  } catch (error: any) {
+    console.error('Error in podcast-transcribe:', error)
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: error.message || 'Unknown error' 
+      }),
+      { 
+        status: 400, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+  }
+})
+
+========== process-audio ==========
+IMPORTS (first 15 lines):
+import { createClient } from 'jsr:@supabase/supabase-js@2.44.0';
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createSubscriptionValidator, createErrorResponse } from '../utils/subscription-validator.ts';
+
+// Define the expected request body structure
+interface RequestBody {
+  file_url: string;
+  target_language?: string; // Optional target language for translation
+  user_id: string; // Added user_id to the request body interface
+  document_id?: string; // Added document_id to the request body interface
+  podcast_id?: string; // Optional podcast_id to link transcript back to podcast
+}
+
+// Initialize Supabase client
+const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+---
+createClient:
+  L1: import { createClient } from 'jsr:@supabase/supabase-js@2.44.0';
+  L18: const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
+---
+CATCH BLOCK:
+  } catch (error: any) {
+    // console.error('Error initiating audio processing:', error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500,
+    });
+  }
+});
+
+
+
+========== realtime-transcribe ==========
+IMPORTS (first 15 lines):
+// Supabase Edge Function for low-latency partial transcription (realtime captions)
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+// Model fallback chain for quota/rate-limit resilience
+const MODEL_CHAIN = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-pro',
+  'gemini-3-pro-preview',
+---
+createClient:
+  (none)
+---
+CATCH BLOCK:
+  } catch (err) {
+    console.error('Error in realtime-transcribe:', err)
+    return new Response(JSON.stringify({ success: false, error: String(err?.message || err) }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 400,
+    })
+  }
+})
+
+
+
+========== refresh-calendar-token ==========
+IMPORTS (first 15 lines):
+// Supabase Edge Function: refresh-calendar-token
+// Automatically refreshes expired calendar OAuth tokens
+
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+
+const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID')!
+const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET')!
+
+const MICROSOFT_CLIENT_ID = Deno.env.get('MICROSOFT_CLIENT_ID')!
+const MICROSOFT_CLIENT_SECRET = Deno.env.get('MICROSOFT_CLIENT_SECRET')!
+
+interface TokenResponse {
+  access_token: string
+  refresh_token?: string
+---
+createClient:
+  L5: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+  L81: const supabaseClient = createClient(
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('Error in refresh-calendar-token function:', error)
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+      }
+    )
+  }
+})
+
+
+========== save-shared-resource ==========
+IMPORTS (first 15 lines):
+// supabase/functions/save-shared-resource/index.ts
+// Consolidates: save shared notes/documents/recordings from chat, with subscription limit checks
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L38: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('Error in save-shared-resource:', error);
+    return createErrorResponse(error.message || 'Internal server error', 500);
+  }
+});
+
+
+========== send-chat-message ==========
+IMPORTS (first 15 lines):
+// supabase/functions/send-chat-message/index.ts
+// Consolidates: fetch sender + insert message + attach resource (3 queries ΓåÆ 1 call)
+// File uploads remain client-side; media records are attached via media_items param
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+---
+createClient:
+  L5: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L37: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('send-chat-message error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+
+========== send-group-message ==========
+IMPORTS (first 15 lines):
+// supabase/functions/send-group-message/index.ts
+// Consolidates: insert group chat message (1 query ΓåÆ 1 call, server-validated)
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L33: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('Error in send-group-message:', error);
+    return createErrorResponse(error.message || 'Internal server error', 500);
+  }
+});
+
+
+========== send-message ==========
+IMPORTS (first 15 lines):
+// supabase/functions/send-message/index.ts
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { 
+  SubscriptionValidator, 
+  createErrorResponse, 
+  extractUserIdFromAuth 
+} from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS'
+};
+
+---
+createClient:
+  L3: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L59: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    // console.error('Error in send-message:', error);
+    return createErrorResponse('Internal server error', 500);
+  }
+});
+
+
+
+========== send-notification ==========
+IMPORTS (first 15 lines):
+// Supabase Edge Function: send-notification
+// Sends push notifications to subscribed users
+
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import webpush from 'npm:web-push@3.6.7'
+
+const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY')!
+const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY')!
+const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') || 'mailto:support@studdyhub.com'
+
+webpush.setVapidDetails(
+  VAPID_SUBJECT,
+  VAPID_PUBLIC_KEY,
+  VAPID_PRIVATE_KEY
+---
+createClient:
+  L5: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+  L169: const supabaseClient = createClient(
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('Error in send-notification function:', error)
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+      }
+    )
+  }
+})
+
+
+========== start-recording-session ==========
+IMPORTS (first 15 lines):
+// Edge Function: start-recording-session
+// Creates a new podcast_recordings entry with Service Role to bypass RLS
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L20: const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, { auth: { persistSession: false } });
+---
+CATCH BLOCK:
+  } catch (e: any) {
+    return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+});
+
+
+========== toggle-bookmark ==========
+IMPORTS (first 15 lines):
+// supabase/functions/toggle-bookmark/index.ts
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+---
+createClient:
+  L3: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L33: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('toggle-bookmark error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+
+========== toggle-follow ==========
+IMPORTS (first 15 lines):
+// supabase/functions/toggle-follow/index.ts
+// Consolidates: check existing follow, insert/delete, update counts, create notification
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L38: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('toggle-follow error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+
+========== toggle-like ==========
+IMPORTS (first 15 lines):
+// supabase/functions/toggle-like/index.ts
+// Consolidates: check social_users exists, insert/delete like, create notification
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L34: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('toggle-like error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+
+========== track-post-view ==========
+IMPORTS (first 15 lines):
+// supabase/functions/track-post-view/index.ts
+// Consolidates: check existing view, insert view, update views_count
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscription-validator.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L34: const supabase = createClient(supabaseUrl, supabaseServiceKey);
+---
+CATCH BLOCK:
+  } catch (error) {
+    console.error('track-post-view error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+
+========== transcribe-caption ==========
+IMPORTS (first 15 lines):
+// Supabase Edge Function for simple caption transcription (handling JSON + Base64)
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+// Model fallback chain for quota/rate-limit resilience
+const MODEL_CHAIN = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-pro',
+  'gemini-3-pro-preview',
+---
+createClient:
+  (none)
+---
+CATCH BLOCK:
+  } catch (error: any) {
+    console.error('Error in transcribe-caption:', error)
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 400,
+    })
+  }
+})
+
+
+========== upload-podcast-chunk ==========
+IMPORTS (first 15 lines):
+// Edge Function: upload-podcast-chunk
+// Accepts a chunk upload (multipart/form-data or JSON with base64) and saves to storage and DB.
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+function decodeJwtSub(token: string | null) {
+  try {
+    if (!token) return null;
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+---
+createClient:
+  L4: import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  L31: const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, { auth: { persistSession: false } });
+---
+CATCH BLOCK:
+  } catch (e: any) {
+    // console.error('upload-podcast-chunk error', e);
+    return new Response(JSON.stringify({ success: false, error: e?.message || String(e) }), { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+  }
+});
+
+
+

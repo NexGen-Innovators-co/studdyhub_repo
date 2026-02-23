@@ -122,15 +122,25 @@ const AdminOverview = ({ onNavigate }: { onNavigate?: (tab: string) => void }) =
       const startISO = startDate.toISOString();
 
       // Batch fetch: all users with created_at in range for growth chart
-      const [usersInRange, activeUsersInRange, postsInRange, commentsInRange, notesInRange] = await Promise.all([
+      const [usersInRange, activeUsersInRange, postsInRange, commentsInRange, notesInRange,
+        totalPostsCount, totalCommentsCount, totalNotesCount, totalDocsCount, totalGroupsCount, totalPodcastsCount, totalChatSessionsCount
+      ] = await Promise.all([
         supabase.from('profiles').select('created_at').gte('created_at', startISO).order('created_at'),
-        supabase.from('profiles').select('updated_at').gte('updated_at', startISO).order('updated_at'),
+        supabase.from('profiles').select('id, updated_at').gte('updated_at', startISO).order('updated_at'),
         supabase.from('social_posts').select('created_at')
           .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
         supabase.from('social_comments').select('created_at')
           .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
         supabase.from('notes').select('created_at')
           .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+        // Content distribution counts (fetched independently so they don't depend on stats state)
+        supabase.from('social_posts').select('*', { count: 'exact', head: true }),
+        supabase.from('social_comments').select('*', { count: 'exact', head: true }),
+        supabase.from('notes').select('*', { count: 'exact', head: true }),
+        supabase.from('documents').select('*', { count: 'exact', head: true }),
+        supabase.from('social_groups').select('*', { count: 'exact', head: true }),
+        supabase.from('ai_podcasts').select('*', { count: 'exact', head: true }),
+        supabase.from('chat_sessions').select('*', { count: 'exact', head: true }),
       ]);
 
       // Also get total users before the range for cumulative count
@@ -151,7 +161,7 @@ const AdminOverview = ({ onNavigate }: { onNavigate?: (tab: string) => void }) =
         const dateStr = u.updated_at?.split('T')[0];
         if (dateStr) {
           if (!activeByDate[dateStr]) activeByDate[dateStr] = new Set();
-          activeByDate[dateStr].add(JSON.stringify(u));
+          activeByDate[dateStr].add(u.id); // deduplicate by user id
         }
       });
 
@@ -168,14 +178,16 @@ const AdminOverview = ({ onNavigate }: { onNavigate?: (tab: string) => void }) =
         });
       }
 
-      // Content distribution from stats
+      // Content distribution from direct counts (not dependent on stats state)
       const contentDistribution = [
-        { name: 'Posts', value: stats?.totalPosts || 0 },
-        { name: 'Comments', value: stats?.totalComments || 0 },
-        { name: 'Notes', value: stats?.totalNotes || 0 },
-        { name: 'Documents', value: stats?.totalDocuments || 0 },
-        { name: 'Groups', value: stats?.totalGroups || 0 },
-      ];
+        { name: 'Posts', value: totalPostsCount.count || 0 },
+        { name: 'Comments', value: totalCommentsCount.count || 0 },
+        { name: 'Notes', value: totalNotesCount.count || 0 },
+        { name: 'Documents', value: totalDocsCount.count || 0 },
+        { name: 'Groups', value: totalGroupsCount.count || 0 },
+        { name: 'Podcasts', value: totalPodcastsCount.count || 0 },
+        { name: 'AI Chats', value: totalChatSessionsCount.count || 0 },
+      ].filter(item => item.value > 0);
 
       // Activity trend (last 7 days) - group fetched data by day
       const postsByDay: Record<string, number> = {};
@@ -217,7 +229,7 @@ const AdminOverview = ({ onNavigate }: { onNavigate?: (tab: string) => void }) =
     }
   };
 
-  const COLORS = ['#3b82f6', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b'];
+  const COLORS = ['#3b82f6', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
 
   const statCards = [
     {

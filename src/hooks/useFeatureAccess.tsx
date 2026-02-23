@@ -19,6 +19,7 @@ export type FeatureName =
     | 'maxDocuments'  // Added
     | 'maxDocumentSize' // Added
     | 'maxPodcasts' // Added
+    | 'canAccessEducator' // Educator portal access
 
 export const useFeatureAccess = () => {
     const {
@@ -131,6 +132,11 @@ export const useFeatureAccess = () => {
 
         // Raw limits for direct access (use with caution)
         subscriptionLimits,
+
+        // Educator-related (access control is handled by EducatorGuard at route level)
+        // These are convenience helpers for conditionally showing educator UI
+        canAccessEducator: () => isAdmin || subscriptionTier !== 'free',
+        canCreateCourses: () => isAdmin || subscriptionTier !== 'free',
 
     };
 };

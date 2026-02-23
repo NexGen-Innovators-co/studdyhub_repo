@@ -1,7 +1,17 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.24.1';
 import { createSubscriptionValidator, createErrorResponse } from '../utils/subscription-validator.ts';
+import { logSystemError } from '../_shared/errorLogger.ts';
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
+
+// Model fallback chain for quota/rate-limit resilience
+const MODEL_CHAIN = [
+	'gemini-2.5-flash',
+	'gemini-2.0-flash',
+	'gemini-2.0-flash-lite',
+	'gemini-2.5-pro',
+	'gemini-3-pro-preview',
+];
 
 const CORS_HEADERS = {
 	'Access-Control-Allow-Origin': '*',
@@ -121,23 +131,70 @@ TASK: ${actionType}
 }
 
 async function generateInlineContentWithGemini(prompt: string): Promise<string> {
-	const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+	const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GEMINI_API_KEY_VERTEX');
 	if (!geminiApiKey) throw new Error('Gemini API key not configured');
 
-	const genAI = new GoogleGenerativeAI(geminiApiKey);
-	const model = genAI.getGenerativeModel({
-		model: 'gemini-2.0-flash',
-		generationConfig: {
-			temperature: 0.7,
-			topP: 0.9,
-			topK: 40,
-			maxOutputTokens: 2048
-		}
-	});
+	const requestBody = {
+		contents: [{ role: 'user', parts: [{ text: prompt }] }],
+		generationConfig: { temperature: 0.7, maxOutputTokens: 2048, topK: 40, topP: 0.9 },
+	};
 
-	const result = await model.generateContent(prompt);
-	const response = await result.response;
-	let aiContent = await response.text();
+	let aiContent = '';
+
+	for (let attempt = 0; attempt < MODEL_CHAIN.length; attempt++) {
+		const model = MODEL_CHAIN[attempt];
+		const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
+		console.log(`[generate-inline-content] Attempt ${attempt + 1}/${MODEL_CHAIN.length} using model: ${model}`);
+
+		try {
+			const response = await fetch(url, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(requestBody),
+			});
+
+			if (response.status === 429 || response.status === 503) {
+				console.warn(`[generate-inline-content] ${response.status} from ${model}, switching to next model...`);
+				await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+				continue;
+			}
+
+			if (response.status === 400) {
+				const errorText = await response.text();
+				console.error(`[generate-inline-content] 400 from ${model}: ${errorText.substring(0, 200)}`);
+				continue;
+			}
+
+			if (!response.ok) {
+				console.error(`[generate-inline-content] ${response.status} from ${model}`);
+				await new Promise(r => setTimeout(r, 1000));
+				continue;
+			}
+
+			const data = await response.json();
+			const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+			if (!text) {
+				console.warn(`[generate-inline-content] No content from ${model}`);
+				continue;
+			}
+
+			aiContent = text;
+			break;
+		} catch (err) {
+			console.error(`[generate-inline-content] Network error with ${model}:`, err);
+			await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+		}
+	}
+
+	if (!aiContent) {
+		// OpenRouter fallback
+		const orResult = await callOpenRouterFallback(requestBody.contents, { source: 'generate-inline-content' });
+		if (orResult.success && orResult.content) {
+			aiContent = orResult.content;
+		} else {
+			throw new Error('All AI models failed (Gemini + OpenRouter)');
+		}
+	}
 
 	// Clean up the response intelligently
 	aiContent = aiContent.trim();
@@ -266,6 +323,16 @@ serve(async (req) => {
 		});
 
 	} catch (error) {
+	  // ── Log to system_error_logs ──
+	  try {
+	    const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+	    await logSystemError(_logClient, {
+	      severity: 'error',
+	      source: 'generate-inline-content',
+	      message: error?.message || String(error),
+	      details: { stack: error?.stack },
+	    });
+	  } catch (_logErr) { console.error('[generate-inline-content] Error logging failed:', _logErr); }
 		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 		// console.error('[generate-inline-content] Unexpected error:', errorMessage);
 		// console.error('[generate-inline-content] Error stack:', error instanceof Error ? error.stack : 'No stack');

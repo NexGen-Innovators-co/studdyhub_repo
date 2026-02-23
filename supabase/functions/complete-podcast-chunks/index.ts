@@ -2,6 +2,7 @@
 // Validates uploaded chunks for a session, assembles into a final file, and triggers transcription.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { logSystemError } from '../_shared/errorLogger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -225,6 +226,16 @@ serve(async (req: Request) => {
 
     return new Response(JSON.stringify({ success: true, assembled_file_url: finalPublicUrl, segment: segData, job: jobResp }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (e: any) {
+    // ── Log to system_error_logs ──
+    try {
+      const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logSystemError(_logClient, {
+        severity: 'error',
+        source: 'complete-podcast-chunks',
+        message: e?.message || String(e),
+        details: { stack: e?.stack },
+      });
+    } catch (_logErr) { console.error('[complete-podcast-chunks] Error logging failed:', _logErr); }
     console.error('complete-podcast-chunks error:', e);
     return new Response(JSON.stringify({ success: false, error: e?.message || String(e), stack: e?.stack }), { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
   }

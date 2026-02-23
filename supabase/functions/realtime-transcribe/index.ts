@@ -1,10 +1,21 @@
 // Supabase Edge Function for low-latency partial transcription (realtime captions)
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { logSystemError } from '../_shared/errorLogger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
+// Model fallback chain for quota/rate-limit resilience
+const MODEL_CHAIN = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-pro',
+  'gemini-3-pro-preview',
+];
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -103,15 +114,10 @@ serve(async (req) => {
 
     // Construct a minimal request to Gemini to transcribe a short audio chunk.
     // We expect small chunks (<= ~10s) for low latency. The function returns a short partial transcript.
-    const model = 'gemini-2.5-flash'
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`
-
     const promptText = `Transcribe the provided short audio chunk. Return ONLY the raw transcript text (no extra commentary). Keep it concise. If the audio is unintelligible or you cannot confidently transcribe, return an empty string (not an apology or explanation).`
 
     // Normalize mime_type to remove codec parameters before sending to Gemini
     const normalizedMime = (mime_type || 'audio/webm').split(';')[0].trim()
-    // If the client provided a video mime for an audio-only transcription path,
-    // coerce to an audio mime to avoid Gemini rejecting video content for audio tasks.
     const finalMime = normalizedMime.includes('video') ? 'audio/webm' : normalizedMime
 
     const requestBody = {
@@ -126,28 +132,49 @@ serve(async (req) => {
       generationConfig: { temperature: 0.0, maxOutputTokens: 256 }
     }
 
-    // Debug: log request summary (don't print full base64)
-    try {
-      // console.log('realtime-transcribe: sending to Gemini model=', model, 'mime=', mime_type || 'audio/webm', 'base64_len=', (audioBase64 || '').length)
-    } catch (e) { }
+    let partial = '';
+    let usedModel = '';
 
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-    })
+    for (let attempt = 0; attempt < MODEL_CHAIN.length; attempt++) {
+      const model = MODEL_CHAIN[attempt];
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+      // console.log(`[realtime-transcribe] Attempt ${attempt + 1}/${MODEL_CHAIN.length} using model: ${model}`);
 
-    if (!resp.ok) {
-      const txt = await resp.text().catch(() => '')
-      console.error('Gemini error:', resp.status, txt)
-      throw new Error(`Gemini responded with ${resp.status}`)
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (resp.status === 429 || resp.status === 503) {
+          console.warn(`[realtime-transcribe] ${resp.status} from ${model}, switching to next model...`);
+          await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+          continue;
+        }
+
+        if (!resp.ok) {
+          const txt = await resp.text().catch(() => '');
+          console.error(`[realtime-transcribe] Gemini error ${resp.status} from ${model}:`, txt.substring(0, 200));
+          continue;
+        }
+
+        const data = await resp.json();
+        try {
+          console.log('realtime-transcribe: Gemini raw response candidates=', JSON.stringify((data?.candidates || []).slice(0,2)));
+        } catch (e) { }
+        partial = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+        usedModel = model;
+        break;
+      } catch (err) {
+        console.error(`[realtime-transcribe] Network error with ${model}:`, err);
+        await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+      }
     }
 
-    const data = await resp.json()
-    try {
-      console.log('realtime-transcribe: Gemini raw response candidates=', JSON.stringify((data?.candidates || []).slice(0,2)))
-    } catch (e) { }
-    let partial = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    if (!usedModel) {
+      throw new Error('All Gemini models failed — quota or service issue');
+    }
 
     // Filter out common uncertain responses from the model — prefer empty string instead
     try {
@@ -162,6 +189,16 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err) {
+    // ── Log to system_error_logs ──
+    try {
+      const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logSystemError(_logClient, {
+        severity: 'error',
+        source: 'realtime-transcribe',
+        message: err?.message || String(err),
+        details: { stack: err?.stack },
+      });
+    } catch (_logErr) { console.error('[realtime-transcribe] Error logging failed:', _logErr); }
     console.error('Error in realtime-transcribe:', err)
     return new Response(JSON.stringify({ success: false, error: String(err?.message || err) }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

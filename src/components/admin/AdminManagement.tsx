@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../integrations/supabase/client';
+import { logAdminActivity } from '../../utils/adminActivityLogger';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Button } from '../ui/button';
@@ -132,6 +133,7 @@ const AdminManagement = () => {
                 if (error) throw error;
 
                 toast.success('Admin created successfully.');
+                logAdminActivity({ action: 'create_admin', target_type: 'admin_users', target_id: authData.user?.id, details: { email: newAdminEmail, role: newAdminRole, method: 'new_user' } });
                 setCreatedPassword(generatedPassword);
             } else {
                 // Select existing user to become an admin
@@ -157,6 +159,7 @@ const AdminManagement = () => {
                 if (error) throw error;
 
                 toast.success('Admin role assigned to selected user.');
+                logAdminActivity({ action: 'assign_admin_role', target_type: 'admin_users', target_id: selectedUser.id, details: { email: selectedUser.email, role: newAdminRole, method: 'existing_user' } });
             }
 
             setIsCreateOpen(false);
@@ -184,6 +187,7 @@ const AdminManagement = () => {
                 .eq('id', adminId);
             if (error) throw error;
             toast.success(makeActive ? 'Admin activated' : 'Admin deactivated');
+            logAdminActivity({ action: makeActive ? 'activate_admin' : 'deactivate_admin', target_type: 'admin_users', target_id: adminId, details: { is_active: makeActive } });
             fetchAdmins();
         } catch (err) {
             toast.error(`Error: ${err}`);

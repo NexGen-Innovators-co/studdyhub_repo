@@ -1,7 +1,75 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.24.1';
 import { createSubscriptionValidator, createErrorResponse as createSubErrorResponse } from '../utils/subscription-validator.ts';
+import { logSystemError } from '../_shared/errorLogger.ts';
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
+
+// Model fallback chain for quota/rate-limit resilience
+const MODEL_CHAIN = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-pro',
+  'gemini-3-pro-preview',
+];
+
+async function callGeminiWithModelChain(prompt: string, apiKey: string): Promise<string> {
+  const requestBody = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.7, maxOutputTokens: 8192, topK: 40, topP: 0.95 },
+  };
+
+  for (let attempt = 0; attempt < MODEL_CHAIN.length; attempt++) {
+    const model = MODEL_CHAIN[attempt];
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    console.log(`[generate-note-from-document] Attempt ${attempt + 1}/${MODEL_CHAIN.length} using model: ${model}`);
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (response.status === 429 || response.status === 503) {
+        console.warn(`[generate-note-from-document] ${response.status} from ${model}, switching to next model...`);
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
+
+      if (response.status === 400) {
+        const errorText = await response.text();
+        console.error(`[generate-note-from-document] 400 from ${model}: ${errorText.substring(0, 200)}`);
+        continue;
+      }
+
+      if (!response.ok) {
+        console.error(`[generate-note-from-document] ${response.status} from ${model}`);
+        await new Promise(r => setTimeout(r, 1000));
+        continue;
+      }
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) {
+        console.warn(`[generate-note-from-document] No content from ${model}`);
+        continue;
+      }
+
+      return text;
+    } catch (err) {
+      console.error(`[generate-note-from-document] Network error with ${model}:`, err);
+      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+
+  // OpenRouter fallback
+  const orResult = await callOpenRouterFallback(requestBody.contents, { source: 'generate-note-from-document' });
+  if (orResult.success && orResult.content) {
+    return orResult.content;
+  }
+  throw new Error('All AI models failed (Gemini + OpenRouter)');
+}
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -298,19 +366,13 @@ serve(async (req) => {
         // 6. Construct the AI prompt, passing selectedSection
         const prompt = createPrompt(userProfile, document, selectedSection);
 
-        // 7. Call the Gemini API
-        const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+        // 7. Call the Gemini API with model chain fallback
+        const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GEMINI_API_KEY_VERTEX');
         if (!geminiApiKey) {
             throw new Error("GEMINI_API_KEY is not set in Supabase secrets.");
         }
-        const genAI = new GoogleGenerativeAI(geminiApiKey);
-        const model = genAI.getGenerativeModel({
-            model: 'gemini-2.0-flash'
-        });
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        let aiContent = response.text(); // Use 'let' because we will modify it
+        let aiContent = await callGeminiWithModelChain(prompt, geminiApiKey);
 
         // 7.5. Process image placeholders in the AI-generated content
         aiContent = await processImagePlaceholders(aiContent, user.id, supabaseServiceRoleClient);
@@ -372,6 +434,16 @@ serve(async (req) => {
             }
         });
     } catch (error) {
+      // ── Log to system_error_logs ──
+      try {
+        const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+        await logSystemError(_logClient, {
+          severity: 'error',
+          source: 'generate-note-from-document',
+          message: error?.message || String(error),
+          details: { stack: error?.stack },
+        });
+      } catch (_logErr) { console.error('[generate-note-from-document] Error logging failed:', _logErr); }
         //console.error('Edge function error:', error.message);
         return new Response(JSON.stringify({
             error: error.message

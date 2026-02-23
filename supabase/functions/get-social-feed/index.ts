@@ -5,6 +5,7 @@ import { extractUserIdFromAuth, createErrorResponse } from '../utils/subscriptio
 import { fetchPostsWithRelations, scoreAndSortPosts } from '../utils/post-helpers.ts';
 import { callGeminiJSON } from '../utils/gemini.ts';
 import { getEducationContext, type ServerEducationContext } from '../_shared/educationContext.ts';
+import { logSystemError } from '../_shared/errorLogger.ts';
 
 // Signal weights for AI preference computation
 const SIGNAL_WEIGHTS: Record<string, number> = {
@@ -505,6 +506,16 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
+    // ── Log to system_error_logs ──
+    try {
+      const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logSystemError(_logClient, {
+        severity: 'error',
+        source: 'get-social-feed',
+        message: error?.message || String(error),
+        details: { stack: error?.stack },
+      });
+    } catch (_logErr) { console.error('[get-social-feed] Error logging failed:', _logErr); }
     console.error('get-social-feed error:', error);
     return new Response(
       JSON.stringify({ error: error.message || 'Internal server error' }),

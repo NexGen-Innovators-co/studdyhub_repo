@@ -1,6 +1,16 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.2.1';
+import { logSystemError } from '../_shared/errorLogger.ts';
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
+
+// Model fallback chain for quota/rate-limit resilience
+const MODEL_CHAIN = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-pro',
+  'gemini-3-pro-preview',
+];
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -54,9 +64,11 @@ serve(async (req) => {
       throw new Error('Content and contentType are required');
     }
 
-    // Initialize Gemini AI
-    const genAI = new GoogleGenerativeAI(Deno.env.get('GEMINI_API_KEY') || '');
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    // Initialize Gemini AI with model chain fallback
+    const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GEMINI_API_KEY_VERTEX');
+    if (!geminiApiKey) {
+      throw new Error('GEMINI_API_KEY not configured');
+    }
 
     // Fetch system settings for moderation
     const { data: settings } = await supabase
@@ -155,8 +167,51 @@ Respond in JSON format:
 
 Be encouraging but maintain quality standards. For borderline cases at medium strictness, give benefit of doubt to educational intent.`;
 
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
+    // Call Gemini with model chain fallback
+    let responseText = '';
+    const requestBody = {
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 2048, topK: 40, topP: 0.95 },
+    };
+
+    for (let attempt = 0; attempt < MODEL_CHAIN.length; attempt++) {
+      const currentModel = MODEL_CHAIN[attempt];
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${geminiApiKey}`;
+
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (resp.status === 429 || resp.status === 503) {
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+
+        if (!resp.ok) continue;
+
+        const data = await resp.json();
+        const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (content) {
+          responseText = content;
+          break;
+        }
+      } catch (err) {
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      }
+    }
+
+    if (!responseText) {
+      // OpenRouter fallback
+      const orResult = await callOpenRouterFallback(requestBody.contents, { source: 'content-moderation' });
+      if (orResult.success && orResult.content) {
+        responseText = orResult.content;
+      } else {
+        throw new Error('All AI models failed (Gemini + OpenRouter)');
+      }
+    }
     
     // Extract JSON from markdown code blocks if present
     let jsonText = responseText.trim();
@@ -228,6 +283,16 @@ Be encouraging but maintain quality standards. For borderline cases at medium st
     });
 
   } catch (error: any) {
+    // ── Log to system_error_logs ──
+    try {
+      const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logSystemError(_logClient, {
+        severity: 'error',
+        source: 'content-moderation',
+        message: error?.message || String(error),
+        details: { stack: error?.stack },
+      });
+    } catch (_logErr) { console.error('[content-moderation] Error logging failed:', _logErr); }
     // console.error('Content moderation error:', error);
     return new Response(JSON.stringify({ 
       error: error.message,

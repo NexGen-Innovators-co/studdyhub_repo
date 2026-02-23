@@ -4,6 +4,7 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { logSystemError } from '../_shared/errorLogger.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -115,6 +116,16 @@ serve(async (req) => {
     )
 
   } catch (error) {
+    // ── Log to system_error_logs ──
+    try {
+      const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logSystemError(_logClient, {
+        severity: 'error',
+        source: 'check-schedule-reminders',
+        message: error?.message || String(error),
+        details: { stack: error?.stack },
+      });
+    } catch (_logErr) { console.error('[check-schedule-reminders] Error logging failed:', _logErr); }
     console.error('Error in check-schedule-reminders:', error)
     return new Response(
       JSON.stringify({ error: error.message }),

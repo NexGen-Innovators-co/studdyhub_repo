@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '../../integrations/supabase/client';
+import { logAdminActivity } from '../../utils/adminActivityLogger';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -49,6 +50,7 @@ const SystemSettings = () => {
 
       if (error) throw error;
       toast.success('Setting updated successfully');
+      logAdminActivity({ action: 'update_setting', target_type: 'admin_system_settings', target_id: id, details: { new_value: value } });
       // Clear pending value after successful save
       setPendingValues(prev => {
         const next = { ...prev };

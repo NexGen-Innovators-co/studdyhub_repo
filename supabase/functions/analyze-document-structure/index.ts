@@ -1,5 +1,16 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
-import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.14.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { logSystemError } from '../_shared/errorLogger.ts';
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
+
+// Model fallback chain for quota/rate-limit resilience
+const MODEL_CHAIN = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-2.5-pro',
+    'gemini-3-pro-preview',
+];
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -58,18 +69,64 @@ serve(async (req) => {
                 }
             });
         }
-        const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+        const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GEMINI_API_KEY_VERTEX');
         if (!geminiApiKey) {
             throw new Error("GEMINI_API_KEY is not set.");
         }
-        const genAI = new GoogleGenerativeAI(geminiApiKey);
-        const model = genAI.getGenerativeModel({
-            model: 'gemini-2.0-flash'
-        });
+
         const prompt = createAnalysisPrompt(documentContent);
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        let text = response.text().replace(/```json|```/g, '').trim();
+        const requestBody = {
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 4096, topK: 40, topP: 0.95 },
+        };
+
+        let text = '';
+        for (let attempt = 0; attempt < MODEL_CHAIN.length; attempt++) {
+            const currentModel = MODEL_CHAIN[attempt];
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${geminiApiKey}`;
+            console.log(`[analyze-document-structure] Attempt ${attempt + 1}/${MODEL_CHAIN.length} using model: ${currentModel}`);
+
+            try {
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody),
+                });
+
+                if (resp.status === 429 || resp.status === 503) {
+                    console.warn(`[analyze-document-structure] ${resp.status} from ${currentModel}, switching...`);
+                    await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+                    continue;
+                }
+
+                if (!resp.ok) {
+                    console.error(`[analyze-document-structure] ${resp.status} from ${currentModel}`);
+                    continue;
+                }
+
+                const data = await resp.json();
+                const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (content) {
+                    text = content;
+                    break;
+                }
+            } catch (err) {
+                console.error(`[analyze-document-structure] Network error with ${currentModel}:`, err);
+                await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+            }
+        }
+
+        if (!text) {
+            // OpenRouter fallback
+            const orResult = await callOpenRouterFallback(requestBody.contents, { source: 'analyze-document-structure' });
+            if (orResult.success && orResult.content) {
+                text = orResult.content;
+            } else {
+                throw new Error('All AI models failed (Gemini + OpenRouter)');
+            }
+        }
+
+        text = text.replace(/```json|```/g, '').trim();
         let structure;
         try {
             structure = JSON.parse(text);
@@ -112,6 +169,16 @@ serve(async (req) => {
             }
         });
     } catch (error) {
+      // ── Log to system_error_logs ──
+      try {
+        const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+        await logSystemError(_logClient, {
+          severity: 'error',
+          source: 'analyze-document-structure',
+          message: error?.message || String(error),
+          details: { stack: error?.stack },
+        });
+      } catch (_logErr) { console.error('[analyze-document-structure] Error logging failed:', _logErr); }
         //console.error('Error analyzing document structure:', error.message);
         return new Response(JSON.stringify({
             error: error.message

@@ -65,6 +65,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           setUser(session?.user ?? null);
         }
 
+        // Touch profiles.updated_at on sign-in so the admin "active users"
+        // chart counts logins (not only profile edits).  Fire-and-forget.
+        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user?.id) {
+          supabase
+            .from('profiles')
+            .update({ updated_at: new Date().toISOString() })
+            .eq('id', session.user.id)
+            .then(() => { /* non-blocking */ })
+            .catch(() => { /* non-blocking */ });
+        }
+
         // Clear cache when user signs out
         if (event === 'SIGNED_OUT') {
           clearCache();

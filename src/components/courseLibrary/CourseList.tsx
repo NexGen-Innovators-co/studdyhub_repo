@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Book, Loader2, School, Globe, Library, Check, ChevronsUpDown, RefreshCw } from 'lucide-react';
+import { Search, Book, Loader2, School, Globe, Library, Check, ChevronsUpDown, RefreshCw, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { CourseFilterBar, type CourseFilterState } from './CourseFilterBar';
+import { useEducationContext } from '@/hooks/useEducationContext';
 
 interface CourseListProps {
   onSelectCourse: (course: Course) => void;
@@ -25,8 +27,28 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
   const navigate = useNavigate();
   const { tab } = useParams();
   const { useCourses } = useCourseLibrary();
+  const { educationContext } = useEducationContext();
   
-  const activeTab = (tab && ['my-school', 'global', 'all'].includes(tab)) ? tab : 'my-school';
+  const activeTab = (tab && ['for-you', 'my-school', 'global', 'all'].includes(tab)) ? tab : (educationContext ? 'for-you' : 'my-school');
+  
+  const [educationFilters, setEducationFilters] = useState<CourseFilterState>({
+    curriculumId: null,
+    educationLevelId: null,
+    countryId: null,
+    subjectIds: [],
+  });
+
+  // Auto-apply education context as default filters when available
+  useEffect(() => {
+    if (educationContext && activeTab === 'for-you') {
+      setEducationFilters({
+        curriculumId: educationContext.curriculum?.id ?? null,
+        educationLevelId: educationContext.educationLevel?.id ?? null,
+        countryId: educationContext.country?.id ?? null,
+        subjectIds: educationContext.subjects.map(s => s.id),
+      });
+    }
+  }, [educationContext, activeTab]);
   
   const [userSchool, setUserSchool] = useState<string | null>(null);
   const [isSchoolDialogOpen, setIsSchoolDialogOpen] = useState(false);
@@ -96,12 +118,16 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
 
   // Determine filter based on active tab
   const getFilter = () => {
+    if (activeTab === 'for-you') return 'for-you';
     if (activeTab === 'my-school') return userSchool;
     if (activeTab === 'global') return 'global';
     return null; // 'all'
   };
 
-  const { data: courses, isLoading, refetch } = useCourses(getFilter());
+  const { data: courses, isLoading, refetch } = useCourses(
+    getFilter(),
+    activeTab === 'for-you' ? educationFilters : null
+  );
 
   const handleSaveSchool = async () => {
     if (!user || !tempSchoolName.trim()) return;
@@ -157,7 +183,11 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
+        <TabsList className="grid w-full grid-cols-4 lg:w-[520px]">
+          <TabsTrigger value="for-you" disabled={!educationContext} className="data-[state=active]:bg-violet-100 data-[state=active]:text-violet-700 dark:data-[state=active]:bg-violet-900/40 dark:data-[state=active]:text-violet-300">
+            <Sparkles className="w-4 h-4 mr-2" />
+            For You
+          </TabsTrigger>
           <TabsTrigger value="my-school" disabled={!userSchool} className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 dark:data-[state=active]:bg-blue-900/40 dark:data-[state=active]:text-blue-300">
             <School className="w-4 h-4 mr-2" />
             My School
@@ -172,6 +202,15 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
           </TabsTrigger>
         </TabsList>
       </Tabs>
+
+      {/* Education context filter bar for "For You" tab */}
+      {activeTab === 'for-you' && (
+        <CourseFilterBar
+          educationContext={educationContext}
+          filters={educationFilters}
+          onFiltersChange={setEducationFilters}
+        />
+      )}
 
       <div className="relative w-full sm:w-72">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />

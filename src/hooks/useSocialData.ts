@@ -4,6 +4,7 @@ import { SocialPostWithDetails, SocialUserWithDetails, SocialGroupWithDetails } 
 import { toast } from 'sonner';
 import { SortBy, FilterBy } from '../components/social/types/social';
 import { DEFAULT_LIMITS } from '../components/social/utils/socialConstants';
+import type { FeedMode } from '../components/social/components/feed/FeedModeSelector';
 
 import {
   CACHE_KEYS,
@@ -49,7 +50,8 @@ export const useSocialData = (
   userProfile: any,
   sortBy: SortBy,
   filterBy: FilterBy,
-  onNotificationReceived?: (notification: any) => void
+  onNotificationReceived?: (notification: any) => void,
+  feedMode: FeedMode = 'all'
 ) => {
   // State initialization remains the same
   const [posts, setPosts] = useState<SocialPostWithDetails[]>(() => loadFromCache(CACHE_KEYS.POSTS) || []);
@@ -130,6 +132,7 @@ export const useSocialData = (
         body: {
           mode: 'feed',
           sortBy,
+          feedMode,
           cursor: currentCursor,
           limit: DEFAULT_LIMITS.POSTS_PER_PAGE,
           viewedPostIds: Array.from(viewedPostIds),
@@ -176,7 +179,7 @@ export const useSocialData = (
       setIsLoading(false);
       setIsLoadingMorePosts(false);
     }
-  }, [sortBy, filterBy, hasMorePosts, isLoadingMorePosts, postsCursor, posts, viewedPostIds]);
+  }, [sortBy, filterBy, feedMode, hasMorePosts, isLoadingMorePosts, postsCursor, posts, viewedPostIds]);
 
   // OPTIMIZED: Trending posts via edge function
   const fetchTrendingPosts = useCallback(async (reset: boolean = false) => {
@@ -431,6 +434,11 @@ export const useSocialData = (
           .eq('id', user.id)
           .single();
 
+        // Resolve the best available avatar: prefer profiles table, fall back to auth metadata
+        const bestAvatar = userProfile?.avatar_url
+          || user.user_metadata?.avatar_url
+          || '';
+
         if (fetchError && fetchError.code === 'PGRST116') {
           const { data: newSocialUser, error: createError } = await supabase
             .from('social_users')
@@ -438,7 +446,7 @@ export const useSocialData = (
               id: user.id,
               username: userProfile?.full_name?.toLowerCase().replace(/\s+/g, '_') || `user_${user.id.slice(0, 8)}`,
               display_name: userProfile?.full_name || `user_${user.id.slice(0, 8)}`,
-              avatar_url: userProfile?.avatar_url || '',
+              avatar_url: bestAvatar,
               bio: 'New to the community!',
               interests: ['learning', 'technology']
             })
@@ -454,6 +462,22 @@ export const useSocialData = (
           }
           setCurrentUser(newSocialUser);
         } else if (!fetchError && socialUser) {
+          // If social_users has stale/empty avatar or display_name, sync from profiles
+          const needsAvatarSync = !socialUser.avatar_url && bestAvatar;
+          const needsNameSync = userProfile?.full_name && socialUser.display_name !== userProfile.full_name;
+          if (needsAvatarSync || needsNameSync) {
+            const patch: Record<string, any> = { updated_at: new Date().toISOString() };
+            if (needsAvatarSync) patch.avatar_url = bestAvatar;
+            if (needsNameSync) patch.display_name = userProfile.full_name;
+            supabase
+              .from('social_users')
+              .update(patch)
+              .eq('id', user.id)
+              .select()
+              .single()
+              .then(({ data }) => { if (data) setCurrentUser(data); })
+              .catch(() => { /* non-blocking */ });
+          }
           setCurrentUser(socialUser);
         } else {
           setIsLoading(false);

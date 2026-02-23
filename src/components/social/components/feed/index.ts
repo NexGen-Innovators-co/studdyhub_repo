@@ -7,4 +7,6 @@ export { FloatingActionButtons } from './FloatingActionButtons';
 export { ChatPanel } from './ChatPanel';
 export { SocialFeedDialogs } from './SocialFeedDialogs';
 export { InFeedSuggestedStrip } from './InFeedSuggestedStrip';
+export { FeedModeSelector } from './FeedModeSelector';
+export type { FeedMode } from './FeedModeSelector';
 export { adaptNotifications, getNotificationTitle, getNotificationMessage } from './notificationHelpers';

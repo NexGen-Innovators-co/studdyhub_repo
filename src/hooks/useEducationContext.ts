@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { UserEducationContext } from '@/types/Education';
 import { useAuth } from './useAuth';
 
-export function useEducationContext() {
+export function useEducationContext(onboardingCompleted?: boolean) {
   const { user } = useAuth();
   const [educationContext, setEducationContext] = useState<UserEducationContext | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -15,6 +15,13 @@ export function useEducationContext() {
 
   const fetchEducationContext = useCallback(async () => {
     if (!user?.id) {
+      setEducationContext(null);
+      setIsLoading(false);
+      return;
+    }
+
+    // Skip the query during onboarding — no education profile exists yet
+    if (onboardingCompleted === false) {
       setEducationContext(null);
       setIsLoading(false);
       return;
@@ -79,7 +86,7 @@ export function useEducationContext() {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, onboardingCompleted]);
 
   useEffect(() => {
     fetchEducationContext();

@@ -383,19 +383,20 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
       return;
     }
 
+    // Mark IMMEDIATELY (synchronously) to prevent concurrent calls from both passing the guard
+    listenedPodcastsRef.current.add(podcastId);
+    setListenedPodcasts(prev => {
+      const s = new Set(prev);
+      s.add(podcastId);
+      return s;
+    });
+
     try {
       if (!currentUser) {
         return;
       }
 
       if (!navigator.onLine) {
-        // mark locally and enqueue for sync
-        listenedPodcastsRef.current.add(podcastId);
-        setListenedPodcasts(prev => {
-          const s = new Set(prev);
-          s.add(podcastId);
-          return s;
-        });
         await offlineStorage.addPendingSync('create', 'podcast_listeners', { podcast_id: podcastId, user_id: currentUser.id });
         return;
       }
@@ -412,13 +413,7 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
       }
 
       if (existingListener) {
-        // mark locally to avoid duplicate writes
-        listenedPodcastsRef.current.add(podcastId);
-        setListenedPodcasts(prev => {
-          const s = new Set(prev);
-          s.add(podcastId);
-          return s;
-        });
+        // Already in DB — nothing to do
         return;
       }
 
@@ -442,14 +437,6 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
 
       // Track course progress (fire-and-forget)
       trackCourseResourceCompletion(currentUser.id, 'podcast', podcastId);
-
-      // Optimistically mark as listened to avoid duplicate writes in this session
-      listenedPodcastsRef.current.add(podcastId);
-      setListenedPodcasts(prev => {
-        const s = new Set(prev);
-        s.add(podcastId);
-        return s;
-      });
     } catch (err) {
       // ignore errors
     }

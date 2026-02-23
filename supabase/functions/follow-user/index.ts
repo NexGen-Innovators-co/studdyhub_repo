@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.170.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
+import { logSystemError } from '../_shared/errorLogger.ts';
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -166,6 +167,16 @@ serve(async (req: Request) => {
       201
     );
   } catch (error) {
+    // ── Log to system_error_logs ──
+    try {
+      const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logSystemError(_logClient, {
+        severity: 'error',
+        source: 'follow-user',
+        message: error?.message || String(error),
+        details: { stack: error?.stack },
+      });
+    } catch (_logErr) { console.error('[follow-user] Error logging failed:', _logErr); }
     // console.error("Unexpected error:", error);
     return createErrorResponse("Internal server error", 500);
   }

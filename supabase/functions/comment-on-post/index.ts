@@ -5,6 +5,7 @@ import {
   createErrorResponse as createSubErrorResponse, 
   extractUserIdFromAuth 
 } from '../utils/subscription-validator.ts';
+import { logSystemError } from '../_shared/errorLogger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -158,6 +159,16 @@ serve(async (req: Request) => {
       201
     );
   } catch (error) {
+    // ── Log to system_error_logs ──
+    try {
+      const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logSystemError(_logClient, {
+        severity: 'error',
+        source: 'comment-on-post',
+        message: error?.message || String(error),
+        details: { stack: error?.stack },
+      });
+    } catch (_logErr) { console.error('[comment-on-post] Error logging failed:', _logErr); }
     // console.error("Unexpected error:", error);
     return createSubErrorResponse("Internal server error", 500);
   }

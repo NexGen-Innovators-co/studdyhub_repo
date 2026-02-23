@@ -29,10 +29,13 @@ import {
   FloatingActionButtons,
   ChatPanel,
   SocialFeedDialogs,
+  FeedModeSelector,
   adaptNotifications,
   getNotificationTitle,
   getNotificationMessage,
 } from './components/feed';
+import type { FeedMode } from './components/feed';
+import { useEducationContext } from '@/hooks/useEducationContext';
 
 // Other existing components
 import { PostCard } from './components/PostCard';
@@ -106,7 +109,9 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     // ─── Sort / filter / profile state ────────────────────
     const [sortBy, setSortBy] = useState<SortBy>('newest');
     const [filterBy, setFilterBy] = useState<FilterBy>('all');
+    const [feedMode, setFeedMode] = useState<FeedMode>('all');
     const [userProfile, setUserProfile] = useState<any>(null);
+    const { educationContext } = useEducationContext();
 
     // ─── Post creation state ──────────────────────────────
     const [newPostContent, setNewPostContent] = useState('');
@@ -209,7 +214,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
       isLoadingSuggestedUsers, hasMoreSuggestedUsers, loadMoreSuggestedUsers,
       forceRefresh,
       setPosts, setTrendingPosts, setUserPosts, setGroups, setSuggestedUsers, setCurrentUser,
-    } = useSocialData(userProfile, sortBy, filterBy);
+    } = useSocialData(userProfile, sortBy, filterBy, undefined, feedMode);
 
     const {
       chatSessions, activeSessionMessages,
@@ -711,6 +716,13 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
                 ) : (
                   <Tabs value={activeTab} className="space-y-1">
                     <TabsContent value="feed" className="outline-none space-y-1 lg:space-y-4">
+                      {/* Education-aware feed mode selector */}
+                      <FeedModeSelector
+                        mode={feedMode}
+                        onModeChange={setFeedMode}
+                        educationContext={educationContext}
+                        className="px-1 pt-1"
+                      />
                       <FeedTabContent
                         posts={posts}
                         isLoading={isLoading}

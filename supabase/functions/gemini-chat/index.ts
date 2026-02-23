@@ -8,6 +8,7 @@ import { createStreamResponse, StreamingHandler } from './streaming-handler.ts';
 import { createSubscriptionValidator, createErrorResponse } from '../utils/subscription-validator.ts';
 import { executeParsedActions, runAction, AI_ACTION_SCHEMA, getFriendlyActionLabel } from './actions_helper.ts';
 import { DB_SCHEMA_DEFINITION } from './db_schema.ts';
+import { logSystemError } from '../_shared/errorLogger.ts';
 
 // Define CORS headers for cross-origin requests
 const corsHeaders = {
@@ -160,6 +161,14 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
         console.log(`[ActionExecution] ${action.action}: ${result?.success ? 'SUCCESS' : 'FAILED'}`);
       } catch (err: any) {
         console.error(`[ActionExecution] Error executing ${action.action}:`, err);
+        logSystemError(supabase, {
+          severity: 'error',
+          source: 'gemini-chat',
+          component: 'action-execution',
+          error_code: 'ACTION_EXEC_FAILED',
+          message: `Action '${action.action}' failed: ${err.message}`,
+          details: { action: action.action, params: action.params, error: String(err) },
+        });
         executedActions.push({
           type: action.action,
           success: false,
@@ -640,6 +649,15 @@ async function saveChatMessage({
     };
   } catch (error) {
     console.error('Database error when saving chat message:', error);
+    logSystemError(supabase, {
+      severity: 'warning',
+      source: 'gemini-chat',
+      component: 'save-message',
+      error_code: 'MESSAGE_SAVE_FAILED',
+      message: `Failed to save chat message: ${String(error)}`,
+      details: { error: String(error), role: params?.role, sessionId: params?.sessionId },
+      user_id: params?.userId,
+    });
     return null;
   }
 }
@@ -803,6 +821,15 @@ async function ensureChatSession(userId: string, sessionId: string, newDocumentI
     }
   } catch (error) {
     console.error('Database error when ensuring chat session:', error);
+    logSystemError(supabase, {
+      severity: 'warning',
+      source: 'gemini-chat',
+      component: 'ensure-session',
+      error_code: 'SESSION_ENSURE_FAILED',
+      message: `Failed to ensure chat session: ${String(error)}`,
+      details: { error: String(error), sessionId },
+      user_id: userId,
+    });
   }
 }
 
@@ -1204,10 +1231,8 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string, conf
     'gemini-2.5-flash',
     'gemini-3-pro-preview',
     'gemini-2.0-flash',
-    'gemini-1.5-flash',
+    'gemini-2.0-flash-lite',
     'gemini-2.5-pro',
-    'gemini-2.0-pro',
-    'gemini-1.5-pro',
   ];
 
   // Extract systemInstruction from configOverrides
@@ -1255,6 +1280,14 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string, conf
         const errorText = await response.text();
         const status = response.status;
         console.error(`[GeminiAPI] Error ${status} with ${currentModel}: ${errorText.substring(0, 200)}...`);
+        logSystemError(supabase, {
+          severity: 'error',
+          source: 'gemini-chat',
+          component: 'gemini-api',
+          error_code: `GEMINI_HTTP_${status}`,
+          message: `Gemini ${currentModel} returned HTTP ${status}`,
+          details: { model: currentModel, status, errorSnippet: errorText.substring(0, 500), attempt },
+        });
 
         if (status === 429 || status === 503) {
           console.warn(`[GeminiAPI] Quota/Load limit hit for ${currentModel}. Switching to next model...`);
@@ -1270,6 +1303,14 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string, conf
       }
     } catch (error) {
       console.error(`[GeminiAPI] Network error with ${currentModel}:`, error);
+      logSystemError(supabase, {
+        severity: 'error',
+        source: 'gemini-chat',
+        component: 'gemini-api',
+        error_code: 'GEMINI_NETWORK_ERROR',
+        message: `Gemini ${currentModel} network error: ${String(error)}`,
+        details: { model: currentModel, attempt, error: String(error) },
+      });
       if (attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
         await sleep(1000);
       }
@@ -1308,9 +1349,25 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string, conf
       } else {
         const errText = await orResponse.text();
         console.error('[OpenRouter] Error', orResponse.status, errText.substring(0, 300));
+        logSystemError(supabase, {
+          severity: 'error',
+          source: 'gemini-chat',
+          component: 'openrouter-api',
+          error_code: `OPENROUTER_HTTP_${orResponse.status}`,
+          message: `OpenRouter fallback returned HTTP ${orResponse.status}`,
+          details: { status: orResponse.status, errorSnippet: errText.substring(0, 500) },
+        });
       }
     } catch (orErr) {
       console.error('[OpenRouter] Network error:', orErr);
+      logSystemError(supabase, {
+        severity: 'error',
+        source: 'gemini-chat',
+        component: 'openrouter-api',
+        error_code: 'OPENROUTER_NETWORK_ERROR',
+        message: `OpenRouter fallback network error: ${String(orErr)}`,
+        details: { error: String(orErr) },
+      });
     }
   }
 
@@ -1435,6 +1492,14 @@ async function callEnhancedGeminiAPIStream(contents: any[], geminiApiKey: string
       if (!resp.ok) {
         const txt = await resp.text();
         console.error('[GeminiAPI-Stream] HTTP error:', resp.status, txt.substring(0, 300));
+        logSystemError(supabase, {
+          severity: 'error',
+          source: 'gemini-chat',
+          component: 'gemini-stream',
+          error_code: `GEMINI_STREAM_HTTP_${resp.status}`,
+          message: `Gemini streaming ${currentModel} HTTP ${resp.status}`,
+          details: { model: currentModel, status: resp.status, errorSnippet: txt.substring(0, 500) },
+        });
         continue;
       }
 
@@ -1477,6 +1542,14 @@ async function callEnhancedGeminiAPIStream(contents: any[], geminiApiKey: string
       }
     } catch (err) {
       console.error('[GeminiAPI-Stream] Network/stream error:', err);
+      logSystemError(supabase, {
+        severity: 'error',
+        source: 'gemini-chat',
+        component: 'gemini-stream',
+        error_code: 'GEMINI_STREAM_NETWORK_ERROR',
+        message: `Gemini streaming network error: ${String(err)}`,
+        details: { model: currentModel, error: String(err) },
+      });
       continue;
     }
   }
@@ -1506,6 +1579,14 @@ async function callEnhancedGeminiAPIStream(contents: any[], geminiApiKey: string
       if (!orResp.ok) {
         const errText = await orResp.text();
         console.error('[OpenRouter-Stream] HTTP error:', orResp.status, errText.substring(0, 300));
+        logSystemError(supabase, {
+          severity: 'error',
+          source: 'gemini-chat',
+          component: 'openrouter-stream',
+          error_code: `OPENROUTER_STREAM_HTTP_${orResp.status}`,
+          message: `OpenRouter streaming HTTP ${orResp.status}`,
+          details: { status: orResp.status, errorSnippet: errText.substring(0, 500) },
+        });
       } else {
         const reader = orResp.body?.getReader();
         if (reader) {
@@ -1557,6 +1638,14 @@ async function callEnhancedGeminiAPIStream(contents: any[], geminiApiKey: string
       }
     } catch (orErr) {
       console.error('[OpenRouter-Stream] Error:', orErr);
+      logSystemError(supabase, {
+        severity: 'error',
+        source: 'gemini-chat',
+        component: 'openrouter-stream',
+        error_code: 'OPENROUTER_STREAM_ERROR',
+        message: `OpenRouter streaming error: ${String(orErr)}`,
+        details: { error: String(orErr) },
+      });
     }
   }
 
@@ -1715,8 +1804,8 @@ async function handleStreamingResponse(
       console.warn('[Streaming] Failed to get AI model config, using default chain:', e);
       return {
         tier: 'free' as const,
-        modelChain: ['gemini-2.0-flash', 'gemini-1.5-flash'],
-        streamingChain: ['gemini-2.0-flash', 'gemini-1.5-flash'],
+        modelChain: ['gemini-2.0-flash', 'gemini-2.0-flash-lite'],
+        streamingChain: ['gemini-2.0-flash', 'gemini-2.0-flash-lite'],
         displayLabel: 'Gemini Flash',
       };
     }
@@ -1748,6 +1837,15 @@ async function handleStreamingResponse(
         console.log('✅ Query understood:', userIntent.primary);
       } catch (error: any) {
         console.error('❌ Error in understandQuery:', error.message, error.stack);
+        logSystemError(supabase, {
+          severity: 'warning',
+          source: 'gemini-chat',
+          component: 'understand-query',
+          error_code: 'QUERY_UNDERSTANDING_FAILED',
+          message: `understandQuery failed: ${error.message}`,
+          details: { stack: error.stack },
+          user_id: userId,
+        });
         // Fallback intent if query understanding fails
         userIntent = {
           primary: 'general_query',
@@ -1794,6 +1892,15 @@ async function handleStreamingResponse(
         console.log('✅ Retrieved context:', relevantContext?.length || 0, 'items');
       } catch (error: any) {
         console.error('❌ Error in retrieveRelevantContext:', error.message, error.stack);
+        logSystemError(supabase, {
+          severity: 'warning',
+          source: 'gemini-chat',
+          component: 'retrieve-context',
+          error_code: 'CONTEXT_RETRIEVAL_FAILED',
+          message: `retrieveRelevantContext failed: ${error.message}`,
+          details: { stack: error.stack },
+          user_id: userId,
+        });
         // Continue with empty context
       }
 
@@ -1823,6 +1930,15 @@ async function handleStreamingResponse(
         console.log('✅ Built reasoning chain:', reasoningChain?.length || 0, 'steps');
       } catch (error: any) {
         console.error('❌ Error in buildReasoningChain:', error.message, error.stack);
+        logSystemError(supabase, {
+          severity: 'warning',
+          source: 'gemini-chat',
+          component: 'reasoning-chain',
+          error_code: 'REASONING_CHAIN_FAILED',
+          message: `buildReasoningChain failed: ${error.message}`,
+          details: { stack: error.stack },
+          user_id: userId,
+        });
         // Continue with empty reasoning chain
       }
 
@@ -2198,6 +2314,15 @@ Please provide a corrected JSON action plan that ONLY re-does the FAILED actions
         }
       } catch (actionError: any) {
         console.error('Error during action planning:', actionError);
+        logSystemError(supabase, {
+          severity: 'error',
+          source: 'gemini-chat',
+          component: 'action-planning',
+          error_code: 'ACTION_PLANNING_FAILED',
+          message: `Action planning loop failed: ${actionError.message}`,
+          details: { stack: actionError.stack, sessionId: requestData?.sessionId },
+          user_id: requestData?.userId,
+        });
         handler.sendThinkingStep('action', 'Action Planning Error', 'Continuing to response generation...', 'completed');
       }
 
@@ -2413,6 +2538,15 @@ Please provide a corrected JSON action plan that ONLY re-does the FAILED actions
       console.error('❌ FATAL ERROR in streaming handler:', error.message);
       console.error('❌ Stack trace:', error.stack);
       console.error('❌ Full error:', JSON.stringify(error, null, 2));
+      logSystemError(supabase, {
+        severity: 'critical',
+        source: 'gemini-chat',
+        component: 'streaming-handler',
+        error_code: 'STREAMING_FATAL',
+        message: `Fatal streaming error: ${error.message}`,
+        details: { stack: error.stack, sessionId: requestData?.sessionId },
+        user_id: requestData?.userId,
+      });
       if (!handler.isClosed) {
         handler.sendError(error.message || 'An error occurred');
       }
@@ -2477,6 +2611,14 @@ serve(async (req) => {
         requestData = JSON.parse(responseBody);
       } catch (e) {
         console.error("Failed to parse JSON", e);
+        logSystemError(supabase, {
+          severity: 'error',
+          source: 'gemini-chat',
+          component: 'request-parse',
+          error_code: 'REQUEST_JSON_PARSE_FAILED',
+          message: `Failed to parse request body JSON`,
+          details: { error: String(e) },
+        });
         return new Response(JSON.stringify({
           error: 'Invalid JSON in request body'
         }), {
@@ -2616,6 +2758,15 @@ serve(async (req) => {
         }
       } catch (err) {
         console.error('[gemini-chat] Error fetching course materials:', err);
+        logSystemError(supabase, {
+          severity: 'warning',
+          source: 'gemini-chat',
+          component: 'course-materials',
+          error_code: 'COURSE_MATERIALS_FETCH_FAILED',
+          message: `Failed to fetch course materials: ${String(err)}`,
+          details: { error: String(err) },
+          user_id: userId,
+        });
       }
     }
     const hasFiles = rawFiles.length > 0 || jsonFiles.length > 0;
@@ -2667,6 +2818,15 @@ serve(async (req) => {
       if (!processorResponse.ok) {
         const errorBody = await processorResponse.text();
         console.error(`Document processor error: ${processorResponse.status} - ${errorBody}`);
+        logSystemError(supabase, {
+          severity: 'error',
+          source: 'gemini-chat',
+          component: 'document-processor',
+          error_code: `DOC_PROCESSOR_HTTP_${processorResponse.status}`,
+          message: `Document processor failed: HTTP ${processorResponse.status}`,
+          details: { status: processorResponse.status, errorBody: errorBody?.substring(0, 500) },
+          user_id: userId,
+        });
 
         // ✅ Send user-friendly error message
         const errorMessage = {
@@ -2821,8 +2981,8 @@ serve(async (req) => {
         console.warn('[NonStreaming] Failed to get AI model config, using default chain:', e);
         return {
           tier: 'free' as const,
-          modelChain: ['gemini-2.0-flash', 'gemini-1.5-flash'],
-          streamingChain: ['gemini-2.0-flash', 'gemini-1.5-flash'],
+          modelChain: ['gemini-2.0-flash', 'gemini-2.0-flash-lite'],
+          streamingChain: ['gemini-2.0-flash', 'gemini-2.0-flash-lite'],
           displayLabel: 'Gemini Flash',
         };
       }
@@ -3074,6 +3234,15 @@ serve(async (req) => {
         }
       } catch (factError) {
         console.error('Error extracting user facts:', factError);
+        logSystemError(supabase, {
+          severity: 'info',
+          source: 'gemini-chat',
+          component: 'user-facts',
+          error_code: 'USER_FACTS_EXTRACTION_FAILED',
+          message: `User facts extraction failed: ${String(factError)}`,
+          details: { error: String(factError) },
+          user_id: userId,
+        });
       }
     }
 
@@ -3193,6 +3362,16 @@ serve(async (req) => {
     const hasFiles = rawFiles.length > 0 || jsonFiles.length > 0;
     const processingTime = Date.now() - startTime;
     console.error('Error in ai-chat function:', error);
+
+    logSystemError(supabase, {
+      severity: 'critical',
+      source: 'gemini-chat',
+      component: 'main-handler',
+      error_code: 'CHAT_REQUEST_FAILED',
+      message: `AI chat request failed: ${error.message || String(error)}`,
+      details: { stack: error.stack, processingTime, hasFiles, sessionId: requestData?.sessionId },
+      user_id: requestData?.userId,
+    });
 
     let userFriendlyMessage = 'I apologize, but I encountered an unexpected error while processing your request. Please try again.';
 

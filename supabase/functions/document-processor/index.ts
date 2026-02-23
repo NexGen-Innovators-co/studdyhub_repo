@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import mammoth from 'https://esm.sh/mammoth@1.6.0';
 import * as XLSX from 'https://esm.sh/xlsx@0.18.5';
@@ -7,6 +8,7 @@ import xml2js from 'https://esm.sh/xml2js@0.5.0';
 import Papa from 'https://esm.sh/papaparse@5.4.1';
 import cheerio from 'https://esm.sh/cheerio@1.0.0-rc.12';
 import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.min.js';
+import { logSystemError } from '../_shared/errorLogger.ts';
 
 // Define CORS headers for cross-origin requests
 const corsHeaders = {
@@ -783,10 +785,16 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
   return mergedContent;
 }
 /**
- * Enhanced Gemini API caller with better error handling and retries
- */ async function callEnhancedGeminiAPI(contents, geminiApiKey) {
-  const apiUrl = new URL('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent');
-  apiUrl.searchParams.append('key', geminiApiKey);
+ * Enhanced Gemini API caller with model chain fallback for rate-limit resilience
+ */ const DOC_MODEL_CHAIN = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-pro',
+  'gemini-3-pro-preview',
+];
+
+async function callEnhancedGeminiAPI(contents, geminiApiKey) {
   const requestBody = {
     contents,
     generationConfig: {
@@ -796,9 +804,11 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
       topP: 0.8
     }
   };
-  for(let attempt = 0; attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS; attempt++){
+  for(let attempt = 0; attempt < DOC_MODEL_CHAIN.length; attempt++){
+    const model = DOC_MODEL_CHAIN[attempt];
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
     try {
-      const response = await fetch(apiUrl.toString(), {
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -814,17 +824,19 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
             content: extractedContent
           };
         } else {
-          return {
-            success: false,
-            error: 'No content returned from Gemini'
-          };
+          console.warn(`[document-processor] No content from ${model}`);
+          continue;
         }
       } else {
         const errorText = await response.text();
-        if (response.status === 429 && attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
+        if (response.status === 429 || response.status === 503) {
+          console.warn(`[document-processor] ${response.status} from ${model}, switching to next model...`);
           const delay = Math.pow(2, attempt) * ENHANCED_PROCESSING_CONFIG.RATE_LIMIT_DELAY + Math.random() * 1000;
-          // console.log(`Rate limited, retrying in ${delay}ms...`);
           await new Promise((resolve)=>setTimeout(resolve, delay));
+          continue;
+        }
+        if (response.status === 400 || response.status === 404) {
+          console.error(`[document-processor] ${response.status} from ${model}: ${errorText.substring(0, 200)}`);
           continue;
         }
         return {
@@ -833,18 +845,20 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
         };
       }
     } catch (error) {
-      if (attempt === ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
-        return {
-          success: false,
-          error: `Network error: ${error.message}`
-        };
+      console.error(`[document-processor] Network error with ${model}:`, error.message);
+      if (attempt < DOC_MODEL_CHAIN.length - 1) {
+        await new Promise((resolve)=>setTimeout(resolve, (attempt + 1) * 1000));
       }
-      await new Promise((resolve)=>setTimeout(resolve, (attempt + 1) * 1000));
     }
+  }
+  // OpenRouter fallback
+  const orResult = await callOpenRouterFallback(contents, { source: 'document-processor' });
+  if (orResult.success && orResult.content) {
+    return { success: true, content: orResult.content };
   }
   return {
     success: false,
-    error: 'Max retries exceeded'
+    error: 'All AI models failed (Gemini + OpenRouter)'
   };
 }
 /**
@@ -2115,6 +2129,16 @@ function sanitizeFileName(name) {
       }
     });
   } catch (error) {
+    // ── Log to system_error_logs ──
+    try {
+      const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logSystemError(_logClient, {
+        severity: 'error',
+        source: 'document-processor',
+        message: error?.message || String(error),
+        details: { stack: error?.stack },
+      });
+    } catch (_logErr) { console.error('[document-processor] Error logging failed:', _logErr); }
     const processingTime = Date.now() - startTime;
     // console.error('Error in enhanced document-processor function:', error);
     return new Response(JSON.stringify({

@@ -11,6 +11,7 @@ import {
   Settings,
   GraduationCap,
   BarChart3,
+  Building2,
 } from 'lucide-react';
 import { EducatorGuard } from './EducatorGuard';
 import { useEducatorPermissions } from '@/hooks/useEducatorPermissions';
@@ -18,6 +19,7 @@ import { useEducatorPermissions } from '@/hooks/useEducatorPermissions';
 const NAV_ITEMS = [
   { to: '/educator', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/educator/courses', label: 'Courses', icon: BookOpen },
+  { to: '/educator/institution', label: 'Institution', icon: Building2 },
   { to: '/educator/students', label: 'Students', icon: Users },
   { to: '/educator/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/educator/settings', label: 'Settings', icon: Settings },

@@ -21,11 +21,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import AIBot from '@/components/ui/aibot';
 import { Helmet } from 'react-helmet-async';
 import { SubscriptionStatusBar } from '@/components/subscription/SubscriptionStatusBar';
+import { PlatformUpdateBanner } from '@/components/updates/PlatformUpdateBanner';
 import { initializePushNotifications } from '@/services/notificationInitService';
 import { Document } from '@/types/Document';
 import { supabase } from '@/integrations/supabase/client';
 import { MobileMenu } from '@/components/layout/MobileMenu';
-import { OnboardingWizard, isOnboardingComplete } from '@/components/onboarding/OnboardingWizard';
 
 const Index = () => {
   const isOnline = useOnlineStatus();
@@ -102,23 +102,7 @@ const Index = () => {
     setUserProfile,
   } = useAppContext();
 
-  // ─── Onboarding Wizard ────────────────────────────────────────
-  const [showOnboarding, setShowOnboarding] = useState(false);
-
-  useEffect(() => {
-    if (!user) return;
-    if (!isOnboardingComplete()) {
-      setShowOnboarding(true);
-    }
-  }, [user]);
-
-  const handleOnboardingComplete = (updatedProfile?: any) => {
-    setShowOnboarding(false);
-    // If the wizard returned an updated profile, propagate it
-    if (updatedProfile) {
-      setUserProfile(updatedProfile);
-    }
-  };
+  // ─── Onboarding Wizard (handled by OnboardingGuard at app level) ───
 
   let activeSocialTab: string | undefined;
   let socialPostId: string | undefined;
@@ -688,15 +672,6 @@ const Index = () => {
 
     <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
 
-      {/* Onboarding Wizard (full-screen, multi-step) */}
-      {showOnboarding && user && (
-        <OnboardingWizard
-          userProfile={userProfile}
-          userId={user.id}
-          onComplete={handleOnboardingComplete}
-        />
-      )}
-
       {/* Smart Responsive Header */}
       {pageSEO && (
         <Helmet>
@@ -723,6 +698,9 @@ const Index = () => {
 
       {/* Subscription Status Bar for free users */}
       <SubscriptionStatusBar />
+
+      {/* Platform update announcements */}
+      <PlatformUpdateBanner />
 
       <div className="flex-1 flex relative overflow-hidden">
         <div className={`${currentActiveTab === 'chat' ? 'block' : 'lg:hidden'}`}>

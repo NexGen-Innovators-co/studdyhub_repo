@@ -15,6 +15,7 @@ import DynamicHead from "./components/seo/DynamicHead";
 import { OfflineIndicator } from "./components/layout/OfflineIndicator";
 import ErrorBoundary from "./components/layout/ErrorBoundary";
 import ModernPremiumLoader from "./components/ui/ModernPremiumLoader";
+import { OnboardingGuard } from "./components/onboarding/OnboardingGuard";
 
 // Minimal spinner for public/static pages (no framer-motion, instant render)
 const MinimalPageLoader = () => (
@@ -49,12 +50,24 @@ const AdminManagement = lazy(() => import("./components/admin/AdminManagement"))
 const ContentModeration = lazy(() => import("./components/admin/ContentModeration"));
 const SystemSettings = lazy(() => import("./components/admin/SystemSettings"));
 const ActivityLogs = lazy(() => import("./components/admin/ActivityLogs"));
+const SystemErrorLogs = lazy(() => import("./components/admin/SystemErrorLogs"));
+const AIAdminInsights = lazy(() => import("./components/admin/AIAdminInsights"));
+const PlatformUpdates = lazy(() => import("./components/admin/PlatformUpdates"));
 const CourseManagement = lazy(() => import("./components/admin/CourseManagement"));
+const RoleVerificationAdmin = lazy(() => import("./components/admin/RoleVerificationAdmin"));
 const CourseDashboard = lazy(() => import("./pages/CourseDashboard"));
 
 // Lazy load educator components
 const EducatorLayout = lazy(() => import("./components/educator/EducatorLayout"));
 const EducatorDashboard = lazy(() => import("./components/educator/EducatorDashboard"));
+const EducatorCourses = lazy(() => import("./components/educator/courses/EducatorCourses"));
+const InstitutionAdminDashboard = lazy(() => import("./components/educator/institution/InstitutionAdminDashboard"));
+const CourseStudents = lazy(() => import("./components/educator/courses/CourseStudents"));
+const CourseAnalyticsView = lazy(() => import("./components/educator/courses/CourseAnalyticsView"));
+const InstitutionSettings = lazy(() => import("./components/educator/institution/InstitutionSettingsPage"));
+const JoinInstitution = lazy(() => import("./pages/JoinInstitution"));
+const TestimonialModeration = lazy(() => import("./components/admin/TestimonialModeration"));
+const RoleUpgradePanel = lazy(() => import("./components/educator/RoleUpgradePanel"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -118,6 +131,7 @@ const AppWithSEO = () => {
             <Route path="/auth" element={<Suspense fallback={<MinimalPageLoader />}><Auth /></Suspense>} />
             <Route path="/reset-password" element={<Suspense fallback={<MinimalPageLoader />}><ResetPassword /></Suspense>} />
             <Route path="/calendar-callback" element={<Suspense fallback={<MinimalPageLoader />}><CalendarCallback /></Suspense>} />
+            <Route path="/join/:inviteToken" element={<Suspense fallback={<MinimalPageLoader />}><JoinInstitution /></Suspense>} />
 
             {/* ==== AUTHENTICATED APP ROUTES (Non-Social) ==== */}
             <Route path="/dashboard" element={<Index />} />
@@ -157,13 +171,17 @@ const AppWithSEO = () => {
             <Route path="/social/group/:groupId" element={<Index />} />
             <Route path="/social/profile/:userId" element={<Index />} />
 
+            {/* ==== EDUCATOR UPGRADE - Outside guard so non-educators can access ==== */}
+            <Route path="/educator/upgrade" element={<Suspense fallback={<Fallback />}><RoleUpgradePanel /></Suspense>} />
+
             {/* ==== EDUCATOR ROUTES - Protected by EducatorGuard ==== */}
             <Route element={<Suspense fallback={<Fallback />}><EducatorLayout /></Suspense>}>
               <Route path="/educator" element={<EducatorDashboard />} />
-              <Route path="/educator/courses" element={<EducatorDashboard />} />
-              <Route path="/educator/students" element={<EducatorDashboard />} />
-              <Route path="/educator/analytics" element={<EducatorDashboard />} />
-              <Route path="/educator/settings" element={<EducatorDashboard />} />
+              <Route path="/educator/courses" element={<EducatorCourses />} />
+              <Route path="/educator/institution" element={<InstitutionAdminDashboard />} />
+              <Route path="/educator/students" element={<CourseStudents />} />
+              <Route path="/educator/analytics" element={<CourseAnalyticsView />} />
+              <Route path="/educator/settings" element={<InstitutionSettings />} />
             </Route>
 
             {/* ==== ADMIN ROUTES - Protected by AdminLayout ==== */}
@@ -173,8 +191,13 @@ const AppWithSEO = () => {
               <Route path="/admin/courses" element={<CourseManagement />} />
               <Route path="/admin/admins" element={<AdminManagement />} />
               <Route path="/admin/moderation" element={<ContentModeration />} />
+              <Route path="/admin/testimonials" element={<Suspense fallback={<Fallback />}><TestimonialModeration /></Suspense>} />
               <Route path="/admin/settings" element={<SystemSettings />} />
               <Route path="/admin/logs" element={<ActivityLogs />} />
+              <Route path="/admin/errors" element={<Suspense fallback={<Fallback />}><SystemErrorLogs /></Suspense>} />
+              <Route path="/admin/ai-insights" element={<Suspense fallback={<Fallback />}><AIAdminInsights /></Suspense>} />
+              <Route path="/admin/updates" element={<Suspense fallback={<Fallback />}><PlatformUpdates /></Suspense>} />
+              <Route path="/admin/verification" element={<Suspense fallback={<Fallback />}><RoleVerificationAdmin /></Suspense>} />
             </Route>
 
             {/* ==== 404 NOT FOUND ==== */}
@@ -199,7 +222,9 @@ const App = () => (
             <AuthProvider>
               <AdminAuthProvider>
                 <AppProvider>
-                  <AppWithSEO />
+                  <OnboardingGuard>
+                    <AppWithSEO />
+                  </OnboardingGuard>
                 </AppProvider>
               </AdminAuthProvider>
             </AuthProvider>

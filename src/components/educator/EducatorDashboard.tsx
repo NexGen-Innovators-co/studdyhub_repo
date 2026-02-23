@@ -12,14 +12,20 @@ import {
   Plus,
   GraduationCap,
   Building2,
+  Loader2,
 } from 'lucide-react';
 import { useEducatorPermissions } from '@/hooks/useEducatorPermissions';
 import { useEducation } from '@/hooks/useAppContext';
+import { useEducatorCourses } from '@/hooks/useEducatorCourses';
+import { useInstitutionMembers } from '@/hooks/useInstitutionMembers';
 
 export const EducatorDashboard: React.FC = () => {
   const { permissions } = useEducatorPermissions();
   const { educationContext } = useEducation();
   const navigate = useNavigate();
+  const { courses, isLoading: coursesLoading } = useEducatorCourses(permissions.institutionId || undefined);
+  const { members, isLoading: membersLoading } = useInstitutionMembers(permissions.institutionId || '');
+  const studentCount = members.filter(m => m.role === 'student').length;
 
   return (
     <div className="space-y-6">
@@ -66,7 +72,7 @@ export const EducatorDashboard: React.FC = () => {
               <BookOpen className="h-5 w-5 text-purple-600 dark:text-purple-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">—</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{coursesLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : courses.length}</p>
               <p className="text-sm text-gray-500">Courses</p>
             </div>
           </CardContent>
@@ -78,7 +84,7 @@ export const EducatorDashboard: React.FC = () => {
               <Users className="h-5 w-5 text-green-600 dark:text-green-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">—</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{membersLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : studentCount}</p>
               <p className="text-sm text-gray-500">Students</p>
             </div>
           </CardContent>
@@ -90,8 +96,8 @@ export const EducatorDashboard: React.FC = () => {
               <BarChart3 className="h-5 w-5 text-orange-600 dark:text-orange-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">—</p>
-              <p className="text-sm text-gray-500">Analytics</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{coursesLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : members.length}</p>
+              <p className="text-sm text-gray-500">Enrollments</p>
             </div>
           </CardContent>
         </Card>

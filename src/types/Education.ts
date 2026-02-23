@@ -131,11 +131,48 @@ export interface InstitutionInvite {
   created_at: string;
 }
 
+// ─── Role Verification ──────────────────────────────────────────
+
+export type RoleVerificationStatus = 'not_required' | 'pending' | 'verified' | 'rejected';
+
+export interface RoleVerificationRequest {
+  id: string;
+  user_id: string;
+  requested_role: UserRole;
+  institution_id: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  documents: VerificationDocument[];
+  qualifications: string | null;
+  years_experience: string | null;
+  specializations: string[] | null;
+  additional_notes: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  // Optional resolved relations
+  profile?: {
+    id: string;
+    full_name: string | null;
+    avatar_url: string | null;
+    email?: string;
+  };
+}
+
+export interface VerificationDocument {
+  name: string;
+  path: string;
+  uploaded_at: string;
+  size?: number;
+}
+
 // ─── Educator Permissions (computed client-side) ────────────────
 
 export interface EducatorPermissions {
   isEducator: boolean;
   role: UserRole;
+  roleVerificationStatus: RoleVerificationStatus;
   institutionRole: InstitutionMemberRole | null;
   institutionId: string | null;
   institutionName: string | null;

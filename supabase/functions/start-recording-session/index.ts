@@ -2,6 +2,7 @@
 // Creates a new podcast_recordings entry with Service Role to bypass RLS
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { logSystemError } from '../_shared/errorLogger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -48,6 +49,16 @@ serve(async (req: Request) => {
     return new Response(JSON.stringify(data), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (e: any) {
+    // ── Log to system_error_logs ──
+    try {
+      const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logSystemError(_logClient, {
+        severity: 'error',
+        source: 'start-recording-session',
+        message: e?.message || String(e),
+        details: { stack: e?.stack },
+      });
+    } catch (_logErr) { console.error('[start-recording-session] Error logging failed:', _logErr); }
     return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });

@@ -1,14 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
+import type { CourseFilterState } from '@/components/courseLibrary/CourseFilterBar';
 
 export type Course = Database['public']['Tables']['courses']['Row'] & { school_name?: string | null };
 export type CourseMaterial = Database['public']['Tables']['course_materials']['Row'];
 
 export const useCourseLibrary = () => {
-  const useCourses = (schoolFilter?: string | null) => {
+  const useCourses = (schoolFilter?: string | null, educationFilters?: CourseFilterState | null) => {
     return useQuery({
-      queryKey: ['courses', schoolFilter],
+      queryKey: ['courses', schoolFilter, educationFilters],
       queryFn: async () => {
         let query = supabase
           .from('courses')
@@ -18,6 +19,18 @@ export const useCourseLibrary = () => {
         if (schoolFilter === 'global') {
           // Fetch global courses (where school_name is null or 'Global')
           query = query.or('school_name.is.null,school_name.eq.Global');
+        } else if (schoolFilter === 'for-you') {
+          // "For You" tab: apply education context filters
+          if (educationFilters?.curriculumId) {
+            query = query.eq('curriculum_id', educationFilters.curriculumId);
+          }
+          if (educationFilters?.educationLevelId) {
+            query = query.eq('education_level_id', educationFilters.educationLevelId);
+          }
+          if (educationFilters?.countryId) {
+            query = query.eq('country_id', educationFilters.countryId);
+          }
+          // If no education filters are active, fall back to all courses
         } else if (schoolFilter) {
           // Fetch courses for a specific school
           query = query.eq('school_name', schoolFilter);

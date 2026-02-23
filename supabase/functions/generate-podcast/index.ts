@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { getEducationContext, formatEducationContextForPrompt } from '../_shared/educationContext.ts';
+import { logSystemError } from '../_shared/errorLogger.ts';
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,6 +15,7 @@ interface PodcastRequest {
   style?: 'casual' | 'educational' | 'deep-dive';
   duration?: 'short' | 'medium' | 'long'; // 5min, 15min, 30min
   podcastType?: 'audio' | 'image-audio' | 'video' | 'live-stream';
+  videoGenerationMode?: 'embedded-audio' | 'looping-visual';
   cover_image_url?: string;
   // Optional customization of hosts and voices
   hosts?: Array<{ name: string; voice?: string }>;
@@ -24,6 +27,10 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // Track credit deduction for refund on failure (declared outside try/catch so catch can refund)
+  let deductedCredits = 0;
+  let deductedUserId: string | null = null;
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -33,10 +40,8 @@ serve(async (req) => {
       'gemini-2.5-flash',
       'gemini-3-pro-preview',
       'gemini-2.0-flash',
-      'gemini-1.5-flash',
+      'gemini-2.0-flash-lite',
       'gemini-2.5-pro',
-      'gemini-2.0-pro',
-      'gemini-1.5-pro'
     ];
 
     async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 3): Promise<any> {
@@ -59,7 +64,12 @@ serve(async (req) => {
           if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
         }
       }
-      throw new Error('All Gemini models failed');
+      // OpenRouter fallback
+      const orResult = await callOpenRouterFallback(requestBody.contents, { source: 'generate-podcast' });
+      if (orResult.success && orResult.content) {
+        return { candidates: [{ content: { parts: [{ text: orResult.content }] } }] };
+      }
+      throw new Error('All AI models failed (Gemini + OpenRouter)');
     }
     const gcpServiceAccountJson = Deno.env.get("GCP_SERVICE_ACCOUNT_JSON");
     const gcpProjectId = "gen-lang-client-0612038711";
@@ -138,11 +148,27 @@ serve(async (req) => {
           const tokenData = await tokenResponse.json();
           return tokenData.access_token;
         } else {
-          // console.error("[OAuth] Token fetch failed:", await tokenResponse.text());
+          logSystemError(supabase, {
+            severity: 'warning',
+            source: 'generate-podcast',
+            component: 'oauth-token',
+            error_code: 'OAUTH_TOKEN_FETCH_FAILED',
+            message: 'GCP OAuth token fetch returned non-OK response',
+            details: { status: tokenResponse.status },
+            user_id: user?.id,
+          });
           return null;
         }
       } catch (error) {
-        // console.error("[OAuth] Error getting access token:", error);
+        logSystemError(supabase, {
+          severity: 'warning',
+          source: 'generate-podcast',
+          component: 'oauth-token',
+          error_code: 'OAUTH_TOKEN_ERROR',
+          message: `GCP OAuth token error: ${String(error)}`,
+          details: { error: String(error) },
+          user_id: user?.id,
+        });
         return null;
       }
     }
@@ -174,10 +200,82 @@ serve(async (req) => {
       style = 'educational',
       duration = 'medium',
       podcastType = 'audio',
+      videoGenerationMode = 'looping-visual',
       cover_image_url: providedCoverImageUrl,
       hosts: requestedHosts,
       numberOfHosts = 2
     } = body as PodcastRequest;
+
+    // ── SERVER-SIDE CREDIT CHECK ──────────────────────────────────────────
+    // Credit costs: audio=1, image-audio=3, video=10, live-stream=3
+    const CREDIT_COSTS: Record<string, number> = {
+      'audio': 1,
+      'image-audio': 3,
+      'video': 10,
+      'live-stream': 3,
+    };
+    const creditCost = CREDIT_COSTS[podcastType] ?? 1;
+
+    // Check if user is admin (admins bypass credit check)
+    const { data: adminUser } = await supabase
+      .from('admin_users')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    const isAdmin = !!adminUser;
+
+    if (!isAdmin) {
+      // Atomically deduct credits — will fail if balance < cost
+      const txnType = podcastType === 'audio' ? 'generation_audio'
+        : podcastType === 'video' ? 'generation_video'
+        : 'generation_image';
+
+      const modeLabel = podcastType === 'video' ? ` [${videoGenerationMode}]` : '';
+      const { data: deductResult, error: deductError } = await supabase
+        .rpc('deduct_podcast_credits', {
+          p_user_id: user.id,
+          p_amount: creditCost,
+          p_type: txnType,
+          p_description: `Generated ${podcastType}${modeLabel} podcast (${creditCost} credits)`,
+        });
+
+      if (deductError) {
+        console.error('[Podcast] Credit deduction error:', deductError);
+        logSystemError(supabase, {
+          severity: 'error',
+          source: 'generate-podcast',
+          component: 'credit-deduction',
+          error_code: 'CREDIT_DEDUCTION_FAILED',
+          message: `Credit deduction failed for ${podcastType} podcast`,
+          details: { creditCost, podcastType, deductError: String(deductError) },
+          user_id: user.id,
+        });
+        return new Response(
+          JSON.stringify({ success: false, error: 'Credit check failed. Please try again.' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const creditResult = deductResult as any;
+      if (!creditResult?.success) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'insufficient_credits',
+            message: `You need ${creditCost} credits for a ${podcastType} podcast but only have ${creditResult?.balance ?? 0}. Please purchase more credits.`,
+            balance: creditResult?.balance ?? 0,
+            required: creditCost,
+          }),
+          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Track for refund on failure
+      deductedCredits = creditCost;
+      deductedUserId = user.id;
+    }
+    // ── END CREDIT CHECK ──────────────────────────────────────────────────
 
     // Normalize hosts: default to Thomas & Isabel when not provided
     const defaultHosts = [
@@ -283,7 +381,7 @@ serve(async (req) => {
     // 2.5. Generate an engaging title for the podcast
     let podcastTitle = `Podcast: ${sources.join(", ")}`; // Fallback title
     try {
-      const titlePrompt = `Based on this podcast script, generate a catchy, engaging title (maximum 60 characters). The title should capture the main topic and be interesting to listeners. Return ONLY the title text, nothing else.
+      const titlePrompt = `Based on this podcast script, generate a catchy, engaging title (maximum 120 characters). The title should capture the main topic and be interesting to listeners. Return ONLY the title text, nothing else.
 
 Script excerpt:
 ${script.substring(0, 1500)}
@@ -297,15 +395,22 @@ Title:`;
         }, geminiApiKey);
 
         const generatedTitle = titleData.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-        if (generatedTitle && generatedTitle.length > 0 && generatedTitle.length <= 100) {
+        if (generatedTitle && generatedTitle.length > 0 && generatedTitle.length <= 150) {
           podcastTitle = generatedTitle.replace(/^['"]|['"]$/g, '');
           // console.log(`[Podcast] Generated title: ${podcastTitle}`);
         }
       } catch (titleError) {
-        // console.error('[Podcast] Title generation error:', titleError);
+        logSystemError(supabase, {
+          severity: 'info',
+          source: 'generate-podcast',
+          component: 'title-generation',
+          error_code: 'TITLE_GENERATION_FAILED',
+          message: `Podcast title generation failed, using fallback`,
+          details: { error: String(titleError) },
+          user_id: user.id,
+        });
       }
     } catch (titleError) {
-      // console.error("[Podcast] Title generation error:", titleError);
       // Keep fallback title
     }
 
@@ -313,7 +418,11 @@ Title:`;
     const segments = parseScript(script, hosts.map(h => h.name));
 
     // Flag: use dedicated video flow (Veo clips with AI audio) for video podcast type
-    const useVideoFlow = podcastType === 'video' && !!accessToken;
+    // embedded-audio: Veo generates video WITH built-in audio, TTS is skipped entirely
+    // looping-visual: TTS audio is generated normally, Veo generates SILENT background loops
+    const useVideoFlow = podcastType === 'video' && videoGenerationMode === 'embedded-audio' && !!accessToken;
+    const useLoopingVisualFlow = podcastType === 'video' && videoGenerationMode === 'looping-visual' && !!accessToken;
+    console.log(`[Podcast] Type: ${podcastType}, VideoMode: ${videoGenerationMode}, EmbeddedAudio: ${useVideoFlow}, LoopingVisual: ${useLoopingVisualFlow}`);
 
     // ── Shared Veo helpers (used by video flow) ──
     async function pollVeoOperation(operationName: string, token: string, maxWaitMs = 120_000): Promise<any> {
@@ -426,8 +535,8 @@ Title:`;
           return null;
         }
 
-        // Video type: skip TTS entirely — audio comes from Veo video clips
-        // Return text-only segment for transcript
+        // embedded-audio mode: skip TTS entirely — audio comes from Veo video clips
+        // looping-visual mode: TTS is generated normally (audio plays over silent video loops)
         if (useVideoFlow) {
           return { speaker: segment.speaker, text: cleanedText, index };
         }
@@ -454,7 +563,15 @@ Title:`;
 
         if (!ttsResponse.ok) {
           const errorText = await ttsResponse.text();
-          // console.error(`[Podcast] TTS API error for segment ${index}:`, ttsResponse.status, errorText);
+          logSystemError(supabase, {
+            severity: 'error',
+            source: 'generate-podcast',
+            component: 'tts-generation',
+            error_code: `TTS_HTTP_${ttsResponse.status}`,
+            message: `TTS API failed for segment ${index}: HTTP ${ttsResponse.status}`,
+            details: { segmentIndex: index, status: ttsResponse.status, errorSnippet: errorText.substring(0, 500) },
+            user_id: user.id,
+          });
           throw new Error(`TTS API failed: ${ttsResponse.status} - ${errorText}`);
         }
 
@@ -497,7 +614,18 @@ Title:`;
             body: JSON.stringify({ description: coverPrompt, userId: user.id })
           });
           if (coverRes.ok) { coverImageUrl = (await coverRes.json()).imageUrl; }
-        } catch (e) { console.error('[Podcast] Cover image error:', e); }
+        } catch (e) {
+          console.error('[Podcast] Cover image error:', e);
+          logSystemError(supabase, {
+            severity: 'warning',
+            source: 'generate-podcast',
+            component: 'cover-image',
+            error_code: 'COVER_IMAGE_GENERATION_FAILED',
+            message: `Cover image generation failed: ${String(e)}`,
+            details: { error: String(e) },
+            user_id: user.id,
+          });
+        }
       }
 
       try {
@@ -538,8 +666,51 @@ Return ONLY valid JSON array: [{"concept":"...", "description":"...", "dialogue"
         let scenes: any[] = [];
         const sceneText = sceneData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
         const jsonMatch = sceneText.match(/\[[\s\S]*\]/);
-        if (jsonMatch) scenes = JSON.parse(jsonMatch[0]);
-        if (scenes.length === 0) throw new Error('No scenes extracted from script');
+        if (jsonMatch) {
+          let rawJson = jsonMatch[0];
+          try {
+            scenes = JSON.parse(rawJson);
+          } catch (_firstErr) {
+            // LLM JSON is often malformed — attempt common repairs
+            try {
+              let fixed = rawJson
+                // Remove trailing commas before ] or }
+                .replace(/,\s*([\]}])/g, '$1')
+                // Replace literal newlines/tabs inside strings with escape sequences
+                .replace(/"(?:[^"\\]|\\.)*"/g, (match) =>
+                  match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
+                )
+                // Remove control characters that break JSON
+                .replace(/[\x00-\x1F\x7F]/g, (ch) => ch === '\n' || ch === '\r' || ch === '\t' ? ch : '');
+              scenes = JSON.parse(fixed);
+            } catch (_secondErr) {
+              // Last resort: try to extract individual scene objects with a lenient regex
+              console.error('[Podcast] JSON repair failed, falling back to per-object extraction');
+              const objMatches = rawJson.matchAll(/\{[^{}]*?"concept"\s*:\s*"[^"]*?"[^{}]*?\}/g);
+              for (const m of objMatches) {
+                try {
+                  scenes.push(JSON.parse(m[0]));
+                } catch { /* skip unparseable object */ }
+              }
+            }
+          }
+        }
+        if (scenes.length === 0) {
+          // Fallback: create evenly-spaced generic scenes covering all segments
+          console.warn('[Podcast] No scenes parsed — generating fallback scenes');
+          const fallbackCount = Math.min(Math.max(Math.ceil(segments.length / 2), 4), 12);
+          scenes = Array.from({ length: fallbackCount }, (_, i) => {
+            const start = Math.floor(i * segments.length / fallbackCount);
+            const end = Math.floor((i + 1) * segments.length / fallbackCount);
+            return {
+              concept: `Scene ${i + 1}`,
+              description: `Professional cinematic educational scene about ${sources.join(', ') || 'the topic'}, modern studio setting, warm lighting, dynamic camera movement`,
+              dialogue: segments.slice(start, end).map((s: any) => s.text || '').join(' ').substring(0, 200),
+              segmentIndices: Array.from({ length: end - start }, (_, j) => start + j),
+              duration: 8,
+            };
+          });
+        }
         // Hard cap at 12 scenes (12 × 8s = 96s of video, all generated in parallel)
         scenes = scenes.slice(0, 12);
 
@@ -627,6 +798,15 @@ Return ONLY valid JSON array: [{"concept":"...", "description":"...", "dialogue"
             }
           } catch (err) {
             console.error(`[Podcast] Clip ${clipIndex} launch error:`, err);
+            logSystemError(supabase, {
+              severity: 'error',
+              source: 'generate-podcast',
+              component: 'veo-clip-launch',
+              error_code: 'VEO_CLIP_LAUNCH_FAILED',
+              message: `Veo clip ${clipIndex} launch failed: ${String(err)}`,
+              details: { clipIndex, error: String(err) },
+              user_id: user.id,
+            });
           }
         }
 
@@ -697,6 +877,15 @@ Return ONLY valid JSON array: [{"concept":"...", "description":"...", "dialogue"
               }
             } catch (err) {
               console.error(`[Podcast] Poll clip ${op.clipIndex} error:`, err);
+              logSystemError(supabase, {
+                severity: 'warning',
+                source: 'generate-podcast',
+                component: 'veo-poll',
+                error_code: 'VEO_POLL_ERROR',
+                message: `Veo poll clip ${op.clipIndex} error: ${String(err)}`,
+                details: { clipIndex: op.clipIndex, error: String(err), elapsed: Date.now() - videoFlowStart },
+                user_id: user.id,
+              });
             }
           }));
 
@@ -710,39 +899,53 @@ Return ONLY valid JSON array: [{"concept":"...", "description":"...", "dialogue"
         // Sort visual assets by order
         visualAssets.sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
         console.log(`[Podcast] Generated ${visualAssets.length}/${scenes.length} video clips (audio: ${veoSupportsAudio})`);
-      } catch (sceneErr) {
+      } catch (sceneErr: any) {
         console.error('[Podcast] Video flow error:', sceneErr);
+        logSystemError(supabase, {
+          severity: 'error',
+          source: 'generate-podcast',
+          component: 'embedded-audio-video',
+          error_code: 'VIDEO_FLOW_ERROR',
+          message: `Video flow failed: ${sceneErr?.message || sceneErr}`,
+          details: { stack: sceneErr?.stack },
+          user_id: user?.id,
+        });
       }
     }
+
+    // Track early-saved podcast ID for looping-visual flow (saves before Veo polling)
+    let earlySavedPodcastId: string | null = null;
 
     // ══════════════════════════════════════════════════════════════
     // IMAGE-AUDIO FLOW: TTS audio + generated images (existing)
     // ══════════════════════════════════════════════════════════════
     if (!coverImageUrl && !useVideoFlow && (podcastType === 'image-audio' || podcastType === 'video' || podcastType === 'live-stream')) {
-      // Generate a cover image for the podcast (use first concept or a summary prompt)
-      try {
-        let coverPrompt = '';
-        if (visualAssets.length > 0 && visualAssets[0].description) {
-          coverPrompt = visualAssets[0].description;
-        } else {
-          coverPrompt = `A vibrant, professional educational podcast cover about ${sources.join(", ") || 'the topic'}, modern design, clean typography, bright gradients, engaging, 3D rendered style, cinematic composition`;
+      // Generate a cover image for the podcast (skip for looping-visual — Veo videos will serve as visuals)
+      if (!useLoopingVisualFlow) {
+        try {
+          let coverPrompt = '';
+          if (visualAssets.length > 0 && visualAssets[0].description) {
+            coverPrompt = visualAssets[0].description;
+          } else {
+            coverPrompt = `A vibrant, professional educational podcast cover about ${sources.join(", ") || 'the topic'}, modern design, clean typography, bright gradients, engaging, 3D rendered style, cinematic composition`;
+          }
+          const coverRes = await fetch(`${supabaseUrl}/functions/v1/generate-image-from-text`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${supabaseKey}`
+            },
+            body: JSON.stringify({ description: coverPrompt, userId: user.id })
+          });
+          if (coverRes.ok) {
+            const coverData = await coverRes.json();
+            coverImageUrl = coverData.imageUrl;
+          } else {
+            // console.error('[Podcast] Cover image upload error:', await coverRes.text());
+          }
+        } catch (coverError) {
+          // console.error('[Podcast] Cover image generation exception:', coverError);
         }
-        const coverRes = await fetch(`${supabaseUrl}/functions/v1/generate-image-from-text`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${supabaseKey}`
-          },
-          body: JSON.stringify({ description: coverPrompt, userId: user.id })
-        });
-        if (coverRes.ok) {
-          const coverData = await coverRes.json();
-          coverImageUrl = coverData.imageUrl;
-        } else {
-          // console.error('[Podcast] Cover image upload error:', await coverRes.text());
-        }
-      } catch (coverError) {
-        // console.error('[Podcast] Cover image generation exception:', coverError);
       }
 
       try {
@@ -816,49 +1019,334 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
         }
 
 
-        // Use the generate-image-from-text edge function to upload and get a public URL for each image
-        for (let i = 0; i < concepts.length; i++) {
-          const concept = concepts[i];
-          let description = (typeof concept.description === 'string' && concept.description.trim())
-            ? concept.description.trim()
-            : `${concept.concept || sources.join(", ") || 'the topic'}`;
-
-          description = `${description}. `;
-
-          let imageUrl = "";
-          try {
-            const imageRes = await fetch(`${supabaseUrl}/functions/v1/generate-image-from-text`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${supabaseKey}`
-              },
-              body: JSON.stringify({ description: description, userId: user.id })
+        // For looping-visual, skip expensive AI image generation — use lightweight
+        // placeholders.  Veo videos will replace them in the background anyway.
+        if (useLoopingVisualFlow) {
+          console.log(`[Podcast] Looping-visual: using ${concepts.length} placeholder images (skipping AI image gen)`);
+          for (let i = 0; i < concepts.length; i++) {
+            const concept = concepts[i];
+            const description = (typeof concept.description === 'string' && concept.description.trim())
+              ? concept.description.trim()
+              : `${concept.concept || sources.join(", ") || 'the topic'}`;
+            visualAssets.push({
+              type: 'image',
+              concept: concept.concept,
+              description,
+              url: `https://placehold.co/1792x1024/6366f1/white?text=${encodeURIComponent(concept.concept)}`,
+              segmentIndices: Array.isArray(concept.segmentIndices) ? concept.segmentIndices : [],
+              timestamp: null
             });
-            if (imageRes.ok) {
-              const imageData = await imageRes.json();
-              imageUrl = imageData.imageUrl;
-            } else {
-              // console.error(`[Podcast] Image upload error:`, await imageRes.text());
-            }
-          } catch (error) {
-            // console.error(`[Podcast] Image upload exception:`, error);
           }
+        } else {
+          // IMAGE-AUDIO / other flows: generate real AI images per concept
+          for (let i = 0; i < concepts.length; i++) {
+            const concept = concepts[i];
+            let description = (typeof concept.description === 'string' && concept.description.trim())
+              ? concept.description.trim()
+              : `${concept.concept || sources.join(", ") || 'the topic'}`;
 
-          visualAssets.push({
-            type: 'image',
-            concept: concept.concept,
-            description,
-            url: imageUrl || `https://placehold.co/1792x1024/6366f1/white?text=${encodeURIComponent(concept.concept)}`,
-            segmentIndices: Array.isArray(concept.segmentIndices) ? concept.segmentIndices : [],
-            timestamp: null // will be set in UI based on segmentIndex
-          });
+            description = `${description}. `;
+
+            let imageUrl = "";
+            try {
+              const imageRes = await fetch(`${supabaseUrl}/functions/v1/generate-image-from-text`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${supabaseKey}`
+                },
+                body: JSON.stringify({ description: description, userId: user.id })
+              });
+              if (imageRes.ok) {
+                const imageData = await imageRes.json();
+                imageUrl = imageData.imageUrl;
+              } else {
+                // console.error(`[Podcast] Image upload error:`, await imageRes.text());
+              }
+            } catch (error) {
+              // console.error(`[Podcast] Image upload exception:`, error);
+            }
+
+            visualAssets.push({
+              type: 'image',
+              concept: concept.concept,
+              description,
+              url: imageUrl || `https://placehold.co/1792x1024/6366f1/white?text=${encodeURIComponent(concept.concept)}`,
+              segmentIndices: Array.isArray(concept.segmentIndices) ? concept.segmentIndices : [],
+              timestamp: null // will be set in UI based on segmentIndex
+            });
+          }
         }
 
         // console.log(`[Podcast] Generated ${visualAssets.length} visual assets`);
 
-        // For video podcast type, generate video clips using Veo 2
-        if (podcastType === 'video' && visualAssets.length > 0 && accessToken) {
+        // For video podcast type (looping-visual), generate SILENT video loops using Veo
+        // These play as background visuals while TTS audio plays over them
+        if (useLoopingVisualFlow && visualAssets.length > 0 && accessToken) {
+          // ── EARLY SAVE: persist podcast with images+TTS BEFORE Veo polling ──
+          // This ensures we don't lose the podcast if the function is killed during Veo polling
+          try {
+            const earlySegmentImageMap: (string | null)[] = Array(segments.length).fill(null);
+            visualAssets.forEach(asset => {
+              if (Array.isArray(asset.segmentIndices)) {
+                asset.segmentIndices.forEach((segIdx: number) => {
+                  if (segIdx >= 0 && segIdx < segments.length) earlySegmentImageMap[segIdx] = asset.url;
+                });
+              }
+            });
+            for (let i = 0; i < earlySegmentImageMap.length; i++) {
+              if (!earlySegmentImageMap[i]) {
+                let nearest = -1, minDist = Infinity;
+                for (let j = 0; j < earlySegmentImageMap.length; j++) {
+                  if (earlySegmentImageMap[j] && Math.abs(j - i) < minDist) { minDist = Math.abs(j - i); nearest = j; }
+                }
+                earlySegmentImageMap[i] = nearest >= 0 ? earlySegmentImageMap[nearest] : (visualAssets[0]?.url || '');
+              }
+            }
+            const earlyAudioWithImages = validAudioSegments.map((seg, idx) => ({
+              ...seg,
+              imageUrl: earlySegmentImageMap[idx] || null
+            }));
+            const earlyOptimizedAssets = visualAssets.map(asset => {
+              if (asset.url.startsWith('data:')) {
+                return { ...asset, url: `https://placehold.co/1792x1024/6366f1/white?text=${encodeURIComponent(asset.concept)}`, generated: true };
+              }
+              return asset;
+            });
+            const { data: earlyPodcast, error: earlyInsertErr } = await supabase
+              .from("ai_podcasts")
+              .insert({
+                user_id: user.id,
+                title: podcastTitle,
+                sources,
+                script,
+                audio_segments: earlyAudioWithImages,
+                duration_minutes: estimateDuration(segments),
+                style,
+                podcast_type: podcastType,
+                visual_assets: earlyOptimizedAssets,
+                cover_image_url: coverImageUrl,
+                status: "completed"
+              })
+              .select('id')
+              .single();
+            if (!earlyInsertErr && earlyPodcast) {
+              earlySavedPodcastId = earlyPodcast.id;
+              // Clear refund tracking — podcast is saved, credits are earned
+              deductedCredits = 0;
+              deductedUserId = null;
+              console.log(`[Podcast] Early-saved podcast ${earlySavedPodcastId} with images before Veo enhancement`);
+            }
+          } catch (earlySaveErr: any) {
+            console.error('[Podcast] Early save failed, will try final save:', earlySaveErr);
+            logSystemError(supabase, {
+              severity: 'warning',
+              source: 'generate-podcast',
+              component: 'early-save',
+              error_code: 'EARLY_SAVE_FAILED',
+              message: `Early save failed: ${earlySaveErr?.message || earlySaveErr}`,
+              details: { stack: earlySaveErr?.stack },
+              user_id: user?.id,
+            });
+          }
+
+          console.log(`[Podcast] Looping-visual mode: dispatching ${Math.min(concepts.length, 6)} silent video loops to background...`);
+
+          // ── FIRE-AND-FORGET: Veo launch + polling + DB update ALL run in background ──
+          // After early save, return the response immediately. The Deno isolate stays
+          // alive for pending promises, giving Veo the remaining wall-clock time.
+          if (earlySavedPodcastId) {
+            const bgPodcastId = earlySavedPodcastId;
+            const bgAccessToken = accessToken;
+            const bgUserId = user.id;
+            const bgVisualAssets = [...visualAssets]; // snapshot
+            const bgSegments = segments;
+            const bgValidAudioSegments = validAudioSegments;
+            const bgConcepts = concepts.slice(0, 6); // max 6 loops
+            const bgGcpProjectId = gcpProjectId;
+            const LOOP_BUDGET_MS = 180_000;
+
+            // Non-awaited — runs entirely in background after response is returned
+            (async () => {
+              try {
+                const loopStart = Date.now();
+                console.log(`[Podcast] BG: Launching ${bgConcepts.length} Veo operations for podcast ${bgPodcastId}...`);
+
+                interface LoopOp {
+                  index: number;
+                  concept: any;
+                  operationName: string | null;
+                  done: boolean;
+                  result: any;
+                }
+                const loopOps: LoopOp[] = [];
+
+                // Launch all Veo requests in parallel (silent — no generateAudio)
+                for (let i = 0; i < bgConcepts.length; i++) {
+                  const concept = bgConcepts[i];
+                  const videoPrompt = `${concept.description}. Professional educational ambient background video, smooth camera movement, modern design, clean aesthetic. 8 seconds, loopable.`;
+                  const op: LoopOp = { index: i, concept, operationName: null, done: false, result: null };
+                  loopOps.push(op);
+
+                  try {
+                    const veoRes = await fetch(
+                      `https://us-central1-aiplatform.googleapis.com/v1/projects/${bgGcpProjectId}/locations/us-central1/publishers/google/models/veo-2.0-generate-001:predictLongRunning`,
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${bgAccessToken}` },
+                        body: JSON.stringify({
+                          instances: [{ prompt: videoPrompt }],
+                          parameters: {
+                            sampleCount: 1,
+                            aspectRatio: "16:9",
+                            durationSeconds: 8
+                          }
+                        })
+                      }
+                    );
+                    if (veoRes.ok) {
+                      const data = await veoRes.json();
+                      if (data.name) {
+                        op.operationName = data.name;
+                        console.log(`[Podcast] BG: Loop ${i}: operation ${data.name.split('/').pop()}`);
+                      }
+                    } else {
+                      console.error(`[Podcast] BG: Loop ${i} launch failed (${veoRes.status})`);
+                    }
+                  } catch (err) {
+                    console.error(`[Podcast] BG: Loop ${i} launch error:`, err);
+                  }
+                }
+
+                const launchedLoops = loopOps.filter(o => o.operationName).length;
+                console.log(`[Podcast] BG: Launched ${launchedLoops}/${bgConcepts.length} silent loop operations, polling...`);
+
+                // Polling loop
+                let firstPoll = true;
+                while (true) {
+                  const elapsed = Date.now() - loopStart;
+                  if (elapsed >= LOOP_BUDGET_MS) {
+                    console.warn(`[Podcast] BG: Loop budget exhausted (${Math.round(elapsed / 1000)}s)`);
+                    break;
+                  }
+                  const stillPending = loopOps.filter(o => o.operationName && !o.done);
+                  if (stillPending.length === 0) break;
+
+                  const waitMs = firstPoll ? 15_000 : 6_000;
+                  firstPoll = false;
+                  await new Promise(r => setTimeout(r, waitMs));
+
+                  await Promise.all(stillPending.map(async (op) => {
+                    try {
+                      const modelEndpoint = op.operationName!.split('/operations/')[0];
+                      const pollUrl = `https://us-central1-aiplatform.googleapis.com/v1/${modelEndpoint}:fetchPredictOperation`;
+                      const res = await fetch(pollUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${bgAccessToken}` },
+                        body: JSON.stringify({ operationName: op.operationName })
+                      });
+                      if (!res.ok) {
+                        if (res.status === 404 && (Date.now() - loopStart) > 90_000) op.done = true;
+                        return;
+                      }
+                      const data = await res.json();
+                      if (data.done) {
+                        op.done = true;
+                        op.result = data;
+                        const videoBytes = extractVideoBytes(data);
+                        if (videoBytes) {
+                          const videoUrl = await uploadVideoClip(videoBytes, bgUserId, op.index + 100);
+                          if (videoUrl) {
+                            const existingIdx = bgVisualAssets.findIndex((a: any) =>
+                              a.concept === op.concept.concept && a.type === 'image'
+                            );
+                            const videoAsset = {
+                              type: 'video',
+                              concept: op.concept.concept,
+                              description: op.concept.description,
+                              url: videoUrl,
+                              segmentIndices: Array.isArray(op.concept.segmentIndices) ? op.concept.segmentIndices : [],
+                              order: op.index,
+                              duration: 8,
+                              hasAudio: false,
+                              timestamp: null
+                            };
+                            if (existingIdx >= 0) {
+                              bgVisualAssets[existingIdx] = videoAsset;
+                            } else {
+                              bgVisualAssets.push(videoAsset);
+                            }
+                            console.log(`[Podcast] BG: Silent loop ${op.index + 1}: ${videoUrl}`);
+                          }
+                        }
+                      }
+                    } catch (err) {
+                      console.error(`[Podcast] BG: Loop ${op.index} poll error:`, err);
+                    }
+                  }));
+                }
+
+                const completedLoops = loopOps.filter(o => o.done && o.result).length;
+                console.log(`[Podcast] BG: Completed ${completedLoops}/${launchedLoops} silent video loops`);
+
+                // Update the podcast record with video assets
+                if (completedLoops > 0) {
+                  const updatedSegMap: (string | null)[] = Array(bgSegments.length).fill(null);
+                  bgVisualAssets.forEach(asset => {
+                    if (Array.isArray(asset.segmentIndices)) {
+                      asset.segmentIndices.forEach((segIdx: number) => {
+                        if (segIdx >= 0 && segIdx < bgSegments.length) updatedSegMap[segIdx] = asset.url;
+                      });
+                    }
+                  });
+                  for (let i = 0; i < updatedSegMap.length; i++) {
+                    if (!updatedSegMap[i]) {
+                      let nearest = -1, minDist = Infinity;
+                      for (let j = 0; j < updatedSegMap.length; j++) {
+                        if (updatedSegMap[j] && Math.abs(j - i) < minDist) { minDist = Math.abs(j - i); nearest = j; }
+                      }
+                      updatedSegMap[i] = nearest >= 0 ? updatedSegMap[nearest] : (bgVisualAssets[0]?.url || '');
+                    }
+                  }
+                  const updatedAudioWithImages = bgValidAudioSegments.map((seg, idx) => ({
+                    ...seg,
+                    imageUrl: updatedSegMap[idx] || null
+                  }));
+                  const updatedOptimizedAssets = bgVisualAssets.map(asset => {
+                    if (asset.url.startsWith('data:')) {
+                      return { ...asset, url: `https://placehold.co/1792x1024/6366f1/white?text=${encodeURIComponent(asset.concept)}`, generated: true };
+                    }
+                    return asset;
+                  });
+                  await supabase
+                    .from("ai_podcasts")
+                    .update({
+                      audio_segments: updatedAudioWithImages,
+                      visual_assets: updatedOptimizedAssets,
+                    })
+                    .eq('id', bgPodcastId);
+                  console.log(`[Podcast] BG: Updated podcast ${bgPodcastId} with ${completedLoops} video loop assets`);
+                }
+              } catch (bgErr: any) {
+                console.error('[Podcast] BG: Veo enhancement failed:', bgErr);
+                logSystemError(supabase, {
+                  severity: 'error',
+                  source: 'generate-podcast',
+                  component: 'veo-background',
+                  error_code: 'VEO_ENHANCEMENT_FAILED',
+                  message: `Veo background enhancement failed: ${bgErr?.message || bgErr}`,
+                  details: { stack: bgErr?.stack, podcastId: bgPodcastId },
+                  user_id: bgUserId,
+                });
+              }
+            })(); // fire-and-forget — NOT awaited
+            console.log(`[Podcast] Veo enhancement dispatched to background, returning response now`);
+          }
+
+          // Return immediately — podcast is already saved with images, Veo runs in background
+        }
+        // For non-looping video podcast type (legacy path), generate max 2 clips
+        else if (podcastType === 'video' && !useLoopingVisualFlow && visualAssets.length > 0 && accessToken) {
           console.log(`[Podcast] Generating video clips with Veo 2...`);
 
           // Helper: poll a Vertex AI LRO via fetchPredictOperation (POST) until done or timeout
@@ -1092,26 +1580,42 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
       ? Math.max(1, Math.round(visualAssets.reduce((sum: number, a: any) => sum + (a.duration || 8), 0) / 60))
       : estimateDuration(segments);
 
-    const { data: podcast, error: insertError } = await supabase
-      .from("ai_podcasts")
-      .insert({
-        user_id: user.id,
-        title: podcastTitle,
-        sources: sources,
-        script: script,
-        audio_segments: audioSegmentsWithImages,
-        duration_minutes: actualDurationMinutes,
-        style: style,
-        podcast_type: podcastType,
-        visual_assets: optimizedVisualAssets,
-        cover_image_url: coverImageUrl,
-        status: "completed"
-      })
-      .select()
-      .single();
+    // If podcast was already early-saved (looping-visual), fetch & return it instead of re-inserting
+    let podcast: any;
+    if (earlySavedPodcastId) {
+      const { data: existing, error: fetchErr } = await supabase
+        .from("ai_podcasts")
+        .select()
+        .eq('id', earlySavedPodcastId)
+        .single();
+      if (fetchErr || !existing) {
+        throw new Error(`Failed to fetch early-saved podcast: ${fetchErr?.message}`);
+      }
+      podcast = existing;
+      console.log(`[Podcast] Returning early-saved podcast ${podcast.id}`);
+    } else {
+      const { data: inserted, error: insertError } = await supabase
+        .from("ai_podcasts")
+        .insert({
+          user_id: user.id,
+          title: podcastTitle,
+          sources: sources,
+          script: script,
+          audio_segments: audioSegmentsWithImages,
+          duration_minutes: actualDurationMinutes,
+          style: style,
+          podcast_type: podcastType,
+          visual_assets: optimizedVisualAssets,
+          cover_image_url: coverImageUrl,
+          status: "completed"
+        })
+        .select()
+        .single();
 
-    if (insertError) {
-      throw insertError;
+      if (insertError) {
+        throw insertError;
+      }
+      podcast = inserted;
     }
 
     // console.log(`[Podcast] Saved podcast: ${podcast.id}`);
@@ -1128,7 +1632,61 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
     );
 
   } catch (error: any) {
-    // console.error("[Podcast] Error:", error);
+    console.error("[Podcast] Fatal error:", error?.message || error);
+
+    // ── Log to system_error_logs for admin visibility ──
+    try {
+      const errSupabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const errSupabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const errClient = createClient(errSupabaseUrl, errSupabaseKey);
+      await logSystemError(errClient, {
+        severity: 'critical',
+        source: 'generate-podcast',
+        component: 'main',
+        error_code: 'GENERATION_FAILED',
+        message: `Podcast generation failed: ${error?.message || 'Unknown error'}`,
+        details: {
+          stack: error?.stack,
+          deductedCredits,
+          refunded: deductedCredits > 0,
+        },
+        user_id: deductedUserId || undefined,
+      });
+    } catch (_logErr) {
+      console.error('[Podcast] Error logging failed:', _logErr);
+    }
+
+    // ── REFUND credits on generation failure (only if we already deducted) ──
+    if (deductedCredits > 0 && deductedUserId) {
+      try {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        const refundClient = createClient(supabaseUrl, supabaseKey);
+        await refundClient.rpc('add_podcast_credits', {
+          p_user_id: deductedUserId,
+          p_amount: deductedCredits,
+          p_type: 'refund',
+          p_description: `Refund for failed podcast generation: ${error.message?.substring(0, 100)}`,
+        });
+      } catch (refundErr: any) {
+        console.error('[Podcast] Refund failed:', refundErr);
+        try {
+          const rfSupabaseUrl = Deno.env.get("SUPABASE_URL")!;
+          const rfSupabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+          const rfClient = createClient(rfSupabaseUrl, rfSupabaseKey);
+          await logSystemError(rfClient, {
+            severity: 'critical',
+            source: 'generate-podcast',
+            component: 'credit-refund',
+            error_code: 'REFUND_FAILED',
+            message: `Credit refund failed (${deductedCredits} credits for user ${deductedUserId}): ${refundErr?.message}`,
+            details: { deductedCredits, userId: deductedUserId, originalError: error?.message },
+            user_id: deductedUserId || undefined,
+          });
+        } catch { /* best effort */ }
+      }
+    }
+
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       {

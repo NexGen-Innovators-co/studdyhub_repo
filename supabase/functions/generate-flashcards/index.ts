@@ -1,8 +1,18 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.24.1';
 import { createSubscriptionValidator, createErrorResponse } from '../utils/subscription-validator.ts';
 import { getEducationContext, formatEducationContextForPrompt } from '../_shared/educationContext.ts';
+import { logSystemError } from '../_shared/errorLogger.ts';
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
+
+// Model fallback chain for quota/rate-limit resilience
+const MODEL_CHAIN = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-pro',
+  'gemini-3-pro-preview',
+];
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -87,41 +97,67 @@ Generate exactly ${numberOfCards} diverse, high-quality flashcards covering the 
 };
 // In-memory cache (for demonstration purposes only - use a more robust caching solution in production)
 const flashcardCache = new Map();
-async function generateFlashcardsWithRetry(prompt, maxRetries = 3, initialDelay = 2000, maxDelay = 30000) {
-  let delay = initialDelay;
-  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+async function generateFlashcardsWithRetry(prompt: string): Promise<{ text: string; model: string }> {
+  const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GEMINI_API_KEY_VERTEX');
   if (!geminiApiKey) {
     throw new Error('Gemini API key not configured');
   }
-  const genAI = new GoogleGenerativeAI(geminiApiKey);
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
-    generationConfig: {
-      temperature: 0.8,
-      topP: 0.9,
-      topK: 40,
-      maxOutputTokens: 8192
-    }
-  });
-  for(let i = 0; i < maxRetries; i++){
+
+  const requestBody = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.8, maxOutputTokens: 8192, topK: 40, topP: 0.9 },
+  };
+
+  for (let attempt = 0; attempt < MODEL_CHAIN.length; attempt++) {
+    const model = MODEL_CHAIN[attempt];
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
+    console.log(`[generate-flashcards] Attempt ${attempt + 1}/${MODEL_CHAIN.length} using model: ${model}`);
+
     try {
-      // console.log(`Generating flashcards (attempt ${i + 1}/${maxRetries}), delay: ${delay}ms`);
-      const result = await model.generateContent(prompt);
-      // console.log(`Flashcard generation successful on attempt ${i + 1}`);
-      return result;
-    } catch (error) {
-      // console.error(`Attempt ${i + 1} failed:`, error);
-      // console.error('Full error object:', error);
-      if (error?.status === 429) {
-        // console.warn(`Rate limit exceeded. Retrying in ${delay}ms (attempt ${i + 1}/${maxRetries})`);
-        await new Promise((resolve)=>setTimeout(resolve, Math.min(delay, maxDelay)));
-        delay *= 2; // Exponential backoff
-      } else {
-        throw error; // Re-throw non-429 errors
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (response.status === 429 || response.status === 503) {
+        console.warn(`[generate-flashcards] ${response.status} from ${model}, switching to next model...`);
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
       }
+
+      if (response.status === 400) {
+        const errorText = await response.text();
+        console.error(`[generate-flashcards] 400 from ${model}: ${errorText.substring(0, 200)}`);
+        continue;
+      }
+
+      if (!response.ok) {
+        console.error(`[generate-flashcards] ${response.status} from ${model}`);
+        await new Promise(r => setTimeout(r, 1000));
+        continue;
+      }
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) {
+        console.warn(`[generate-flashcards] No content from ${model}`);
+        continue;
+      }
+
+      return { text, model };
+    } catch (err) {
+      console.error(`[generate-flashcards] Network error with ${model}:`, err);
+      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
     }
   }
-  throw new Error('Max retries reached. Failed to generate flashcards.');
+
+  // OpenRouter fallback
+  const orResult = await callOpenRouterFallback(requestBody.contents, { source: 'generate-flashcards' });
+  if (orResult.success && orResult.content) {
+    return { text: orResult.content, model: 'openrouter/free' };
+  }
+  throw new Error('All AI models failed (Gemini + OpenRouter)');
 }
 serve(async (req)=>{
   // Handle CORS
@@ -240,8 +276,7 @@ serve(async (req)=>{
       const prompt = createFlashcardPrompt(noteContent, userProfile, numberOfCards, difficulty, focusAreas, educationBlock);
       // console.log(`Generating ${numberOfCards} flashcards for user ${user.id}`);
       const result = await generateFlashcardsWithRetry(prompt);
-      const response = await result.response;
-      let aiContent = response.text();
+      let aiContent = result.text;
       // Clean up the response
       aiContent = aiContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       // Parse AI response
@@ -347,6 +382,16 @@ serve(async (req)=>{
       });
     }
   } catch (error) {
+    // ── Log to system_error_logs ──
+    try {
+      const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logSystemError(_logClient, {
+        severity: 'error',
+        source: 'generate-flashcards',
+        message: error?.message || String(error),
+        details: { stack: error?.stack },
+      });
+    } catch (_logErr) { console.error('[generate-flashcards] Error logging failed:', _logErr); }
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     // console.error('Flashcard generation error:', error);
     return new Response(JSON.stringify({

@@ -3,6 +3,7 @@
 // Shared types are in podcastTypes.ts and utilities in podcastUtils.ts
 import React, { useState, useRef, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { ScrollArea } from '../ui/scroll-area';
@@ -12,7 +13,7 @@ import {
   Share2, Users, Clock, Radio, RefreshCcw,
   ThumbsUp, ThumbsDown, MoreVertical, MessageSquare,
   List, Eye, Flag, ChevronLeft, ChevronRight, Menu, ChevronDown, ChevronUp,
-  Captions
+  Captions, Pencil, Check
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../integrations/supabase/client';
@@ -21,6 +22,7 @@ import { transcribeLivePodcast } from '@/services/transcriptionService';
 import { saveTranscriptionResult } from '@/services/podcastLiveService';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { Input } from '../ui/input';
 import { Sheet, SheetContent, SheetTrigger } from '../ui/sheet';
 import { PodcastData } from './PodcastGenerator';
 
@@ -52,6 +54,50 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
   onPodcastSelect
 }, ref) => {
   const isOnline = useOnlineStatus();
+  const { user: currentUser } = useAuth();
+  const isOwner = !!(currentUser && podcast && podcast.user_id === currentUser.id);
+
+  // ──── Inline title editing ────
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [isSavingTitle, setIsSavingTitle] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  const startEditingTitle = useCallback(() => {
+    if (!isOwner || !podcast) return;
+    setEditTitle(podcast.title || '');
+    setIsEditingTitle(true);
+    setTimeout(() => titleInputRef.current?.focus(), 50);
+  }, [isOwner, podcast]);
+
+  const saveTitle = useCallback(async () => {
+    if (!podcast || !editTitle.trim() || editTitle.trim() === podcast.title) {
+      setIsEditingTitle(false);
+      return;
+    }
+    setIsSavingTitle(true);
+    try {
+      const { error } = await supabase
+        .from('ai_podcasts')
+        .update({ title: editTitle.trim() })
+        .eq('id', podcast.id)
+        .eq('user_id', currentUser!.id);
+      if (error) throw error;
+      // Update local podcast object
+      (podcast as any).title = editTitle.trim();
+      toast.success('Title updated');
+    } catch (err: any) {
+      toast.error('Failed to update title');
+    } finally {
+      setIsSavingTitle(false);
+      setIsEditingTitle(false);
+    }
+  }, [podcast, editTitle, currentUser]);
+
+  const cancelEditingTitle = useCallback(() => {
+    setIsEditingTitle(false);
+    setEditTitle('');
+  }, []);
 
   // ──── Progressive loader ────
   const loader = useProgressiveLoader({ podcast, isOpen });
@@ -806,7 +852,28 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
         <div className={`${isFullScreen ? 'hidden' : 'hidden lg:block w-[30%]'} bg-white dark:bg-black border-l border-gray-300 dark:border-gray-800 overflow-y-auto`}>
           <div className="p-4">
             <div className="mb-6">
-              <h1 className="text-black dark:text-white font-bold text-lg mb-2">{!isPodcastDataLoaded ? 'Loading...' : podcast.title}</h1>
+              <h1 className="text-black dark:text-white font-bold text-lg mb-2">{!isPodcastDataLoaded ? 'Loading...' : (
+                isEditingTitle ? (
+                  <span className="flex items-center gap-2">
+                    <Input
+                      ref={titleInputRef}
+                      value={editTitle}
+                      onChange={e => setEditTitle(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') cancelEditingTitle(); }}
+                      className="text-lg font-bold h-8 px-2"
+                      maxLength={150}
+                      disabled={isSavingTitle}
+                    />
+                    <Button variant="ghost" size="icon" onClick={saveTitle} disabled={isSavingTitle} className="h-7 w-7 shrink-0 text-green-600 hover:text-green-700"><Check className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={cancelEditingTitle} className="h-7 w-7 shrink-0 text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></Button>
+                  </span>
+                ) : (
+                  <span className="group flex items-center gap-1">
+                    {podcast.title}
+                    {isOwner && <button onClick={startEditingTitle} className="opacity-0 group-hover:opacity-100 transition-opacity" title="Edit title"><Pencil className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" /></button>}
+                  </span>
+                )
+              )}</h1>
               {isPodcastDataLoaded ? (
                 <>
                   <div className="flex items-center gap-2 mb-3">
@@ -977,7 +1044,28 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
         <div className="md:hidden bg-white dark:bg-black border-t border-gray-300 dark:border-gray-800 overflow-y-auto">
           <div className="p-4">
             <div className="mb-4">
-              <h1 className="text-black dark:text-white font-bold text-lg mb-2">{!isPodcastDataLoaded ? 'Loading...' : podcast.title}</h1>
+              <h1 className="text-black dark:text-white font-bold text-lg mb-2">{!isPodcastDataLoaded ? 'Loading...' : (
+                isEditingTitle ? (
+                  <span className="flex items-center gap-2">
+                    <Input
+                      ref={titleInputRef}
+                      value={editTitle}
+                      onChange={e => setEditTitle(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') cancelEditingTitle(); }}
+                      className="text-lg font-bold h-8 px-2"
+                      maxLength={150}
+                      disabled={isSavingTitle}
+                    />
+                    <Button variant="ghost" size="icon" onClick={saveTitle} disabled={isSavingTitle} className="h-7 w-7 shrink-0 text-green-600 hover:text-green-700"><Check className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={cancelEditingTitle} className="h-7 w-7 shrink-0 text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></Button>
+                  </span>
+                ) : (
+                  <span className="group flex items-center gap-1">
+                    {podcast.title}
+                    {isOwner && <button onClick={startEditingTitle} className="opacity-0 group-hover:opacity-100 transition-opacity" title="Edit title"><Pencil className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" /></button>}
+                  </span>
+                )
+              )}</h1>
               {isPodcastDataLoaded ? (
                 <>
                   <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400 text-sm mb-3">

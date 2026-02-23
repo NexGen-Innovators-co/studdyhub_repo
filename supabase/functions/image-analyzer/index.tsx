@@ -3,6 +3,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.24.1";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logSystemError } from '../_shared/errorLogger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -68,10 +69,8 @@ serve(async (req) => {
       'gemini-2.5-flash',
       'gemini-3-pro-preview',
       'gemini-2.0-flash',
-      'gemini-1.5-flash',
+      'gemini-2.0-flash-lite',
       'gemini-2.5-pro',
-      'gemini-2.0-pro',
-      'gemini-1.5-pro'
     ];
 
     let model: any = null;
@@ -177,6 +176,16 @@ Do NOT interpret the meaning, provide educational context, highlight key concept
     });
 
   } catch (error) {
+    // ── Log to system_error_logs ──
+    try {
+      const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logSystemError(_logClient, {
+        severity: 'error',
+        source: 'image-analyzer',
+        message: error?.message || String(error),
+        details: { stack: error?.stack },
+      });
+    } catch (_logErr) { console.error('[image-analyzer] Error logging failed:', _logErr); }
     console.error('Error in image-analyzer function:', error);
     let errorResponse = {
       error: error.message || 'Internal Server Error',

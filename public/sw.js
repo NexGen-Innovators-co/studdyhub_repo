@@ -1,7 +1,7 @@
 // Service Worker for Push Notifications and Offline Access
 // @ts-nocheck
 
-const CACHE_NAME = 'studdyhub-v2'; // Increment version
+const CACHE_NAME = 'studdyhub-v2.5.0'; // Increment version
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

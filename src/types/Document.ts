@@ -39,4 +39,7 @@ export interface UserProfile {
   school: string | null
   updated_at: string | null
   username: string | null
+  onboarding_completed: boolean | null
+  user_role: 'student' | 'school_admin' | 'tutor_affiliated' | 'tutor_independent' | null
+  role_verified_at: string | null
 }

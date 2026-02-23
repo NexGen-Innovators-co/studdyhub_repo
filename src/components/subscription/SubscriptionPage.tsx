@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { PricingCards } from '@/components/subscription/PricingCards';
 import { ReferralModal } from '@/components/subscription/ReferralModal';
+import { PodcastCreditStore } from '@/components/subscription/PodcastCreditStore';
 import { useAppContext } from '@/hooks/useAppContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -185,6 +186,20 @@ export function SubscriptionPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Podcast Credits Section */}
+        <div className="space-y-6">
+          <div className="text-center">
+            <Badge className="mb-4 bg-gradient-to-r from-amber-500 to-yellow-400 text-white border-0 px-4 py-1">
+              🎙️ AI Podcast Credits
+            </Badge>
+            <h2 className="text-3xl font-bold mb-2">Podcast Generation Credits</h2>
+            <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+              Generate AI podcasts with audio, images, and video. Purchase credit packs or earn monthly credits with your subscription.
+            </p>
+          </div>
+          <PodcastCreditStore />
+        </div>
 
         {/* Features Grid */}
         <div className="space-y-6">

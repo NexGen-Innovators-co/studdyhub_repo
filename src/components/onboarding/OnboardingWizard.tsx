@@ -29,6 +29,11 @@ import {
 } from '@/services/notificationInitService';
 import { UserProfile } from '@/types/Document';
 import { EducationContextStep, type EducationStepData } from './steps/EducationContextStep';
+import { EducatorRoleStep } from '@/components/educator/onboarding/EducatorRoleStep';
+import { CreateInstitutionFlow } from '@/components/educator/onboarding/CreateInstitutionFlow';
+import { JoinInstitutionFlow } from '@/components/educator/onboarding/JoinInstitutionFlow';
+import { IndependentTutorSetup } from '@/components/educator/onboarding/IndependentTutorSetup';
+import type { UserRole } from '@/types/Education';
 
 // ─── Types ────────────────────────────────────────────────────
 interface OnboardingWizardProps {
@@ -37,8 +42,8 @@ interface OnboardingWizardProps {
   userId: string;
 }
 
-type Step = 'welcome' | 'education' | 'profile' | 'learning' | 'personalization' | 'permissions';
-const STEPS: Step[] = ['welcome', 'education', 'profile', 'learning', 'personalization', 'permissions'];
+type Step = 'welcome' | 'education' | 'role' | 'profile' | 'learning' | 'personalization' | 'permissions';
+const STEPS: Step[] = ['welcome', 'education', 'role', 'profile', 'learning', 'personalization', 'permissions'];
 
 const ONBOARDING_KEY = 'studdyhub_onboarding_completed_v2';
 
@@ -134,6 +139,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     userProfile?.learning_preferences?.explanation_style || 'detailed'
   );
 
+  // Role step state
+  const [selectedRole, setSelectedRole] = useState<UserRole | null>(
+    (userProfile?.user_role as UserRole) || null
+  );
+  const [showEducatorSubFlow, setShowEducatorSubFlow] = useState<
+    'create_institution' | 'join_institution' | 'independent_setup' | null
+  >(null);
+
   // AI personalization state
   const [selectedContextCards, setSelectedContextCards] = useState<Set<number>>(new Set());
   const [customContext, setCustomContext] = useState('');
@@ -167,11 +180,20 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     onComplete();
   };
 
-  const markComplete = () => {
+  const markComplete = async () => {
     try {
       localStorage.setItem(ONBOARDING_KEY, '1');
     } catch {
       // ignore localStorage errors
+    }
+    // Also persist to DB so it survives sign-out / new device
+    try {
+      await supabase
+        .from('profiles')
+        .update({ onboarding_completed: true })
+        .eq('id', userId);
+    } catch {
+      // Non-blocking — localStorage is primary fallback
     }
   };
 
@@ -237,6 +259,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
       // 2. Build profile update
       const personalContext = buildPersonalContext();
+      const chosenRole = selectedRole || 'student';
       const updatePayload: Record<string, unknown> = {
         full_name: fullName.trim() || userProfile?.full_name || null,
         school: school.trim() || userProfile?.school || null,
@@ -247,6 +270,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           examples: true,
           difficulty,
         },
+        user_role: chosenRole,
+        onboarding_completed: true,
         updated_at: new Date().toISOString(),
       };
 
@@ -744,12 +769,78 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     <EducationContextStep data={educationData} onChange={setEducationData} />
   );
 
+  const handleRoleSelect = (role: UserRole) => {
+    setSelectedRole(role);
+    // Auto-trigger sub-flow for educator roles
+    if (role === 'school_admin') {
+      setShowEducatorSubFlow('create_institution');
+    } else if (role === 'tutor_affiliated') {
+      setShowEducatorSubFlow('join_institution');
+    } else if (role === 'tutor_independent') {
+      setShowEducatorSubFlow('independent_setup');
+    } else {
+      setShowEducatorSubFlow(null);
+    }
+  };
+
+  const handleEducatorSubFlowComplete = () => {
+    setShowEducatorSubFlow(null);
+    goNext();
+  };
+
+  const handleEducatorSubFlowSkip = () => {
+    setShowEducatorSubFlow(null);
+  };
+
+  const renderRole = () => {
+    // If an educator sub-flow is active, show it
+    if (showEducatorSubFlow === 'create_institution') {
+      return (
+        <CreateInstitutionFlow
+          onComplete={handleEducatorSubFlowComplete}
+          onSkip={handleEducatorSubFlowSkip}
+        />
+      );
+    }
+    if (showEducatorSubFlow === 'join_institution') {
+      return (
+        <JoinInstitutionFlow
+          onComplete={handleEducatorSubFlowComplete}
+          onSkip={handleEducatorSubFlowSkip}
+        />
+      );
+    }
+    if (showEducatorSubFlow === 'independent_setup') {
+      return (
+        <IndependentTutorSetup
+          onComplete={() => handleEducatorSubFlowComplete()}
+          onSkip={handleEducatorSubFlowSkip}
+        />
+      );
+    }
+
+    // Default: show role selection
+    return (
+      <div className="space-y-4">
+        <EducatorRoleStep
+          selectedRole={selectedRole}
+          onRoleSelect={handleRoleSelect}
+        />
+        <p className="text-center text-xs text-gray-400 mt-2">
+          Not an educator? Just skip this step — you&apos;re set as a student by default.
+        </p>
+      </div>
+    );
+  };
+
   const renderStep = () => {
     switch (currentStep) {
       case 'welcome':
         return renderWelcome();
       case 'education':
         return renderEducation();
+      case 'role':
+        return renderRole();
       case 'profile':
         return renderProfile();
       case 'learning':
@@ -878,15 +969,28 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 };
 
 /**
- * Check whether onboarding has been completed (per localStorage).
- * Use v2 key since we replaced the old v1 permission-only dialog.
+ * Check whether onboarding has been completed.
+ * Checks localStorage first (fast), falls back to userProfile DB flag.
  */
-export const isOnboardingComplete = (): boolean => {
+export const isOnboardingComplete = (userProfile?: UserProfile | null): boolean => {
   try {
-    return localStorage.getItem(ONBOARDING_KEY) === '1';
+    // Fast path: localStorage check
+    if (localStorage.getItem(ONBOARDING_KEY) === '1') return true;
   } catch {
-    return true; // If localStorage fails, don't block the user
+    // localStorage unavailable
   }
+
+  // DB-backed check: if profile says completed, sync to localStorage
+  if (userProfile?.onboarding_completed) {
+    try {
+      localStorage.setItem(ONBOARDING_KEY, '1');
+    } catch {
+      // ignore
+    }
+    return true;
+  }
+
+  return false;
 };
 
 export default OnboardingWizard;

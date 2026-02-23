@@ -1,13 +1,13 @@
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
 // supabase/functions/utils/gemini.ts
 // Shared Gemini AI helper for all edge functions
 
 const MODEL_CHAIN = [
   'gemini-2.5-flash',
   'gemini-2.0-flash',
-  'gemini-1.5-flash',
+  'gemini-2.0-flash-lite',
   'gemini-2.5-pro',
-  'gemini-2.0-pro',
-  'gemini-1.5-pro',
+  'gemini-3-pro-preview',
 ];
 
 const MAX_RETRIES = 3;
@@ -97,6 +97,11 @@ export async function callGemini(
     }
   }
 
+  // OpenRouter fallback
+  const orResult = await callOpenRouterFallback(prompt, { source: 'utils-gemini', systemPrompt: systemInstruction });
+  if (orResult.success && orResult.content) {
+    return { success: true, text: orResult.content, model: 'openrouter/free' };
+  }
   return { success: false, error: 'ALL_MODELS_FAILED' };
 }
 

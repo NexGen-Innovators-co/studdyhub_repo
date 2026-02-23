@@ -701,6 +701,20 @@ export const Header: React.FC<HeaderProps> = ({
                     </button>
                   ))}
 
+                  {/* Educator Portal Link */}
+                  <div className="border-t border-slate-200 dark:border-slate-700">
+                    <button
+                      onClick={() => {
+                        navigate('/educator');
+                        setIsAppMenuOpen(false);
+                      }}
+                      className="w-full px-4 py-3 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                    >
+                      <GraduationCap className="h-5 w-5 flex-shrink-0 text-blue-500" />
+                      <span>Educator Portal</span>
+                    </button>
+                  </div>
+
                   {/* Install App in Menu */}
                   <div className="p-3 border-t border-slate-200 dark:border-slate-700">
                     <button

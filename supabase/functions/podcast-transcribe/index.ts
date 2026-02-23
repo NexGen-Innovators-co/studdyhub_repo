@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'npm:@supabase/supabase-js@2.92.0';
+import { logSystemError } from '../_shared/errorLogger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,9 +51,9 @@ serve(async (req) => {
 
     const MODEL_CHAIN = [
       'gemini-2.5-flash',
-      'gemini-1.5-flash',
-      'gemini-1.5-pro',
-      'gemini-2.0-flash'
+      'gemini-2.0-flash',
+      'gemini-2.0-flash-lite',
+      'gemini-2.5-pro',
     ]
 
     async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 3) {
@@ -194,6 +195,16 @@ Format the transcript clearly with timestamps if possible.`
       }
     )
   } catch (error: any) {
+    // ── Log to system_error_logs ──
+    try {
+      const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logSystemError(_logClient, {
+        severity: 'error',
+        source: 'podcast-transcribe',
+        message: error?.message || String(error),
+        details: { stack: error?.stack },
+      });
+    } catch (_logErr) { console.error('[podcast-transcribe] Error logging failed:', _logErr); }
     console.error('Error in podcast-transcribe:', error)
     return new Response(
       JSON.stringify({ 

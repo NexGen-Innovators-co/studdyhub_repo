@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../integrations/supabase/client';
+import { logAdminActivity } from '../../utils/adminActivityLogger';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Button } from '../ui/button';
@@ -77,6 +78,7 @@ const ContentModeration = () => {
         : action === 'remove' ? 'Content removed and report resolved'
         : 'Report dismissed'
       );
+      logAdminActivity({ action: `moderation_${action}`, target_type: item?.content_type || 'content', target_id: id, details: { content_id: item?.content_id, notes, new_status: newStatus } });
       fetchItems();
       setSelected(null);
       setNotes('');

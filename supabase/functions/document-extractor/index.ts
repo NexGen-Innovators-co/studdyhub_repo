@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import mammoth from 'https://esm.sh/mammoth@1.6.0';
 import * as XLSX from 'https://esm.sh/xlsx@0.18.5';
@@ -7,6 +8,7 @@ import xml2js from 'https://esm.sh/xml2js@0.5.0';
 import Papa from 'https://esm.sh/papaparse@5.4.1';
 import cheerio from 'https://esm.sh/cheerio@1.0.0-rc.12';
 import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.min.js';
+import { logSystemError } from '../_shared/errorLogger.ts';
 // Define CORS headers for cross-origin requests
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -771,12 +773,10 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
  */ async function callEnhancedGeminiAPI(contents, geminiApiKey) {
     const MODEL_CHAIN = [
         'gemini-2.5-flash',
-        'gemini-3-pro-preview',
         'gemini-2.0-flash',
-        'gemini-1.5-flash',
+        'gemini-2.0-flash-lite',
         'gemini-2.5-pro',
-        'gemini-2.0-pro',
-        'gemini-1.5-pro'
+        'gemini-3-pro-preview'
     ];
 
     const requestBody = {
@@ -836,9 +836,14 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
             await new Promise((resolve) => setTimeout(resolve, (attempt + 1) * 1000));
         }
     }
+    // OpenRouter fallback
+    const orResult = await callOpenRouterFallback(contents, { source: 'document-extractor' });
+    if (orResult.success && orResult.content) {
+        return { success: true, content: orResult.content };
+    }
     return {
         success: false,
-        error: 'Max retries exceeded'
+        error: 'All AI models failed (Gemini + OpenRouter)'
     };
 }
 /**
@@ -2007,6 +2012,16 @@ This is an archive file that contains compressed data. Without extraction capabi
             }
         });
     } catch (error) {
+      // ── Log to system_error_logs ──
+      try {
+        const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+        await logSystemError(_logClient, {
+          severity: 'error',
+          source: 'document-extractor',
+          message: error?.message || String(error),
+          details: { stack: error?.stack },
+        });
+      } catch (_logErr) { console.error('[document-extractor] Error logging failed:', _logErr); }
         const processingTime = Date.now() - startTime;
         //console.error('Error in enhanced document-processor function:', error);
         return new Response(JSON.stringify({

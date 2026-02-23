@@ -1,6 +1,8 @@
 import "https://deno.land/x/xhr@0.2.0/mod.ts";
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { pdfText } from "jsr:@pdf/pdftext@1.3.2"; // Switched to @pdf/pdftext from JSR
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { logSystemError } from '../_shared/errorLogger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -79,6 +81,16 @@ serve(async (req) => {
     });
 
   } catch (error) {
+    // ── Log to system_error_logs ──
+    try {
+      const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logSystemError(_logClient, {
+        severity: 'error',
+        source: 'document-parser',
+        message: error?.message || String(error),
+        details: { stack: error?.stack },
+      });
+    } catch (_logErr) { console.error('[document-parser] Error logging failed:', _logErr); }
     // console.error('Document Parser Edge Function Error:', error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

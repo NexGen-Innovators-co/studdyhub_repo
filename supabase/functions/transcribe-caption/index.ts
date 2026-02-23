@@ -1,10 +1,21 @@
 // Supabase Edge Function for simple caption transcription (handling JSON + Base64)
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { logSystemError } from '../_shared/errorLogger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
+// Model fallback chain for quota/rate-limit resilience
+const MODEL_CHAIN = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-pro',
+  'gemini-3-pro-preview',
+];
 
 serve(async (req) => {
   // Handle CORS preflight request
@@ -43,15 +54,12 @@ serve(async (req) => {
       throw new Error('GEMINI_API_KEY not configured')
     }
 
-    // Use a fast model for realtime captions
-    const model = 'gemini-2.5-flash';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`
-
     const promptText = `Transcribe the provided short audio chunk. Return ONLY the raw transcript text (no extra commentary). Keep it concise. If the audio is unintelligible or you cannot confidently transcribe, return an empty string.`;
 
     // Ensure we use a compatible mime type for Gemini
     const finalMime = mimeType.includes('video') ? 'audio/webm' : mimeType
 
+    // Use a fast model for realtime captions — with model chain fallback
     const requestBody = {
       contents: [
         {
@@ -64,23 +72,49 @@ serve(async (req) => {
       generationConfig: { temperature: 0.0, maxOutputTokens: 256 }
     }
 
-    console.log(`[transcribe-caption] Sending to Gemini model: ${model}, mime: ${finalMime}`);
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-    })
+    let text = '';
+    let usedModel = '';
 
-    if (!resp.ok) {
-       const txt = await resp.text()
-       console.error('[transcribe-caption] Gemini error:', txt)
-       throw new Error(`Gemini responded with ${resp.status}: ${txt}`)
+    for (let attempt = 0; attempt < MODEL_CHAIN.length; attempt++) {
+      const model = MODEL_CHAIN[attempt];
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+      console.log(`[transcribe-caption] Attempt ${attempt + 1}/${MODEL_CHAIN.length} using model: ${model}, mime: ${finalMime}`);
+
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (resp.status === 429 || resp.status === 503) {
+          console.warn(`[transcribe-caption] ${resp.status} from ${model}, switching to next model...`);
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+
+        if (!resp.ok) {
+          const txt = await resp.text();
+          console.error(`[transcribe-caption] Gemini error ${resp.status} from ${model}:`, txt.substring(0, 200));
+          continue;
+        }
+
+        const data = await resp.json();
+        console.log('[transcribe-caption] Gemini success. Candidates:', data?.candidates?.length);
+        text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+        usedModel = model;
+        break;
+      } catch (err) {
+        console.error(`[transcribe-caption] Network error with ${model}:`, err);
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      }
     }
 
-    const data = await resp.json()
-    console.log('[transcribe-caption] Gemini success. Candidates:', data?.candidates?.length);
-    let text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-    console.log('[transcribe-caption] Raw text:', text);
+    if (!usedModel) {
+      throw new Error('All Gemini models failed — quota or service issue');
+    }
+
+    console.log(`[transcribe-caption] Raw text (model: ${usedModel}):`, text);
 
     // Filter out hallucinations or refusals
     try {
@@ -96,6 +130,16 @@ serve(async (req) => {
     })
 
   } catch (error: any) {
+    // ── Log to system_error_logs ──
+    try {
+      const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logSystemError(_logClient, {
+        severity: 'error',
+        source: 'transcribe-caption',
+        message: error?.message || String(error),
+        details: { stack: error?.stack },
+      });
+    } catch (_logErr) { console.error('[transcribe-caption] Error logging failed:', _logErr); }
     console.error('Error in transcribe-caption:', error)
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

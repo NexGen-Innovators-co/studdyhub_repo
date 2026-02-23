@@ -29,9 +29,7 @@ const AvatarImage = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Image>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
 >(({ src, className, ...props }, ref) => {
-  // Block Google avatar URLs
-  const isGoogleAvatar = typeof src === 'string' && src.includes('lh3.googleusercontent.com');
-  if (!src || isGoogleAvatar) return null;
+  if (!src) return null;
   return (
     <AvatarPrimitive.Image
       ref={ref}

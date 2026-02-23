@@ -3,6 +3,27 @@ import { supabase } from '@/integrations/supabase/client';
 export const addPodcastListener = async (podcastId: string, userId: string | null) => {
   if (!userId) return null;
   const now = new Date().toISOString();
+
+  // Check if listener row already exists to avoid duplicates
+  const { data: existing } = await supabase
+    .from('podcast_listeners')
+    .select('id')
+    .eq('podcast_id', podcastId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (existing) {
+    // Reactivate existing row
+    const { data, error } = await supabase
+      .from('podcast_listeners')
+      .update({ is_active: true, joined_at: now })
+      .eq('id', existing.id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
   const { data, error } = await supabase.from('podcast_listeners').insert({ podcast_id: podcastId, user_id: userId, joined_at: now, is_active: true }).select().single();
   if (error) throw error;
   return data;

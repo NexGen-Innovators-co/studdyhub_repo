@@ -452,6 +452,11 @@ export const useAppData = (authUser?: any) => {
   const dataCacheRef = useRef<Map<string, { data: any; timestamp: number }>>(new Map());
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
 
+  // Ref-based loading locks — synchronous guards that never go stale.
+  // Unlike dataLoading (React state), these update immediately even inside
+  // the same event-loop tick, preventing duplicate loads after clearAllData().
+  const loadingLocksRef = useRef<Set<string>>(new Set());
+
   // Add ref to track loaded IDs for duplicate prevention
   const loadedIdsRef = useRef<Record<string, Set<string>>>({
     notes: new Set(),
@@ -572,6 +577,11 @@ export const useAppData = (authUser?: any) => {
     setLoadingPhase({ phase: 'initial', progress: 0 });
     setLoading(false);
 
+    // Synchronously clear loading locks so the very next load call
+    // (e.g. startProgressiveDataLoading) passes the ref-based guard
+    // even before React flushes the queued setDataLoading(false) updates.
+    loadingLocksRef.current.clear();
+
     // Clear loaded IDs
     clearLoadedIds();
   }, [cleanup, setDataLoading, clearLoadedIds]);
@@ -601,48 +611,50 @@ export const useAppData = (authUser?: any) => {
 
   // Enhanced documents loading with retry logic
   const loadDocumentsPage = useCallback(async (userId: string, isInitial = false, force = false) => {
-    if (dataLoading.documents || (!isInitial && !dataPagination.documents.hasMore)) return;
+    if (loadingLocksRef.current.has('documents')) return;
+    if (!isInitial && !dataPagination.documents.hasMore) return;
 
+    loadingLocksRef.current.add('documents');
     setDataLoading('documents', true);
 
-    // If forced, clear loaded IDs to allow full refresh of first page
-    if (force) {
-      loadedIdsRef.current.documents.clear();
-    }
-
-    // Optimistically load from offline storage for initial load
-    if (isInitial && !force) {
-      if (!navigator.onLine) {
-        try {
-          const offlineDocs = await offlineStorage.getAll<Document>(STORES.DOCUMENTS);
-          if (offlineDocs && offlineDocs.length > 0) {
-            setDocuments(offlineDocs);
-            offlineDocs.forEach(doc => loadedIdsRef.current.documents.add(doc.id));
-            setDataLoaded(prev => new Set([...prev, 'documents']));
-            setDataLoading('documents', false);
-            return;
-          }
-        } catch (err) {
-          //console.warn('Failed to load offline documents:', err);
-        }
-      } else {
-        offlineStorage.getAll<Document>(STORES.DOCUMENTS).then(offlineDocs => {
-          if (offlineDocs && offlineDocs.length > 0) {
-            setDocuments(offlineDocs);
-          }
-        }).catch(err => {
-          // Failed to load offline documents
-        });
-      }
-    }
+    // Flag to prevent fire-and-forget offline preload from overwriting fresh data
+    let freshDataApplied = false;
 
     try {
+      // If forced, clear loaded IDs to allow full refresh of first page
+      if (force) {
+        loadedIdsRef.current.documents.clear();
+      }
+
+      // Optimistically load from offline storage for initial load
+      if (isInitial && !force) {
+        if (!navigator.onLine) {
+          try {
+            const offlineDocs = await offlineStorage.getAll<Document>(STORES.DOCUMENTS);
+            if (offlineDocs && offlineDocs.length > 0) {
+              setDocuments(offlineDocs);
+              offlineDocs.forEach(doc => loadedIdsRef.current.documents.add(doc.id));
+              setDataLoaded(prev => new Set([...prev, 'documents']));
+              return; // finally block will clean up
+            }
+          } catch (err) {
+            //console.warn('Failed to load offline documents:', err);
+          }
+        } else {
+          offlineStorage.getAll<Document>(STORES.DOCUMENTS).then(offlineDocs => {
+            if (!freshDataApplied && offlineDocs && offlineDocs.length > 0) {
+              setDocuments(offlineDocs);
+            }
+          }).catch(() => {});
+        }
+      }
+
       const offset = isInitial ? 0 : dataPagination.documents.offset;
       const limit = isInitial ? INITIAL_LOAD_LIMITS.documents : LOAD_MORE_LIMITS.documents;
 
       const startTime = Date.now();
 
-      const { data, error, retriesUsed } = await withRetry<any[]>(
+      const { data, error } = await withRetry<any[]>(
         () => withTimeout<any[]>(
           supabase
             .from('documents')
@@ -680,6 +692,8 @@ export const useAppData = (authUser?: any) => {
       }
 
       if (data) {
+        freshDataApplied = true;
+
         // Filter out duplicates only if not forced (force clears IDs so filter passes all)
         const newDocsData = data.filter(doc =>
           !loadedIdsRef.current.documents.has(doc.id)
@@ -736,56 +750,58 @@ export const useAppData = (authUser?: any) => {
           setDataLoaded(prev => new Set([...prev, 'documents']));
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       //console.error('Error loading documents:', error);
       if (isInitial && !error.message?.includes('network') && !error.message?.includes('QUIC') && !error.message?.includes('timeout')) {
         setDataErrors(prev => ({ ...prev, documents: 'Failed to load documents' }));
       }
     } finally {
+      loadingLocksRef.current.delete('documents');
       setDataLoading('documents', false);
     }
-  }, [dataLoaded, dataLoading, dataPagination, setDataLoading, recordResponseTime]);
+  }, [dataLoaded, dataPagination, setDataLoading, recordResponseTime]);
 
   // Optimized recordings loading with retry logic
   const loadRecordingsPage = useCallback(async (userId: string, isInitial = false) => {
-    if (dataLoading.recordings) return;
+    if (loadingLocksRef.current.has('recordings')) return;
     if (!isInitial && !dataPagination.recordings.hasMore) return;
 
+    loadingLocksRef.current.add('recordings');
     setDataLoading('recordings', true);
 
-    // Optimistically load from offline storage for initial load
-    if (isInitial) {
-      if (!navigator.onLine) {
-        try {
-          const offlineRecs = await offlineStorage.getAll<ClassRecording>(STORES.RECORDINGS);
-          if (offlineRecs && offlineRecs.length > 0) {
-            setRecordings(offlineRecs);
-            offlineRecs.forEach(rec => loadedIdsRef.current.recordings.add(rec.id));
-            setDataLoaded(prev => new Set([...prev, 'recordings']));
-            setDataLoading('recordings', false);
-            return;
-          }
-        } catch (err) {
-          // console.warn('Failed to load offline recordings:', err);
-        }
-      } else {
-        offlineStorage.getAll<ClassRecording>(STORES.RECORDINGS).then(offlineRecs => {
-          if (offlineRecs && offlineRecs.length > 0) {
-            setRecordings(offlineRecs);
-          }
-        }).catch(err => {
-          // Failed to load offline recordings
-        });
-      }
-    }
+    // Flag to prevent fire-and-forget offline preload from overwriting fresh data
+    let freshDataApplied = false;
 
     try {
+      // Optimistically load from offline storage for initial load
+      if (isInitial) {
+        if (!navigator.onLine) {
+          try {
+            const offlineRecs = await offlineStorage.getAll<ClassRecording>(STORES.RECORDINGS);
+            if (offlineRecs && offlineRecs.length > 0) {
+              setRecordings(offlineRecs);
+              offlineRecs.forEach(rec => loadedIdsRef.current.recordings.add(rec.id));
+              setDataLoaded(prev => new Set([...prev, 'recordings']));
+              return; // finally block will clean up
+            }
+          } catch (err) {
+            // console.warn('Failed to load offline recordings:', err);
+          }
+        } else {
+          offlineStorage.getAll<ClassRecording>(STORES.RECORDINGS).then(offlineRecs => {
+            if (!freshDataApplied && offlineRecs && offlineRecs.length > 0) {
+              setRecordings(offlineRecs);
+            }
+          }).catch(() => {});
+        }
+      }
+
       const limit = isInitial ? INITIAL_LOAD_LIMITS.recordings : LOAD_MORE_LIMITS.recordings;
       const offset = isInitial ? 0 : dataPagination.recordings.offset;
 
       const startTime = Date.now();
 
-      const { data, error, retriesUsed } = await withRetry<ClassRecording[]>(
+      const { data, error } = await withRetry<ClassRecording[]>(
         () => withTimeout<ClassRecording[]>(
           supabase
             .from('class_recordings')
@@ -818,6 +834,8 @@ export const useAppData = (authUser?: any) => {
       }
 
       if (data) {
+        freshDataApplied = true;
+
         // Filter out duplicates before formatting
         const newRecordingsData = data.filter(recording =>
           !loadedIdsRef.current.recordings.has(recording.id)
@@ -865,50 +883,51 @@ export const useAppData = (authUser?: any) => {
       }
 
       setDataLoaded(prev => new Set([...prev, 'recordings']));
-    } catch (error) {
+    } catch (error: any) {
       //console.error('Error loading recordings:', error);
       if (isInitial && !error.message?.includes('network')) {
         setDataErrors(prev => ({ ...prev, recordings: 'Failed to load recordings' }));
       }
     } finally {
+      loadingLocksRef.current.delete('recordings');
       setDataLoading('recordings', false);
     }
-  }, [dataLoading.recordings, dataPagination.recordings, setDataLoading, recordResponseTime]);
+  }, [dataPagination.recordings, setDataLoading, recordResponseTime]);
 
   // Optimized schedule loading with better error handling
   const loadSchedulePage = useCallback(async (userId: string, isInitial = false) => {
-    if (dataLoading.scheduleItems) return;
+    if (loadingLocksRef.current.has('scheduleItems')) return;
     if (!isInitial && !dataPagination.scheduleItems.hasMore) return;
 
+    loadingLocksRef.current.add('scheduleItems');
     setDataLoading('scheduleItems', true);
 
-    // Optimistically load from offline storage for initial load
-    if (isInitial) {
-      if (!navigator.onLine) {
-        try {
-          const offlineItems = await offlineStorage.getAll<ScheduleItem>(STORES.SCHEDULE);
-          if (offlineItems && offlineItems.length > 0) {
-            setScheduleItems(offlineItems);
-            offlineItems.forEach(item => loadedIdsRef.current.scheduleItems.add(item.id));
-            setDataLoaded(prev => new Set([...prev, 'scheduleItems']));
-            setDataLoading('scheduleItems', false);
-            return;
-          }
-        } catch (err) {
-          // console.warn('Failed to load offline schedule:', err);
-        }
-      } else {
-        offlineStorage.getAll<ScheduleItem>(STORES.SCHEDULE).then(offlineItems => {
-          if (offlineItems && offlineItems.length > 0) {
-            setScheduleItems(offlineItems);
-          }
-        }).catch(err => {
-          // Failed to load offline schedule
-        });
-      }
-    }
+    let freshDataApplied = false;
 
     try {
+      // Optimistically load from offline storage for initial load
+      if (isInitial) {
+        if (!navigator.onLine) {
+          try {
+            const offlineItems = await offlineStorage.getAll<ScheduleItem>(STORES.SCHEDULE);
+            if (offlineItems && offlineItems.length > 0) {
+              setScheduleItems(offlineItems);
+              offlineItems.forEach(item => loadedIdsRef.current.scheduleItems.add(item.id));
+              setDataLoaded(prev => new Set([...prev, 'scheduleItems']));
+              return; // finally block will clean up
+            }
+          } catch (err) {
+            // console.warn('Failed to load offline schedule:', err);
+          }
+        } else {
+          offlineStorage.getAll<ScheduleItem>(STORES.SCHEDULE).then(offlineItems => {
+            if (!freshDataApplied && offlineItems && offlineItems.length > 0) {
+              setScheduleItems(offlineItems);
+            }
+          }).catch(() => {});
+        }
+      }
+
       const limit = isInitial ? INITIAL_LOAD_LIMITS.scheduleItems : LOAD_MORE_LIMITS.scheduleItems;
       const offset = isInitial ? 0 : dataPagination.scheduleItems.offset;
 
@@ -941,6 +960,8 @@ export const useAppData = (authUser?: any) => {
       }
 
       if (data) {
+        freshDataApplied = true;
+
         // Filter out duplicates before formatting
         const newScheduleData = data.filter(item =>
           !loadedIdsRef.current.scheduleItems.has(item.id)
@@ -992,23 +1013,28 @@ export const useAppData = (authUser?: any) => {
       }
 
       setDataLoaded(prev => new Set([...prev, 'scheduleItems']));
-    } catch (error) {
+    } catch (error: any) {
       //console.error('Error loading schedule items:', error);
       // Don't show error for network/CORS issues
       if (!error.message?.includes('Failed to fetch') && !error.message?.includes('CORS')) {
         setDataErrors(prev => ({ ...prev, scheduleItems: 'Failed to load schedule items' }));
       }
     } finally {
+      loadingLocksRef.current.delete('scheduleItems');
       setDataLoading('scheduleItems', false);
     }
-  }, [dataLoading.scheduleItems, dataPagination.scheduleItems, setDataLoading]);
+  }, [dataPagination.scheduleItems, setDataLoading]);
   // Optimized quizzes loading with retry logic
   const loadQuizzesPage = useCallback(async (userId: string, isInitial = false) => {
-    if (dataLoading.quizzes) return;
+    if (loadingLocksRef.current.has('quizzes')) return;
     if (!isInitial && !dataPagination.quizzes.hasMore) return;
 
+    loadingLocksRef.current.add('quizzes');
     setDataLoading('quizzes', true);
 
+    let freshDataApplied = false;
+
+    try {
     // Optimistically load from offline storage for initial load
     if (isInitial) {
       if (!navigator.onLine) {
@@ -1018,30 +1044,26 @@ export const useAppData = (authUser?: any) => {
             setQuizzes(offlineQuizzes);
             offlineQuizzes.forEach(quiz => loadedIdsRef.current.quizzes.add(quiz.id));
             setDataLoaded(prev => new Set([...prev, 'quizzes']));
-            setDataLoading('quizzes', false);
-            return;
+            return; // finally block will clean up
           }
         } catch (err) {
           //console.warn('Failed to load offline quizzes:', err);
         }
       } else {
         offlineStorage.getAll<Quiz>(STORES.QUIZZES).then(offlineQuizzes => {
-          if (offlineQuizzes && offlineQuizzes.length > 0) {
+          if (!freshDataApplied && offlineQuizzes && offlineQuizzes.length > 0) {
             setQuizzes(offlineQuizzes);
           }
-        }).catch(err => {
-          // Failed to load offline quizzes
-        });
+        }).catch(() => {});
       }
     }
 
-    try {
       const limit = isInitial ? INITIAL_LOAD_LIMITS.quizzes : LOAD_MORE_LIMITS.quizzes;
       const offset = isInitial ? 0 : dataPagination.quizzes.offset;
 
       const startTime = Date.now();
 
-      const { data, error, retriesUsed } = await withRetry<Quiz[]>(
+      const { data, error } = await withRetry<Quiz[]>(
         () => withTimeout<Quiz[]>(
           supabase
             .from('quizzes')
@@ -1074,6 +1096,8 @@ export const useAppData = (authUser?: any) => {
       }
 
       if (data) {
+        freshDataApplied = true;
+
         // Filter out duplicates before formatting
         const newQuizzesData = data.filter(quiz =>
           !loadedIdsRef.current.quizzes.has(quiz.id)
@@ -1138,85 +1162,86 @@ export const useAppData = (authUser?: any) => {
       }
 
       setDataLoaded(prev => new Set([...prev, 'quizzes']));
-    } catch (error) {
+    } catch (error: any) {
       //console.error('Error loading quizzes:', error);
       if (isInitial && !error.message?.includes('network')) {
         setDataErrors(prev => ({ ...prev, quizzes: 'Failed to load quizzes' }));
       }
     } finally {
+      loadingLocksRef.current.delete('quizzes');
       setDataLoading('quizzes', false);
     }
-  }, [dataLoading.quizzes, dataPagination.quizzes, setDataLoading, recordResponseTime]);
+  }, [dataPagination.quizzes, setDataLoading, recordResponseTime]);
 
   // Optimized folder loading with retry logic
   const loadFolders = useCallback(async (userId: string, isInitial = false, force = false) => {
-    if (dataLoading.folders && !force) return;
+    if (loadingLocksRef.current.has('folders') && !force) return;
 
-    const cacheKey = `folders_${userId}`;
-    const cached = getCachedData(cacheKey);
-    // Skip cache if forced
-    if (!force && cached && isInitial) {
-      // Filter out duplicates
-      const uniqueFolders = cached.folders.filter(folder =>
-        !loadedIdsRef.current.folders.has(folder.id)
-      );
-      setFolders(uniqueFolders);
-
-      // Add to loaded IDs
-      uniqueFolders.forEach(folder => loadedIdsRef.current.folders.add(folder.id));
-
-      setFolderTree(cached.tree);
-      setDataLoaded(prev => new Set([...prev, 'folders']));
-      return;
-    }
-
+    loadingLocksRef.current.add('folders');
     setDataLoading('folders', true);
 
-    // If forced, clear loaded IDs to allow full refresh
-    if (force) {
-      loadedIdsRef.current.folders.clear();
-    }
-
-    // Optimistically load from offline storage for initial load
-    if (isInitial && !cached && !force) {
-      if (!navigator.onLine) {
-        try {
-          const offlineFolders = await offlineStorage.getAll<DocumentFolder>(STORES.FOLDERS);
-          if (offlineFolders && offlineFolders.length > 0) {
-            setFolders(offlineFolders);
-            offlineFolders.forEach(folder => loadedIdsRef.current.folders.add(folder.id));
-
-            // Try to build tree if function is available
-            try {
-              if (typeof buildFolderTree === 'function') {
-                setFolderTree(buildFolderTree(offlineFolders));
-              }
-            } catch (e) {
-              // console.warn('Could not build folder tree offline:', e);
-            }
-
-            setDataLoaded(prev => new Set([...prev, 'folders']));
-            setDataLoading('folders', false);
-            return;
-          }
-        } catch (err) {
-          // console.warn('Failed to load offline folders:', err);
-        }
-      } else {
-        offlineStorage.getAll<DocumentFolder>(STORES.FOLDERS).then(offlineFolders => {
-          if (offlineFolders && offlineFolders.length > 0) {
-            setFolders(offlineFolders);
-          }
-        }).catch(err => {
-          // console.warn('Failed to load offline folders:', err)
-        });
-      }
-    }
+    let freshDataApplied = false;
 
     try {
+      const cacheKey = `folders_${userId}`;
+      const cached = getCachedData(cacheKey);
+      // Skip cache if forced
+      if (!force && cached && isInitial) {
+        // Filter out duplicates
+        const uniqueFolders = cached.folders.filter((folder: DocumentFolder) =>
+          !loadedIdsRef.current.folders.has(folder.id)
+        );
+        setFolders(uniqueFolders);
+
+        // Add to loaded IDs
+        uniqueFolders.forEach((folder: DocumentFolder) => loadedIdsRef.current.folders.add(folder.id));
+
+        setFolderTree(cached.tree);
+        setDataLoaded(prev => new Set([...prev, 'folders']));
+        return; // finally block will clean up
+      }
+
+      // If forced, clear loaded IDs to allow full refresh
+      if (force) {
+        loadedIdsRef.current.folders.clear();
+      }
+
+      // Optimistically load from offline storage for initial load
+      if (isInitial && !cached && !force) {
+        if (!navigator.onLine) {
+          try {
+            const offlineFolders = await offlineStorage.getAll<DocumentFolder>(STORES.FOLDERS);
+            if (offlineFolders && offlineFolders.length > 0) {
+              setFolders(offlineFolders);
+              offlineFolders.forEach(folder => loadedIdsRef.current.folders.add(folder.id));
+
+              // Try to build tree if function is available
+              try {
+                if (typeof buildFolderTree === 'function') {
+                  setFolderTree(buildFolderTree(offlineFolders));
+                }
+              } catch (e) {
+                // console.warn('Could not build folder tree offline:', e);
+              }
+
+              setDataLoaded(prev => new Set([...prev, 'folders']));
+              return; // finally block will clean up
+            }
+          } catch (err) {
+            // console.warn('Failed to load offline folders:', err);
+          }
+        } else {
+          offlineStorage.getAll<DocumentFolder>(STORES.FOLDERS).then(offlineFolders => {
+            if (!freshDataApplied && offlineFolders && offlineFolders.length > 0) {
+              setFolders(offlineFolders);
+            }
+          }).catch(() => {});
+        }
+      }
+
       const startTime = Date.now();
 
-      const { data, error, retriesUsed } = await withRetry<DocumentFolder[]>(
+      const { data, error } = await withRetry<DocumentFolder[]>(
         () => withTimeout<DocumentFolder[]>(
           supabase
             .from('document_folders')
@@ -1249,8 +1274,9 @@ export const useAppData = (authUser?: any) => {
       }
 
       if (data) {
+        freshDataApplied = true;
+
         // Filter out duplicates ONLY if not forced (or clear loadedIds above effectively disables filter)
-        // Since we cleared loadedIds if forced, this filter will permit all new data
         const newFoldersData = data.filter(folder =>
           !loadedIdsRef.current.folders.has(folder.id)
         );
@@ -1279,19 +1305,21 @@ export const useAppData = (authUser?: any) => {
         setFolderTree(tree);
 
         // Cache the result
-        setCachedData(cacheKey, { folders: formattedFolders, tree });
+        const cacheKeyForSave = `folders_${userId}`;
+        setCachedData(cacheKeyForSave, { folders: formattedFolders, tree });
       }
 
       setDataLoaded(prev => new Set([...prev, 'folders']));
-    } catch (error) {
+    } catch (error: any) {
       //console.error('Error loading folders:', error);
       if (isInitial && !error.message?.includes('network')) {
         setDataErrors(prev => ({ ...prev, folders: 'Failed to load folders' }));
       }
     } finally {
+      loadingLocksRef.current.delete('folders');
       setDataLoading('folders', false);
     }
-  }, [dataLoading.folders, getCachedData, setCachedData, setDataLoading, recordResponseTime]);
+  }, [getCachedData, setCachedData, setDataLoading, recordResponseTime]);
 
   // Enhanced user profile loading with retry logic
   const loadUserProfile = useCallback(async (user: any) => {
@@ -1301,12 +1329,15 @@ export const useAppData = (authUser?: any) => {
       return;
     }
 
+    loadingLocksRef.current.add('profile');
+
+    try {
     const cacheKey = `profile_${user.id}`;
     const cached = getCachedData(cacheKey);
     if (cached) {
       setUserProfile(cached);
       setDataLoaded(prev => new Set([...prev, 'profile']));
-      return;
+      return; // finally block will clean up
     }
 
     // Offline check for profile
@@ -1318,8 +1349,7 @@ export const useAppData = (authUser?: any) => {
           if (myProfile) {
             setUserProfile(myProfile);
             setDataLoaded(prev => new Set([...prev, 'profile']));
-            setDataLoading('profile', false);
-            return;
+            return; // finally block will clean up
           }
         }
       } catch (e) {
@@ -1387,6 +1417,9 @@ export const useAppData = (authUser?: any) => {
           school: profileData.school,
           username: profileData.username,
           personal_context: profileData.personal_context || '',
+          onboarding_completed: profileData.onboarding_completed ?? false,
+          user_role: profileData.user_role ?? null,
+          role_verified_at: profileData.role_verified_at ?? null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
@@ -1412,6 +1445,9 @@ export const useAppData = (authUser?: any) => {
           school: null,
           username: null,
           personal_context: null,
+          onboarding_completed: false,
+          user_role: null,
+          role_verified_at: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
@@ -1461,6 +1497,9 @@ export const useAppData = (authUser?: any) => {
         school: null,
         username: null,
         personal_context: null,
+        onboarding_completed: false,
+        user_role: null,
+        role_verified_at: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -1469,82 +1508,91 @@ export const useAppData = (authUser?: any) => {
     } finally {
       setDataLoading('profile', false);
     }
+    } finally {
+      loadingLocksRef.current.delete('profile');
+      setDataLoading('profile', false);
+    }
   }, [dataLoaded, getCachedData, setCachedData, setDataLoading]);
 
   // Optimized notes loading with retry logic
+  // Uses ref-based lock (loadingLocksRef) instead of dataLoading state for the
+  // guard to avoid stale-closure issues when called right after clearAllData().
   const loadNotesPage = useCallback(async (userId: string, isInitial = false) => {
-    if (dataLoading.notes) return;
+    if (loadingLocksRef.current.has('notes')) return;
     if (!isInitial && !dataPagination.notes.hasMore) return;
 
+    loadingLocksRef.current.add('notes');
     setDataLoading('notes', true);
     setDataErrors(prev => ({ ...prev, notes: '' }));
 
-    const cacheKey = `notes_${userId}_${isInitial ? 'initial' : dataPagination.notes.offset}`;
-    const cached = getCachedData(cacheKey);
-    if (cached && isInitial) {
-      // Filter out any duplicates from cache
-      const uniqueCachedNotes = cached.notes.filter(note =>
-        !loadedIdsRef.current.notes.has(note.id)
-      );
-      setNotes(prev => isInitial ? uniqueCachedNotes : [...prev, ...uniqueCachedNotes]);
-
-      // Add to loaded IDs
-      uniqueCachedNotes.forEach(note => loadedIdsRef.current.notes.add(note.id));
-
-      if (cached.activeNote && !activeNote) setActiveNote(cached.activeNote);
-      setDataPagination(prev => ({ ...prev, notes: cached.pagination }));
-      setDataLoaded(prev => new Set([...prev, 'notes']));
-      return;
-    }
-
-    // Optimistically load from offline storage for initial load
-    if (isInitial && !cached) {
-      // If offline, prioritize offline data and skip fetch
-      if (!navigator.onLine) {
-        try {
-          const offlineNotes = await offlineStorage.getAll<Note>(STORES.NOTES);
-          if (offlineNotes && offlineNotes.length > 0) {
-            const formattedNotes = offlineNotes.map(n => ({
-              ...n,
-              created_at: n.created_at || new Date().toISOString(),
-              updated_at: n.updated_at || new Date().toISOString()
-            }));
-            setNotes(formattedNotes);
-            formattedNotes.forEach(note => loadedIdsRef.current.notes.add(note.id));
-
-            // Set active note if needed
-            if (!activeNote && formattedNotes.length > 0) {
-              setActiveNote(formattedNotes.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0]);
-            }
-
-            setDataLoaded(prev => new Set([...prev, 'notes']));
-            setDataLoading('notes', false);
-            return;
-          }
-        } catch (err) {
-          // console.warn('Failed to load offline notes:', err);
-        }
-      } else {
-        offlineStorage.getAll<Note>(STORES.NOTES).then(offlineNotes => {
-          if (offlineNotes && offlineNotes.length > 0) {
-            setNotes(offlineNotes);
-          }
-        }).catch(err => {
-          // Failed to load offline notes
-        });
-      }
-    }
-
-    const controller = new AbortController();
-    abortControllersRef.current.set(`notes_${userId}`, controller);
+    // Flag to prevent fire-and-forget offline preload from overwriting fresh data
+    let freshDataApplied = false;
 
     try {
+      const cacheKey = `notes_${userId}_${isInitial ? 'initial' : dataPagination.notes.offset}`;
+      const cached = getCachedData(cacheKey);
+      if (cached && isInitial) {
+        // Filter out any duplicates from cache
+        const uniqueCachedNotes = cached.notes.filter((note: Note) =>
+          !loadedIdsRef.current.notes.has(note.id)
+        );
+        setNotes(isInitial ? uniqueCachedNotes : [...uniqueCachedNotes]);
+
+        // Add to loaded IDs
+        uniqueCachedNotes.forEach((note: Note) => loadedIdsRef.current.notes.add(note.id));
+
+        if (cached.activeNote && !activeNote) setActiveNote(cached.activeNote);
+        setDataPagination(prev => ({ ...prev, notes: cached.pagination }));
+        setDataLoaded(prev => new Set([...prev, 'notes']));
+        return; // finally block will clean up lock + loading state
+      }
+
+      // Optimistically load from offline storage for initial load
+      if (isInitial && !cached) {
+        // If offline, prioritize offline data and skip fetch
+        if (!navigator.onLine) {
+          try {
+            const offlineNotes = await offlineStorage.getAll<Note>(STORES.NOTES);
+            if (offlineNotes && offlineNotes.length > 0) {
+              const formattedNotes = offlineNotes.map(n => ({
+                ...n,
+                created_at: n.created_at || new Date().toISOString(),
+                updated_at: n.updated_at || new Date().toISOString()
+              }));
+              setNotes(formattedNotes);
+              formattedNotes.forEach(note => loadedIdsRef.current.notes.add(note.id));
+
+              // Set active note if needed
+              if (!activeNote && formattedNotes.length > 0) {
+                setActiveNote(formattedNotes.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0]);
+              }
+
+              setDataLoaded(prev => new Set([...prev, 'notes']));
+              return; // finally block will clean up
+            }
+          } catch (err) {
+            // console.warn('Failed to load offline notes:', err);
+          }
+        } else {
+          // Fire-and-forget offline preload — guarded by freshDataApplied flag
+          // so it cannot overwrite Supabase data if IndexedDB resolves late.
+          offlineStorage.getAll<Note>(STORES.NOTES).then(offlineNotes => {
+            if (!freshDataApplied && offlineNotes && offlineNotes.length > 0) {
+              setNotes(offlineNotes);
+            }
+          }).catch(() => {});
+        }
+      }
+
+      const controller = new AbortController();
+      abortControllersRef.current.set(`notes_${userId}`, controller);
+
       const limit = isInitial ? INITIAL_LOAD_LIMITS.notes : LOAD_MORE_LIMITS.notes;
       const offset = isInitial ? 0 : dataPagination.notes.offset;
 
       const startTime = Date.now();
 
-      const { data, error, retriesUsed } = await withRetry<any[]>(
+      const { data, error } = await withRetry<any[]>(
         () => withTimeout<any[]>(
           supabase
             .from('notes')
@@ -1570,7 +1618,6 @@ export const useAppData = (authUser?: any) => {
           if (offlineNotes && offlineNotes.length > 0) {
             setNotes(offlineNotes);
             setDataLoaded(prev => new Set([...prev, 'notes']));
-            //toast.info('Loaded notes from offline storage');
           }
           return;
         }
@@ -1578,6 +1625,10 @@ export const useAppData = (authUser?: any) => {
       }
 
       if (data) {
+        // Mark fresh data as applied BEFORE setNotes so the offline
+        // preload .then() (if it hasn't resolved yet) will bail out.
+        freshDataApplied = true;
+
         // Filter out duplicates before formatting
         const newNotesData = data.filter(note =>
           !loadedIdsRef.current.notes.has(note.id)
@@ -1636,7 +1687,7 @@ export const useAppData = (authUser?: any) => {
       }
 
       setDataLoaded(prev => new Set([...prev, 'notes']));
-    } catch (error) {
+    } catch (error: any) {
       //console.error('Error loading notes:', error);
       setDataErrors(prev => ({ ...prev, notes: 'Failed to load notes' }));
 
@@ -1644,10 +1695,11 @@ export const useAppData = (authUser?: any) => {
         showToastOnce('Failed to load notes. Please check your connection.', 'error');
       }
     } finally {
+      loadingLocksRef.current.delete('notes');
       abortControllersRef.current.delete(`notes_${userId}`);
       setDataLoading('notes', false);
     }
-  }, [dataLoading, dataPagination, activeNote, getCachedData, setCachedData, setDataLoading, recordResponseTime]);
+  }, [dataPagination, activeNote, getCachedData, setCachedData, setDataLoading, recordResponseTime]);
 
   // Enhanced progressive loading with connection awareness - UPDATED
   const startProgressiveDataLoading = useCallback(async (user: any) => {
@@ -2174,28 +2226,29 @@ export const useAppData = (authUser?: any) => {
     }, [currentUser, loadNotesPage, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadFolders, setNotes, setRecordings, setScheduleItems, setDocuments, setQuizzes, setFolders]),
 
 
-    // Lazy loading functions
+    // Lazy loading functions — uses ref-based lock for the "currently loading"
+    // check so the guard is never stale regardless of React batching.
     loadDataIfNeeded: useCallback((dataType: keyof DataLoadingState, force = false) => {
       if (!currentUser?.id) return;
       // If forced, bypass the loaded check. Also bypass loading check if forced? 
       // Ideally yes, but we should be careful with race conditions.
       // However loadFolders/loadDocumentsPage handle concurrency internally now if force is passed.
-      if (!force && (dataLoaded.has(dataType) || dataLoading[dataType])) return;
+      if (!force && (dataLoaded.has(dataType) || loadingLocksRef.current.has(dataType))) return;
 
       const loaders = {
         recordings: () => loadRecordingsPage(currentUser.id, true),
-        scheduleItems: () => loadSchedulePage(currentUser.id, true), // Does not support force yet
+        scheduleItems: () => loadSchedulePage(currentUser.id, true),
         documents: () => loadDocumentsPage(currentUser.id, true, force),
         quizzes: () => loadQuizzesPage(currentUser.id, true),
         notes: () => loadNotesPage(currentUser.id, true),
-        profile: () => !dataLoading.profile && loadUserProfile(currentUser),
+        profile: () => !loadingLocksRef.current.has('profile') && loadUserProfile(currentUser),
         folders: () => loadFolders(currentUser.id, true, force),
       };
 
       if (loaders[dataType]) {
         loaders[dataType]();
       }
-    }, [currentUser, dataLoaded, dataLoading, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadNotesPage, loadUserProfile, loadFolders]),
+    }, [currentUser, dataLoaded, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadNotesPage, loadUserProfile, loadFolders]),
 
     // Force refresh function (always fetches, even if already loaded)
     forceRefreshDocuments: useCallback(() => {

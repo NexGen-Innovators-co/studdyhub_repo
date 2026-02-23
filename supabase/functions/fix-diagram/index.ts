@@ -1,10 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.24.1"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { logSystemError } from '../_shared/errorLogger.ts';
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
+// Model fallback chain for quota/rate-limit resilience
+const MODEL_CHAIN = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-pro',
+  'gemini-3-pro-preview',
+];
 
 interface DiagramFixRequest {
   diagramType: 'mermaid' | 'html' | 'code';
@@ -26,13 +37,10 @@ serve(async (req) => {
       userProfile
     }: DiagramFixRequest = await req.json()
 
-    const apiKey = Deno.env.get('GEMINI_API_KEY')
+    const apiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GEMINI_API_KEY_VERTEX')
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY not found')
     }
-
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
 
     const systemPrompt = `You are an expert diagram and code fixing assistant. Your task is to analyze and fix broken diagrams/code.
 
@@ -74,13 +82,57 @@ ${originalContent}
 
 Please analyze the error and provide a fixed version with explanation and suggestions.`
 
-    const result = await model.generateContent([
-      { text: systemPrompt },
-      { text: userPrompt }
-    ])
+    const fullPrompt = systemPrompt + '\n\n' + userPrompt;
+    const requestBody = {
+      contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 4096, topK: 40, topP: 0.95 },
+    };
 
-    const response = await result.response
-    const text = response.text()
+    let text = '';
+    for (let attempt = 0; attempt < MODEL_CHAIN.length; attempt++) {
+      const currentModel = MODEL_CHAIN[attempt];
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${apiKey}`;
+      console.log(`[fix-diagram] Attempt ${attempt + 1}/${MODEL_CHAIN.length} using model: ${currentModel}`);
+
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (resp.status === 429 || resp.status === 503) {
+          console.warn(`[fix-diagram] ${resp.status} from ${currentModel}, switching to next model...`);
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+
+        if (!resp.ok) {
+          console.error(`[fix-diagram] ${resp.status} from ${currentModel}`);
+          continue;
+        }
+
+        const data = await resp.json();
+        const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (content) {
+          text = content;
+          break;
+        }
+      } catch (err) {
+        console.error(`[fix-diagram] Network error with ${currentModel}:`, err);
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      }
+    }
+
+    if (!text) {
+      // OpenRouter fallback
+      const orResult = await callOpenRouterFallback(requestBody.contents, { source: 'fix-diagram' });
+      if (orResult.success && orResult.content) {
+        text = orResult.content;
+      } else {
+        throw new Error('All AI models failed (Gemini + OpenRouter)');
+      }
+    }
 
     // Try to parse as JSON
     let fixResult;
@@ -122,6 +174,16 @@ Please analyze the error and provide a fixed version with explanation and sugges
     )
 
   } catch (error) {
+    // ── Log to system_error_logs ──
+    try {
+      const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logSystemError(_logClient, {
+        severity: 'error',
+        source: 'fix-diagram',
+        message: error?.message || String(error),
+        details: { stack: error?.stack },
+      });
+    } catch (_logErr) { console.error('[fix-diagram] Error logging failed:', _logErr); }
     //console.error('Error in fix-diagram function:', error)
 
     return new Response(

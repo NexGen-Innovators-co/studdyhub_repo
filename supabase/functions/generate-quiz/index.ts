@@ -3,6 +3,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { createSubscriptionValidator, createErrorResponse, extractUserIdFromAuth } from '../utils/subscription-validator.ts';
 import { getEducationContext, formatEducationContextForPrompt } from '../_shared/educationContext.ts';
+import { logSystemError } from '../_shared/errorLogger.ts';
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,6 +17,8 @@ serve(async (req)=>{
       headers: corsHeaders
     });
   }
+  let supabaseAdmin: any = null;
+  let logUserId: string | undefined;
   try {
     // Validate user authentication and quiz limit
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -24,11 +28,14 @@ serve(async (req)=>{
       throw new Error('Missing Supabase configuration');
     }
 
+    supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
     const userId = await extractUserIdFromAuth(req, supabaseUrl, supabaseServiceKey);
     
     if (!userId) {
       return createErrorResponse('Unauthorized: Please login to generate quizzes', 401);
     }
+    logUserId = userId;
 
     // Check daily quiz limit
     const validator = createSubscriptionValidator();
@@ -46,8 +53,7 @@ serve(async (req)=>{
     // Fetch education context for curriculum-aligned quiz generation
     let educationBlock = '';
     try {
-      const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
-      const eduCtx = await getEducationContext(supabase, userId);
+      const eduCtx = await getEducationContext(supabaseAdmin, userId);
       if (eduCtx) {
         educationBlock = `\n\n${formatEducationContextForPrompt(eduCtx)}\nAlign questions to this student's curriculum, exam format, and subject focus where relevant.\n`;
       }
@@ -133,10 +139,8 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
       'gemini-2.5-flash',
       'gemini-3-pro-preview',
       'gemini-2.0-flash',
-      'gemini-1.5-flash',
+      'gemini-2.0-flash-lite',
       'gemini-2.5-pro',
-      'gemini-2.0-pro',
-      'gemini-1.5-pro'
     ];
 
     async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 3): Promise<any> {
@@ -158,7 +162,21 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
           if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
         }
       }
-      throw new Error('All Gemini models failed');
+      logSystemError(supabaseAdmin, {
+        severity: 'error',
+        source: 'generate-quiz',
+        component: 'gemini-model-chain',
+        error_code: 'ALL_MODELS_FAILED',
+        message: `All ${maxAttempts} Gemini model attempts failed for quiz generation`,
+        details: { modelsAttempted: MODEL_CHAIN.slice(0, maxAttempts) },
+        user_id: logUserId,
+      });
+      // OpenRouter fallback
+      const orResult = await callOpenRouterFallback(requestBody.contents, { source: 'generate-quiz' });
+      if (orResult.success && orResult.content) {
+        return { candidates: [{ content: { parts: [{ text: orResult.content }] } }] };
+      }
+      throw new Error('All AI models failed (Gemini + OpenRouter)');
     }
 
     const result = await callGeminiWithModelChain(payload, geminiApiKey);
@@ -181,8 +199,15 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
         }
       });
     } catch (parseError) {
-      // console.error('Failed to parse quiz JSON or validate structure:', parseError);
-      // console.error('Raw content that failed parsing:', generatedContent);
+      logSystemError(supabaseAdmin, {
+        severity: 'warning',
+        source: 'generate-quiz',
+        component: 'json-parse',
+        error_code: 'QUIZ_JSON_PARSE_FAILED',
+        message: `Quiz JSON parse/validation failed, using fallback quiz`,
+        details: { error: String(parseError), rawContentLength: generatedContent?.length },
+        user_id: logUserId,
+      });
       // Fallback: create a simple quiz based on the content
       quizData = {
         title: `Quiz: ${name}`,
@@ -209,7 +234,17 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
       }
     });
   } catch (error) {
-    // console.error('Error in generate-quiz function:', error);
+    if (supabaseAdmin) {
+      logSystemError(supabaseAdmin, {
+        severity: 'error',
+        source: 'generate-quiz',
+        component: 'main',
+        error_code: 'QUIZ_GENERATION_FAILED',
+        message: `Quiz generation failed: ${error.message || String(error)}`,
+        details: { stack: error.stack, error: String(error) },
+        user_id: logUserId,
+      });
+    }
     return new Response(JSON.stringify({
       error: error.message,
       details: 'Failed to generate quiz. Please ensure the transcript contains sufficient educational content and a valid Gemini API key is configured.'

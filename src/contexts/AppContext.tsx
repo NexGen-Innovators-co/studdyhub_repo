@@ -29,7 +29,8 @@ import { PlanType, SubscriptionLimits, Subscription, useSubscription, } from '@/
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { offlineStorage, STORES } from '@/utils/offlineStorage';
 import { useEducationContext } from '../hooks/useEducationContext';
-import type { UserEducationContext } from '../types/Education';
+import { useEducatorPermissions } from '../hooks/useEducatorPermissions';
+import type { UserEducationContext, EducatorPermissions } from '../types/Education';
 
 // Context interface
 interface AppContextType extends AppState {
@@ -155,6 +156,9 @@ interface AppContextType extends AppState {
   educationContext: UserEducationContext | null;
   educationLoading: boolean;
   refetchEducation: () => Promise<void>;
+  educatorPermissions: EducatorPermissions | null;
+  educatorLoading: boolean;
+  refetchEducatorPermissions: () => Promise<void>;
 }
 
 // Create context
@@ -431,12 +435,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
   const socialData = useSocialData(userProfile, 'newest', 'all');
 
-  // Education context — loaded once per auth session
+  // Education context — loaded once per auth session, skipped during onboarding
   const {
     educationContext,
     isLoading: educationLoading,
     refetch: refetchEducation,
-  } = useEducationContext();
+  } = useEducationContext(userProfile?.onboarding_completed);
+
+  // Educator permissions — loaded once per auth session
+  const {
+    permissions: educatorPermissions,
+    isLoading: educatorLoading,
+    refetch: refetchEducatorPermissions,
+  } = useEducatorPermissions();
 
   // Wire social refresh into the ref so retryAllData can trigger it
   useEffect(() => {
@@ -1358,6 +1369,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     educationContext,
     educationLoading,
     refetchEducation,
+    educatorPermissions,
+    educatorLoading,
+    refetchEducatorPermissions,
   };
 
   return (

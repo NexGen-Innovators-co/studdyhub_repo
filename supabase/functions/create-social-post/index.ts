@@ -7,6 +7,8 @@ import {
   extractUserIdFromAuth 
 } from '../utils/subscription-validator.ts';
 import { getEducationContext } from '../_shared/educationContext.ts';
+import { logSystemError } from '../_shared/errorLogger.ts';
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -182,12 +184,10 @@ Respond in JSON format:
 
         const MODEL_CHAIN = [
           'gemini-2.5-flash',
-          'gemini-3-pro-preview',
           'gemini-2.0-flash',
-          'gemini-1.5-flash',
+          'gemini-2.0-flash-lite',
           'gemini-2.5-pro',
-          'gemini-2.0-pro',
-          'gemini-1.5-pro'
+          'gemini-3-pro-preview'
         ];
 
         async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 3): Promise<any> {
@@ -209,7 +209,12 @@ Respond in JSON format:
               if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
             }
           }
-          throw new Error('All Gemini models failed');
+          // OpenRouter fallback
+          const orResult = await callOpenRouterFallback(requestBody.contents, { source: 'create-social-post' });
+          if (orResult.success && orResult.content) {
+            return { candidates: [{ content: { parts: [{ text: orResult.content }] } }] };
+          }
+          throw new Error('All AI models failed (Gemini + OpenRouter)');
         }
 
         const result = await callGeminiWithModelChain({ contents: [{ parts: [{ text: prompt }] }] }, geminiApiKey);
@@ -503,6 +508,16 @@ Respond in JSON format:
     });
 
   } catch (error) {
+    // ── Log to system_error_logs ──
+    try {
+      const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logSystemError(_logClient, {
+        severity: 'error',
+        source: 'create-social-post',
+        message: error?.message || String(error),
+        details: { stack: error?.stack },
+      });
+    } catch (_logErr) { console.error('[create-social-post] Error logging failed:', _logErr); }
     // console.error('Error in create-social-post:', error);
     return createErrorResponse('Internal server error', 500);
   }

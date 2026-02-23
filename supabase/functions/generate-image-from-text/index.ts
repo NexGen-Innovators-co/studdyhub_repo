@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { decodeBase64 } from 'https://deno.land/std@0.224.0/encoding/base64.ts';
+import { logSystemError } from '../_shared/errorLogger.ts';
 // import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.24.1';
 
 const corsHeaders = {
@@ -162,6 +163,16 @@ serve(async (req) => {
         });
 
     } catch (error) {
+      // ── Log to system_error_logs ──
+      try {
+        const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+        await logSystemError(_logClient, {
+          severity: 'error',
+          source: 'generate-image-from-text',
+          message: error?.message || String(error),
+          details: { stack: error?.stack },
+        });
+      } catch (_logErr) { console.error('[generate-image-from-text] Error logging failed:', _logErr); }
         // console.error('Edge function error in generate-image-from-text:', error.message);
         return new Response(JSON.stringify({ error: error.message }), {
             status: 500,

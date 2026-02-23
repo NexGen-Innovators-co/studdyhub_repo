@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { logAdminActivity } from '@/utils/adminActivityLogger';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -219,6 +220,7 @@ export const ContentModerationAdmin: React.FC = () => {
         title: 'Settings Saved',
         description: 'Content moderation settings updated successfully.',
       });
+      logAdminActivity({ action: 'update_content_moderation_settings', target_type: 'system_settings', details: { strictness: settings.strictness, enabled: settings.enabled } });
     } catch (error: any) {
 
       toast({

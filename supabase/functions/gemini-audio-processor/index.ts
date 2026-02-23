@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.0';
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { logSystemError } from '../_shared/errorLogger.ts';
 
 // Define the expected request body structure
 interface RequestBody {
@@ -23,12 +24,10 @@ const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!;
 
 const MODEL_CHAIN = [
   'gemini-2.5-flash',
-  'gemini-3-pro-preview',
   'gemini-2.0-flash',
-  'gemini-1.5-flash',
+  'gemini-2.0-flash-lite',
   'gemini-2.5-pro',
-  'gemini-2.0-pro',
-  'gemini-1.5-pro'
+  'gemini-3-pro-preview'
 ];
 
 async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 3): Promise<any> {
@@ -400,6 +399,16 @@ Keep it concise but comprehensive (150-300 words).\n\nTranscript:\n${transcript}
     });
 
   } catch (error: any) { // Explicitly type error as 'any' for easier access to .message
+    // ── Log to system_error_logs ──
+    try {
+      const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logSystemError(_logClient, {
+        severity: 'error',
+        source: 'gemini-audio-processor',
+        message: error?.message || String(error),
+        details: { stack: error?.stack },
+      });
+    } catch (_logErr) { console.error('[gemini-audio-processor] Error logging failed:', _logErr); }
     //console.error('Error processing audio:', error);
     return new Response(JSON.stringify({ error: error.message || 'An unknown error occurred' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

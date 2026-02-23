@@ -15,7 +15,12 @@ import {
   Menu,
   X,
   BarChart3,
-  BookOpen
+  BookOpen,
+  MessageSquare,
+  Bug,
+  Bot,
+  Megaphone,
+  ShieldCheck
 } from 'lucide-react';
 
 export const AdminLayout = () => {
@@ -49,8 +54,13 @@ export const AdminLayout = () => {
     { to: '/admin/courses', icon: BookOpen, label: 'Courses', perm: true }, // Added Courses
     { to: '/admin/admins', icon: Shield, label: 'Admins', perm: permissions.canManageAdmins },
     { to: '/admin/moderation', icon: AlertTriangle, label: 'Moderation', perm: permissions.canModerateContent },
+    { to: '/admin/testimonials', icon: MessageSquare, label: 'Testimonials', perm: permissions.canModerateContent },
     { to: '/admin/settings', icon: Settings, label: 'Settings', perm: permissions.canManageSettings },
+    { to: '/admin/ai-insights', icon: Bot, label: 'AI Insights', perm: true },
+    { to: '/admin/updates', icon: Megaphone, label: 'Updates', perm: permissions.canManageSettings },
+    { to: '/admin/verification', icon: ShieldCheck, label: 'Verification', perm: permissions.canManageUsers },
     { to: '/admin/logs', icon: FileText, label: 'Activity Logs', perm: permissions.canViewLogs },
+    { to: '/admin/errors', icon: Bug, label: 'System Errors', perm: permissions.canViewLogs },
   ].filter(i => i.perm);
 
   // Loading state

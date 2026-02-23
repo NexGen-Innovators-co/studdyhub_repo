@@ -6,6 +6,7 @@ import {
   createErrorResponse, 
   extractUserIdFromAuth 
 } from '../utils/subscription-validator.ts';
+import { logSystemError } from '../_shared/errorLogger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -134,6 +135,16 @@ serve(async (req) => {
     });
 
   } catch (error) {
+    // ── Log to system_error_logs ──
+    try {
+      const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logSystemError(_logClient, {
+        severity: 'error',
+        source: 'create-study-group',
+        message: error?.message || String(error),
+        details: { stack: error?.stack },
+      });
+    } catch (_logErr) { console.error('[create-study-group] Error logging failed:', _logErr); }
     // console.error('Error in create-study-group:', error);
     return createErrorResponse('Internal server error', 500);
   }

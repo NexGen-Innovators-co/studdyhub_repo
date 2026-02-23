@@ -1,8 +1,10 @@
 // supabase/functions/gemini-document-extractor/index.ts
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
 import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.43.2';
 import { createSubscriptionValidator, createErrorResponse } from '../utils/subscription-validator.ts';
+import { logSystemError } from '../_shared/errorLogger.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -119,12 +121,10 @@ const extractContentWithGemini = async (
 
     const MODEL_CHAIN = [
         'gemini-2.5-flash',
-        'gemini-3-pro-preview',
         'gemini-2.0-flash',
-        'gemini-1.5-flash',
+        'gemini-2.0-flash-lite',
         'gemini-2.5-pro',
-        'gemini-2.0-pro',
-        'gemini-1.5-pro'
+        'gemini-3-pro-preview'
     ];
 
     async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 3): Promise<any> {
@@ -146,7 +146,12 @@ const extractContentWithGemini = async (
                 if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
             }
         }
-        throw new Error('All Gemini models failed');
+        // OpenRouter fallback
+        const orResult = await callOpenRouterFallback(requestBody.contents, { source: 'gemini-document-extractor' });
+        if (orResult.success && orResult.content) {
+            return { candidates: [{ content: { parts: [{ text: orResult.content }] } }] };
+        }
+        throw new Error('All AI models failed (Gemini + OpenRouter)');
     }
 
     const result = await callGeminiWithModelChain(payload, geminiApiKey);
@@ -411,6 +416,16 @@ serve(async (req) => {
                 }).eq('id', documentId);
             }
         } catch (updateErr) {
+          // ── Log to system_error_logs ──
+          try {
+            const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+            await logSystemError(_logClient, {
+              severity: 'error',
+              source: 'gemini-document-extractor',
+              message: updateErr?.message || String(updateErr),
+              details: { stack: updateErr?.stack },
+            });
+          } catch (_logErr) { console.error('[gemini-document-extractor] Error logging failed:', _logErr); }
             // console.error("Failed to update document status to failed:", updateErr);
         }
 

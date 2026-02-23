@@ -47,6 +47,7 @@ import { requestNotificationPermission, getPushService } from '@/services/notifi
 import { CalendarIntegrationSettings } from '../settings/CalendarIntegrationSettings';
 import { Separator } from '../ui/separator';
 import { EducationSettingsTab } from './EducationSettingsTab';
+import { RoleUpgradePanel } from '../educator/RoleUpgradePanel';
 
 interface UserSettingsProps {
   profile: UserProfile | null;
@@ -102,7 +103,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 }) => {
   const { confirm: confirmAction, ConfirmDialogComponent } = useConfirmDialog();
   // Tab state
-  const [activeTab, setActiveTab] = useState<'profile' | 'education' | 'learning' | 'personalization' | 'goals' | 'achievements' | 'study' | 'privacy' | 'notifications' | 'security'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'education' | 'role' | 'learning' | 'personalization' | 'goals' | 'achievements' | 'study' | 'privacy' | 'notifications' | 'security'>('profile');
 
   // Original form states
   const [learningStyle, setLearningStyle] = useState<UserProfile['learning_style']>('visual');
@@ -502,6 +503,18 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 
       if (error) throw error;
 
+      // Sync display_name + avatar to social_users so the social profile stays in sync
+      supabase
+        .from('social_users')
+        .update({
+          display_name: fullName,
+          avatar_url: updatedAvatarUrl,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id)
+        .then(() => { /* fire-and-forget */ })
+        .catch(() => { /* non-blocking */ });
+
       if (newPassword) {
         const { error: passwordError } = await supabase.auth.updateUser({
           password: newPassword,
@@ -756,6 +769,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
   const navItems = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'education', label: 'Education', icon: GraduationCap },
+    { id: 'role', label: 'Role', icon: Shield },
     { id: 'learning', label: 'Learning', icon: Brain },
     { id: 'personalization', label: 'AI Context', icon: Sparkles },
     { id: 'goals', label: 'Goals', icon: Target },
@@ -921,6 +935,20 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
           {/* Education Section */}
           {activeTab === 'education' && (
             <EducationSettingsTab />
+          )}
+
+          {/* Role / Educator Upgrade Section */}
+          {activeTab === 'role' && (
+            <CardContent className="p-8">
+              <div className="flex items-center gap-3 mb-6">
+                <Shield className="h-5 w-5 text-blue-500" />
+                <h2 className="text-xl font-semibold">Account Role</h2>
+              </div>
+              <p className="text-gray-500 dark:text-gray-400 mb-6">
+                Upgrade your account to an educator role to create courses, manage students, and access the Educator Portal.
+              </p>
+              <RoleUpgradePanel compact redirectTo="/educator" />
+            </CardContent>
           )}
 
           {/* Learning Section */}

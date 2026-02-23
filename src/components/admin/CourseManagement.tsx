@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { logAdminActivity } from '@/utils/adminActivityLogger';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -69,10 +70,11 @@ const CourseManagement = () => {
       const { error } = await supabase.from('courses').insert(newCourse);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
       setIsAddCourseOpen(false);
       toast.success('Course created successfully');
+      logAdminActivity({ action: 'create_course', target_type: 'courses', details: { title: variables?.title } });
     },
     onError: (error) => toast.error(`Error creating course: ${error.message}`),
   });
@@ -88,6 +90,7 @@ const CourseManagement = () => {
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       toast.success('Material added successfully');
+      logAdminActivity({ action: 'add_course_material', target_type: 'course_materials', details: { course_id: selectedCourseId } });
     },
     onError: (error) => toast.error(`Error adding material: ${error.message}`),
   });
@@ -97,10 +100,11 @@ const CourseManagement = () => {
       const { error } = await supabase.from('courses').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
       if (selectedCourseId) setSelectedCourseId(null);
       toast.success('Course deleted');
+      logAdminActivity({ action: 'delete_course', target_type: 'courses', target_id: id });
     },
   });
 
@@ -109,9 +113,10 @@ const CourseManagement = () => {
       const { error } = await supabase.from('course_materials').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: ['admin-course-materials', selectedCourseId] });
       toast.success('Material deleted');
+      logAdminActivity({ action: 'delete_course_material', target_type: 'course_materials', target_id: id, details: { course_id: selectedCourseId } });
     },
   });
 
