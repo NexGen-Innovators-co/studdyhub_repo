@@ -518,13 +518,10 @@ const AIChat: React.FC<AIChatProps> = ({
     // Read text from the ref (uncontrolled textarea)
     const inputMessage = inputMessageRef.current;
 
-    // Check if this is an image generation request
+    // Check if this is an image generation request (currently suspended)
     const imageDetection = detectImageGenerationRequest(inputMessage);
     if (imageDetection.isImageRequest && imageDetection.extractedPrompt) {
-      // Open image generator with the detected prompt
-      setDetectedImagePrompt(imageDetection.extractedPrompt);
-      setShowImageGenerator(true);
-      setInputValue(''); // Clear the input
+      toast.info('AI Image generation is temporarily suspended. We\'re working on improvements — stay tuned!', { duration: 5000 });
       return;
     }
 
@@ -1248,12 +1245,17 @@ const AIChat: React.FC<AIChatProps> = ({
                             Generate AI Podcast
                           </span>
                         </MenubarItem>
-                        <MenubarItem onClick={() => setShowImageGenerator(true)} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
-                          <span className="flex items-center">
+                        <MenubarItem 
+                          onClick={() => {
+                            toast.info('AI Image generation is temporarily suspended. We\'re working on improvements — stay tuned!', { duration: 5000 });
+                          }}
+                        >
+                          <span className="flex items-center opacity-50">
                             <motion.span whileHover={{ scale: 1.25 }} className="text-purple-500">
                               <Image className="h-5 w-5 mr-2" />
                             </motion.span>
                             Generate AI Image
+                            <span className="ml-2 text-[10px] text-amber-500 font-medium">(Suspended)</span>
                           </span>
                         </MenubarItem>
                         <MenubarItem onClick={() => setAutoTypeInPanel(prev => !prev)}>

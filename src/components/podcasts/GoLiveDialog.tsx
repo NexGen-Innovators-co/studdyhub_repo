@@ -363,7 +363,7 @@ export const GoLiveDialog: React.FC<GoLiveDialogProps> = ({
               <option value="live-stream">Live Stream</option>
               <option value="audio">Audio</option>
               <option value="image-audio">Image + Audio</option>
-              <option value="video">Video</option>
+              <option value="video" disabled>Video (Temporarily Unavailable)</option>
             </select>
           </div>
 

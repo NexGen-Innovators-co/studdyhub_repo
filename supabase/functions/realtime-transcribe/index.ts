@@ -2,6 +2,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { logSystemError } from '../_shared/errorLogger.ts';
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -173,7 +174,25 @@ serve(async (req) => {
     }
 
     if (!usedModel) {
-      throw new Error('All Gemini models failed — quota or service issue');
+      // Log model chain exhaustion
+      try {
+        const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+        logSystemError(_logClient, {
+          severity: 'error',
+          source: 'realtime-transcribe',
+          component: 'gemini-model-chain',
+          error_code: 'ALL_MODELS_FAILED',
+          message: `All ${MODEL_CHAIN.length} Gemini model attempts failed for realtime transcription`,
+          details: { modelsAttempted: MODEL_CHAIN },
+        });
+      } catch (_) {}
+      // OpenRouter fallback
+      const orResult = await callOpenRouterFallback(requestBody.contents, { source: 'realtime-transcribe' });
+      if (orResult.success && orResult.content) {
+        partial = orResult.content;
+      } else {
+        throw new Error('All AI models failed (Gemini + OpenRouter) — quota or service issue');
+      }
     }
 
     // Filter out common uncertain responses from the model — prefer empty string instead

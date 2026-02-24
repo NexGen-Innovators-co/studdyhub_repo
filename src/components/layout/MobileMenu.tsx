@@ -2,9 +2,11 @@ import React from 'react';
 import { 
   LayoutDashboard, BookOpen, Video, Calendar, 
   MessageSquare, FileText, Sparkles, Users2, Sliders, 
-  Podcast, Clipboard
+  Podcast, Clipboard, GraduationCap, Star
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { RateAppDialog } from '@/components/ratings/RateAppDialog';
+import { Button } from '@/components/ui/button';
 
 interface MobileMenuProps {
   isOpen: boolean;
@@ -27,6 +29,7 @@ const mainNavItems = [
   { label: 'Schedule', icon: Calendar, tab: 'schedule' },
   { label: 'Podcasts', icon: Podcast, tab: 'podcasts' },
   { label: 'Settings', icon: Sliders, tab: 'settings' },
+  { label: 'Educator', icon: GraduationCap, tab: 'educator' },
 ];
 
 export const MobileMenu: React.FC<MobileMenuProps> = ({ 
@@ -77,6 +80,18 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
                 </button>
                 );
             })}
+            </div>
+
+            {/* Rate App */}
+            <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-center">
+              <RateAppDialog
+                trigger={
+                  <Button variant="outline" size="sm" className="gap-2 text-yellow-600 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/20">
+                    <Star className="h-4 w-4 fill-yellow-400" />
+                    Rate StuddyHub
+                  </Button>
+                }
+              />
             </div>
         </div>
       </SheetContent>

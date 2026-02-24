@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'npm:@supabase/supabase-js@2.92.0';
 import { logSystemError } from '../_shared/errorLogger.ts';
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -51,6 +52,7 @@ serve(async (req) => {
 
     const MODEL_CHAIN = [
       'gemini-2.5-flash',
+      'gemini-3-pro-preview',
       'gemini-2.0-flash',
       'gemini-2.0-flash-lite',
       'gemini-2.5-pro',
@@ -74,7 +76,24 @@ serve(async (req) => {
           console.error(`Gemini ${model} network error:`, err)
         }
       }
-      throw new Error('All Gemini model attempts failed')
+      // Log model chain exhaustion
+      try {
+        const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+        logSystemError(_logClient, {
+          severity: 'error',
+          source: 'podcast-transcribe',
+          component: 'gemini-model-chain',
+          error_code: 'ALL_MODELS_FAILED',
+          message: `All ${maxAttempts} Gemini model attempts failed for podcast transcription`,
+          details: { modelsAttempted: MODEL_CHAIN.slice(0, maxAttempts) },
+        });
+      } catch (_) {}
+      // OpenRouter fallback
+      const orResult = await callOpenRouterFallback(requestBody.contents, { source: 'podcast-transcribe' });
+      if (orResult.success && orResult.content) {
+        return { candidates: [{ content: { parts: [{ text: orResult.content }] } }] };
+      }
+      throw new Error('All AI models failed (Gemini + OpenRouter)')
     }
 
     let audioBase64: string | null = null

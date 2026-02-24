@@ -2,6 +2,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2.44.0';
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createSubscriptionValidator, createErrorResponse } from '../utils/subscription-validator.ts';
 import { logSystemError } from '../_shared/errorLogger.ts';
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
 
 // Define the expected request body structure
 interface RequestBody {
@@ -34,7 +35,7 @@ const MODEL_CHAIN = [
   'gemini-2.5-pro',
 ];
 
-async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 3): Promise<any> {
+async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 5): Promise<any> {
   for (let attempt = 0; attempt < Math.min(maxAttempts, MODEL_CHAIN.length); attempt++) {
     const model = MODEL_CHAIN[attempt % MODEL_CHAIN.length];
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -65,7 +66,21 @@ async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAtt
       if (attempt < maxAttempts - 1) await sleep(1000 * (attempt + 1));
     }
   }
-  throw new Error('All Gemini model attempts failed');
+  // Log model chain exhaustion
+  logSystemError(supabase, {
+    severity: 'error',
+    source: 'process-audio',
+    component: 'gemini-model-chain',
+    error_code: 'ALL_MODELS_FAILED',
+    message: `All ${maxAttempts} Gemini model attempts failed for audio processing`,
+    details: { modelsAttempted: MODEL_CHAIN.slice(0, maxAttempts) },
+  });
+  // OpenRouter fallback
+  const orResult = await callOpenRouterFallback(requestBody.contents, { source: 'process-audio' });
+  if (orResult.success && orResult.content) {
+    return { candidates: [{ content: { parts: [{ text: orResult.content }] } }] };
+  }
+  throw new Error('All AI models failed (Gemini + OpenRouter)');
 }
 
 // CORS headers

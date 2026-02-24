@@ -4,6 +4,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.24.1";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logSystemError } from '../_shared/errorLogger.ts';
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -130,7 +131,53 @@ Do NOT interpret the meaning, provide educational context, highlight key concept
         await new Promise(r => setTimeout(r, 500 * (Math.random() + 1)));
       }
     }
-    if (!result) throw lastErr || new Error('All Gemini model attempts failed');
+    if (!result) {
+      // Log model chain exhaustion
+      try {
+        const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+        logSystemError(_logClient, {
+          severity: 'error',
+          source: 'image-analyzer',
+          component: 'gemini-model-chain',
+          error_code: 'ALL_MODELS_FAILED',
+          message: `All ${MODEL_CHAIN.length} Gemini model attempts failed for image analysis`,
+          details: { modelsAttempted: MODEL_CHAIN },
+          user_id: userId,
+        });
+      } catch (_) {}
+      // OpenRouter fallback (text-only — image can't be forwarded)
+      const orResult = await callOpenRouterFallback(prompt, { source: 'image-analyzer' });
+      if (orResult.success && orResult.content) {
+        // Use OpenRouter response as a text-only description
+        let imageDescription = orResult.content;
+        imageDescription = imageDescription.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+          .replace(/\r\n/g, '\n')
+          .replace(/\r/g, '\n')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim();
+
+        const { data, error } = await supabaseServiceRoleClient.from('documents').update({
+          content_extracted: imageDescription,
+          processing_status: 'completed',
+          processing_error: null,
+          updated_at: new Date().toISOString()
+        }).eq('id', documentId).eq('user_id', userId).select().single();
+
+        if (error) {
+          throw new Error(`Failed to save image description: ${error.message}`);
+        }
+
+        return new Response(JSON.stringify({
+          status: 'success',
+          document: data,
+          description: imageDescription,
+          timestamp: new Date().toISOString()
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      throw lastErr || new Error('All AI models failed (Gemini + OpenRouter)');
+    }
 
     const response = result.response;
     let imageDescription = response.text();

@@ -34,7 +34,8 @@ import {
   RefreshCcw,
   Music2,
   Coins,
-  ShoppingCart
+  ShoppingCart,
+  AlertTriangle
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -233,6 +234,9 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
       color: 'from-green-500 to-emerald-500'
     }
   ];
+
+  // ── Suspended feature types (temporarily unavailable) ──
+  const SUSPENDED_TYPES = ['video'];
 
   const styleOptions = [
     {
@@ -474,6 +478,12 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
   };
 
   const generatePodcast = async () => {
+    // Block suspended types
+    if (SUSPENDED_TYPES.includes(podcastType)) {
+      toast.info('Video generation is temporarily suspended. We\'re working on improvements — stay tuned!');
+      return;
+    }
+
     if (!eligibility?.canCreate) {
       toast.error('You do not meet the requirements to generate podcasts');
       return;
@@ -962,19 +972,28 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {podcastTypes.map((type) => {
                         const Icon = type.icon;
+                        const isSuspended = SUSPENDED_TYPES.includes(type.value);
                         return (
                           <motion.div
                             key={type.value}
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
+                            whileHover={isSuspended ? {} : { scale: 1.05 }}
+                            whileTap={isSuspended ? {} : { scale: 0.95 }}
                           >
                             <Card
-                              className={`cursor-pointer transition-all ${
-                                podcastType === type.value
-                                  ? 'ring-2 ring-purple-500 bg-gradient-to-br ' + type.color + ' text-white'
-                                  : 'hover:shadow-lg'
+                              className={`transition-all ${
+                                isSuspended
+                                  ? 'opacity-50 cursor-not-allowed relative'
+                                  : podcastType === type.value
+                                    ? 'cursor-pointer ring-2 ring-purple-500 bg-gradient-to-br ' + type.color + ' text-white'
+                                    : 'cursor-pointer hover:shadow-lg'
                               }`}
-                              onClick={() => setPodcastType(type.value as any)}
+                              onClick={() => {
+                                if (isSuspended) {
+                                  toast.info('Video generation is temporarily suspended. We\'re working on improvements — stay tuned!');
+                                  return;
+                                }
+                                setPodcastType(type.value as any);
+                              }}
                             >
                               <CardHeader className="pb-3">
                                 <CardTitle className="flex items-center justify-between text-base">
@@ -983,21 +1002,30 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
                                     {type.label}
                                   </div>
                                   <div className="flex items-center gap-1.5">
-                                    <Badge variant="outline" className={`text-xs ${
-                                      canAfford(type.value) ? 'border-emerald-400 text-emerald-600' : 'border-red-400 text-red-600'
-                                    }`}>
-                                      <Coins className="h-3 w-3 mr-1" />
-                                      {PODCAST_CREDIT_COSTS[type.value] ?? 1}
-                                    </Badge>
-                                    {type.badge && (
-                                      <Badge variant={type.badge === 'Premium' ? 'destructive' : 'secondary'} className="text-xs">
-                                        {type.badge}
+                                    {isSuspended ? (
+                                      <Badge variant="outline" className="text-xs border-amber-400 text-amber-600 dark:text-amber-400">
+                                        <AlertTriangle className="h-3 w-3 mr-1" />
+                                        Temporarily Unavailable
                                       </Badge>
+                                    ) : (
+                                      <>
+                                        <Badge variant="outline" className={`text-xs ${
+                                          canAfford(type.value) ? 'border-emerald-400 text-emerald-600' : 'border-red-400 text-red-600'
+                                        }`}>
+                                          <Coins className="h-3 w-3 mr-1" />
+                                          {PODCAST_CREDIT_COSTS[type.value] ?? 1}
+                                        </Badge>
+                                        {type.badge && (
+                                          <Badge variant={type.badge === 'Premium' ? 'destructive' : 'secondary'} className="text-xs">
+                                            {type.badge}
+                                          </Badge>
+                                        )}
+                                      </>
                                     )}
                                   </div>
                                 </CardTitle>
                                 <CardDescription className={podcastType === type.value ? 'text-white/80' : ''}>
-                                  {type.description}
+                                  {isSuspended ? 'This feature is temporarily suspended while we work on improvements.' : type.description}
                                 </CardDescription>
                               </CardHeader>
                             </Card>

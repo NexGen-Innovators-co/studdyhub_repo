@@ -36,7 +36,9 @@ import {
   Shield,
   Menu,
   Podcast,
-  BookOpen
+  BookOpen,
+  GraduationCap,
+  Star
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
@@ -44,6 +46,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useFeatureAccess } from '../../hooks/useFeatureAccess';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { RateAppDialog } from '../ratings/RateAppDialog';
 
 // Define interfaces
 interface ChatSession {
@@ -880,6 +883,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'podcasts', name: 'Podcasts', icon: Podcast },
         { id: 'social', name: 'Social Feed', icon: Users },
         { id: 'settings', name: 'Settings', icon: Settings },
+        { id: 'educator', name: 'Educator Portal', icon: GraduationCap },
       ];
       
       if (isAdmin) {
@@ -1141,6 +1145,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
         </div>
+
+        {/* Rate App */}
+        {(isOpen || isSidebarExpanded) && (
+          <div className="flex-shrink-0 border-t border-slate-200 dark:border-gray-700 px-4 py-2">
+            <RateAppDialog
+              trigger={
+                <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20">
+                  <Star className="h-4 w-4 fill-yellow-400" />
+                  Rate StuddyHub
+                </Button>
+              }
+            />
+          </div>
+        )}
 
         <div
           ref={avatarMenuRef}

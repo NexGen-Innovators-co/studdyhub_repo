@@ -1,10 +1,12 @@
 // supabase/functions/quiz-scheduler.ts
 // Scheduled function to auto-advance quizzes in auto mode
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+import { logSystemError } from '../_shared/errorLogger.ts';
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
 export default async function handler(req: Request) {
+  try {
   // 1. Find all in-progress sessions with auto-advance
   const { data: sessions, error } = await supabase
     .from('live_quiz_sessions')
@@ -103,4 +105,17 @@ export default async function handler(req: Request) {
   }
 
   return new Response(JSON.stringify({ updated }), { status: 200 });
+  } catch (err: any) {
+    // ── Log to system_error_logs ──
+    try {
+      await logSystemError(supabase, {
+        severity: 'error',
+        source: 'quiz-scheduler',
+        message: err?.message || String(err),
+        details: { stack: err?.stack },
+      });
+    } catch (_logErr) { console.error('[quiz-scheduler] Error logging failed:', _logErr); }
+    console.error('Error in quiz-scheduler:', err);
+    return new Response(JSON.stringify({ error: err?.message || 'Internal error' }), { status: 500 });
+  }
 }
