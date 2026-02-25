@@ -65,15 +65,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           setUser(session?.user ?? null);
         }
 
-        // Touch profiles.updated_at on sign-in so the admin "active users"
-        // chart counts logins (not only profile edits).  Fire-and-forget.
-        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user?.id) {
-          supabase
-            .from('profiles')
-            .update({ updated_at: new Date().toISOString() })
-            .eq('id', session.user.id)
-            .then(() => { /* non-blocking */ })
-            .catch(() => { /* non-blocking */ });
+        // Touch profiles.updated_at on any authenticated session event so the
+        // admin "active users" chart counts logins, page loads, and token
+        // refreshes — not only profile edits.
+        // Uses a SECURITY DEFINER RPC to bypass RLS and avoid infinite recursion.
+        if (
+          (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') &&
+          session?.user?.id
+        ) {
+          supabase.rpc('touch_profile_active').then(({ error }) => {
+            if (error) console.warn('[useAuth] Failed to touch profile active:', error.message);
+          });
         }
 
         // Clear cache when user signs out

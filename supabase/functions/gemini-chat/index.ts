@@ -3155,12 +3155,10 @@ serve(async (req) => {
 
     const finalResponse = await callEnhancedGeminiAPI(conversationData.contents, geminiApiKey, {
       systemInstruction: conversationData.systemInstruction,
-      generationConfig: {
-        temperature: 0.7,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 8192
-      }
+      temperature: 0.7,
+      topK: 40,
+      topP: 0.95,
+      maxOutputTokens: 8192
     }, aiModelConfig.modelChain);
 
     let generatedText = '';

@@ -20,6 +20,7 @@ import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, X
 
 interface DashboardStats {
   totalUsers: number;
+  activeUsersToday: number;
   activeUsers7d: number;
   activeUsers30d: number;
   totalPosts: number;
@@ -54,9 +55,12 @@ const AdminOverview = ({ onNavigate }: { onNavigate?: (tab: string) => void }) =
     try {
       setLoading(true);
 
+      const todayMidnight = new Date().toISOString().split('T')[0]; // UTC midnight today
+
       const [
         usersCount,
         usersCountYesterday,
+        activeUsersToday,
         activeUsers7d,
         activeUsers30d,
         postsCount,
@@ -72,6 +76,8 @@ const AdminOverview = ({ onNavigate }: { onNavigate?: (tab: string) => void }) =
         supabase.from('profiles').select('*', { count: 'exact', head: true })
           .lt('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
         supabase.from('profiles').select('*', { count: 'exact', head: true })
+          .gte('updated_at', todayMidnight),
+        supabase.from('profiles').select('*', { count: 'exact', head: true })
           .gte('updated_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
         supabase.from('profiles').select('*', { count: 'exact', head: true })
           .gte('updated_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
@@ -85,7 +91,7 @@ const AdminOverview = ({ onNavigate }: { onNavigate?: (tab: string) => void }) =
         supabase.from('social_reports').select('*', { count: 'exact', head: true })
           .eq('status', 'pending'),
         supabase.from('profiles').select('*', { count: 'exact', head: true })
-          .gte('created_at', new Date().toISOString().split('T')[0])
+          .gte('created_at', todayMidnight)
       ]);
 
       const totalUsers = usersCount.count || 0;
@@ -96,6 +102,7 @@ const AdminOverview = ({ onNavigate }: { onNavigate?: (tab: string) => void }) =
 
       setStats({
         totalUsers,
+        activeUsersToday: activeUsersToday.count || 0,
         activeUsers7d: activeUsers7d.count || 0,
         activeUsers30d: activeUsers30d.count || 0,
         totalPosts: postsCount.count || 0,
@@ -244,13 +251,13 @@ const AdminOverview = ({ onNavigate }: { onNavigate?: (tab: string) => void }) =
       trendLabel: 'vs yesterday'
     },
     {
-      title: 'Active Users (7d)',
-      value: stats?.activeUsers7d || 0,
+      title: 'Active Users Today',
+      value: stats?.activeUsersToday || 0,
       icon: Activity,
       color: 'text-green-500 dark:text-green-400',
       bgColor: 'bg-green-500/10 dark:bg-green-500/20',
       borderColor: 'border-green-500/20 dark:border-green-500/30',
-      subtitle: `${stats?.activeUsers30d || 0} in 30 days`,
+      subtitle: `${stats?.activeUsers7d || 0} this week · ${stats?.activeUsers30d || 0} this month`,
       trend: stats?.engagementRate || 0,
       trendLabel: 'engagement rate'
     },
