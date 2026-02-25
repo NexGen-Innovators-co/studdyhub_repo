@@ -285,7 +285,7 @@ const SystemErrorLogs: React.FC = () => {
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Total Open</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalOpen}</p>
               </div>
-              <BarChart3 className="h-8 w-8 text-gray-400" />
+              <BarChart3 className="h-8 w-8 text-gray-300 dark:text-gray-500" />
             </div>
           </CardContent>
         </Card>
@@ -296,7 +296,7 @@ const SystemErrorLogs: React.FC = () => {
         <CardContent className="pt-4 pb-4">
           <div className="flex flex-wrap gap-3 items-center">
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
               <Input
                 placeholder="Search errors..."
                 value={searchTerm}
@@ -415,7 +415,7 @@ const SystemErrorLogs: React.FC = () => {
                         <TableCell>
                           <p className="text-sm text-gray-800 dark:text-gray-200 line-clamp-2">{log.message}</p>
                           {log.user_id && (
-                            <span className="text-xs text-gray-400">User: {log.user_id.slice(0, 8)}...</span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">User: {log.user_id.slice(0, 8)}...</span>
                           )}
                         </TableCell>
                         <TableCell>

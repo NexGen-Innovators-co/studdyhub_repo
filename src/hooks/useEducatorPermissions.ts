@@ -23,7 +23,7 @@ export function useEducatorPermissions() {
   const [membership, setMembership] = useState<MembershipRow | null>(null);
   const [userRole, setUserRole] = useState<UserRole>('student');
   const [verificationStatus, setVerificationStatus] = useState<RoleVerificationStatus>('not_required');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const fetchMembership = useCallback(async () => {
     if (!user?.id) {
@@ -44,10 +44,8 @@ export function useEducatorPermissions() {
         .eq('id', user.id)
         .maybeSingle();
 
-      const role = (profile?.user_role as UserRole) ?? 'student';
-      const vStatus = (profile?.role_verification_status as RoleVerificationStatus) ?? 'not_required';
-      setUserRole(role);
-      setVerificationStatus(vStatus);
+      let role = (profile?.user_role as UserRole) ?? 'student';
+      let vStatus = (profile?.role_verification_status as RoleVerificationStatus) ?? 'not_required';
 
       // Fetch institution membership (educator role)
       const { data: memberData } = await supabase
@@ -61,6 +59,50 @@ export function useEducatorPermissions() {
         .maybeSingle();
 
       setMembership(memberData as MembershipRow | null);
+
+      // Cross-check: if profile says 'pending', verify against multiple sources
+      if (vStatus === 'pending') {
+        let resolved = false;
+
+        // Check 1: If user is owner/admin/educator in a VERIFIED institution,
+        // their role verification should be auto-approved
+        if (memberData) {
+          const inst = (memberData as any).institution;
+          if (inst?.verification_status === 'verified') {
+            vStatus = 'verified';
+            resolved = true;
+            // NOTE: We don't attempt to self-heal the profile here because
+            // the RLS policy blocks users from updating role_verification_status.
+            // The admin approval flow handles this at the DB level.
+          }
+        }
+
+        // Check 2: Cross-check against role_verification_requests table
+        if (!resolved) {
+          try {
+            const { data: latestReq } = await supabase
+              .from('role_verification_requests')
+              .select('status, requested_role')
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (latestReq?.status === 'approved') {
+              // Request was approved but profile wasn't updated — override client-side
+              vStatus = 'verified';
+              role = (latestReq.requested_role as UserRole) || role;
+            } else if (latestReq?.status === 'rejected') {
+              vStatus = 'rejected';
+            }
+          } catch {
+            // requests table may not exist — keep profile value
+          }
+        }
+      }
+
+      setUserRole(role);
+      setVerificationStatus(vStatus);
     } catch {
       // Tables may not exist yet — degrade silently
       setMembership(null);

@@ -38,6 +38,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useInstitutionMembers } from '@/hooks/useInstitutionMembers';
+import { MemberRequestCard } from './MemberRequestCard';
 import type { InstitutionMemberRole } from '@/types/Education';
 
 interface MemberManagementProps {
@@ -57,7 +58,11 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({
     removeMember,
     updateMemberRole,
     revokeInvite,
+    refetch,
   } = useInstitutionMembers(institutionId);
+
+  const activeMembers = members.filter((m) => m.status === 'active');
+  const pendingMembers = members.filter((m) => m.status === 'pending');
 
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -96,7 +101,7 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Members ({members.length})
+            Members ({activeMembers.length})
           </h3>
           <p className="text-sm text-gray-500">Manage institution members and invitations</p>
         </div>
@@ -108,9 +113,26 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({
         )}
       </div>
 
-      {/* Members grid */}
+      {/* Pending membership requests */}
+      {isAdmin && pendingMembers.length > 0 && (
+        <div className="space-y-3">
+          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+            <UserPlus className="w-4 h-4 text-yellow-500" />
+            Pending Requests ({pendingMembers.length})
+          </h4>
+          {pendingMembers.map((member) => (
+            <MemberRequestCard
+              key={member.id}
+              member={member}
+              onProcessed={refetch}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Active members grid */}
       <div className="grid gap-3">
-        {members.map((member) => (
+        {activeMembers.map((member) => (
           <Card key={member.id} className="rounded-xl">
             <CardContent className="p-4 flex items-center gap-4">
               <Avatar className="w-10 h-10">

@@ -244,7 +244,7 @@ const TestimonialModeration: React.FC = () => {
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.pending}</p>
-              <p className="text-xs text-gray-500">Pending Review</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Pending Review</p>
             </div>
           </CardContent>
         </Card>
@@ -255,7 +255,7 @@ const TestimonialModeration: React.FC = () => {
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.approved}</p>
-              <p className="text-xs text-gray-500">Published</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Published</p>
             </div>
           </CardContent>
         </Card>
@@ -266,7 +266,7 @@ const TestimonialModeration: React.FC = () => {
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</p>
-              <p className="text-xs text-gray-500">Total Testimonials</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Total Testimonials</p>
             </div>
           </CardContent>
         </Card>
@@ -345,7 +345,7 @@ const TestimonialModeration: React.FC = () => {
                       </div>
                       <div>
                         <p className="font-medium text-gray-900 dark:text-white">{t.full_name}</p>
-                        <p className="text-xs text-gray-500">{formatDate(t.created_at)}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(t.created_at)}</p>
                       </div>
                       <Badge
                         className={`ml-auto sm:ml-2 text-xs ${

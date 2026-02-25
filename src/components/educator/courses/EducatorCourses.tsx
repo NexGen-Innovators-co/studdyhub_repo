@@ -16,11 +16,13 @@ import {
   Pencil,
   Trash2,
   BarChart3,
+  Package,
 } from 'lucide-react';
 import { useEducatorCourses, type Course } from '@/hooks/useEducatorCourses';
-import { useInstitution } from '@/hooks/useInstitution';
+import { useEducatorContext } from '@/contexts/EducatorContext';
 import { CreateCourseForm } from './CreateCourseForm';
 import { EditCourseForm } from './EditCourseForm';
+import { CourseResourceManager } from './CourseResourceManager';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,14 +34,15 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
-type ViewMode = 'list' | 'create' | 'edit';
+type ViewMode = 'list' | 'create' | 'edit' | 'resources';
 
 export const EducatorCourses: React.FC = () => {
-  const { institution } = useInstitution();
+  const { institution } = useEducatorContext();
   const { courses, isLoading, publishCourse, deleteCourse, refetch } =
     useEducatorCourses(institution?.id);
   const [view, setView] = useState<ViewMode>('list');
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [resourcesCourse, setResourcesCourse] = useState<Course | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [courseToDelete, setCourseToDelete] = useState<string | null>(null);
 
@@ -54,9 +57,15 @@ export const EducatorCourses: React.FC = () => {
     setView('edit');
   };
 
+  const handleResources = (course: Course) => {
+    setResourcesCourse(course);
+    setView('resources');
+  };
+
   const handleBack = () => {
     setView('list');
     setEditingCourse(null);
+    setResourcesCourse(null);
     refetch();
   };
 
@@ -83,6 +92,16 @@ export const EducatorCourses: React.FC = () => {
         course={editingCourse}
         onSuccess={handleBack}
         onCancel={handleBack}
+      />
+    );
+  }
+
+  if (view === 'resources' && resourcesCourse) {
+    return (
+      <CourseResourceManager
+        courseId={resourcesCourse.id}
+        courseTitle={resourcesCourse.title}
+        onBack={handleBack}
       />
     );
   }
@@ -174,6 +193,15 @@ export const EducatorCourses: React.FC = () => {
                     ) : (
                       <Eye className="w-4 h-4" />
                     )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => handleResources(course)}
+                    title="Manage Resources"
+                  >
+                    <Package className="w-4 h-4" />
                   </Button>
                   <Button
                     variant="ghost"

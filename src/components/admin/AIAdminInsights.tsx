@@ -401,7 +401,7 @@ const AIAdminInsights: React.FC = () => {
                 <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Quick Analysis</p>
                 <button
                   onClick={() => setShowQuickPrompts(false)}
-                  className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                 >
                   <ChevronUp className="h-4 w-4" />
                 </button>
@@ -428,7 +428,7 @@ const AIAdminInsights: React.FC = () => {
           {!showQuickPrompts && messages.length === 0 && (
             <button
               onClick={() => setShowQuickPrompts(true)}
-              className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
             >
               <ChevronDown className="h-4 w-4" />
               Show quick prompts
@@ -496,7 +496,7 @@ const AIAdminInsights: React.FC = () => {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask about platform metrics, anomalies, or request a report..."
-              className="min-h-[44px] max-h-[120px] resize-none bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white placeholder:text-gray-400"
+              className="min-h-[44px] max-h-[120px] resize-none bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500"
               disabled={isGenerating}
               rows={1}
             />

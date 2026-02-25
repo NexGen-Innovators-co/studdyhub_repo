@@ -20,7 +20,8 @@ import {
   Bug,
   Bot,
   Megaphone,
-  ShieldCheck
+  ShieldCheck,
+  Building2
 } from 'lucide-react';
 
 export const AdminLayout = () => {
@@ -59,6 +60,7 @@ export const AdminLayout = () => {
     { to: '/admin/ai-insights', icon: Bot, label: 'AI Insights', perm: true },
     { to: '/admin/updates', icon: Megaphone, label: 'Updates', perm: permissions.canManageSettings },
     { to: '/admin/verification', icon: ShieldCheck, label: 'Verification', perm: permissions.canManageUsers },
+    { to: '/admin/institutions', icon: Building2, label: 'Institutions', perm: permissions.canManageSettings },
     { to: '/admin/logs', icon: FileText, label: 'Activity Logs', perm: permissions.canViewLogs },
     { to: '/admin/errors', icon: Bug, label: 'System Errors', perm: permissions.canViewLogs },
   ].filter(i => i.perm);

@@ -14,22 +14,21 @@ import {
   Building2,
 } from 'lucide-react';
 import { EducatorGuard } from './EducatorGuard';
-import { useEducatorPermissions } from '@/hooks/useEducatorPermissions';
+import { EducatorProvider, useEducatorContext } from '@/contexts/EducatorContext';
 
 const NAV_ITEMS = [
   { to: '/educator', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/educator/courses', label: 'Courses', icon: BookOpen },
   { to: '/educator/institution', label: 'Institution', icon: Building2 },
-  { to: '/educator/students', label: 'Students', icon: Users },
+  { to: '/educator/members', label: 'Members', icon: Users },
   { to: '/educator/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/educator/settings', label: 'Settings', icon: Settings },
 ];
 
-export const EducatorLayout: React.FC = () => {
-  const { permissions } = useEducatorPermissions();
+const EducatorLayoutInner: React.FC = () => {
+  const { permissions } = useEducatorContext();
 
   return (
-    <EducatorGuard>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Top bar */}
         <header className="sticky top-0 z-30 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
@@ -74,8 +73,15 @@ export const EducatorLayout: React.FC = () => {
           </div>
         </div>
       </div>
-    </EducatorGuard>
   );
 };
+
+export const EducatorLayout: React.FC = () => (
+  <EducatorProvider>
+    <EducatorGuard>
+      <EducatorLayoutInner />
+    </EducatorGuard>
+  </EducatorProvider>
+);
 
 export default EducatorLayout;

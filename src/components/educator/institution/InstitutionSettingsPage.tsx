@@ -3,13 +3,11 @@
 
 import React from 'react';
 import { Loader2, Building2 } from 'lucide-react';
-import { useEducatorPermissions } from '@/hooks/useEducatorPermissions';
-import { useInstitution } from '@/hooks/useInstitution';
+import { useEducatorContext } from '@/contexts/EducatorContext';
 import { InstitutionSettings } from './InstitutionSettings';
 
 export const InstitutionSettingsPage: React.FC = () => {
-  const { permissions } = useEducatorPermissions();
-  const { institution, isLoading } = useInstitution();
+  const { institution, institutionLoading: isLoading } = useEducatorContext();
 
   if (isLoading) {
     return (

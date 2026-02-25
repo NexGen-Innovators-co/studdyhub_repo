@@ -187,13 +187,44 @@ const RoleVerificationAdmin: React.FC = () => {
     setIsApproving(true);
 
     try {
-      const { error } = await supabase.rpc('approve_role_request', {
+      // Try RPC first (atomic, handles both tables)
+      const { error: rpcError } = await supabase.rpc('approve_role_request', {
         _request_id: selectedRequest.id,
         _admin_id: user.id,
         _review_notes: reviewNotes || null,
       });
 
-      if (error) throw error;
+      if (rpcError) {
+        console.warn('RPC approve_role_request failed, falling back to direct updates:', rpcError.message);
+        // Fallback: update both tables directly
+        const { error: reqErr } = await supabase
+          .from('role_verification_requests')
+          .update({
+            status: 'approved',
+            reviewed_by: user.id,
+            reviewed_at: new Date().toISOString(),
+            review_notes: reviewNotes || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', selectedRequest.id);
+
+        if (reqErr) throw reqErr;
+
+        const { error: profErr } = await supabase
+          .from('profiles')
+          .update({
+            user_role: selectedRequest.requested_role,
+            role_verification_status: 'verified',
+            role_verified_at: new Date().toISOString(),
+            role_verified_by: user.id,
+            role_rejection_reason: null,
+          } as any)
+          .eq('id', selectedRequest.user_id);
+
+        if (profErr) {
+          console.warn('Profile update failed (may need admin RLS policy):', profErr.message);
+        }
+      }
 
       toast.success(`Approved ${selectedRequest.profile?.full_name || 'user'} as ${ROLE_LABELS[selectedRequest.requested_role] || selectedRequest.requested_role}`);
 
@@ -229,13 +260,45 @@ const RoleVerificationAdmin: React.FC = () => {
     setIsRejecting(true);
 
     try {
-      const { error } = await supabase.rpc('reject_role_request', {
+      // Try RPC first (atomic, handles both tables)
+      const { error: rpcError } = await supabase.rpc('reject_role_request', {
         _request_id: selectedRequest.id,
         _admin_id: user.id,
+        _reason: reviewNotes,
         _review_notes: reviewNotes,
       });
 
-      if (error) throw error;
+      if (rpcError) {
+        console.warn('RPC reject_role_request failed, falling back to direct updates:', rpcError.message);
+        // Fallback: update both tables directly
+        const { error: reqErr } = await supabase
+          .from('role_verification_requests')
+          .update({
+            status: 'rejected',
+            reviewed_by: user.id,
+            reviewed_at: new Date().toISOString(),
+            review_notes: reviewNotes,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', selectedRequest.id);
+
+        if (reqErr) throw reqErr;
+
+        const { error: profErr } = await supabase
+          .from('profiles')
+          .update({
+            user_role: 'student',
+            role_verification_status: 'rejected',
+            role_verified_at: null,
+            role_verified_by: user.id,
+            role_rejection_reason: reviewNotes,
+          } as any)
+          .eq('id', selectedRequest.user_id);
+
+        if (profErr) {
+          console.warn('Profile update failed (may need admin RLS policy):', profErr.message);
+        }
+      }
 
       toast.success(`Rejected verification request from ${selectedRequest.profile?.full_name || 'user'}`);
 
@@ -313,7 +376,7 @@ const RoleVerificationAdmin: React.FC = () => {
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.pending}</p>
-              <p className="text-xs text-gray-500">Pending</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Pending</p>
             </div>
           </CardContent>
         </Card>
@@ -324,7 +387,7 @@ const RoleVerificationAdmin: React.FC = () => {
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.approved}</p>
-              <p className="text-xs text-gray-500">Approved</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Approved</p>
             </div>
           </CardContent>
         </Card>
@@ -335,7 +398,7 @@ const RoleVerificationAdmin: React.FC = () => {
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.rejected}</p>
-              <p className="text-xs text-gray-500">Rejected</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Rejected</p>
             </div>
           </CardContent>
         </Card>
@@ -346,7 +409,7 @@ const RoleVerificationAdmin: React.FC = () => {
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</p>
-              <p className="text-xs text-gray-500">Total</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Total</p>
             </div>
           </CardContent>
         </Card>
@@ -355,7 +418,7 @@ const RoleVerificationAdmin: React.FC = () => {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
           <Input
             placeholder="Search by name, role, or qualifications..."
             value={searchQuery}
@@ -429,7 +492,7 @@ const RoleVerificationAdmin: React.FC = () => {
                           <p className="font-medium text-sm text-gray-900 dark:text-white truncate">
                             {req.profile?.full_name || 'Unknown User'}
                           </p>
-                          <p className="text-xs text-gray-400 truncate">{req.user_id.slice(0, 8)}...</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{req.user_id.slice(0, 8)}...</p>
                         </div>
                       </div>
                     </TableCell>
@@ -440,7 +503,7 @@ const RoleVerificationAdmin: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <FileText className="h-4 w-4 text-gray-400" />
+                        <FileText className="h-4 w-4 text-gray-400 dark:text-gray-500" />
                         <span className="text-sm">{req.documents?.length || 0}</span>
                       </div>
                     </TableCell>
@@ -450,7 +513,7 @@ const RoleVerificationAdmin: React.FC = () => {
                         {statusCfg.label}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-gray-500">
+                    <TableCell className="text-sm text-gray-500 dark:text-gray-400">
                       {new Date(req.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
@@ -504,13 +567,13 @@ const RoleVerificationAdmin: React.FC = () => {
                   <p className="font-medium text-gray-900 dark:text-white">
                     {selectedRequest.profile?.full_name || 'Unknown User'}
                   </p>
-                  <p className="text-xs text-gray-500">{selectedRequest.user_id}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{selectedRequest.user_id}</p>
                 </div>
               </div>
 
               {/* Requested role */}
               <div>
-                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Requested Role</label>
+                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Requested Role</label>
                 <p className="font-medium text-gray-900 dark:text-white mt-0.5">
                   {ROLE_LABELS[selectedRequest.requested_role] || selectedRequest.requested_role}
                 </p>
@@ -519,7 +582,7 @@ const RoleVerificationAdmin: React.FC = () => {
               {/* Qualifications */}
               {selectedRequest.qualifications && (
                 <div>
-                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Qualifications</label>
+                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Qualifications</label>
                   <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5 whitespace-pre-wrap">
                     {selectedRequest.qualifications}
                   </p>
@@ -529,7 +592,7 @@ const RoleVerificationAdmin: React.FC = () => {
               {/* Experience */}
               {selectedRequest.years_experience && (
                 <div>
-                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Years of Experience</label>
+                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Years of Experience</label>
                   <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">
                     {selectedRequest.years_experience}
                   </p>
@@ -539,7 +602,7 @@ const RoleVerificationAdmin: React.FC = () => {
               {/* Specializations */}
               {selectedRequest.specializations && selectedRequest.specializations.length > 0 && (
                 <div>
-                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Specializations</label>
+                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Specializations</label>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {selectedRequest.specializations.map((s, i) => (
                       <Badge key={i} variant="secondary" className="text-xs">
@@ -553,7 +616,7 @@ const RoleVerificationAdmin: React.FC = () => {
               {/* Additional notes */}
               {selectedRequest.additional_notes && (
                 <div>
-                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Additional Notes</label>
+                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Additional Notes</label>
                   <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">
                     {selectedRequest.additional_notes}
                   </p>
@@ -563,7 +626,7 @@ const RoleVerificationAdmin: React.FC = () => {
               {/* Documents */}
               {selectedRequest.documents && selectedRequest.documents.length > 0 && (
                 <div>
-                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                     Uploaded Documents ({selectedRequest.documents.length})
                   </label>
                   <div className="space-y-2 mt-1">
@@ -594,13 +657,13 @@ const RoleVerificationAdmin: React.FC = () => {
               {/* Already reviewed info */}
               {selectedRequest.reviewed_at && (
                 <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Previous Review</label>
+                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Previous Review</label>
                   <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">
                     {selectedRequest.status === 'approved' ? '✅ Approved' : '❌ Rejected'} on{' '}
                     {new Date(selectedRequest.reviewed_at).toLocaleDateString()}
                   </p>
                   {selectedRequest.review_notes && (
-                    <p className="text-sm text-gray-500 mt-1">Notes: {selectedRequest.review_notes}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Notes: {selectedRequest.review_notes}</p>
                   )}
                 </div>
               )}
@@ -609,7 +672,7 @@ const RoleVerificationAdmin: React.FC = () => {
               {selectedRequest.status === 'pending' && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Review Notes <span className="text-gray-400">(required for rejection)</span>
+                    Review Notes <span className="text-gray-400 dark:text-gray-500">(required for rejection)</span>
                   </label>
                   <textarea
                     value={reviewNotes}

@@ -14,14 +14,12 @@ import {
   Building2,
   Loader2,
 } from 'lucide-react';
-import { useEducatorPermissions } from '@/hooks/useEducatorPermissions';
-import { useEducation } from '@/hooks/useAppContext';
+import { useEducatorContext } from '@/contexts/EducatorContext';
 import { useEducatorCourses } from '@/hooks/useEducatorCourses';
 import { useInstitutionMembers } from '@/hooks/useInstitutionMembers';
 
 export const EducatorDashboard: React.FC = () => {
-  const { permissions } = useEducatorPermissions();
-  const { educationContext } = useEducation();
+  const { permissions } = useEducatorContext();
   const navigate = useNavigate();
   const { courses, isLoading: coursesLoading } = useEducatorCourses(permissions.institutionId || undefined);
   const { members, isLoading: membersLoading } = useInstitutionMembers(permissions.institutionId || '');
@@ -78,7 +76,7 @@ export const EducatorDashboard: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl border shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate('/educator/students')}>
+        <Card className="rounded-2xl border shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate('/educator/members')}>
           <CardContent className="p-6 flex items-center gap-4">
             <div className="p-3 rounded-xl bg-green-100 dark:bg-green-900/30">
               <Users className="h-5 w-5 text-green-600 dark:text-green-400" />
@@ -115,8 +113,8 @@ export const EducatorDashboard: React.FC = () => {
             </Button>
           )}
           {permissions.canInviteStudents && (
-            <Button variant="outline" className="gap-2" onClick={() => navigate('/educator/students')}>
-              <Users className="h-4 w-4" /> Invite Students
+            <Button variant="outline" className="gap-2" onClick={() => navigate('/educator/members')}>
+              <Users className="h-4 w-4" /> Invite Members
             </Button>
           )}
           {permissions.canInviteEducators && (

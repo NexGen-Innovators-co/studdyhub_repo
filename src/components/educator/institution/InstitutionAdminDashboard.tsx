@@ -3,16 +3,17 @@
 
 import React, { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Building2, Users, Settings, BarChart3 } from 'lucide-react';
-import { useInstitution } from '@/hooks/useInstitution';
+import { Building2, Users, Settings, BarChart3, FolderTree } from 'lucide-react';
+import { useEducatorContext } from '@/contexts/EducatorContext';
 import { InstitutionOverview } from './InstitutionOverview';
 import { MemberManagement } from './MemberManagement';
 import { InstitutionSettings } from './InstitutionSettings';
 import { InstitutionAnalytics } from './InstitutionAnalytics';
+import { DepartmentManager } from './DepartmentManager';
 import ModernPremiumLoader from '@/components/ui/ModernPremiumLoader';
 
 export const InstitutionAdminDashboard: React.FC = () => {
-  const { institution, membership, isLoading } = useInstitution();
+  const { institution, membership, institutionLoading: isLoading } = useEducatorContext();
   const [activeTab, setActiveTab] = useState('overview');
 
   if (isLoading) {
@@ -63,7 +64,7 @@ export const InstitutionAdminDashboard: React.FC = () => {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4 lg:w-[500px]">
+        <TabsList className="grid w-full grid-cols-5 lg:w-[620px]">
           <TabsTrigger value="overview">
             <Building2 className="w-4 h-4 mr-1.5" />
             Overview
@@ -71,6 +72,10 @@ export const InstitutionAdminDashboard: React.FC = () => {
           <TabsTrigger value="members">
             <Users className="w-4 h-4 mr-1.5" />
             Members
+          </TabsTrigger>
+          <TabsTrigger value="departments" disabled={!isAdmin}>
+            <FolderTree className="w-4 h-4 mr-1.5" />
+            Depts
           </TabsTrigger>
           <TabsTrigger value="analytics" disabled={!isAdmin}>
             <BarChart3 className="w-4 h-4 mr-1.5" />
@@ -88,6 +93,10 @@ export const InstitutionAdminDashboard: React.FC = () => {
 
         <TabsContent value="members" className="mt-6">
           <MemberManagement institutionId={institution.id} isAdmin={isAdmin} />
+        </TabsContent>
+
+        <TabsContent value="departments" className="mt-6">
+          <DepartmentManager institution={institution} isAdmin={isAdmin} onUpdate={() => window.location.reload()} />
         </TabsContent>
 
         <TabsContent value="analytics" className="mt-6">

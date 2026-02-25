@@ -4,7 +4,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useEducatorPermissions } from '@/hooks/useEducatorPermissions';
+import { useEducatorContext } from '@/contexts/EducatorContext';
 import ModernPremiumLoader from '@/components/ui/ModernPremiumLoader';
 import { GraduationCap, ArrowRight, ArrowLeft, Clock, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,7 @@ interface EducatorGuardProps {
 }
 
 export const EducatorGuard: React.FC<EducatorGuardProps> = ({ children }) => {
-  const { permissions, isLoading } = useEducatorPermissions();
+  const { permissions, permissionsLoading: isLoading } = useEducatorContext();
   const navigate = useNavigate();
 
   if (isLoading) {

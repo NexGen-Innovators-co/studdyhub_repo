@@ -18,7 +18,8 @@ export type NotificationType =
   | 'subscription_renewal'
   | 'podcast_created'
   | 'podcast_live'
-  | 'podcast_deleted';
+  | 'podcast_deleted'
+  | 'institution_invite';
 /**
  * Create a podcast notification (created, live, deleted)
  */
@@ -205,5 +206,25 @@ export async function createTestNotification(userId: string): Promise<Notificati
     type: 'general',
     title: 'Test Notification',
     message: 'This is a test notification from the frontend! 🔔'
+  });
+}
+
+/**
+ * Create an institution invite notification for an existing platform user.
+ */
+export async function createInstitutionInviteNotification(
+  userId: string,
+  institutionName: string,
+  role: string,
+  inviteToken: string,
+  invitedByName?: string
+): Promise<Notification | null> {
+  const from = invitedByName ? ` by ${invitedByName}` : '';
+  return createNotification({
+    userId,
+    type: 'institution_invite' as NotificationType,
+    title: 'Institution Invitation',
+    message: `You've been invited${from} to join "${institutionName}" as ${role}.`,
+    data: { inviteToken, institutionName, role },
   });
 }

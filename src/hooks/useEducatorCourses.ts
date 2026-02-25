@@ -202,16 +202,22 @@ export function useEducatorCourses(institutionId?: string | null): UseEducatorCo
   const getAnalyticsSummary = useCallback(
     async (courseId: string): Promise<CourseAnalyticsSummary | null> => {
       try {
-        // Count materials
-        const { count: materialsCount } = await supabase
-          .from('course_materials')
+        // Count resources
+        const { count: resourcesCount } = await supabase
+          .from('course_resources')
+          .select('id', { count: 'exact', head: true })
+          .eq('course_id', courseId);
+
+        // Count enrollments
+        const { count: enrollmentsCount } = await supabase
+          .from('course_enrollments')
           .select('id', { count: 'exact', head: true })
           .eq('course_id', courseId);
 
         return {
           courseId,
-          totalEnrollments: 0, // TODO: implement when enrollments table exists
-          totalMaterials: materialsCount ?? 0,
+          totalEnrollments: enrollmentsCount ?? 0,
+          totalMaterials: resourcesCount ?? 0,
           totalViews: 0, // TODO: implement when course views tracking exists
         };
       } catch {

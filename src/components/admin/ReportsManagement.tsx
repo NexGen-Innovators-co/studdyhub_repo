@@ -263,11 +263,11 @@ export const ReportsManagement: React.FC = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
-        return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300"><AlertTriangle className="h-3 w-3 mr-1" />Pending</Badge>;
+        return <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700"><AlertTriangle className="h-3 w-3 mr-1" />Pending</Badge>;
       case 'resolved':
-        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300"><CheckCircle className="h-3 w-3 mr-1" />Resolved</Badge>;
+        return <Badge variant="outline" className="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700"><CheckCircle className="h-3 w-3 mr-1" />Resolved</Badge>;
       case 'dismissed':
-        return <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-300"><XCircle className="h-3 w-3 mr-1" />Dismissed</Badge>;
+        return <Badge variant="outline" className="bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-400 border-gray-300 dark:border-gray-600"><XCircle className="h-3 w-3 mr-1" />Dismissed</Badge>;
       default:
         return <Badge>{status}</Badge>;
     }

@@ -14,13 +14,20 @@ import { HelmetProvider } from "react-helmet-async";
 import DynamicHead from "./components/seo/DynamicHead";
 import { OfflineIndicator } from "./components/layout/OfflineIndicator";
 import ErrorBoundary from "./components/layout/ErrorBoundary";
-import ModernPremiumLoader from "./components/ui/ModernPremiumLoader";
+import { Skeleton } from "./components/ui/skeleton";
 import { OnboardingGuard } from "./components/onboarding/OnboardingGuard";
 
-// Minimal spinner for public/static pages (no framer-motion, instant render)
+// Skeleton page loader for public/static pages
 const MinimalPageLoader = () => (
-  <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">
-    <div className="h-8 w-8 rounded-full border-3 border-blue-500 border-t-transparent animate-spin" />
+  <div className="min-h-screen bg-white dark:bg-gray-900 p-6 space-y-6">
+    <Skeleton className="h-10 w-48 bg-gray-200 dark:bg-gray-800" />
+    <Skeleton className="h-4 w-72 bg-gray-200 dark:bg-gray-800" />
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8">
+      <Skeleton className="h-32 rounded-xl bg-gray-200 dark:bg-gray-800" />
+      <Skeleton className="h-32 rounded-xl bg-gray-200 dark:bg-gray-800" />
+      <Skeleton className="h-32 rounded-xl bg-gray-200 dark:bg-gray-800" />
+    </div>
+    <Skeleton className="h-64 w-full rounded-xl bg-gray-200 dark:bg-gray-800" />
   </div>
 );
 
@@ -55,6 +62,7 @@ const AIAdminInsights = lazy(() => import("./components/admin/AIAdminInsights"))
 const PlatformUpdates = lazy(() => import("./components/admin/PlatformUpdates"));
 const CourseManagement = lazy(() => import("./components/admin/CourseManagement"));
 const RoleVerificationAdmin = lazy(() => import("./components/admin/RoleVerificationAdmin"));
+const AdminInstitutions = lazy(() => import("./components/admin/AdminInstitutions"));
 const CourseDashboard = lazy(() => import("./pages/CourseDashboard"));
 
 // Lazy load educator components
@@ -64,6 +72,8 @@ const EducatorCourses = lazy(() => import("./components/educator/courses/Educato
 const InstitutionAdminDashboard = lazy(() => import("./components/educator/institution/InstitutionAdminDashboard"));
 const CourseStudents = lazy(() => import("./components/educator/courses/CourseStudents"));
 const CourseAnalyticsView = lazy(() => import("./components/educator/courses/CourseAnalyticsView"));
+const InstitutionStudentsPage = lazy(() => import("./components/educator/InstitutionStudentsPage"));
+const InstitutionAnalyticsPage = lazy(() => import("./components/educator/InstitutionAnalyticsPage"));
 const InstitutionSettings = lazy(() => import("./components/educator/institution/InstitutionSettingsPage"));
 const JoinInstitution = lazy(() => import("./pages/JoinInstitution"));
 const TestimonialModeration = lazy(() => import("./components/admin/TestimonialModeration"));
@@ -84,7 +94,25 @@ const queryClient = new QueryClient({
   },
 });
 
-const Fallback = () => <ModernPremiumLoader text="L O A D I N G" />;
+const Fallback = () => (
+  <div className="min-h-screen bg-white dark:bg-gray-900 p-6 space-y-6 animate-pulse">
+    <div className="flex items-center gap-4">
+      <Skeleton className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-800" />
+      <Skeleton className="h-6 w-40 bg-gray-200 dark:bg-gray-800" />
+    </div>
+    <Skeleton className="h-4 w-64 bg-gray-200 dark:bg-gray-800" />
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <Skeleton className="h-36 rounded-xl bg-gray-200 dark:bg-gray-800" />
+      <Skeleton className="h-36 rounded-xl bg-gray-200 dark:bg-gray-800" />
+      <Skeleton className="h-36 rounded-xl bg-gray-200 dark:bg-gray-800" />
+    </div>
+    <Skeleton className="h-52 w-full rounded-xl bg-gray-200 dark:bg-gray-800" />
+    <div className="flex gap-4">
+      <Skeleton className="h-10 w-28 rounded-lg bg-gray-200 dark:bg-gray-800" />
+      <Skeleton className="h-10 w-28 rounded-lg bg-gray-200 dark:bg-gray-800" />
+    </div>
+  </div>
+);
 
 // Create a wrapper component for SEO
 const AppWithSEO = () => {
@@ -179,8 +207,8 @@ const AppWithSEO = () => {
               <Route path="/educator" element={<EducatorDashboard />} />
               <Route path="/educator/courses" element={<EducatorCourses />} />
               <Route path="/educator/institution" element={<InstitutionAdminDashboard />} />
-              <Route path="/educator/students" element={<CourseStudents />} />
-              <Route path="/educator/analytics" element={<CourseAnalyticsView />} />
+              <Route path="/educator/members" element={<InstitutionStudentsPage />} />
+              <Route path="/educator/analytics" element={<InstitutionAnalyticsPage />} />
               <Route path="/educator/settings" element={<InstitutionSettings />} />
             </Route>
 
@@ -198,6 +226,7 @@ const AppWithSEO = () => {
               <Route path="/admin/ai-insights" element={<Suspense fallback={<Fallback />}><AIAdminInsights /></Suspense>} />
               <Route path="/admin/updates" element={<Suspense fallback={<Fallback />}><PlatformUpdates /></Suspense>} />
               <Route path="/admin/verification" element={<Suspense fallback={<Fallback />}><RoleVerificationAdmin /></Suspense>} />
+              <Route path="/admin/institutions" element={<Suspense fallback={<Fallback />}><AdminInstitutions /></Suspense>} />
             </Route>
 
             {/* ==== 404 NOT FOUND ==== */}

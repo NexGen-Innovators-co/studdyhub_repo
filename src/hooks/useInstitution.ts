@@ -35,13 +35,14 @@ export function useInstitution(): UseInstitutionReturn {
   const { user } = useAuth();
   const [institution, setInstitution] = useState<Institution | null>(null);
   const [membership, setMembership] = useState<InstitutionMember | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchInstitution = useCallback(async () => {
     if (!user?.id) {
       setInstitution(null);
       setMembership(null);
+      setIsLoading(false);
       return;
     }
 
@@ -49,7 +50,7 @@ export function useInstitution(): UseInstitutionReturn {
     setError(null);
 
     try {
-      // Find user's active institution membership
+      // Find user's active institution membership (educator / admin / owner)
       const { data: memberData, error: memberError } = await supabase
         .from('institution_members')
         .select(`
@@ -62,6 +63,9 @@ export function useInstitution(): UseInstitutionReturn {
         `)
         .eq('user_id', user.id)
         .eq('status', 'active')
+        .in('role', ['owner', 'admin', 'educator'])
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (memberError) {
