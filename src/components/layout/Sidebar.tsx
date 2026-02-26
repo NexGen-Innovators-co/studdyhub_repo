@@ -678,6 +678,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isTogglingSidebar, setIsTogglingSidebar] = useState(false);
+  const [rateDialogOpen, setRateDialogOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 
   const { signOut } = useAuth();
@@ -1149,13 +1150,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Rate App */}
         {(isOpen || isSidebarExpanded) && (
           <div className="flex-shrink-0 border-t border-slate-200 dark:border-gray-700 px-4 py-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start gap-2 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20"
+              onClick={() => {
+                // Close sidebar first, then open the rate dialog after a brief delay
+                onToggle();
+                setTimeout(() => setRateDialogOpen(true), 200);
+              }}
+            >
+              <Star className="h-4 w-4 fill-yellow-400" />
+              Rate StuddyHub
+            </Button>
             <RateAppDialog
-              trigger={
-                <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20">
-                  <Star className="h-4 w-4 fill-yellow-400" />
-                  Rate StuddyHub
-                </Button>
-              }
+              externalOpen={rateDialogOpen}
+              onExternalOpenChange={setRateDialogOpen}
             />
           </div>
         )}

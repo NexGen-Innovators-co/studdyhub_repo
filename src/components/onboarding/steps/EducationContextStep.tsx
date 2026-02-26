@@ -39,6 +39,8 @@ export interface EducationStepData {
 interface EducationContextStepProps {
   data: EducationStepData;
   onChange: (data: EducationStepData) => void;
+  /** When true, hides the heading and outer padding (for embedding inside another step) */
+  compact?: boolean;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -101,6 +103,7 @@ function SubjectChip({
 export const EducationContextStep: React.FC<EducationContextStepProps> = ({
   data,
   onChange,
+  compact = false,
 }) => {
   const { countries, framework, isLoadingCountries, isLoadingFramework } = useEducationFramework(
     data.countryCode
@@ -193,18 +196,22 @@ export const EducationContextStep: React.FC<EducationContextStepProps> = ({
 
   // ─── Rendering ────────────────────────────────────────────────
   return (
-    <div className="px-4 max-w-lg mx-auto w-full">
-      <div className="flex items-center gap-3 mb-2">
-        <GraduationCap className="h-5 w-5 text-blue-500" />
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-          Your Education
-        </h2>
-      </div>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
-        This helps us tailor quizzes, AI responses, and the dashboard to your curriculum.
-      </p>
+    <div className={compact ? 'w-full' : 'px-4 max-w-lg mx-auto w-full'}>
+      {!compact && (
+        <>
+          <div className="flex items-center gap-3 mb-2">
+            <GraduationCap className="h-5 w-5 text-blue-500" />
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              Your Education
+            </h2>
+          </div>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+            This helps us tailor quizzes, AI responses, and the dashboard to your curriculum.
+          </p>
+        </>
+      )}
 
-      <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-1">
+      <div className={`space-y-5 ${compact ? 'max-h-[45vh]' : 'max-h-[60vh]'} overflow-y-auto pr-1`}>
         {/* ── 1. Country ── */}
         <section>
           <label className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">

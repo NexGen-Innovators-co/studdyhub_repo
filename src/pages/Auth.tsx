@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Mail, Lock, User, Eye, EyeOff, Loader2, CheckCircle2, XCircle, RefreshCw, Clock, Ticket } from 'lucide-react';
 import { supabase } from '../integrations/supabase/client';
 import { toast } from 'sonner';
+import { BrandedLoader } from '../App';
 
 // List of common disposable email domains
 const DISPOSABLE_EMAIL_DOMAINS = [
@@ -230,6 +231,7 @@ const Auth = () => {
   const [isCheckingName, setIsCheckingName] = useState(false);
   const [showResendVerification, setShowResendVerification] = useState(false);
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState('');
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const navigate = useNavigate();
 
   // Enhanced email validation
@@ -322,6 +324,7 @@ const Auth = () => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
+        setIsRedirecting(true);
         navigate('/dashboard', { replace: true });
       }
     };
@@ -431,6 +434,7 @@ const Auth = () => {
     }
 
     setIsLoading(true);
+    let loginSucceeded = false;
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -465,12 +469,14 @@ const Auth = () => {
            }
         }
         // toast.success('Welcome back!');
+        loginSucceeded = true;
+        setIsRedirecting(true);
         navigate('/dashboard', { replace: true });
       }
     } catch (error) {
       toast.error('An unexpected error occurred during sign-in.');
     } finally {
-      setIsLoading(false);
+      if (!loginSucceeded) setIsLoading(false);
     }
   };
 
@@ -529,6 +535,13 @@ const Auth = () => {
       setIsLoading(false);
     }
   };
+
+  // Show branded loader immediately after authentication succeeds,
+  // so the user sees a clear transition instead of the stale auth form
+  // (React's startTransition keeps old UI while the dashboard chunk loads).
+  if (isRedirecting) {
+    return <BrandedLoader />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col font-inter relative overflow-hidden

@@ -2,7 +2,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Message } from '../../../types/Class';
-import { generateSpeech } from '../../../services/cloudTtsService';
+import { generateSpeech, speakText as cloudSpeakText } from '../../../services/cloudTtsService';
 
 interface UseTextToSpeechProps {
   messages: Message[];
@@ -155,33 +155,26 @@ export const useTextToSpeech = ({
 
 
     try {
-      // Generate speech using Cloud TTS
+      // Generate speech — speakText auto-falls back to native TTS if cloud fails
       toast.loading('Generating speech...', { id: 'cloud-tts' });
-      
-      const { audioContent, error } = await generateSpeech({
+
+      const audio = await cloudSpeakText({
         text: cleanedContent,
         voice: 'female',
         rate: 1.0,
-        pitch: 0
+        pitch: 0,
       });
 
       toast.dismiss('cloud-tts');
 
-      if (error || !audioContent) {
-        toast.error(error || 'Failed to generate speech');
+      if (!audio) {
+        toast.error('Speech unavailable — cloud TTS and native TTS both failed.');
         return;
       }
 
-      // Play audio
-      const cleanedAudio = audioContent
-        .trim()
-        .replace(/^data:audio\/[a-z]+;base64,/, '')
-        .replace(/\s/g, '');
-
-      const audio = new Audio(`data:audio/mp3;base64,${cleanedAudio}`);
       currentAudioRef.current = audio;
 
-      audio.onended = () => {
+      audio.addEventListener('ended', () => {
         setIsSpeaking(false);
         setSpeakingMessageId(null);
         setIsPaused(false);
@@ -189,11 +182,10 @@ export const useTextToSpeech = ({
         lastSpokenChunkRef.current = '';
         lastProcessedMessageIdRef.current = messageId;
         blockAutoSpeakRef.current = true;
-      };
+      });
 
-      audio.onerror = (event) => {
-
-        toast.error('Failed to play audio');
+      audio.addEventListener('error', () => {
+        toast.error('Audio playback failed');
         setIsSpeaking(false);
         setSpeakingMessageId(null);
         setIsPaused(false);
@@ -201,16 +193,15 @@ export const useTextToSpeech = ({
         lastSpokenChunkRef.current = '';
         lastProcessedMessageIdRef.current = messageId;
         blockAutoSpeakRef.current = true;
-      };
+      });
 
-      await audio.play();
       setIsSpeaking(true);
       setSpeakingMessageId(messageId);
       setIsPaused(false);
       lastSpokenChunkRef.current = cleanedContent;
       lastProcessedMessageIdRef.current = messageId;
     } catch (error: any) {
-
+      toast.dismiss('cloud-tts');
       toast.error(error.message || 'Failed to generate speech');
       setIsSpeaking(false);
       setSpeakingMessageId(null);

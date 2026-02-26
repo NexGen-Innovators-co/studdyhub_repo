@@ -68,8 +68,10 @@ export const useQuizManagement = ({
       }
 
       const notesClassId = crypto.randomUUID();
+      const quizId = crypto.randomUUID();
 
       const quiz: Quiz = {
+        id: quizId,
         title: data.title || 'Notes Quiz',
         questions: data.questions,
         user_id: user.id,
@@ -77,19 +79,26 @@ export const useQuizManagement = ({
         source_type: 'notes'
       };
 
-      const { error: insertError } = await supabase
+      const { data: insertedQuiz, error: insertError } = await supabase
         .from('quizzes')
         .insert({
-          id: quiz.id,
+          id: quizId,
           class_id: quiz.class_id,
           title: quiz.title,
           questions: quiz.questions as any,
           user_id: user.id,
           created_at: quiz.created_at,
           source_type: 'notes'
-        });
+        })
+        .select()
+        .single();
 
       if (insertError) throw new Error(`Failed to save quiz: ${insertError.message}`);
+
+      // Use the DB-confirmed quiz data
+      if (insertedQuiz) {
+        quiz.id = insertedQuiz.id;
+      }
 
       const notesRecording: ClassRecording = {
         id: notesClassId,
@@ -178,8 +187,10 @@ export const useQuizManagement = ({
       }
 
       const aiClassId = crypto.randomUUID();
+      const quizId = crypto.randomUUID();
 
       const quiz: Quiz = {
+        id: quizId,
         title: data.title || 'AI Smart Quiz',
         questions: data.questions,
         user_id: user.id,
@@ -187,19 +198,26 @@ export const useQuizManagement = ({
         source_type: 'ai'
       };
 
-      const { error: insertError } = await supabase
+      const { data: insertedQuiz, error: insertError } = await supabase
         .from('quizzes')
         .insert({
-          id: quiz.id,
+          id: quizId,
           title: quiz.title,
           questions: quiz.questions as any,
           user_id: user.id,
           created_at: quiz.created_at,
           source_type: 'ai'
-        });
+        })
+        .select()
+        .single();
 
       if (insertError) {
         throw insertError;
+      }
+
+      // Use the DB-confirmed quiz data
+      if (insertedQuiz) {
+        quiz.id = insertedQuiz.id;
       }
 
       const aiRecording: ClassRecording = {
@@ -273,7 +291,10 @@ export const useQuizManagement = ({
         return;
       }
 
+      const quizId = crypto.randomUUID();
+
       const quiz: Quiz = {
+        id: quizId,
         class_id: recording.id,
         title: data.title || recording.title,
         questions: data.questions,
@@ -282,19 +303,26 @@ export const useQuizManagement = ({
         source_type: 'recording'
       };
 
-      const { error: insertError } = await supabase
+      const { data: insertedQuiz, error: insertError } = await supabase
         .from('quizzes')
         .insert({
-          id: quiz.id,
+          id: quizId,
           class_id: quiz.class_id,
           title: quiz.title,
           questions: quiz.questions as any,
           user_id: user.id,
           created_at: quiz.created_at,
           source_type: 'recording'
-        });
+        })
+        .select()
+        .single();
 
       if (insertError) throw new Error(`Failed to save quiz to database: ${insertError.message}`);
+
+      // Use the DB-confirmed quiz data
+      if (insertedQuiz) {
+        quiz.id = insertedQuiz.id;
+      }
 
       onGenerateQuiz(recording, quiz);
       setQuizMode({ recording, quiz });

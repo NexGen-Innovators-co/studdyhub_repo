@@ -9,11 +9,18 @@ import { toast } from 'sonner';
 
 interface RateAppDialogProps {
   trigger?: React.ReactNode;
+  /** Externally controlled open state (optional – falls back to internal state) */
+  externalOpen?: boolean;
+  /** Callback when dialog open state changes externally */
+  onExternalOpenChange?: (open: boolean) => void;
 }
 
-export const RateAppDialog: React.FC<RateAppDialogProps> = ({ trigger }) => {
+export const RateAppDialog: React.FC<RateAppDialogProps> = ({ trigger, externalOpen, onExternalOpenChange }) => {
   const { user } = useAuth();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  const open = externalOpen !== undefined ? externalOpen : internalOpen;
+  const setOpen = onExternalOpenChange ?? setInternalOpen;
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
   const [testimonial, setTestimonial] = useState('');
@@ -113,14 +120,17 @@ export const RateAppDialog: React.FC<RateAppDialogProps> = ({ trigger }) => {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger || (
-          <Button variant="outline" size="sm" className="gap-2">
-            <Star className="h-4 w-4" />
-            Rate App
-          </Button>
-        )}
-      </DialogTrigger>
+      {/* Only render a trigger when not externally controlled */}
+      {externalOpen === undefined && (
+        <DialogTrigger asChild>
+          {trigger || (
+            <Button variant="outline" size="sm" className="gap-2">
+              <Star className="h-4 w-4" />
+              Rate App
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">

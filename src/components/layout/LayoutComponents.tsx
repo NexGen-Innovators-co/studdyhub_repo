@@ -1,9 +1,66 @@
-// src/components/layout/AppLayout.tsx
-import React, { useState, useEffect } from 'react';
+ // src/components/layout/AppLayout.tsx
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../ui/button';
-import { Sun, Moon, Menu, X, LocateIcon, MapIcon, PhoneCallIcon, Download, Smartphone, CheckCircle, Loader2 } from 'lucide-react';
+import { Sun, Moon, Menu, X, LocateIcon, MapIcon, PhoneCallIcon, Download, Smartphone, CheckCircle, Loader2, LayoutDashboard, Settings, LogOut, ChevronDown, FileText, MessageSquare, Brain, Mic, Users, BookOpen, GraduationCap, HelpCircle, Newspaper, Code2, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '../../integrations/supabase/client';
+
+// ── Mega Nav Dropdown (hover-based for desktop) ──────────────────────────
+const MegaNavDropdown: React.FC<{
+  label: string;
+  children: React.ReactNode;
+  setIsMenuOpen?: (open: boolean) => void;
+}> = ({ label, children }) => {
+  const [open, setOpen] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleEnter = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setOpen(true);
+  };
+  const handleLeave = () => {
+    timeoutRef.current = setTimeout(() => setOpen(false), 200);
+  };
+
+  // Also close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    if (open) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+          open
+            ? 'text-blue-600 dark:text-blue-400 bg-blue-50/60 dark:bg-blue-900/20'
+            : 'text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800/40'
+        }`}
+        aria-expanded={open}
+      >
+        {label}
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div
+          className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white dark:bg-gray-900 rounded-xl shadow-xl ring-1 ring-gray-200/70 dark:ring-gray-800 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+          onMouseEnter={handleEnter}
+          onMouseLeave={handleLeave}
+        >
+          {/* Arrow */}
+          <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white dark:bg-gray-900 rotate-45 border-l border-t border-gray-200/70 dark:border-gray-800 rounded-tl-sm" />
+          <div className="relative">{children}</div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Header component extracted from LandingPage
 export const AppHeader: React.FC<{
@@ -18,6 +75,66 @@ export const AppHeader: React.FC<{
   const [isPwaInstalled, setIsPwaInstalled] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  // Auth-aware state: show user info when logged in
+  const [authUser, setAuthUser] = useState<{ fullName: string; avatarUrl: string | null } | null>(null);
+  // Avatar dropdown state
+  const [isAvatarDropdownOpen, setIsAvatarDropdownOpen] = useState(false);
+  const avatarDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (avatarDropdownRef.current && !avatarDropdownRef.current.contains(e.target as Node)) {
+        setIsAvatarDropdownOpen(false);
+      }
+    };
+    if (isAvatarDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isAvatarDropdownOpen]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadUser = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user || !mounted) return;
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name, avatar_url')
+          .eq('id', session.user.id)
+          .single();
+
+        if (mounted) {
+          setAuthUser({
+            fullName: profile?.full_name || session.user.email?.split('@')[0] || 'User',
+            avatarUrl: profile?.avatar_url || null,
+          });
+        }
+      } catch {
+        // Not logged in or profile fetch failed — stay in guest mode
+      }
+    };
+
+    loadUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        if (mounted) setAuthUser(null);
+      } else {
+        loadUser();
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   React.useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
@@ -224,31 +341,130 @@ export const AppHeader: React.FC<{
         </div>
       </Link>
 
-      {/* Desktop Navigation */}
-      <nav className="hidden md:flex items-center gap-4">
+      {/* Desktop Navigation — Mega Nav */}
+      <nav className="hidden md:flex items-center gap-1">
         <InstallAppButton />
 
-        <a href="/#features" className="text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium">
-          Features
-        </a>
-        <Link to="/documentation-page" className="text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium">
-          Docs
-        </Link>
-        <Link to="/pricing" className="text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium">
+        {/* Features mega dropdown */}
+        <MegaNavDropdown label="Features" setIsMenuOpen={setIsMenuOpen}>
+          <div className="grid grid-cols-2 gap-1 p-4 w-[520px]">
+            {[
+              { icon: LayoutDashboard, title: 'Smart Dashboard', desc: 'Track study streaks & AI insights', href: '/#features' },
+              { icon: MessageSquare, title: 'AI Chat Assistant', desc: '24/7 AI-powered study companion', href: '/#features' },
+              { icon: FileText, title: 'Intelligent Notes', desc: 'AI summarisation & organisation', href: '/#features' },
+              { icon: Brain, title: 'Document Analysis', desc: 'Upload & chat with your docs', href: '/#features' },
+              { icon: Mic, title: 'Podcasts & Recordings', desc: 'Record, transcribe & study', href: '/#features' },
+              { icon: Users, title: 'Social & Study Groups', desc: 'Collaborate with classmates', href: '/#features' },
+            ].map((item) => (
+              <a key={item.title} href={item.href} className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors group">
+                <div className="mt-0.5 w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                  <item.icon className="h-4.5 w-4.5" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{item.title}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 leading-snug">{item.desc}</p>
+                </div>
+              </a>
+            ))}
+          </div>
+          <div className="border-t border-gray-100 dark:border-gray-800 px-4 py-3 bg-gray-50/60 dark:bg-gray-800/40 rounded-b-xl">
+            <a href="/#features" className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
+              View all features <ChevronDown className="h-3 w-3 rotate-[-90deg]" />
+            </a>
+          </div>
+        </MegaNavDropdown>
+
+        {/* Resources mega dropdown */}
+        <MegaNavDropdown label="Resources" setIsMenuOpen={setIsMenuOpen}>
+          <div className="grid grid-cols-2 gap-1 p-4 w-[440px]">
+            {[
+              { icon: BookOpen, title: 'Documentation', desc: 'Guides & API reference', to: '/documentation-page' },
+              { icon: HelpCircle, title: 'User Guide', desc: 'Step-by-step tutorials', to: '/user-guide-page' },
+              { icon: Newspaper, title: 'Blog', desc: 'Tips, updates & stories', to: '/blogs' },
+              { icon: Code2, title: 'API', desc: 'Integrate with StuddyHub', to: '/api' },
+              { icon: Briefcase, title: 'Careers', desc: 'Join our team', to: '/careers' },
+              { icon: GraduationCap, title: 'Integrations', desc: 'Tools & extensions', to: '/integrations' },
+            ].map((item) => (
+              <Link key={item.title} to={item.to} className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors group">
+                <div className="mt-0.5 w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                  <item.icon className="h-4.5 w-4.5" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{item.title}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 leading-snug">{item.desc}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </MegaNavDropdown>
+
+        <Link to="/pricing" className="px-3 py-2 text-sm text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/40">
           Pricing
         </Link>
-        <Link to="/about-us" className="text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium">
+        <Link to="/about-us" className="px-3 py-2 text-sm text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/40">
           About
         </Link>
-        <Link to="/contact" className="text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium">
+        <Link to="/contact" className="px-3 py-2 text-sm text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/40">
           Contact
         </Link>
-        <Button
-          onClick={() => navigate('/auth')}
-          className="px-5 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-        >
-          Sign In
-        </Button>
+        {authUser ? (
+          <div className="relative" ref={avatarDropdownRef}>
+            <button
+              onClick={() => setIsAvatarDropdownOpen(prev => !prev)}
+              className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 hover:opacity-90 transition-opacity"
+              aria-label="User menu"
+              aria-expanded={isAvatarDropdownOpen}
+            >
+              <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-semibold overflow-hidden ring-2 ring-white dark:ring-gray-800">
+                {authUser.avatarUrl ? (
+                  <img src={authUser.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <span>{authUser.fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</span>
+                )}
+              </div>
+              <ChevronDown className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform ${isAvatarDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isAvatarDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-lg ring-1 ring-gray-200 dark:ring-gray-700 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                {/* User info */}
+                <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
+                  <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{authUser.fullName}</p>
+                </div>
+                {/* Menu items */}
+                <button
+                  onClick={() => { setIsAvatarDropdownOpen(false); navigate('/dashboard'); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                  <LayoutDashboard className="h-4 w-4" />
+                  Dashboard
+                </button>
+                <button
+                  onClick={() => { setIsAvatarDropdownOpen(false); navigate('/settings'); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                  <Settings className="h-4 w-4" />
+                  Settings
+                </button>
+                <div className="border-t border-gray-100 dark:border-gray-700 mt-1 pt-1">
+                  <button
+                    onClick={async () => { setIsAvatarDropdownOpen(false); await supabase.auth.signOut(); navigate('/'); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <Button
+            onClick={() => navigate('/auth')}
+            className="px-5 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          >
+            Sign In
+          </Button>
+        )}
         <Button
           variant="outline"
           size="icon"
@@ -343,6 +559,20 @@ export const AppHeader: React.FC<{
               Documentation
             </Link>
             <Link
+              to="/user-guide-page"
+              className="min-h-[44px] flex items-center px-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-800 transition-colors font-medium"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              User Guide
+            </Link>
+            <Link
+              to="/blogs"
+              className="min-h-[44px] flex items-center px-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-800 transition-colors font-medium"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Blog
+            </Link>
+            <Link
               to="/pricing"
               className="min-h-[44px] flex items-center px-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-800 transition-colors font-medium"
               onClick={() => setIsMenuOpen(false)}
@@ -364,16 +594,53 @@ export const AppHeader: React.FC<{
               Contact
             </Link>
             <hr className="border-gray-200 dark:border-gray-700" />
-            <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
-              <Button className="w-full bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors">
-                Sign In
-              </Button>
-            </Link>
-            <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
-              <Button className="w-full bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors">
-                Get Started
-              </Button>
-            </Link>
+            {authUser ? (
+              <>
+                <div className="flex items-center gap-3 px-2 py-2">
+                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-semibold overflow-hidden ring-2 ring-white dark:ring-gray-800 flex-shrink-0">
+                    {authUser.avatarUrl ? (
+                      <img src={authUser.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <span>{authUser.fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</span>
+                    )}
+                  </div>
+                  <span className="font-medium text-gray-800 dark:text-gray-200 truncate">{authUser.fullName}</span>
+                </div>
+                <Link to="/dashboard" onClick={() => setIsMenuOpen(false)}>
+                  <Button className="w-full bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2">
+                    <LayoutDashboard className="h-4 w-4" />
+                    Dashboard
+                  </Button>
+                </Link>
+                <Link to="/settings" onClick={() => setIsMenuOpen(false)}>
+                  <Button variant="outline" className="w-full mt-2 flex items-center justify-center gap-2">
+                    <Settings className="h-4 w-4" />
+                    Settings
+                  </Button>
+                </Link>
+                <Button
+                  variant="ghost"
+                  className="w-full mt-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center gap-2"
+                  onClick={async () => { setIsMenuOpen(false); await supabase.auth.signOut(); navigate('/'); }}
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign Out
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
+                  <Button className="w-full bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors">
+                    Sign In
+                  </Button>
+                </Link>
+                <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
+                  <Button className="w-full bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors">
+                    Get Started
+                  </Button>
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       )}

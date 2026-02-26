@@ -216,27 +216,12 @@ const LandingPage: React.FC = () => {
   useEffect(() => {
     const fetchLiveData = async () => {
       try {
-        // Fetch approved testimonials with user profile info
-        const { data: testimonialData } = await supabase
-          .from('app_testimonials')
-          .select('content, rating, user_id, created_at')
-          .eq('is_approved', true)
-          .order('created_at', { ascending: false })
-          .limit(20);
+        // Use SECURITY DEFINER RPC so anonymous visitors see real names + avatars
+        const { data: testimonialRows } = await supabase.rpc('get_approved_testimonials', { p_limit: 20 });
 
-        if (testimonialData && testimonialData.length > 0) {
-          // Fetch profile names for testimonial authors
-          const userIds = testimonialData.map(t => t.user_id);
-          const { data: profiles } = await supabase
-            .from('profiles')
-            .select('id, full_name, avatar_url')
-            .in('id', userIds);
-
-          const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
-
-          const mapped = testimonialData.map(t => {
-            const profile = profileMap.get(t.user_id);
-            const name = profile?.full_name || 'StuddyHub User';
+        if (Array.isArray(testimonialRows) && testimonialRows.length > 0) {
+          const mapped = testimonialRows.map((t: any) => {
+            const name = t.author_name || 'StuddyHub User';
             const initials = name.split(' ').map((w: string) => w[0]).join('').substring(0, 2).toUpperCase();
             return {
               name,
@@ -245,7 +230,7 @@ const LandingPage: React.FC = () => {
               content: t.content,
               rating: t.rating,
               verified: true,
-              imageUrl: profile?.avatar_url || '',
+              imageUrl: t.author_avatar_url || '',
             };
           });
           setLiveTestimonials(mapped);
@@ -337,101 +322,153 @@ const LandingPage: React.FC = () => {
 
   return (
     <AppLayout>
-      {/* Hero Section */}
-      <section className="relative min-h-screen bg-gray-100 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased overflow-x-hidden flex items-center justify-center">
-        <video
-          src="https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/video_2025-12-06_08-58-44.mp4"
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover opacity-30 dark:opacity-20 pointer-events-none"
-          onError={(e) => console.error("Video load error:", e.currentTarget.error)}
-        >
-          Your browser does not support the video tag.
-        </video>
+      {/* Hero Section — Modern gradient mesh, no video */}
+      {/* -mt-16 pulls the hero under the fixed header so there's no gray gap when header is transparent */}
+      <section className="relative min-h-[92vh] -mt-16 bg-white dark:bg-gray-950 overflow-hidden flex items-center">
+        {/* Decorative mesh blobs */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-32 -left-32 w-[500px] h-[500px] bg-blue-400/20 dark:bg-blue-500/10 rounded-full blur-[120px]" />
+          <div className="absolute top-1/3 right-0 w-[400px] h-[400px] bg-indigo-400/20 dark:bg-indigo-500/10 rounded-full blur-[100px]" />
+          <div className="absolute bottom-0 left-1/4 w-[350px] h-[350px] bg-purple-300/15 dark:bg-purple-500/10 rounded-full blur-[100px]" />
+          {/* Subtle dot grid */}
+          <div className="absolute inset-0 opacity-[0.035] dark:opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
+        </div>
 
-        {/* Overlay gradient for better text readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-white/80 dark:from-black/30 dark:to-black/80 pointer-events-none" />
+        <div className="relative z-10 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center px-4 sm:px-6 lg:px-8 pt-36 pb-16 lg:pt-40 lg:pb-20">
+          {/* Left — Copy */}
+          <div className="text-center lg:text-left">
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm font-semibold mb-6 border border-blue-200/60 dark:border-blue-800"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              AI-Powered Learning Platform
+            </motion.div>
 
-        <div className="relative z-10 max-w-5xl mx-auto text-center px-4 pt-20">
+            <motion.h1
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1, duration: 0.6 }}
+              className="text-4xl sm:text-5xl lg:text-6xl xl:text-[3.5rem] font-extrabold leading-[1.1] tracking-tight text-gray-900 dark:text-white mb-6"
+            >
+              Level Up Your <br className="hidden sm:block" />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 dark:from-blue-400 dark:via-indigo-400 dark:to-purple-400">Study Game</span>
+            </motion.h1>
+
+            <motion.p
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.6 }}
+              className="text-lg sm:text-xl text-gray-600 dark:text-gray-300 max-w-xl mx-auto lg:mx-0 mb-8 leading-relaxed"
+            >
+              Notes, docs, recordings, podcasts, quizzes, scheduling &amp; social study
+              groups — all supercharged by AI. One platform to ace every semester.
+            </motion.p>
+
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3, duration: 0.6 }}
+              className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mb-10"
+            >
+              <Link to="/auth">
+                <Button className="px-7 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-base rounded-xl shadow-lg shadow-blue-600/25 hover:shadow-xl hover:shadow-blue-600/30 transition-all hover:scale-[1.03] active:scale-[0.98]">
+                  Get Started Free <ArrowRight className="h-5 w-5 ml-2" />
+                </Button>
+              </Link>
+              <a href="#features">
+                <Button variant="outline" className="px-7 py-3.5 border-gray-300 dark:border-gray-700 bg-white/70 dark:bg-gray-900/60 backdrop-blur text-gray-700 dark:text-gray-200 font-semibold text-base rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all hover:scale-[1.03] active:scale-[0.98]">
+                  Explore Features
+                </Button>
+              </a>
+            </motion.div>
+
+            {/* Trust badges */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5, duration: 0.8 }}
+              className="flex flex-wrap gap-4 justify-center lg:justify-start text-sm text-gray-500 dark:text-gray-400"
+            >
+              <span className="flex items-center gap-1.5"><Shield className="h-4 w-4 text-green-500" /> Secure &amp; Private</span>
+              <span className="flex items-center gap-1.5"><Globe className="h-4 w-4 text-blue-500" /> Global Community</span>
+              <span className="flex items-center gap-1.5"><Award className="h-4 w-4 text-yellow-500" /> Built for Students</span>
+            </motion.div>
+          </div>
+
+          {/* Right — Gamified achievement cards */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
+            initial={{ opacity: 0, x: 40 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.25, duration: 0.7, ease: 'easeOut' }}
+            className="relative hidden lg:block"
           >
-            <img
-              src="/siteimage.png"
-              alt="StuddyHub AI logo"
-              className="w-48 h-48 sm:w-64 sm:h-64 mx-auto mb-6 object-contain drop-shadow-2xl filter"
-            />
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.6 }}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100/90 backdrop-blur-sm text-blue-700 rounded-full text-sm font-semibold mb-6 shadow-sm dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
-          >
-            <Zap className="h-4 w-4" />
-            <span>AI-Powered Study Platform</span>
-          </motion.div>
-
-          <motion.h1
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3, duration: 0.6 }}
-            className="text-4xl md:text-5xl lg:text-7xl font-bold mb-6 leading-tight text-gray-900 dark:text-white tracking-tight"
-          >
-            Study Smarter with <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">AI-Powered Tools</span>
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4, duration: 0.6 }}
-            className="text-lg md:text-2xl text-gray-700 dark:text-gray-200 mb-10 max-w-3xl mx-auto leading-relaxed font-medium"
-          >
-            Notes, documents, recordings, podcasts, quizzes, scheduling, and social study groups — all enhanced by AI.
-            One platform for everything you need to excel academically.
-          </motion.p>
-
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5, duration: 0.6 }}
-            className="flex flex-col sm:flex-row justify-center gap-4 mb-20"
-          >
-            <Link to="/auth">
-              <Button className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xl rounded-xl shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 border-0 ring-4 ring-blue-500/20">
-                Start Free Trial <ArrowRight className="h-6 w-6 ml-2" />
-              </Button>
-            </Link>
-            <a href="https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/video_2025-12-06_08-58-44.mp4" target="_blank" rel="noopener noreferrer">
-              <Button variant="outline" className="px-8 py-4 border-2 border-gray-300/50 backdrop-blur-sm bg-white/50 dark:bg-gray-900/50 text-gray-800 font-bold text-xl rounded-xl hover:bg-white dark:hover:bg-gray-800 transition-all transform hover:scale-105 dark:border-gray-700 dark:text-gray-200">
-                Watch Demo <Play className="h-6 w-6 ml-2" />
-              </Button>
-            </a>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.8, duration: 1 }}
-            className="flex flex-wrap justify-center items-center gap-6 md:gap-10 text-sm md:text-base text-gray-600 dark:text-gray-300 font-medium"
-          >
-            <div className="flex items-center gap-2 bg-white/60 dark:bg-black/40 px-4 py-2 rounded-full backdrop-blur-md shadow-sm border border-gray-100 dark:border-gray-800">
-              <Shield className="h-4 w-4 text-green-600" />
-              <span>Secure & Private</span>
+            {/* Main dashboard mockup card */}
+            <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200/60 dark:border-gray-800 p-5 transform rotate-1 hover:rotate-0 transition-transform duration-500">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow">
+                  <Brain className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 dark:text-white text-sm">Today's Progress</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">3 of 5 goals completed</p>
+                </div>
+                <div className="ml-auto px-2.5 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold rounded-full">+120 XP</div>
+              </div>
+              {/* Progress bar */}
+              <div className="w-full h-2.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden mb-4">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: '60%' }}
+                  transition={{ delay: 0.8, duration: 1.2, ease: 'easeOut' }}
+                  className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full"
+                />
+              </div>
+              {/* Mini feature grid */}
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { icon: FileText, label: 'Notes', count: '24', color: 'text-green-500 bg-green-50 dark:bg-green-900/20' },
+                  { icon: MessageSquare, label: 'AI Chats', count: '12', color: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' },
+                  { icon: Mic, label: 'Podcasts', count: '8', color: 'text-purple-500 bg-purple-50 dark:bg-purple-900/20' },
+                ].map((item, i) => (
+                  <div key={i} className={`flex flex-col items-center p-3 rounded-xl ${item.color}`}>
+                    <item.icon className={`h-5 w-5 mb-1 ${item.color.split(' ')[0]}`} />
+                    <span className="text-lg font-bold text-gray-900 dark:text-white">{item.count}</span>
+                    <span className="text-[11px] text-gray-500 dark:text-gray-400">{item.label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="flex items-center gap-2 bg-white/60 dark:bg-black/40 px-4 py-2 rounded-full backdrop-blur-md shadow-sm border border-gray-100 dark:border-gray-800">
-              <Globe className="h-4 w-4 text-blue-600" />
-              <span>Global Community</span>
-            </div>
-            <div className="flex items-center gap-2 bg-white/60 dark:bg-black/40 px-4 py-2 rounded-full backdrop-blur-md shadow-sm border border-gray-100 dark:border-gray-800">
-              <Award className="h-4 w-4 text-yellow-600" />
-              <span>Built for Students, by Students</span>
-            </div>
+
+            {/* Floating streak badge */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ delay: 1, duration: 0.5 }}
+              className="absolute -top-6 -right-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200/60 dark:border-gray-700 px-4 py-3 flex items-center gap-3"
+            >
+              <div className="w-9 h-9 bg-orange-100 dark:bg-orange-900/30 text-orange-500 rounded-lg flex items-center justify-center text-lg">🔥</div>
+              <div>
+                <p className="text-sm font-bold text-gray-900 dark:text-white">7-Day Streak!</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Keep it going</p>
+              </div>
+            </motion.div>
+
+            {/* Floating quiz score badge */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: -20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ delay: 1.2, duration: 0.5 }}
+              className="absolute -bottom-4 -left-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200/60 dark:border-gray-700 px-4 py-3 flex items-center gap-3"
+            >
+              <div className="w-9 h-9 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-lg flex items-center justify-center font-bold text-sm">A+</div>
+              <div>
+                <p className="text-sm font-bold text-gray-900 dark:text-white">Quiz Score</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">96% — Top 5%</p>
+              </div>
+            </motion.div>
           </motion.div>
         </div>
       </section>

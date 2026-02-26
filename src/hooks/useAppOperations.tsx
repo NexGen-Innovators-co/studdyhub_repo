@@ -635,7 +635,15 @@ export const useAppOperations = ({
       // Update local state with the new quiz
       setQuizzes(prev => {
         // Check if quiz already exists to avoid duplicates from realtime sync
-        if (prev.some(q => q.id === quiz.id)) return prev;
+        const existingIndex = prev.findIndex(q => q.id === quiz.id);
+        if (existingIndex >= 0) {
+          // Update existing quiz in place
+          const updated = [...prev];
+          updated[existingIndex] = quiz;
+          return updated;
+        }
+        // Only add if quiz has a valid id
+        if (!quiz.id) return prev;
         return [quiz, ...prev];
       });
 

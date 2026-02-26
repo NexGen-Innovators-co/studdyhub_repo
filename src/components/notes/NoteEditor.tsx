@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { supabase } from '../../integrations/supabase/client';
 import { Note, NoteCategory, UserProfile } from '../../types';
 import { Database } from '../../integrations/supabase/types';
-import { generateSpeech, playAudioContent } from '../../services/cloudTtsService';
+import { generateSpeech, playAudioContent, speakText as cloudSpeakText } from '../../services/cloudTtsService';
 import mermaid from 'mermaid';
 import { Chart, registerables } from 'chart.js';
 import katex from 'katex';
@@ -879,36 +879,36 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
     try {
       toast.loading('Generating speech...', { id: 'note-tts' });
-      const { audioContent, error } = await generateSpeech({
+
+      // speakText auto-falls back to native TTS when cloud fails
+      const audio = await cloudSpeakText({
         text: textToRead,
         voice: 'female',
         rate: 1.0,
-        pitch: 0
+        pitch: 0,
       });
+
       toast.dismiss('note-tts');
-      if (error || !audioContent) {
-        toast.error(error || 'Failed to generate speech');
+
+      if (!audio) {
+        toast.error('Speech unavailable — cloud and native TTS both failed.');
         return;
       }
-      // Play audio using a persistent ref
-      const cleanedAudio = audioContent
-        .trim()
-        .replace(/^data:audio\/[a-z]+;base64,/, '')
-        .replace(/\s/g, '');
-      const audio = new Audio(`data:audio/mp3;base64,${cleanedAudio}`);
+
       currentAudioRef.current = audio;
-      audio.onended = () => {
+      audio.addEventListener('ended', () => {
         setIsSpeaking(false);
         currentAudioRef.current = null;
-      };
-      audio.onerror = (event) => {
+      });
+      audio.addEventListener('error', () => {
         toast.error('Failed to play audio');
         setIsSpeaking(false);
         currentAudioRef.current = null;
-      };
-      await audio.play();
+      });
+
       setIsSpeaking(true);
     } catch (error: any) {
+      toast.dismiss('note-tts');
       toast.error(error.message || 'Failed to generate speech');
       setIsSpeaking(false);
       currentAudioRef.current = null;

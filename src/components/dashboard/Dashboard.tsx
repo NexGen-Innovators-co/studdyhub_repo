@@ -28,7 +28,7 @@ import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 import { RecentPodcasts } from './RecentPodcasts';
 import { RecentActivityFeed } from './RecentActivityFeed';
 import { AIInsights } from './AIInsights';
-import { EducationWidgets } from './widgets/EducationWidgets';
+// import { EducationWidgets } from './widgets/EducationWidgets';
 import { useEducationContext } from '@/hooks/useEducationContext';
 
 const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
@@ -241,11 +241,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
             </div>
 
             {/* Education Context Widgets */}
-            {educationContext && (
+            {/* {educationContext && (
                 <div className="mb-8">
                     <EducationWidgets educationContext={educationContext} />
                 </div>
-            )}
+            )} */}
 
             {/* Quick Stats Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8 mt-4">

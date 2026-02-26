@@ -17,13 +17,14 @@ export const useRealtimeSyncForQuizzes = ({
   useEffect(() => {
     if (!userId) return;
 
-    // Subscribe to quizzes changes
+    // Subscribe to quizzes changes - only UPDATE events
+    // INSERT events are handled locally to avoid duplication
     const quizzesChannel = supabase
       .channel('quizzes')
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'UPDATE',
           schema: 'public',
           table: 'quizzes',
           filter: `user_id=eq.${userId}`,

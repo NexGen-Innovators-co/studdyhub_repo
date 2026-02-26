@@ -14,22 +14,35 @@ import { HelmetProvider } from "react-helmet-async";
 import DynamicHead from "./components/seo/DynamicHead";
 import { OfflineIndicator } from "./components/layout/OfflineIndicator";
 import ErrorBoundary from "./components/layout/ErrorBoundary";
-import { Skeleton } from "./components/ui/skeleton";
 import { OnboardingGuard } from "./components/onboarding/OnboardingGuard";
 
-// Skeleton page loader for public/static pages
-const MinimalPageLoader = () => (
-  <div className="min-h-screen bg-white dark:bg-gray-900 p-6 space-y-6">
-    <Skeleton className="h-10 w-48 bg-gray-200 dark:bg-gray-800" />
-    <Skeleton className="h-4 w-72 bg-gray-200 dark:bg-gray-800" />
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8">
-      <Skeleton className="h-32 rounded-xl bg-gray-200 dark:bg-gray-800" />
-      <Skeleton className="h-32 rounded-xl bg-gray-200 dark:bg-gray-800" />
-      <Skeleton className="h-32 rounded-xl bg-gray-200 dark:bg-gray-800" />
+// LinkedIn-style branded loader for protected / heavy routes
+export const BrandedLoader = () => (
+  <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-gray-950">
+    <img
+      src="/siteimage.png"
+      alt="StuddyHub AI"
+      className="h-16 w-16 object-contain mb-4 animate-pulse"
+    />
+    <span className="text-xl font-semibold text-gray-800 dark:text-gray-100 tracking-tight mb-6">
+      StuddyHub <span className="text-blue-600 dark:text-blue-400">AI</span>
+    </span>
+    {/* Thin animated progress bar */}
+    <div className="w-48 h-1 rounded-full bg-gray-200 dark:bg-gray-800 overflow-hidden">
+      <div className="h-full rounded-full bg-blue-600 dark:bg-blue-400 animate-[shimmer_1.4s_ease-in-out_infinite]" />
     </div>
-    <Skeleton className="h-64 w-full rounded-xl bg-gray-200 dark:bg-gray-800" />
+    <style>{`
+      @keyframes shimmer {
+        0%   { width: 0%; margin-left: 0; }
+        50%  { width: 70%; margin-left: 15%; }
+        100% { width: 0%; margin-left: 100%; }
+      }
+    `}</style>
   </div>
 );
+
+// Lightweight empty placeholder for public static pages (no visible loader)
+const EmptyFallback = () => <div className="min-h-screen" />;
 
 // ─── Lazy-loaded pages (code-split per route) ───
 const Index = lazy(() => import("./pages/Index"));
@@ -94,25 +107,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const Fallback = () => (
-  <div className="min-h-screen bg-white dark:bg-gray-900 p-6 space-y-6 animate-pulse">
-    <div className="flex items-center gap-4">
-      <Skeleton className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-800" />
-      <Skeleton className="h-6 w-40 bg-gray-200 dark:bg-gray-800" />
-    </div>
-    <Skeleton className="h-4 w-64 bg-gray-200 dark:bg-gray-800" />
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      <Skeleton className="h-36 rounded-xl bg-gray-200 dark:bg-gray-800" />
-      <Skeleton className="h-36 rounded-xl bg-gray-200 dark:bg-gray-800" />
-      <Skeleton className="h-36 rounded-xl bg-gray-200 dark:bg-gray-800" />
-    </div>
-    <Skeleton className="h-52 w-full rounded-xl bg-gray-200 dark:bg-gray-800" />
-    <div className="flex gap-4">
-      <Skeleton className="h-10 w-28 rounded-lg bg-gray-200 dark:bg-gray-800" />
-      <Skeleton className="h-10 w-28 rounded-lg bg-gray-200 dark:bg-gray-800" />
-    </div>
-  </div>
-);
+const Fallback = () => <BrandedLoader />;
 
 // Create a wrapper component for SEO
 const AppWithSEO = () => {
@@ -142,24 +137,25 @@ const AppWithSEO = () => {
     <>
       <DynamicHead pathname={location.pathname} />
       <ErrorBoundary>
-        <Suspense fallback={<Fallback />}>
+        <Suspense fallback={<BrandedLoader />}>
           <Routes location={location}>
             {/* ==== PUBLIC ROUTES (lightweight Suspense — no premium loader) ==== */}
-            <Route path="/" element={<Suspense fallback={<MinimalPageLoader />}><LandingPage /></Suspense>} />
-            <Route path="/privacy-policy" element={<Suspense fallback={<MinimalPageLoader />}><PrivacyPolicy /></Suspense>} />
-            <Route path="/about-us" element={<Suspense fallback={<MinimalPageLoader />}><AboutUs /></Suspense>} />
-            <Route path="/contact" element={<Suspense fallback={<MinimalPageLoader />}><Contact /></Suspense>} />
-            <Route path="/blogs" element={<Suspense fallback={<MinimalPageLoader />}><Blog /></Suspense>} />
-            <Route path="/integrations" element={<Suspense fallback={<MinimalPageLoader />}><Integrations /></Suspense>} />
-            <Route path="/terms-of-service" element={<Suspense fallback={<MinimalPageLoader />}><TermsOfService /></Suspense>} />
-            <Route path="/careers" element={<Suspense fallback={<MinimalPageLoader />}><Careers /></Suspense>} />
-            <Route path="/api" element={<Suspense fallback={<MinimalPageLoader />}><APIPage /></Suspense>} />
-            <Route path="/documentation-page" element={<Suspense fallback={<MinimalPageLoader />}><DocumentationPage /></Suspense>} />
-            <Route path="/user-guide-page" element={<Suspense fallback={<MinimalPageLoader />}><UserGuidePage /></Suspense>} />
-            <Route path="/auth" element={<Suspense fallback={<MinimalPageLoader />}><Auth /></Suspense>} />
-            <Route path="/reset-password" element={<Suspense fallback={<MinimalPageLoader />}><ResetPassword /></Suspense>} />
-            <Route path="/calendar-callback" element={<Suspense fallback={<MinimalPageLoader />}><CalendarCallback /></Suspense>} />
-            <Route path="/join/:inviteToken" element={<Suspense fallback={<MinimalPageLoader />}><JoinInstitution /></Suspense>} />
+            {/* PUBLIC ROUTES — lightweight empty fallback (no visible loader) */}
+            <Route path="/" element={<Suspense fallback={<EmptyFallback />}><LandingPage /></Suspense>} />
+            <Route path="/privacy-policy" element={<Suspense fallback={<EmptyFallback />}><PrivacyPolicy /></Suspense>} />
+            <Route path="/about-us" element={<Suspense fallback={<EmptyFallback />}><AboutUs /></Suspense>} />
+            <Route path="/contact" element={<Suspense fallback={<EmptyFallback />}><Contact /></Suspense>} />
+            <Route path="/blogs" element={<Suspense fallback={<EmptyFallback />}><Blog /></Suspense>} />
+            <Route path="/integrations" element={<Suspense fallback={<EmptyFallback />}><Integrations /></Suspense>} />
+            <Route path="/terms-of-service" element={<Suspense fallback={<EmptyFallback />}><TermsOfService /></Suspense>} />
+            <Route path="/careers" element={<Suspense fallback={<EmptyFallback />}><Careers /></Suspense>} />
+            <Route path="/api" element={<Suspense fallback={<EmptyFallback />}><APIPage /></Suspense>} />
+            <Route path="/documentation-page" element={<Suspense fallback={<EmptyFallback />}><DocumentationPage /></Suspense>} />
+            <Route path="/user-guide-page" element={<Suspense fallback={<EmptyFallback />}><UserGuidePage /></Suspense>} />
+            <Route path="/auth" element={<Suspense fallback={<EmptyFallback />}><Auth /></Suspense>} />
+            <Route path="/reset-password" element={<Suspense fallback={<EmptyFallback />}><ResetPassword /></Suspense>} />
+            <Route path="/calendar-callback" element={<Suspense fallback={<EmptyFallback />}><CalendarCallback /></Suspense>} />
+            <Route path="/join/:inviteToken" element={<Suspense fallback={<EmptyFallback />}><JoinInstitution /></Suspense>} />
 
             {/* ==== AUTHENTICATED APP ROUTES (Non-Social) ==== */}
             <Route path="/dashboard" element={<Index />} />
@@ -247,7 +243,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <OfflineIndicator />
-          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <BrowserRouter future={{ v7_relativeSplatPath: true }}>
             <AuthProvider>
               <AdminAuthProvider>
                 <AppProvider>

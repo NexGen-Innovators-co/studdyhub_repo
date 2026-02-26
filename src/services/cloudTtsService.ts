@@ -106,16 +106,70 @@ export function playAudioContent(audioContent: string): HTMLAudioElement {
 }
 
 /**
- * Generate and play speech in one call
+ * Fall back to the browser's built-in Web Speech API when cloud TTS is unavailable.
+ * Returns a dummy HTMLAudioElement-like wrapper so callers can still call .pause() / listen to 'ended'.
+ */
+function speakWithNativeTts(options: CloudTtsOptions): HTMLAudioElement | null {
+  if (!('speechSynthesis' in window)) {
+    console.warn('[TTS] Native speechSynthesis not available on this device');
+    return null;
+  }
+
+  // Cancel any ongoing utterance first
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(options.text);
+  utterance.rate = options.rate ?? 1.0;
+  utterance.pitch = options.pitch != null ? options.pitch + 1 : 1; // Cloud pitch 0 = neutral → native 1
+  utterance.lang = 'en-US';
+
+  // Try to pick a voice matching the requested gender
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length > 0) {
+    const preferred = options.voice === 'male'
+      ? voices.find(v => /male/i.test(v.name) && !/female/i.test(v.name))
+      : voices.find(v => /female/i.test(v.name));
+    if (preferred) utterance.voice = preferred;
+  }
+
+  // Create a thin wrapper so callers can treat this like an HTMLAudioElement
+  const fakeAudio = new Audio(); // silent audio element acting as event proxy
+  utterance.onend = () => fakeAudio.dispatchEvent(new Event('ended'));
+  utterance.onerror = (e) => fakeAudio.dispatchEvent(new ErrorEvent('error', { message: e.error }));
+
+  // Allow callers to pause / stop via the proxy
+  const origPause = fakeAudio.pause.bind(fakeAudio);
+  fakeAudio.pause = () => {
+    window.speechSynthesis.cancel();
+    origPause();
+  };
+
+  window.speechSynthesis.speak(utterance);
+
+  try {
+    window.dispatchEvent(new CustomEvent('cloud-tts:playback-start'));
+  } catch (_) {}
+
+  utterance.onend = () => {
+    try { window.dispatchEvent(new CustomEvent('cloud-tts:playback-ended')); } catch (_) {}
+    fakeAudio.dispatchEvent(new Event('ended'));
+  };
+
+  return fakeAudio;
+}
+
+/**
+ * Generate and play speech in one call.
+ * Automatically falls back to the device's native TTS when cloud generation fails.
  * @param options TTS options
- * @returns Audio element that is playing, or null if generation failed
+ * @returns Audio element that is playing, or null if everything failed
  */
 export async function speakText(options: CloudTtsOptions): Promise<HTMLAudioElement | null> {
   const { audioContent, error } = await generateSpeech(options);
 
   if (error || !audioContent) {
-    //console.error('[CloudTTS] Speech generation failed:', error);
-    return null;
+    console.warn('[CloudTTS] Cloud speech failed, falling back to native TTS:', error);
+    return speakWithNativeTts(options);
   }
 
   return playAudioContent(audioContent);
