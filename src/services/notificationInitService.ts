@@ -30,21 +30,33 @@ export async function initializePushNotifications(): Promise<boolean> {
       return false;
     }
 
-    // Get current user
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return false;
-    }
+    // Confirm there's an active Supabase session before making protected calls.
+    // This avoids firing DB queries while auth is still resolving which can
+    // produce 401s and trigger retry/logout loops.
+    let currentUser: any = null;
+    try {
+      const sessionResp = await supabase.auth.getSession();
+      currentUser = sessionResp?.data?.session?.user || null;
+      if (!currentUser) {
+        initializationAttempted = false;
+        return false;
+      }
 
-    // Check user's notification preferences
-    const { data: preferences } = await supabase
-      .from('notification_preferences')
-      .select('push_notifications')
-      .eq('user_id', user.id)
-      .maybeSingle();
+      // proceed using `currentUser`
+      // Check user's notification preferences
+      const { data: preferences } = await supabase
+        .from('notification_preferences')
+        .select('push_notifications')
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
 
-    // Only auto-subscribe if user has enabled push notifications
-    if (preferences && !preferences.push_notifications) {
+      // Only auto-subscribe if user has enabled push notifications
+      if (preferences && !preferences.push_notifications) {
+        initializationAttempted = false;
+        return false;
+      }
+    } catch (e) {
+      initializationAttempted = false;
       return false;
     }
 
@@ -53,7 +65,7 @@ export async function initializePushNotifications(): Promise<boolean> {
 
     if (permission === 'granted') {
       // Auto-subscribe if permission already granted
-      await pushService.subscribe(user.id);
+      await pushService.subscribe(currentUser.id);
       return true;
     } else if (permission === 'denied') {
       return false;

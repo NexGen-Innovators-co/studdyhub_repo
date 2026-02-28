@@ -8,11 +8,36 @@ export const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 // We enable the wrapper in all environments so PostgREST doesn't return 406
 // due to strict Accept negotiation. Detailed logging remains gated to DEV.
 let clientOptions: any = {};
+
+// Simple cooldown to prevent tight refresh_token retry storms when the
+// token endpoint returns 429. This prevents many repeated refresh attempts
+// from overwhelming the auth endpoint and causing immediate sign-out loops.
+let refreshCooldownUntil = 0;
 if (typeof window !== 'undefined' && window.fetch) {
 	const originalFetch = window.fetch.bind(window);
 	const wrappedFetch = async (input: RequestInfo, init?: RequestInit) => {
 		try {
 			const url = typeof input === 'string' ? input : (input as Request).url;
+
+			// Throttle token refresh attempts: if a cooldown is active and this
+			// request is a refresh_token grant, return an early 429-like response.
+			if (url && url.includes('/token') && url.includes('grant_type=refresh_token')) {
+				if (Date.now() < refreshCooldownUntil) {
+					return new Response(JSON.stringify({ error: 'rate_limited_refresh' }), { status: 429, statusText: 'Too Many Requests', headers: { 'Content-Type': 'application/json' } });
+				}
+			}
+
+			// If this is a token refresh request, perform it and set a cooldown
+			// if the auth endpoint returns a 429 to avoid immediate retry storms.
+			if (url && url.includes('/token') && url.includes('grant_type=refresh_token')) {
+				const resp = await originalFetch(input, init);
+				if (resp.status === 429) {
+					// 5 second cooldown (adjustable)
+					refreshCooldownUntil = Date.now() + 5000;
+				}
+				return resp;
+			}
+
 			// Only inspect REST v1 calls
 			if (url && url.includes('/rest/v1/')) {
 				const headers = new Headers(init?.headers as HeadersInit || {});
