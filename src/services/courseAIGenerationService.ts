@@ -174,9 +174,10 @@ async function generateQuizForCourse(
   const numQuestions = req.options?.quizNumQuestions ?? 10;
   const difficulty = req.options?.quizDifficulty ?? 'medium';
 
-  const { data, error } = await supabase.functions.invoke('generate-quiz-from-notes', {
+  const { data, error } = await supabase.functions.invoke('generate-quiz', {
     body: {
-      notes_content: truncated,
+      name: `${req.courseCode} Quiz`,
+      transcript: truncated,
       num_questions: numQuestions,
       difficulty,
     },

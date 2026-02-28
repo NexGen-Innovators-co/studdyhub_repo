@@ -52,9 +52,11 @@ export const useQuizManagement = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const { data, error } = await supabase.functions.invoke('generate-quiz-from-notes', {
+      // Call the supabase edge function `generate-quiz` which uses the shared model chain + OpenRouter fallback
+      const { data, error } = await supabase.functions.invoke('generate-quiz', {
         body: {
-          notes_content: notesContent,
+          name: 'Notes Quiz',
+          transcript: notesContent,
           num_questions: numQuestions,
           difficulty: difficulty,
         },
@@ -123,8 +125,20 @@ export const useQuizManagement = ({
 
       toast.success('Quiz generated from notes!', { id: toastId });
     } catch (error) {
-
-      toast.error('Failed to generate quiz from notes', { id: toastId });
+        console.error('[generate-quiz-from-notes] error:', error);
+        // If Supabase FunctionsHttpError, try to surface useful details
+        try {
+          const fnErr = error as any;
+          if (fnErr?.message) {
+            toast.error(fnErr.message, { id: toastId });
+          } else if (fnErr?.status) {
+            toast.error(`Server error (${fnErr.status}) while generating quiz`, { id: toastId });
+          } else {
+            toast.error('Failed to generate quiz from notes', { id: toastId });
+          }
+        } catch (e) {
+          toast.error('Failed to generate quiz from notes', { id: toastId });
+        }
     }
   }, [onGenerateQuiz]);
 

@@ -1247,7 +1247,7 @@ const LiveQuizMenu: React.FC<LiveQuizMenuProps> = ({
                <Sparkles className="h-6 w-6 text-blue-600 dark:text-blue-400" />
              </div>
              <div>
-               <h1 className="font-bold text-xl leading-none text-gray-900 dark:text-white">VisioQuiz Setup</h1>
+               <h1 className="font-bold text-xl leading-none text-gray-900 dark:text-white">Live Quiz Setup</h1>
                <p className="text-xs text-gray-700 dark:text-white/50">Configure your session</p>
              </div>
           </div>

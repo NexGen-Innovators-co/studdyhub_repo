@@ -10,15 +10,18 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
 };
-serve(async (req)=>{
+
+serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       headers: corsHeaders
     });
   }
+
   let supabaseAdmin: any = null;
   let logUserId: string | undefined;
+
   try {
     // Validate user authentication and quiz limit
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -45,10 +48,22 @@ serve(async (req)=>{
       return createErrorResponse(limitCheck.message || 'Daily quiz limit exceeded', 403);
     }
 
-    const { name, transcript, file_url } = await req.json();
+    // Extract dynamic parameters, setting defaults if they aren't provided by the frontend
+    const { 
+      name, 
+      transcript, 
+      file_url, 
+      num_questions = 5, 
+      difficulty = 'intermediate' 
+    } = await req.json();
+
     if (!transcript || transcript.trim().length < 100) {
       throw new Error('Transcript too short or missing. Need at least 100 characters for quiz generation.');
     }
+
+    // Safety checks: Ensure num_questions is a valid number between 1 and 20
+    const parsedNumQuestions = Math.min(Math.max(parseInt(num_questions) || 5, 1), 20);
+    const safeDifficulty = String(difficulty).trim() || 'intermediate';
 
     // Fetch education context for curriculum-aligned quiz generation
     let educationBlock = '';
@@ -66,9 +81,13 @@ serve(async (req)=>{
     if (!geminiApiKey) {
       throw new Error('Gemini API key not configured. Please set the GEMINI_API_KEY environment variable.');
     }
-    // Prepare the prompt for quiz generation
-    const prompt = `Based on the following transcript, create a comprehensive quiz with exactly 5 multiple-choice questions. Each question should:
-1. Test understanding of key concepts, facts, or themes
+
+    // Prepare the prompt for quiz generation dynamically
+    const prompt = `Based on the following transcript, create a comprehensive quiz with exactly ${parsedNumQuestions} multiple-choice questions. 
+The difficulty level of the questions should be: ${safeDifficulty}.
+
+Each question should:
+1. Test understanding of key concepts, facts, or themes appropriate for the requested difficulty level.
 2. Have 4 answer options (A, B, C, D)
 3. Have exactly one correct answer (the correctAnswer field should be 0, 1, 2, or 3 corresponding to the option's index)
 4. Include a brief explanation for the correct answer
@@ -77,6 +96,7 @@ Transcript:
 "${transcript.substring(0, 3000)}"
 
 Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
+
     // Construct the payload for Gemini API
     const payload = {
       contents: [
@@ -135,6 +155,7 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
       // Using gemini-2.0-flash as requested
       model: "gemini-2.0-flash"
     };
+
     const MODEL_CHAIN = [
       'gemini-2.5-flash',
       'gemini-3-pro-preview',
@@ -184,6 +205,7 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
       throw new Error('Invalid response structure from Gemini API');
     }
     const generatedContent = result.candidates[0].content.parts[0].text;
+    
     let quizData;
     try {
       // Direct parse the JSON response
@@ -193,7 +215,7 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
         throw new Error('Invalid quiz data structure: missing title or questions array.');
       }
       // Validate each question
-      quizData.questions.forEach((q, index)=>{
+      quizData.questions.forEach((q: any, index: number) => {
         if (!q.question || !Array.isArray(q.options) || q.options.length !== 4 || typeof q.correctAnswer !== 'number' || q.correctAnswer < 0 || q.correctAnswer > 3) {
           throw new Error(`Invalid question structure at index ${index}: ${JSON.stringify(q)}`);
         }
@@ -227,13 +249,15 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
       };
       // console.warn('Falling back to default quiz due to parsing error.');
     }
+
     return new Response(JSON.stringify(quizData), {
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/json'
       }
     });
-  } catch (error) {
+
+  } catch (error: any) {
     if (supabaseAdmin) {
       logSystemError(supabaseAdmin, {
         severity: 'error',
@@ -257,4 +281,3 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
     });
   }
 });
-

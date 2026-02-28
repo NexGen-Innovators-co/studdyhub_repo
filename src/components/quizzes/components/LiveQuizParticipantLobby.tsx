@@ -1,6 +1,5 @@
 // src/components/quizzes/components/LiveQuizParticipantLobby.tsx
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { Alert, AlertDescription } from '../../ui/alert';
@@ -30,6 +29,15 @@ interface LiveQuizParticipantLobbyProps {
   toast: any;
 }
 
+const COSMIC_BG: React.CSSProperties = {
+  background: 'linear-gradient(135deg, #0f0c29, #302b63, #24243e)',
+};
+
+const GLASS_CARD: React.CSSProperties = {
+  background: 'rgba(255,255,255,0.04)',
+  border: '1px solid rgba(255,255,255,0.1)',
+  backdropFilter: 'blur(12px)',
+};
 
 const LiveQuizParticipantLobby: React.FC<LiveQuizParticipantLobbyProps> = ({
   session,
@@ -56,7 +64,7 @@ const LiveQuizParticipantLobby: React.FC<LiveQuizParticipantLobbyProps> = ({
       const now = new Date();
       const diff = scheduledTime.getTime() - now.getTime();
       if (diff <= 0) {
-        setCountdown("Starting...");
+        setCountdown('Starting...');
       } else {
         const min = Math.floor(diff / 60000);
         const sec = Math.floor((diff % 60000) / 1000);
@@ -77,15 +85,12 @@ const LiveQuizParticipantLobby: React.FC<LiveQuizParticipantLobbyProps> = ({
     bgRef.current.loop = true;
     bgRef.current.volume = 0.25;
     bgOrigVol.current = bgRef.current.volume;
-
     startRef.current = new Audio(startUrl);
 
     const play = async () => {
       try { if (bgRef.current) await bgRef.current.play(); } catch (e) {}
       try {
-        // play a soft start chime once
         if (startRef.current) {
-          // duck bg
           if (bgRef.current) bgRef.current.volume = Math.max(0.05, bgOrigVol.current * 0.25);
           startRef.current.currentTime = 0;
           startRef.current.play().catch(() => {});
@@ -96,7 +101,6 @@ const LiveQuizParticipantLobby: React.FC<LiveQuizParticipantLobbyProps> = ({
         }
       } catch (e) {}
     };
-
     play();
 
     return () => {
@@ -116,249 +120,270 @@ const LiveQuizParticipantLobby: React.FC<LiveQuizParticipantLobbyProps> = ({
 
   // --- Fullscreen Immersive View ---
   if (isFullScreen) {
+    const myPlayer = players.find(p => p.user_id === userId);
+    const initials = (myPlayer?.display_name || 'You').split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+
     return (
-      <div className="fixed inset-0 z-50 bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-white overflow-hidden flex flex-col transition-colors duration-300">
-        {/* Background */}
-        <div className="absolute inset-0 z-0 opacity-40">
-           <div 
-             className="absolute inset-0 bg-cover bg-center"
-             style={{ backgroundImage: "url('/herobackgroundimg.png')" }}
-           />
-           <div className="absolute inset-0 bg-white/30 dark:bg-slate-950/80 backdrop-blur-sm" />
+      <div className="fixed inset-0 z-50 overflow-hidden flex flex-col" style={COSMIC_BG}>
+        {/* Ambient blobs */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full blur-3xl" style={{ background: 'rgba(16,185,129,0.12)' }} />
+          <div className="absolute -bottom-40 -right-40 w-80 h-80 rounded-full blur-3xl" style={{ background: 'rgba(99,102,241,0.15)' }} />
         </div>
 
         {/* Top Bar */}
-        <div className="relative z-10 flex flex-row items-center justify-between px-6 py-4 bg-blue-600/90 dark:bg-black/20 backdrop-blur-md border-b border-blue-500/20 dark:border-white/10 shrink-0 shadow-lg dark:shadow-none">
-          {/* Minimize button - far left */}
-          <div className="flex flex-row gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsFullScreen(false)}
-              className="hover:bg-white/20 dark:hover:bg-white/10 text-white/80 dark:text-white/70 hover:text-white dark:hover:text-white"
-            >
-              <Minimize2 className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Exit Fullscreen</span>
-            </Button>
-          </div>
-          {/* Center avatar, name, status */}
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-white/20 dark:bg-green-500/20 rounded-lg border border-white/10 dark:border-green-500/30 shadow-inner">
-              <Users className="h-5 w-5 text-white dark:text-green-400" />
+        <div
+          className="relative z-10 flex items-center justify-between px-4 sm:px-6 py-3 shrink-0"
+          style={{ background: 'rgba(0,0,0,0.35)', borderBottom: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(16px)' }}
+        >
+          <Button
+            variant="ghost" size="sm"
+            onClick={() => setIsFullScreen(false)}
+            className="text-white/60 hover:text-white hover:bg-white/10 gap-2"
+          >
+            <Minimize2 className="h-4 w-4" />
+            <span className="hidden sm:inline text-xs">Exit</span>
+          </Button>
+
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg" style={{ background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.3)' }}>
+              <Users className="h-4 w-4 text-emerald-400" />
             </div>
             <div>
-              <h1 className="font-bold text-lg leading-none text-white dark:text-white">Participant Lobby</h1>
-              <div className="flex items-center gap-2 text-sm text-blue-100 dark:text-white/50">
-                <Badge variant="outline" className="border-white/30 dark:border-white/20 text-white dark:text-white/70 h-5 px-1.5 text-[10px] bg-white/10 dark:bg-transparent">
-                  Waiting for Host
-                </Badge>
-              </div>
+              <h1 className="font-bold text-sm text-white leading-none">Participant Lobby</h1>
+              <p className="text-xs text-white/40 mt-0.5">Waiting for host</p>
             </div>
           </div>
-          {/* Leave button - far right */}
-          <div className="flex flex-row gap-2">
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={resetView}
-              className="bg-red-500/80 dark:bg-red-500/20 hover:bg-red-600 dark:hover:bg-red-500/40 text-white dark:text-red-300 border border-white/20 dark:border-red-500/30"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Leave</span>
-            </Button>
-          </div>
+
+          <Button
+            variant="ghost" size="sm"
+            onClick={resetView}
+            className="text-red-400 hover:text-red-300 hover:bg-red-500/10 gap-2"
+          >
+            <LogOut className="h-4 w-4" />
+            <span className="hidden sm:inline text-xs">Leave</span>
+          </Button>
         </div>
 
         {/* Main Content */}
-        <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-6">
-           <motion.div
-             initial={{ scale: 0.9, opacity: 0 }}
-             animate={{ scale: 1, opacity: 1 }}
-             className="bg-white/60 dark:bg-white/5 backdrop-blur-2xl border border-white/20 dark:border-white/10 p-6 md:p-12 rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col md:flex-row items-center gap-6 md:gap-12 mt-8 md:mt-12"
-           >
-              {/* Left Side: Avatar & Status */}
-              <div className="flex flex-col items-center gap-4 min-w-[200px] border-b md:border-b-0 md:border-r border-gray-200 dark:border-white/10 pb-6 md:pb-0 md:pr-12 w-full md:w-auto">
-                 <div className="relative">
-                    <div className="absolute -inset-4 bg-green-500/20 rounded-full blur-xl animate-pulse" />
-                    <Avatar className="h-24 w-24 md:h-32 md:w-32 border-4 border-green-500/50 shadow-[0_0_30px_rgba(34,197,94,0.4)] relative bg-white dark:bg-black">
-                        <AvatarImage src={players.find(p => p.user_id === userId)?.avatar_url || undefined} />
-                        <AvatarFallback className="bg-slate-100 dark:bg-slate-800 text-3xl font-bold">
-                            {(players.find(p => p.user_id === userId)?.display_name || 'U')[0]}
-                        </AvatarFallback>
-                    </Avatar>
-                    <div className="absolute -bottom-2 -right-2 bg-green-500 text-white dark:text-black text-xs font-bold px-2 py-1 rounded-full border-2 border-white dark:border-black">
-                        READY
-                    </div>
-                 </div>
-                 
-                 <div className="text-center">
-                    <div className="text-xs text-gray-500 dark:text-white/40 uppercase tracking-widest font-semibold mb-1">You are</div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white truncate max-w-[200px]">
-                        {players.find(p => p.user_id === userId)?.display_name || 'You'}
-                    </div>
-                 </div>
+        <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-6 overflow-y-auto">
+          <motion.div
+            initial={{ scale: 0.92, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.5 }}
+            className="w-full max-w-lg flex flex-col items-center gap-8"
+          >
+            {/* Avatar + name */}
+            <div className="flex flex-col items-center gap-3">
+              <div
+                className="w-24 h-24 rounded-full flex items-center justify-center text-3xl font-black text-white shadow-2xl"
+                style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 0 40px rgba(99,102,241,0.4)' }}
+              >
+                {initials}
               </div>
+              <div className="text-center">
+                <p className="text-xs text-white/40 uppercase tracking-widest mb-1">You are</p>
+                <p className="text-2xl font-black text-white">{myPlayer?.display_name || 'You'}</p>
+              </div>
+            </div>
 
-              {/* Right Side: Message & Timer */}
-              <div className="text-center md:text-left flex-1 space-y-4">
-                  <h2 className="text-3xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-600 via-emerald-500 to-teal-600 dark:from-green-300 dark:via-emerald-200 dark:to-teal-400 drop-shadow-sm leading-tight">
-                     {scheduledTime && countdown ? "Get Ready!" : "You're In!"}
-                  </h2>
-                  
-                  {scheduledTime && countdown ? (
-                     <div className="bg-black/5 dark:bg-black/30 rounded-2xl p-6 border border-black/10 dark:border-white/5">
-                        <p className="text-green-600 dark:text-emerald-400/80 uppercase tracking-widest text-xs font-bold mb-2">Quiz Starts In</p>
-                        <div className="text-5xl md:text-7xl font-mono font-black text-gray-900 dark:text-white tabular-nums tracking-tighter break-words">
-                          {countdown}
-                        </div>
-                     </div>
-                  ) : (
-                     <div className="space-y-4">
-                        <p className="text-lg md:text-xl text-gray-600 dark:text-white/70 font-light leading-relaxed">
-                           See your name on screen? Sit tight! The host will start the game shortly.
-                        </p>
-                        <div className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-sm text-gray-500 dark:text-white/50 animate-pulse">
-                            <Clock className="w-4 h-4" />
-                            <span>Waiting for host...</span>
-                        </div>
-                     </div>
-                  )}
+            {/* Status message */}
+            <div className="text-center space-y-3 w-full">
+              <h2 className="text-3xl sm:text-4xl font-black text-white">
+                {scheduledTime && countdown ? 'Get Ready!' : "You're In! ⚡"}
+              </h2>
+
+              {scheduledTime && countdown ? (
+                <div
+                  className="rounded-2xl p-6 text-center w-full"
+                  style={GLASS_CARD}
+                >
+                  <p className="text-emerald-400 uppercase tracking-widest text-xs font-bold mb-2">Quiz Starts In</p>
+                  <div className="text-5xl font-black text-white font-mono tabular-nums">{countdown}</div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-white/50 text-base leading-relaxed max-w-sm mx-auto">
+                    See your name on screen? Sit tight — the host will start the game shortly.
+                  </p>
+                  <div
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm text-white/50 animate-pulse"
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  >
+                    <Clock className="w-4 h-4" />
+                    Waiting for host…
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Session info pills */}
+            <div className="flex flex-wrap gap-2 justify-center">
+              {session.host_role === 'mediator' && (
+                <span
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-blue-300"
+                  style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.25)' }}
+                >
+                  <UserCog className="h-3.5 w-3.5" /> Host is mediator
+                </span>
+              )}
+              {session.advance_mode && (
+                <span
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white/50"
+                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                >
+                  <Clock className="h-3.5 w-3.5" />
+                  {session.advance_mode === 'auto' ? 'Auto advance' : 'Manual advance'}
+                </span>
+              )}
+              {session.config?.question_time_limit && (
+                <span
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white/50"
+                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                >
+                  <Clock className="h-3.5 w-3.5" /> {session.config.question_time_limit}s / question
+                </span>
+              )}
+            </div>
+
+            {/* Players list */}
+            <div className="w-full rounded-2xl overflow-hidden" style={GLASS_CARD}>
+              <div
+                className="flex items-center justify-between px-4 py-3 border-b"
+                style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.15)' }}
+              >
+                <span className="text-white/70 text-sm font-semibold flex items-center gap-2">
+                  <Users className="h-4 w-4" /> Players
+                  <span
+                    className="ml-1 px-2 py-0.5 rounded-full text-xs font-bold"
+                    style={{ background: 'rgba(99,102,241,0.2)', color: '#a5b4fc' }}
+                  >
+                    {players.length}
+                  </span>
+                </span>
+                <Button
+                  variant="ghost" size="sm"
+                  onClick={refreshSessionState}
+                  disabled={isLoading}
+                  className="h-7 w-7 p-0 text-white/40 hover:text-white hover:bg-white/10"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                </Button>
               </div>
-           </motion.div>
+              <div className="p-3 space-y-2 max-h-48 overflow-y-auto">
+                {players.map((player, i) => (
+                  <div
+                    key={player.id}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                    style={{
+                      background: player.user_id === userId ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)',
+                      border: player.user_id === userId ? '1px solid rgba(99,102,241,0.3)' : '1px solid rgba(255,255,255,0.06)',
+                      animation: `slideIn 0.3s ease ${i * 0.06}s both`,
+                    }}
+                  >
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+                      style={{ background: 'rgba(99,102,241,0.35)' }}
+                    >
+                      {(player.display_name || 'U')[0]?.toUpperCase()}
+                    </div>
+                    <span className="flex-1 text-sm font-medium text-white/80">{player.display_name}</span>
+                    {player.user_id === userId && <span className="text-xs text-indigo-400">You</span>}
+                    {player.is_host && (
+                      <span className="text-xs text-yellow-400 flex items-center gap-0.5">
+                        <Crown className="h-3 w-3" /> Host
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
         </div>
+
+        <style>{`
+          @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-12px); }
+            to { opacity: 1; transform: translateX(0); }
+          }
+        `}</style>
       </div>
     );
   }
 
+  // --- Compact (non-fullscreen) View ---
   return (
     <div className="max-w-3xl mx-auto space-y-4">
-      <Card className="rounded-2xl border-2 shadow-lg">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-green-500" />
-              Waiting to Start
-            </CardTitle>
-            <div className="flex gap-2">
-               <Button variant="outline" size="sm" onClick={() => setIsFullScreen(true)}>
-                 <Maximize2 className="h-4 w-4 mr-2" /> Fullscreen
-               </Button>
-               <Button variant="ghost" size="sm" onClick={resetView} className="text-gray-500 hover:text-gray-700">
-                 <LogOut className="h-4 w-4 mr-1.5" /> Leave
-               </Button>
-            </div>
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="font-semibold flex items-center gap-2 text-gray-800 dark:text-white">
+          <Users className="h-5 w-5 text-green-500" /> Waiting to Start
+        </h2>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setIsFullScreen(true)}>
+            <Maximize2 className="h-4 w-4 mr-2" /> Fullscreen
+          </Button>
+          <Button variant="ghost" size="sm" onClick={resetView} className="text-gray-500">
+            <LogOut className="h-4 w-4 mr-1.5" /> Leave
+          </Button>
+        </div>
+      </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="text-center py-8 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/15 dark:to-indigo-900/15 rounded-xl border border-blue-100 dark:border-blue-800">
+        {scheduledTime && countdown ? (
+          <div className="text-4xl font-bold font-mono text-blue-600 dark:text-blue-300 animate-pulse mb-2">{countdown}</div>
+        ) : (
+          <div className="flex items-center justify-center gap-2 mb-4">
+            {[0, 150, 300].map(delay => (
+              <div key={delay} className="w-3 h-3 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: `${delay}ms` }} />
+            ))}
           </div>
-        </CardHeader>
+        )}
+        <h3 className="text-lg font-semibold mb-1">Get Ready!</h3>
+        <p className="text-gray-500 dark:text-gray-400 text-sm">Waiting for the host to start the quiz…</p>
+      </div>
 
-        <CardContent className="space-y-5">
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          {/* ─── Waiting Animation ─── */}
-          <div className="text-center py-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/15 dark:to-indigo-900/15 rounded-xl border border-blue-100 dark:border-blue-800">
-            {scheduledTime && countdown ? (
-               <div className="mb-4">
-                  <div className="text-4xl font-bold font-mono text-blue-600 dark:text-blue-300 animate-pulse">
-                     {countdown}
-                  </div>
-                  <p className="text-sm text-blue-500/80 uppercase tracking-widest mt-1">Starting In</p>
-               </div>
-            ) : (
-                <>
-                {/* Pulsing dots */}
-                <div className="flex items-center justify-center gap-2 mb-4">
-                  <div className="w-3 h-3 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-3 h-3 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-3 h-3 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
-                </>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold text-sm flex items-center gap-2">
+            <Users className="h-4 w-4 text-gray-500" /> Players
+            <Badge variant="secondary" className="bg-gray-100 text-gray-600 dark:bg-gray-700">{players.length}</Badge>
+          </h3>
+          <Button variant="ghost" size="sm" onClick={refreshSessionState} disabled={isLoading} className="h-8 px-2">
+            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
+        {players.map((player) => (
+          <div
+            key={player.id}
+            className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
+              player.user_id === userId
+                ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-400'
+                : 'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700'
+            }`}
+          >
+            <Avatar className="h-9 w-9 flex-shrink-0">
+              <AvatarImage src={player.avatar_url || undefined} />
+              <AvatarFallback>{(player.display_name || 'U')[0]?.toUpperCase()}</AvatarFallback>
+            </Avatar>
+            <span className="flex-1 font-medium text-sm">
+              {player.display_name}
+              {player.user_id === userId && <span className="text-xs text-gray-400 ml-1.5">(You)</span>}
+            </span>
+            {player.is_host && (
+              <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 text-xs">
+                <Crown className="h-2.5 w-2.5 mr-0.5" /> Host
+              </Badge>
             )}
-            
-            <h3 className="text-lg font-semibold mb-1">Get Ready!</h3>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">
-              Waiting for the host to start the quiz…
-            </p>
-
-            {/* Info pills */}
-            <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
-              {session.host_role === 'mediator' && (
-                <span className="inline-flex items-center gap-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2.5 py-1 rounded-full">
-                  <UserCog className="h-3 w-3" /> Host is mediator
-                </span>
-              )}
-              {session.advance_mode && (
-                <span className="inline-flex items-center gap-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2.5 py-1 rounded-full">
-                  <Clock className="h-3 w-3" /> {session.advance_mode === 'auto' ? 'Auto advance' : 'Manual advance'}
-                </span>
-              )}
-              {session.config?.question_time_limit && (
-                <span className="inline-flex items-center gap-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2.5 py-1 rounded-full">
-                  <Clock className="h-3 w-3" /> {session.config.question_time_limit}s per question
-                </span>
-              )}
-            </div>
           </div>
-
-          {/* ─── Players List ─── */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold flex items-center gap-2 text-sm">
-                <Users className="h-4 w-4 text-gray-500" />
-                Players
-                <Badge variant="secondary" className="bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                  {players.length}
-                </Badge>
-              </h3>
-              <Button variant="ghost" size="sm" onClick={refreshSessionState} disabled={isLoading} className="h-8 px-2">
-                <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-              </Button>
-            </div>
-
-            <div className="space-y-2">
-              {players.map((player) => (
-                <div
-                  key={player.id}
-                  className={[
-                    'flex items-center gap-3 p-3 rounded-lg transition-all',
-                    player.user_id === userId
-                      ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-400'
-                      : 'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700',
-                  ].join(' ')}
-                >
-                  <Avatar className="h-9 w-9 flex-shrink-0">
-                    <AvatarImage src={player.avatar_url || undefined} />
-                    <AvatarFallback>
-                      {(player.display_name || 'U')[0]?.toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-
-                  <span className="flex-1 font-medium text-sm">
-                    {player.display_name}
-                    {player.user_id === userId && <span className="text-xs text-gray-400 ml-1.5">(You)</span>}
-                  </span>
-
-                  <div className="flex items-center gap-1.5">
-                    {player.is_host && (
-                      <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 text-xs">
-                        <Crown className="h-2.5 w-2.5 mr-0.5" /> Host
-                      </Badge>
-                    )}
-                    {player.is_host && !player.is_playing && (
-                      <Badge variant="outline" className="text-xs text-gray-500">
-                        <UserCog className="h-2.5 w-2.5 mr-0.5" /> Mediator
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        ))}
+      </div>
     </div>
   );
 };

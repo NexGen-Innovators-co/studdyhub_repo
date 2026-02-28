@@ -1,5 +1,5 @@
 // Hook for managing notifications
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
@@ -15,6 +15,7 @@ export function useNotifications() {
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [loading, setLoading] = useState(true);
+  const initSessionRef = useRef<string | null>(null);
 
   // Fetch notifications
   const fetchNotifications = useCallback(async () => {
@@ -246,6 +247,28 @@ export function useNotifications() {
   useEffect(() => {
     const initialize = async () => {
       if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      // Ensure we have a confirmed session from Supabase before doing any DB calls.
+      // This prevents calling protected endpoints while auth is still resolving
+      // which can produce 401/429 loops.
+      try {
+        const sessionResp = await supabase.auth.getSession();
+        const sessionId = sessionResp?.data?.session?.access_token || null;
+        if (!sessionId) {
+          setLoading(false);
+          return;
+        }
+
+        // If we've already initialized for this session token, skip re-init
+        if (initSessionRef.current === sessionId) {
+          setLoading(false);
+          return;
+        }
+        initSessionRef.current = sessionId;
+      } catch (e) {
         setLoading(false);
         return;
       }

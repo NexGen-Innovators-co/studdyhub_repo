@@ -127,6 +127,8 @@ const LiveQuizActive: React.FC<LiveQuizActiveProps> = ({
   const [isFullScreen, setIsFullScreen] = useState(true);
   const [showCorrectAnswer, setShowCorrectAnswer] = useState(false);
   const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number }>>([]);
+  // (Previously used undo timer) ref kept for safety but we now submit immediately on selection.
+  const undoTimeoutRef = useRef<number | null>(null);
 
   // FIX: submit a "timeout" answer to the backend when time runs out and the
   // player hasn't answered yet. Do NOT mark an answer as selected locally.
@@ -178,9 +180,79 @@ const LiveQuizActive: React.FC<LiveQuizActiveProps> = ({
     setTimeout(() => setParticles([]), 2000);
   };
 
+  // Cleanup any stray timers on unmount
+  useEffect(() => {
+    return () => {
+      if (undoTimeoutRef.current) {
+        window.clearTimeout(undoTimeoutRef.current);
+        undoTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  // Accessibility: ARIA announcements for SR and keyboard navigation
+  const [ariaAnnouncement, setAriaAnnouncement] = useState<string>('');
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isPlayer || hasAnswered || isLoading || timeRemaining === 0) return;
+      if (!currentQuestion) return;
+
+      if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const next = selectedAnswer === null ? 0 : Math.max(0, selectedAnswer - 1);
+        setSelectedAnswer(next);
+        setAriaAnnouncement(`Selected option ${String.fromCharCode(65 + next)}.`);
+      }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const next = selectedAnswer === null ? 0 : Math.min(currentQuestion.options.length - 1, selectedAnswer + 1);
+        setSelectedAnswer(next);
+        setAriaAnnouncement(`Selected option ${String.fromCharCode(65 + next)}.`);
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+          if (selectedAnswer !== null) {
+          // submit immediately
+          if (undoTimeoutRef.current) {
+            window.clearTimeout(undoTimeoutRef.current);
+            undoTimeoutRef.current = null;
+          }
+          setAriaAnnouncement('Submitting answer.');
+          handleSubmitAnswer();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isPlayer, hasAnswered, isLoading, timeRemaining, currentQuestion, selectedAnswer]);
+
   // --- Handlers ---
+  const handleOptionSelect = (index: number) => {
+    if (hasAnswered || isLoading || !isPlayer || timeRemaining === 0 || !currentQuestion || !session) return;
+
+    setSelectedAnswer(index);
+
+    // clear any stray timer
+    if (undoTimeoutRef.current) {
+      window.clearTimeout(undoTimeoutRef.current);
+      undoTimeoutRef.current = null;
+    }
+
+    setAriaAnnouncement(`Selected option ${String.fromCharCode(65 + index)}. Submitting.`);
+    // Submit immediately on selection
+    handleSubmitAnswer();
+  };
+
   const handleSubmitAnswer = async () => {
     if (selectedAnswer === null || !currentQuestion || !session || !isPlayer) return;
+
+    // Clear any pending auto-submit undo timer to avoid duplicate submissions
+    if (undoTimeoutRef.current) {
+      window.clearTimeout(undoTimeoutRef.current);
+      undoTimeoutRef.current = null;
+    }
 
     setIsLoading(true);
     setError(null);
@@ -213,6 +285,8 @@ const LiveQuizActive: React.FC<LiveQuizActiveProps> = ({
         description: result.isCorrect ? `+${result.points} points` : 'Better luck next time!',
         variant: result.isCorrect ? 'default' : 'destructive',
       });
+
+      setAriaAnnouncement(result.isCorrect ? 'Correct answer submitted.' : 'Answer submitted.');
 
       setTimeout(() => refreshSessionState(), 500);
     } catch (err: any) {
@@ -399,9 +473,18 @@ const LiveQuizActive: React.FC<LiveQuizActiveProps> = ({
               return (
                 <button
                   key={index}
-                  onClick={() => !isDisabled && setSelectedAnswer(index)}
+                  onClick={() => handleOptionSelect(index)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleOptionSelect(index);
+                    }
+                  }}
                   disabled={isDisabled}
-                  className={[
+                  aria-pressed={isSelected}
+                  aria-label={`Option ${String.fromCharCode(65 + index)}: ${option}`}
+                  aria-disabled={isDisabled}
+                    className={[
                     'p-4 text-left rounded-xl border-2 transition-all duration-200',
                     // Base
                     'flex items-center justify-between',
@@ -445,23 +528,27 @@ const LiveQuizActive: React.FC<LiveQuizActiveProps> = ({
             })}
           </div>
 
-          {/* ─── Submit / Feedback ─── */}
+          {/* ARIA live region for announcements (screen readers) */}
+          <div aria-live="polite" role="status" className="sr-only">
+            {ariaAnnouncement}
+          </div>
+
+          {/* ─── Undo / Feedback / Hint ─── */}
           {!hasAnswered ? (
-            <Button
-              onClick={handleSubmitAnswer}
-              disabled={selectedAnswer === null || isLoading || timeRemaining === 0 || !isPlayer}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-4 text-base rounded-xl"
-            >
-              {isLoading ? (
-                <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Submitting…</>
-              ) : timeRemaining === 0 ? (
-                <><Clock className="h-5 w-5 mr-2" /> Time's Up!</>
-              ) : !isPlayer ? (
-                <><UserCog className="h-5 w-5 mr-2" /> Mediator (No Answer)</>
-              ) : (
-                <>Submit Answer <ArrowRight className="h-5 w-5 ml-2" /></>
-              )}
-            </Button>
+            !isPlayer ? (
+              <Button
+                disabled
+                className="w-full text-white font-semibold py-4 text-base rounded-xl"
+              >
+                <UserCog className="h-5 w-5 mr-2" /> Mediator (No Answer)
+              </Button>
+            ) : isLoading ? (
+              <Button disabled className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold py-4 text-base rounded-xl">
+                <Loader2 className="h-5 w-5 mr-2 animate-spin" /> Submitting…
+              </Button>
+            ) : (
+              <div className="text-sm text-gray-600 dark:text-gray-400 py-4">Tap an option to answer — it submits immediately</div>
+            )
           ) : (
             <div className="text-center py-5 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl border border-green-200 dark:border-green-800">
               <CheckCircle className="h-10 w-10 mx-auto text-green-500 mb-2" />

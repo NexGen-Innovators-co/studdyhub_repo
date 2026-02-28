@@ -4,33 +4,13 @@ import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Clock,
-  CheckCircle,
-  XCircle,
-  Loader2,
-  ArrowRight,
-  AlertCircle,
-  RefreshCw,
-  UserCog,
-  X,
-  Zap,
-  Trophy,
-  Target,
-  Sparkles,
-  Users,
-  Volume2,
-  VolumeX,
-  LogOut,
+  Clock, CheckCircle, XCircle, Loader2, ArrowRight, AlertCircle,
+  RefreshCw, UserCog, X, Zap, Trophy, Target, Sparkles,
+  Users, Volume2, VolumeX, LogOut,
 } from 'lucide-react';
 import {
-  LiveQuizSession,
-  LiveQuizPlayer,
-  LiveQuizQuestion,
-  LiveQuizAnswer,
-  submitAnswer,
-  advanceToNextQuestion,
-  endQuizSession,
-  advanceQuestionFallback,
+  LiveQuizSession, LiveQuizPlayer, LiveQuizQuestion, LiveQuizAnswer,
+  submitAnswer, advanceToNextQuestion, endQuizSession, advanceQuestionFallback,
 } from '@/services/liveQuizService';
 
 interface LiveQuizActiveFullscreenProps {
@@ -57,33 +37,23 @@ interface LiveQuizActiveFullscreenProps {
   onExitFullscreen: () => void;
 }
 
-// Enhanced Circular SVG timer ring with pulsing effect
+// ─── Timer Ring ─────────────────────────────────────────────────────────────
 const TimerRing: React.FC<{ timeRemaining: number; timeLimit: number }> = ({ timeRemaining, timeLimit }) => {
   const radius = 45;
   const circumference = 2 * Math.PI * radius;
   const progress = timeLimit > 0 ? timeRemaining / timeLimit : 0;
   const offset = circumference * (1 - progress);
-
   const isUrgent = timeRemaining <= 5;
   const isMid = timeRemaining <= 15 && timeRemaining > 5;
 
   return (
     <div className="relative flex items-center justify-center" style={{ width: 110, height: 110 }}>
       <svg width="110" height="110" className="-rotate-90">
-        {/* Background circle */}
+        <circle cx="55" cy="55" r={radius} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
         <circle
-          cx="55" cy="55" r={radius}
-          fill="none"
-          strokeWidth="8"
-          className="stroke-gray-300 dark:stroke-white/10"
-        />
-        {/* Progress arc */}
-        <circle
-          cx="55" cy="55" r={radius}
-          fill="none"
+          cx="55" cy="55" r={radius} fill="none"
           stroke={isUrgent ? '#ef4444' : isMid ? '#f59e0b' : '#10b981'}
-          strokeWidth="8"
-          strokeLinecap="round"
+          strokeWidth="8" strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
           className={isUrgent ? 'animate-pulse' : ''}
@@ -91,12 +61,8 @@ const TimerRing: React.FC<{ timeRemaining: number; timeLimit: number }> = ({ tim
         />
       </svg>
       <div className="absolute flex flex-col items-center">
-        <Clock className={`h-6 w-6 mb-1 ${isUrgent ? 'text-red-500 dark:text-red-400 animate-pulse' : 'text-gray-700 dark:text-white'}`} />
-        <span
-          className={`text-3xl font-bold tabular-nums ${
-            isUrgent ? 'text-red-500 dark:text-red-400 animate-pulse' : isMid ? 'text-amber-500 dark:text-amber-400' : 'text-gray-900 dark:text-white'
-          }`}
-        >
+        <Clock className={`h-5 w-5 mb-0.5 ${isUrgent ? 'text-red-400 animate-pulse' : 'text-white/60'}`} />
+        <span className={`text-3xl font-black tabular-nums leading-none ${isUrgent ? 'text-red-400 animate-pulse' : isMid ? 'text-amber-400' : 'text-white'}`}>
           {timeRemaining}
         </span>
       </div>
@@ -104,28 +70,19 @@ const TimerRing: React.FC<{ timeRemaining: number; timeLimit: number }> = ({ tim
   );
 };
 
+// ─── Answer option colors (Kahoot-style) ────────────────────────────────────
+const OPTION_STYLES = [
+  { base: 'rgba(239,68,68,0.15)', border: 'rgba(239,68,68,0.4)', selected: 'rgba(239,68,68,0.45)', glow: 'rgba(239,68,68,0.3)', icon: '▲', label: 'A' },
+  { base: 'rgba(59,130,246,0.15)', border: 'rgba(59,130,246,0.4)', selected: 'rgba(59,130,246,0.45)', glow: 'rgba(59,130,246,0.3)', icon: '◆', label: 'B' },
+  { base: 'rgba(234,179,8,0.15)', border: 'rgba(234,179,8,0.4)', selected: 'rgba(234,179,8,0.45)', glow: 'rgba(234,179,8,0.3)', icon: '●', label: 'C' },
+  { base: 'rgba(16,185,129,0.15)', border: 'rgba(16,185,129,0.4)', selected: 'rgba(16,185,129,0.45)', glow: 'rgba(16,185,129,0.3)', icon: '■', label: 'D' },
+];
+
 const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
-  session,
-  answers,
-  players,
-  currentQuestion,
-  allQuestions,
-  selectedAnswer,
-  setSelectedAnswer,
-  hasAnswered,
-  setHasAnswered,
-  timeRemaining,
-  isLoading,
-  error,
-  setError,
-  isHost,
-  userId,
-  isPlayer,
-  refreshSessionState,
-  setIsLoading,
-  resetView,
-  toast,
-  onExitFullscreen,
+  session, answers, players, currentQuestion, allQuestions,
+  selectedAnswer, setSelectedAnswer, hasAnswered, setHasAnswered,
+  timeRemaining, isLoading, error, setError, isHost, userId, isPlayer,
+  refreshSessionState, setIsLoading, resetView, toast, onExitFullscreen,
 }) => {
   const timeoutFiredRef = useRef<string | null>(null);
   const [showCorrectAnswer, setShowCorrectAnswer] = useState(false);
@@ -133,6 +90,7 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
   const [answerResult, setAnswerResult] = useState<{ isCorrect: boolean; points: number } | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const undoTimeoutRef = useRef<number | null>(null);
 
   // Audio refs
   const bgMusicRef = useRef<HTMLAudioElement | null>(null);
@@ -146,10 +104,8 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
   const endSfxRef = useRef<HTMLAudioElement | null>(null);
   const clickSfxRef = useRef<HTMLAudioElement | null>(null);
 
-  // Initialize and manage audio
+  // Initialize audio
   useEffect(() => {
-    // Create audio instances
-    // Use the provided Supabase-hosted tracks for background and SFX
     const bgUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/sonican-informational-quiz-loop-397409.mp3';
     const correctUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/mixkit-correct-answer-tone-2870.wav';
     const tickUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/mixkit-fast-wall-clock-ticking-1063.wav';
@@ -157,99 +113,62 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
     const endUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/mixkit-end-of-show-clapping-crowd-477.wav';
 
     bgMusicRef.current = new Audio(bgUrl);
-    // allow cross-origin playback for hosted assets
-    try {
-      // some browsers require crossOrigin to be set before loading
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
-      bgMusicRef.current.crossOrigin = 'anonymous';
-    } catch (e) {}
+    try { (bgMusicRef.current as any).crossOrigin = 'anonymous'; } catch (e) {}
     bgMusicRef.current.loop = true;
     bgMusicRef.current.volume = 0.3;
 
-    // Map provided Supabase files to SFX refs
     correctSfxRef.current = new Audio(correctUrl);
     incorrectSfxRef.current = new Audio(incorrectUrl);
-
-    // thinking/background loops
     thinkingLoopRef.current = new Audio(bgUrl);
     thinkingLoopRef.current.loop = true;
     thinkingLoopRef.current.volume = 0.45;
-
-    // tick and end sounds
     tickRef.current = new Audio(tickUrl);
     endSfxRef.current = new Audio(endUrl);
-
-    // Map remaining UX placeholders to provided Supabase assets
-    // short chime for start/submit
     startSfxRef.current = new Audio(correctUrl);
     submitSfxRef.current = new Audio(correctUrl);
-    // use ticking for quick feedback/advance/click (single play)
     advanceSfxRef.current = new Audio(tickUrl);
     clickSfxRef.current = new Audio(tickUrl);
 
-    // Attempt to play background music interaction
     const playMusic = async () => {
-      try {
-        if (bgMusicRef.current && !isMuted) {
-          await bgMusicRef.current.play();
-        }
-      } catch (err) {
-        // console.warn("Audio autoplay blocked", err);
-      }
+      try { if (bgMusicRef.current && !isMuted) await bgMusicRef.current.play(); } catch (err) {}
     };
-
     playMusic();
 
     return () => {
-      if (bgMusicRef.current) {
-        bgMusicRef.current.pause();
-        bgMusicRef.current = null;
-      }
+      if (bgMusicRef.current) { bgMusicRef.current.pause(); bgMusicRef.current = null; }
     };
   }, []);
 
-  // Handle Mute Toggle
+  // Mute toggle
   useEffect(() => {
     if (bgMusicRef.current) {
-      if (isMuted) {
-        bgMusicRef.current.pause();
-      } else {
-        bgMusicRef.current.play().catch(() => {});
-      }
+      if (isMuted) { bgMusicRef.current.pause(); }
+      else { bgMusicRef.current.play().catch(() => {}); }
     }
-
-    // toggle thinking loop as well
     if (thinkingLoopRef.current) {
-      if (isMuted) {
-        thinkingLoopRef.current.pause();
-      } else {
-        // only autoplay if a question is active
-        if (currentQuestion) thinkingLoopRef.current.play().catch(() => {});
-      }
+      if (isMuted) { thinkingLoopRef.current.pause(); }
+      else if (currentQuestion) { thinkingLoopRef.current.play().catch(() => {}); }
     }
   }, [isMuted]);
 
-  // Reset states on question change
+  // Reset on question change
   useEffect(() => {
     timeoutFiredRef.current = null;
     setShowCorrectAnswer(false);
     setParticles([]);
     setAnswerResult(null);
-    // play question start chime and start thinking loop
     try {
-      if (!isMuted && startSfxRef.current) {
-        startSfxRef.current.currentTime = 0;
-        startSfxRef.current.play().catch(() => {});
-      }
-      if (!isMuted && thinkingLoopRef.current) {
-        thinkingLoopRef.current.currentTime = 0;
-        thinkingLoopRef.current.play().catch(() => {});
-      }
+      if (!isMuted && startSfxRef.current) { startSfxRef.current.currentTime = 0; startSfxRef.current.play().catch(() => {}); }
+      if (!isMuted && thinkingLoopRef.current) { thinkingLoopRef.current.currentTime = 0; thinkingLoopRef.current.play().catch(() => {}); }
     } catch (e) {}
   }, [currentQuestion?.id]);
 
-  // Track small screens to adapt UI and toasts
+  useEffect(() => {
+    return () => {
+      if (undoTimeoutRef.current) { window.clearTimeout(undoTimeoutRef.current); undoTimeoutRef.current = null; }
+    };
+  }, []);
+
   useEffect(() => {
     const update = () => setIsMobile(typeof window !== 'undefined' ? window.innerWidth < 640 : false);
     update();
@@ -257,14 +176,10 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
     return () => window.removeEventListener('resize', update);
   }, []);
 
-  // Show correct answer after submission
   useEffect(() => {
-    if (hasAnswered && !isHost) {
-      setTimeout(() => setShowCorrectAnswer(true), 1000);
-    }
+    if (hasAnswered && !isHost) setTimeout(() => setShowCorrectAnswer(true), 1000);
   }, [hasAnswered, isHost]);
 
-  // Pause thinking loop when answered or time's up
   useEffect(() => {
     if (thinkingLoopRef.current) {
       if (hasAnswered || timeRemaining === 0) {
@@ -275,91 +190,53 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
     }
   }, [hasAnswered, timeRemaining, isMuted, currentQuestion]);
 
-  // Create celebration confetti explosion
   const createConfetti = () => {
     const colors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEEAD'];
-    const newParticles = Array.from({ length: 100 }, (_, i) => ({
+    const np = Array.from({ length: 100 }, (_, i) => ({
       id: Date.now() + i,
-      x: 50, // Start from center
-      y: 50,
+      x: 50, y: 50,
       color: colors[Math.floor(Math.random() * colors.length)],
       size: Math.random() * 10 + 5,
       rotation: Math.random() * 360,
-      velocityX: (Math.random() - 0.5) * 100, // Random spread X
-      velocityY: (Math.random() - 0.5) * 100, // Random spread Y
+      velocityX: (Math.random() - 0.5) * 100,
+      velocityY: (Math.random() - 0.5) * 100,
     }));
-    setParticles(newParticles);
-    
-    // Play SFX
-    if (!isMuted && correctSfxRef.current) {
-      correctSfxRef.current.currentTime = 0;
-      correctSfxRef.current.play().catch(() => {});
-    }
-
+    setParticles(np);
+    if (!isMuted && correctSfxRef.current) { correctSfxRef.current.currentTime = 0; correctSfxRef.current.play().catch(() => {}); }
     setTimeout(() => setParticles([]), 4000);
   };
 
-  // Play incorrect sfx
   const playIncorrectSound = () => {
-    if (!isMuted && incorrectSfxRef.current) {
-      incorrectSfxRef.current.currentTime = 0;
-      incorrectSfxRef.current.play().catch(() => {});
-    }
+    if (!isMuted && incorrectSfxRef.current) { incorrectSfxRef.current.currentTime = 0; incorrectSfxRef.current.play().catch(() => {}); }
   };
 
   // Auto-submit on timeout
   useEffect(() => {
     if (
-      timeRemaining !== 0 ||
-      hasAnswered ||
-      isLoading ||
-      !isPlayer ||
-      !currentQuestion ||
-      !session ||
-      timeoutFiredRef.current === currentQuestion.id
+      timeRemaining !== 0 || hasAnswered || isLoading || !isPlayer ||
+      !currentQuestion || !session || timeoutFiredRef.current === currentQuestion.id
     ) return;
-
     timeoutFiredRef.current = currentQuestion.id;
-    // play submit SFX for auto-submit
     try {
-      if (!isMuted && submitSfxRef.current) {
-        submitSfxRef.current.currentTime = 0;
-        submitSfxRef.current.play().catch(() => {});
-      }
+      if (!isMuted && submitSfxRef.current) { submitSfxRef.current.currentTime = 0; submitSfxRef.current.play().catch(() => {}); }
     } catch (e) {}
-
     submitAnswer(session.id, currentQuestion.id, -1, currentQuestion.time_limit || 0);
-
-    if (!isMobile) {
-      toast({
-        title: "⏱️ Time's Up!",
-        description: 'No answer was submitted in time.',
-        variant: 'destructive',
-      });
-    }
+    if (!isMobile) toast({ title: "⏱️ Time's Up!", description: 'No answer was submitted in time.', variant: 'destructive' });
   }, [timeRemaining, hasAnswered, isLoading, isPlayer, currentQuestion, session, toast]);
 
+  // ─── Handlers ───────────────────────────────────────────────────────────────
   const handleSubmitAnswer = async () => {
     if (selectedAnswer === null || !currentQuestion || !session || !isPlayer) return;
-
+    if (undoTimeoutRef.current) { window.clearTimeout(undoTimeoutRef.current); undoTimeoutRef.current = null; }
     setIsLoading(true);
     setError(null);
-
     try {
-      // play submit SFX on explicit submit
       try {
-        if (!isMuted && submitSfxRef.current) {
-          submitSfxRef.current.currentTime = 0;
-          submitSfxRef.current.play().catch(() => {});
-        }
+        if (!isMuted && submitSfxRef.current) { submitSfxRef.current.currentTime = 0; submitSfxRef.current.play().catch(() => {}); }
       } catch (e) {}
-
       const timeTaken = currentQuestion.start_time
-        ? Math.floor((Date.now() - new Date(currentQuestion.start_time).getTime()) / 1000)
-        : 0;
-
+        ? Math.floor((Date.now() - new Date(currentQuestion.start_time).getTime()) / 1000) : 0;
       const result = await submitAnswer(session.id, currentQuestion.id, selectedAnswer, timeTaken);
-
       if (result.error) {
         if (result.error.includes('409') || result.error.toLowerCase().includes('conflict')) {
           setHasAnswered(true);
@@ -368,23 +245,10 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
         }
         throw new Error(result.error);
       }
-
       setHasAnswered(true);
       setAnswerResult({ isCorrect: result.isCorrect, points: result.points });
-
-      if (result.isCorrect) {
-        createConfetti();
-      } else {
-        playIncorrectSound();
-      }
-
-      // Muted toast to avoid clutter since we have the feedback overlay
-      // toast({
-      //   title: result.isCorrect ? '✅ Correct!' : '❌ Incorrect',
-      //   description: result.isCorrect ? `+${result.points} points` : 'Better luck next time!',
-      //   variant: result.isCorrect ? 'default' : 'destructive',
-      // });
-
+      if (result.isCorrect) { createConfetti(); }
+      else { playIncorrectSound(); }
       setTimeout(() => refreshSessionState(), 500);
     } catch (err: any) {
       setError(err.message || 'Failed to submit answer');
@@ -395,32 +259,30 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
     }
   };
 
+  const handleOptionSelect = (index: number) => {
+    if (hasAnswered || isLoading || !isPlayer || timeRemaining === 0 || !currentQuestion || !session) return;
+    setSelectedAnswer(index);
+    if (undoTimeoutRef.current) { window.clearTimeout(undoTimeoutRef.current); undoTimeoutRef.current = null; }
+    handleSubmitAnswer();
+  };
+
   const handleNextQuestion = async () => {
     if (!session || !isHost) return;
-
     setIsLoading(true);
     setError(null);
-
     try {
       const result = await advanceToNextQuestion(session.id);
       if (result.error) throw new Error(result.error);
-
       try {
-        if (!isMuted && advanceSfxRef.current) {
-          advanceSfxRef.current.currentTime = 0;
-          advanceSfxRef.current.play().catch(() => {});
-        }
+        if (!isMuted && advanceSfxRef.current) { advanceSfxRef.current.currentTime = 0; advanceSfxRef.current.play().catch(() => {}); }
       } catch (e) {}
-
       setHasAnswered(false);
       setSelectedAnswer(null);
       await refreshSessionState();
-
       if (!isMobile) toast({ title: 'Question Advanced', description: 'Next question is now active' });
     } catch (err: any) {
       setError(err.message || 'Failed to advance');
       if (!isMobile) toast({ title: 'Error', description: err.message || 'Failed to advance', variant: 'destructive' });
-
       try {
         const fb = await advanceQuestionFallback(session.id);
         if (fb.error) throw new Error(fb.error);
@@ -438,36 +300,13 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
 
   const handleEndQuiz = async () => {
     if (!session || !isHost) return;
-
     setIsLoading(true);
     setError(null);
-
-    // Stop all audio playback except applause
-    const audioRefs = [
-      bgMusicRef,
-      correctSfxRef,
-      incorrectSfxRef,
-      startSfxRef,
-      thinkingLoopRef,
-      tickRef,
-      submitSfxRef,
-      advanceSfxRef,
-      clickSfxRef
-    ];
-    audioRefs.forEach(ref => {
-      if (ref.current) {
-        try {
-          ref.current.pause();
-          ref.current.currentTime = 0;
-        } catch {}
-      }
-    });
-
+    const audioRefs = [bgMusicRef, correctSfxRef, incorrectSfxRef, startSfxRef, thinkingLoopRef, tickRef, submitSfxRef, advanceSfxRef, clickSfxRef];
+    audioRefs.forEach(ref => { if (ref.current) { try { ref.current.pause(); ref.current.currentTime = 0; } catch {} } });
     try {
       const result = await endQuizSession(session.id);
       if (result.error) throw new Error(result.error);
-
-      // Play applause sound fully (clone to avoid interruption)
       try {
         if (!isMuted && endSfxRef.current) {
           const applause = endSfxRef.current.cloneNode(true) as HTMLAudioElement;
@@ -475,7 +314,6 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
           applause.play().catch(() => {});
         }
       } catch (e) {}
-
       if (!isMobile) toast({ title: 'Quiz Ended', description: 'Thanks for playing!' });
       await refreshSessionState();
     } catch (err: any) {
@@ -488,485 +326,361 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
 
   if (!session || !currentQuestion) {
     return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="fixed inset-0 z-50 bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center"
-      >
-        <div className="text-center text-gray-900 dark:text-white">
-          <Loader2 className="h-16 w-16 animate-spin mx-auto text-blue-600 dark:text-white mb-4" />
-          <p className="text-xl">Loading quiz...</p>
+      <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#0f0c29,#302b63,#24243e)' }}>
+        <div className="text-center text-white">
+          <Loader2 className="h-16 w-16 animate-spin mx-auto mb-4 text-indigo-400" />
+          <p className="text-xl text-white/70">Loading quiz…</p>
         </div>
-      </motion.div>
+      </div>
     );
   }
 
-  const currentIndex = allQuestions.findIndex((q) => q.id === currentQuestion.id);
+  // Derived values
+  const currentIndex = allQuestions.findIndex(q => q.id === currentQuestion.id);
   const totalQuestions = allQuestions.length;
   const progressPercent = totalQuestions > 0 ? ((currentIndex + 1) / totalQuestions) * 100 : 0;
-
-  const playingPlayers = players.filter((p) => p.is_playing);
+  const playingPlayers = players.filter(p => p.is_playing);
   const playersAnswered = playingPlayers.filter(
-    (p) => p.last_answered_at && new Date(p.last_answered_at) >= new Date(currentQuestion.start_time || 0)
+    p => p.last_answered_at && new Date(p.last_answered_at) >= new Date(currentQuestion.start_time || 0)
   ).length;
-
   const answerOptions = currentQuestion.options || [];
   const correctIndex = currentQuestion.correct_answer;
 
-
+  const COSMIC: React.CSSProperties = { background: 'linear-gradient(135deg,#0f0c29,#302b63,#24243e)' };
+  const GLASS = (extra?: string): React.CSSProperties => ({
+    background: extra || 'rgba(255,255,255,0.04)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    backdropFilter: 'blur(12px)',
+  });
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black overflow-auto"
+      className="fixed inset-0 z-50 overflow-auto"
+      style={COSMIC}
     >
-      {/* Background Image & Overlay */}
-      <div
-        className="fixed inset-0 z-0"
-        style={{
-          backgroundImage: "url('/herobackgroundimg.png')",
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      />
-      
-      <div className="fixed inset-0 z-0 bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
-         <div className="absolute inset-0 bg-cover bg-center opacity-40 dark:opacity-40" style={{ backgroundImage: "url('/herobackgroundimg.png')" }} />
-         <div className="absolute inset-0 bg-white/30 dark:bg-slate-950/80 backdrop-blur-sm" />
+      {/* Ambient blobs */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full blur-3xl" style={{ background: 'rgba(99,102,241,0.1)' }} />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 rounded-full blur-3xl" style={{ background: 'rgba(139,92,246,0.08)' }} />
       </div>
 
-
-      {/* Confetti Explosion System */}
+      {/* Confetti particles */}
       <AnimatePresence>
-        {particles.map((particle) => (
+        {particles.map(particle => (
           <motion.div
             key={particle.id}
             initial={{ opacity: 1, scale: 0, x: '50vw', y: '50vh', rotate: 0 }}
-            animate={{ 
-              opacity: 0, 
-              scale: 1, 
-              x: `calc(50vw + ${particle.velocityX}vw)`, 
-              y: `calc(50vh + ${particle.velocityY}vh)`,
-              rotate: particle.rotation 
-            }}
+            animate={{ opacity: 0, scale: 1, x: `calc(50vw + ${particle.velocityX}vw)`, y: `calc(50vh + ${particle.velocityY}vh)`, rotate: particle.rotation }}
             transition={{ duration: 1.5, ease: 'easeOut' }}
             className="fixed pointer-events-none rounded-sm z-[100]"
-            style={{ 
-              backgroundColor: particle.color,
-              width: particle.size,
-              height: particle.size,
-              left: 0, 
-              top: 0 
-            }}
+            style={{ backgroundColor: particle.color, width: particle.size, height: particle.size, left: 0, top: 0 }}
           />
         ))}
       </AnimatePresence>
 
-      {/* Top Controls - Responsive Header */}
+      {/* Top bar: controls */}
       <div
-        className="fixed z-50 flex gap-2"
-        style={{
-          top: '1rem',
-          left: '0',
-          right: '0',
-          width: '100vw',
-          justifyContent: 'flex-end',
-          paddingLeft: '1rem',
-          paddingRight: '1rem',
-          pointerEvents: 'none',
-        }}
+        className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 sm:px-6 py-3"
+        style={{ background: 'rgba(0,0,0,0.4)', borderBottom: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(16px)' }}
       >
-        <div
-          className="flex gap-2 w-full"
-          style={{
-            maxWidth: '100vw',
-            justifyContent: 'flex-end',
-            pointerEvents: 'auto',
-          }}
-        >
-          {/* On mobile, spread buttons horizontally */}
-          <div className="flex flex-row w-full max-w-xs sm:max-w-none sm:w-auto justify-between sm:justify-end gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsMuted(!isMuted)}
-              className="text-gray-700 dark:text-white hover:bg-black/5 dark:hover:bg-white/20 rounded-full"
-            >
-              {isMuted ? <VolumeX className="h-6 w-6" /> : <Volume2 className="h-6 w-6" />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                // Stop all playing audio when exiting fullscreen
-                try {
-                  const audios = document.querySelectorAll('audio');
-                  audios.forEach((audio) => {
-                    (audio as HTMLAudioElement).pause();
-                    (audio as HTMLAudioElement).currentTime = 0;
-                  });
-                } catch (e) {}
-                onExitFullscreen();
-              }}
-              className="text-gray-700 dark:text-white hover:bg-black/5 dark:hover:bg-white/20 rounded-full"
-            >
-              <X className="h-6 w-6" />
-            </Button>
+        {/* Left: progress + question counter */}
+        <div className="flex items-center gap-4 flex-1 min-w-0">
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl" style={GLASS()}>
+            <Target className="h-4 w-4 text-indigo-400" />
+            <span className="text-white font-bold text-sm">{currentIndex + 1} / {totalQuestions}</span>
           </div>
+          {/* Progress bar */}
+          <div className="flex-1 max-w-xs hidden md:block">
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
+              <motion.div
+                className="h-full rounded-full"
+                style={{ background: 'linear-gradient(to right,#10b981,#6366f1)' }}
+                initial={{ width: 0 }}
+                animate={{ width: `${progressPercent}%` }}
+                transition={{ duration: 0.8, ease: 'easeOut' }}
+              />
+            </div>
+          </div>
+          {isHost && (
+            <span className="px-2 py-1 rounded-lg text-xs font-bold text-yellow-300" style={{ background: 'rgba(250,204,21,0.15)', border: '1px solid rgba(250,204,21,0.3)' }}>
+              👑 Host
+            </span>
+          )}
+        </div>
+
+        {/* Right: players answered + controls */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl" style={GLASS()}>
+            <Users className="h-3.5 w-3.5 text-white/50" />
+            <span className="text-white/70 text-sm font-semibold">{playersAnswered}/{playingPlayers.length}</span>
+          </div>
+          <Button
+            variant="ghost" size="icon"
+            onClick={() => setIsMuted(!isMuted)}
+            className="text-white/60 hover:text-white hover:bg-white/10 rounded-full h-8 w-8"
+          >
+            {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+          </Button>
+          <Button
+            variant="ghost" size="icon"
+            onClick={() => {
+              try { document.querySelectorAll('audio').forEach(a => { a.pause(); a.currentTime = 0; }); } catch (e) {}
+              onExitFullscreen();
+            }}
+            className="text-white/60 hover:text-white hover:bg-white/10 rounded-full h-8 w-8"
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
-      <div className="relative z-10 container mx-auto px-4 py-8 max-w-6xl min-h-screen flex flex-col">
-        {/* Header Section */}
-        <motion.div
-          initial={{ y: -50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.6, type: 'spring' }}
-          className="mb-8"
-        >
-          {/* Progress Bar */}
-          <div className="relative mb-6">
-            <div className="w-full h-4 bg-gray-200 dark:bg-white/10 backdrop-blur-sm rounded-full overflow-hidden">
-              <motion.div
-                className="h-full bg-gradient-to-r from-green-400 via-emerald-400 to-green-500 rounded-full shadow-lg"
-                initial={{ width: 0 }}
-                animate={{ width: `${progressPercent}%` }}
-                transition={{ duration: 1, ease: 'easeOut' }}
-              />
-            </div>
-            <motion.div
-              className="absolute -top-2 bg-white rounded-full w-8 h-8 shadow-xl flex items-center justify-center border border-gray-100 dark:border-transparent"
-              initial={{ left: '0%' }}
-              animate={{ left: `${progressPercent}%` }}
-              transition={{ duration: 1, ease: 'easeOut' }}
-              style={{ transform: 'translateX(-50%)' }}
-            >
-              <Zap className="h-4 w-4 text-yellow-500" />
-            </motion.div>
-          </div>
+      {/* Main content */}
+      <div className="relative z-10 container mx-auto px-4 pt-20 pb-8 max-w-6xl min-h-screen flex flex-col">
 
-          {/* Header Info */}
-          <div className="relative z-10 flex items-center justify-between px-6 py-4 bg-white/80 dark:bg-black/20 backdrop-blur-md border-b border-gray-200 dark:border-white/10 shrink-0">
+        {/* ─── HOST MEDIATOR VIEW (not playing) ─── */}
+        {isHost && !isPlayer ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 mt-4">
+
+            {/* Leaderboard */}
             <motion.div
-              initial={{ x: -30, opacity: 0 }}
+              initial={{ x: -40, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="flex items-center gap-4"
+              className="lg:col-span-1 rounded-3xl overflow-hidden flex flex-col max-h-[600px]"
+              style={GLASS()}
             >
-              <div className="bg-white/60 dark:bg-white/20 backdrop-blur-lg rounded-2xl px-6 py-3 border border-gray-200 dark:border-white/30 shadow-sm dark:shadow-none">
-                <div className="flex items-center gap-3">
-                  <Target className="h-6 w-6 text-blue-600 dark:text-white" />
-                  <div>
-                    <div className="text-xs opacity-80 text-gray-600 dark:text-white/80">Question</div>
-                    <div className="text-2xl font-bold">
-                      {currentIndex + 1} / {totalQuestions}
+              <div className="flex items-center gap-2.5 px-5 py-4 border-b" style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.2)' }}>
+                <Trophy className="h-5 w-5 text-yellow-400" />
+                <h3 className="text-white font-bold">Leaderboard</h3>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {[...playingPlayers].sort((a, b) => b.score - a.score).map((player, idx) => (
+                  <div
+                    key={player.id}
+                    className="flex items-center justify-between p-3 rounded-xl"
+                    style={{
+                      background: idx === 0 ? 'rgba(250,204,21,0.12)' : idx === 1 ? 'rgba(156,163,175,0.1)' : idx === 2 ? 'rgba(234,88,12,0.1)' : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${idx === 0 ? 'rgba(250,204,21,0.3)' : idx === 1 ? 'rgba(156,163,175,0.2)' : idx === 2 ? 'rgba(234,88,12,0.2)' : 'rgba(255,255,255,0.06)'}`,
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm text-white ${idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-500' : idx === 2 ? 'bg-orange-600' : 'bg-white/10'}`}>
+                        {idx < 3 ? ['🥇','🥈','🥉'][idx] : idx + 1}
+                      </div>
+                      <div>
+                        <div className="text-white font-bold text-sm truncate max-w-[110px]">{player.display_name}</div>
+                        {answers.some(a => a.user_id === player.user_id && a.question_id === currentQuestion.id) ? (
+                          <span className="text-[10px] text-emerald-400 font-semibold">✓ Answered</span>
+                        ) : (
+                          <span className="text-[10px] text-white/30 italic">Thinking…</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-yellow-400 font-black">{player.score}</div>
+                      <div className="text-white/30 text-xs">pts</div>
                     </div>
                   </div>
-                </div>
+                ))}
+                {playingPlayers.length === 0 && (
+                  <div className="text-center text-white/30 py-8 text-sm">Waiting for players…</div>
+                )}
               </div>
-              
-              {isHost && (
-                <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-4 py-2 text-base shadow-md">
-                  <Trophy className="h-4 w-4 mr-2" /> Host
-                </Badge>
-              )}
             </motion.div>
 
+            {/* Question + Chart */}
             <motion.div
-              initial={{ x: 30, opacity: 0 }}
+              initial={{ x: 40, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="bg-white/60 dark:bg-white/20 backdrop-blur-lg rounded-2xl px-6 py-3 border border-gray-200 dark:border-white/30 shadow-sm dark:shadow-none"
+              className="lg:col-span-2 flex flex-col gap-5"
             >
-              <div className="flex items-center gap-3">
-                <Users className="h-5 w-5 text-purple-600 dark:text-white" />
-                <div>
-                  <div className="text-xs opacity-80 text-gray-600 dark:text-white/80">Players Answered</div>
-                  <div className="text-xl font-bold">{playersAnswered} / {playingPlayers.length}</div>
+              <div className="flex flex-col items-center gap-4">
+                <TimerRing timeRemaining={timeRemaining} timeLimit={currentQuestion.time_limit || 30} />
+                <h2 className="text-2xl md:text-3xl font-black text-white text-center leading-tight">
+                  {currentQuestion.question_text}
+                </h2>
+              </div>
+
+              {/* Live response chart */}
+              <div className="flex-1 rounded-3xl p-6 flex flex-col" style={GLASS()}>
+                <p className="text-white/50 text-xs uppercase tracking-widest font-semibold mb-4 flex items-center gap-2">
+                  <Users className="h-3.5 w-3.5" /> Live Response Distribution
+                </p>
+                <div className="flex items-end justify-around gap-4 h-48 w-full">
+                  {(() => {
+                    const currentAnswers = answers.filter(a => a.question_id === currentQuestion.id);
+                    const counts = answerOptions.map((_, i) => currentAnswers.filter(a => a.selected_option === i).length);
+                    const max = Math.max(...counts, 1);
+                    return answerOptions.map((opt, i) => {
+                      const count = counts[i];
+                      const height = (count / max) * 100;
+                      const isCorrect = i === correctIndex;
+                      const showResult = showCorrectAnswer;
+                      const barBg = showResult
+                        ? (isCorrect ? 'rgba(16,185,129,0.7)' : 'rgba(255,255,255,0.1)')
+                        : OPTION_STYLES[i % OPTION_STYLES.length].selected;
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
+                          <div className="text-white/60 font-bold text-sm">{count}</div>
+                          <motion.div
+                            initial={{ height: 0 }}
+                            animate={{ height: `${height}%` }}
+                            transition={{ type: 'spring', damping: 20 }}
+                            className="w-full max-w-[70px] rounded-t-xl min-h-[8px] relative"
+                            style={{ background: barBg }}
+                          >
+                            {showResult && isCorrect && (
+                              <div className="absolute -top-8 left-1/2 -translate-x-1/2">
+                                <CheckCircle className="h-7 w-7 text-emerald-400 animate-bounce" />
+                              </div>
+                            )}
+                          </motion.div>
+                          <div
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-black text-white"
+                            style={{ background: OPTION_STYLES[i % OPTION_STYLES.length].selected }}
+                          >
+                            {String.fromCharCode(65 + i)}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
+              </div>
+
+              {/* Host Controls */}
+              <div className="flex gap-3 justify-end">
+                {session?.advance_mode === 'manual' ? (
+                  <button
+                    onClick={handleNextQuestion}
+                    disabled={isLoading || timeRemaining > 0}
+                    className="px-8 py-4 rounded-2xl font-black text-white text-base disabled:opacity-50 transition-all hover:scale-105 relative overflow-hidden group"
+                    style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.3)' }}
+                  >
+                    {timeRemaining > 0 ? <><Clock className="h-4 w-4 mr-2 inline animate-pulse" />Wait {timeRemaining}s</> : <>Next Question <ArrowRight className="h-4 w-4 ml-2 inline" /></>}
+                    <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleNextQuestion}
+                    disabled={isLoading || timeRemaining > 0}
+                    className="px-6 py-4 rounded-2xl font-bold text-white/70 hover:text-white text-sm disabled:opacity-50 transition-all"
+                    style={GLASS()}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2 inline" />
+                    {timeRemaining > 0 ? `Auto: ${timeRemaining}s` : 'Force Next'}
+                  </button>
+                )}
+                <button
+                  onClick={handleEndQuiz}
+                  disabled={isLoading}
+                  className="px-5 py-4 rounded-2xl font-bold text-red-400 hover:text-red-300 text-sm disabled:opacity-50 transition-all"
+                  style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}
+                >
+                  End Quiz
+                </button>
               </div>
             </motion.div>
           </div>
-        </motion.div>
 
-        {/* Main Content */}
-        <div className="flex-1 w-full max-w-7xl mx-auto flex flex-col justify-center">
-          {isHost && !isPlayer ? (
-            /* --- HOST VIEW (Only if not playing) --- */
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 w-full mt-4 h-full min-h-[500px]">
-              {/* LEFT: Leaderboard */}
-              <motion.div
-                initial={{ x: -50, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                className="lg:col-span-1 bg-white/60 dark:bg-black/40 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-white/10 p-6 flex flex-col overflow-hidden max-h-[600px] shadow-lg dark:shadow-none"
-              >
-                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-200 dark:border-white/10">
-                  <Trophy className="h-8 w-8 text-yellow-500 dark:text-yellow-400 z-20" />
-                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white z-20 relative">Leaderboard</h3>
-                </div>
-                
-                <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
-                  {[...playingPlayers]
-                    .sort((a, b) => b.score - a.score)
-                    .map((player, idx) => (
-                      <div
-                        key={player.id}
-                        className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
-                          idx === 0 ? 'bg-yellow-500/20 border-yellow-500/50' : 
-                          idx === 1 ? 'bg-slate-300/40 dark:bg-slate-300/20 border-slate-300/50' : 
-                          idx === 2 ? 'bg-orange-700/20 border-orange-700/50' : 
-                          'bg-white/40 dark:bg-white/5 border-gray-200 dark:border-white/10'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`
-                            w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm
-                            ${idx < 3 ? 'text-white shadow-lg' : 'text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-white/10'}
-                            ${idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-slate-500 dark:bg-slate-400' : idx === 2 ? 'bg-orange-600 dark:bg-orange-700' : ''}
-                          `}>
-                            {idx + 1}
-                          </div>
-                          <div>
-                            <div className="font-bold text-gray-900 dark:text-white text-lg truncate max-w-[120px]">{player.display_name}</div>
-                             <div className="flex items-center gap-2">
-                               {answers.some(a => a.user_id === player.user_id && a.question_id === currentQuestion.id) ? (
-                                   <Badge variant="outline" className="text-[10px] px-1 py-0 h-5 bg-green-500/20 text-green-700 dark:text-green-300 border-green-500/30">Answered</Badge>
-                               ) : (
-                                   <span className="text-[10px] text-gray-500 dark:text-gray-400 italic">Thinking...</span>
-                               )}
-                             </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xl font-bold text-gray-900 dark:text-white">{player.score}</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">pts</div>
-                        </div>
-                      </div>
-                  ))}
-                  {playingPlayers.length === 0 && (
-                     <div className="text-center text-gray-500 dark:text-gray-400 py-8">Waiting for players...</div>
-                  )}
-                </div>
-              </motion.div>
-
-              {/* RIGHT: Question & Stats */}
-              <motion.div
-                 initial={{ x: 50, opacity: 0 }}
-                 animate={{ x: 0, opacity: 1 }}
-                 className="lg:col-span-2 flex flex-col h-full"
-              >
-                  {/* Timer & Question */}
-                  <div className="flex flex-col items-center mb-8 shrink-0">
-                     <TimerRing timeRemaining={timeRemaining} timeLimit={currentQuestion.time_limit || 30} />
-                     <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white leading-tight px-4 text-center mt-6 drop-shadow-sm line-clamp-3">
-                        {currentQuestion.question_text}
-                     </h2>
-                  </div>
-
-                  {/* Analytics Graph */}
-                  <div className="flex-1 bg-white/60 dark:bg-black/40 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-white/10 p-8 flex flex-col justify-end min-h-[300px] shadow-lg dark:shadow-none">
-                     <h4 className="text-gray-500 dark:text-white/60 font-medium mb-6 uppercase tracking-wider text-sm flex items-center gap-2">
-                        <Users className="w-4 h-4" /> Live Response Distribution
-                     </h4>
-                     <div className="flex items-end justify-around gap-4 h-64 w-full">
-                        {(() => {
-                            const currentAnswers = answers.filter(a => a.question_id === currentQuestion.id);
-                            const counts = answerOptions.map((_, i) => currentAnswers.filter(a => a.selected_option === i).length);
-                            const max = Math.max(...counts, 1); 
-
-                            return answerOptions.map((opt, i) => {
-                                const count = counts[i];
-                                const height = (count / max) * 100;
-                                const isCorrect = i === correctIndex;
-                                const showResult = showCorrectAnswer; 
-
-                                let barColor = 'bg-blue-500';
-                                if (showResult) {
-                                   if (isCorrect) barColor = 'bg-green-500 shadow-[0_0_20px_rgba(34,197,94,0.6)]';
-                                   else barColor = 'bg-slate-400 dark:bg-slate-600 opacity-50';
-                                }
-
-                                return (
-                                   <div key={i} className="flex-1 flex flex-col items-center gap-3 h-full justify-end group">
-                                      <div className={`text-gray-900 dark:text-white font-bold text-xl mb-1 transition-opacity ${count > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                                         {count} <span className="text-sm font-normal opacity-70 text-gray-500 dark:text-white/70">({Math.round((count / (currentAnswers.length || 1)) * 100)}%)</span>
-                                      </div>
-                                        <motion.div
-                                         initial={{ height: 0 }}
-                                         animate={{ height: `${height}%` }}
-                                         transition={{ type: 'spring', damping: 20 }}
-                                         className={`w-full max-w-[80px] rounded-t-xl relative min-h-[10px] ${barColor} transition-colors duration-500`}
-                                         style={{ marginTop: showResult && isCorrect ? '2.5rem' : undefined }}
-                                        >
-                                          {showResult && isCorrect && (
-                                            <div className="absolute top-0 left-1/2 -translate-x-1/2 mt-[-2.5rem] sm:mt-[-2.5rem]">
-                                              <CheckCircle className="h-8 w-8 text-green-500 dark:text-green-400 drop-shadow-lg animate-bounce" />
-                                            </div>
-                                          )}
-                                        </motion.div>
-                                      
-                                      <div className="h-12 w-12 rounded-full bg-gray-100 dark:bg-white/10 flex items-center justify-center text-gray-900 dark:text-white font-bold text-lg border border-gray-200 dark:border-white/20">
-                                         {String.fromCharCode(65 + i)}
-                                      </div>
-                                   </div>
-                                )
-                            });
-                        })()}
-                     </div>
-                  </div>
-                  
-                  {/* Host Controls */}
-                  <div className="flex gap-4 mt-6 justify-end shrink-0">
-                      {session?.advance_mode === 'manual' ? (
-                        <Button
-                            onClick={handleNextQuestion}
-                            disabled={isLoading || timeRemaining > 0}
-                            size="lg"
-                            className="bg-indigo-600 dark:bg-white text-white dark:text-indigo-900 hover:bg-indigo-700 dark:hover:bg-indigo-50 font-bold text-lg px-8 py-6 rounded-xl shadow-xl transition-all hover:scale-105"
-                        >
-                            {timeRemaining > 0 ? (
-                                <><Clock className="h-5 w-5 mr-2 animate-pulse" /> Wait {timeRemaining}s</>
-                            ) : (
-                                <>Next Question <ArrowRight className="h-5 w-5 ml-2" /></>
-                            )}
-                        </Button>
-                      ) : (
-                        <Button
-                            onClick={handleNextQuestion}
-                            variant="outline"
-                            disabled={isLoading || timeRemaining > 0}
-                            size="lg"
-                            className="border-gray-300 dark:border-white/30 text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-white/20 px-8 py-6 text-lg rounded-xl bg-white/50 dark:bg-transparent"
-                        >
-                            <RefreshCw className="h-5 w-5 mr-2" />
-                            {timeRemaining > 0 ? `Auto: ${timeRemaining}s` : 'Force Next'}
-                        </Button>
-                      )}
-                       <Button
-                            onClick={handleEndQuiz}
-                            variant="destructive"
-                            size="lg"
-                            disabled={isLoading}
-                             className="px-6 py-6 rounded-xl font-bold bg-red-500/80 hover:bg-red-600 border border-red-400/30"
-                        >
-                            End Quiz
-                        </Button>
-                  </div>
-              </motion.div>
-            </div>
-          ) : (
-            /* --- PLAYER VIEW --- */
+        ) : (
+          /* ─── PLAYER VIEW (and host-participant) ─── */
           <motion.div
             key={currentQuestion.id}
-            initial={{ scale: 0.8, opacity: 0 }}
+            initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.5, type: 'spring' }}
-            className="w-full max-w-4xl mx-auto"
+            transition={{ duration: 0.4, type: 'spring' }}
+            className="w-full max-w-4xl mx-auto flex flex-col items-center gap-8"
           >
             {/* Timer */}
-            <div className="flex justify-center mb-8">
+            <div className="flex justify-center">
               <TimerRing timeRemaining={timeRemaining} timeLimit={currentQuestion.time_limit || 30} />
             </div>
 
-            {/* Question Text */}
-            <motion.div
-              initial={{ y: 30, opacity: 0 }}
+            {/* Question */}
+            <motion.h2
+              initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.3 }}
-              className="text-center mb-12"
+              transition={{ delay: 0.2 }}
+              className="text-3xl md:text-4xl lg:text-5xl font-black text-white text-center leading-tight px-2"
             >
-              <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white leading-tight px-4 filter drop-shadow-sm dark:drop-shadow-none">
-                {currentQuestion.question_text}
-              </h2>
-            </motion.div>
+              {currentQuestion.question_text}
+            </motion.h2>
 
-            {/* Answer Options Grid */}
+            {/* Answer grid */}
             <motion.div
-              initial={{ y: 30, opacity: 0 }}
+              initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8"
+              transition={{ delay: 0.4 }}
+              className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full"
             >
               {answerOptions.map((option: string, index: number) => {
                 const isSelected = selectedAnswer === index;
                 const isCorrect = index === correctIndex;
                 const showAsCorrect = showCorrectAnswer && isCorrect;
                 const showAsWrong = showCorrectAnswer && isSelected && !isCorrect;
+                const style = OPTION_STYLES[index % OPTION_STYLES.length];
+
+                let bg = style.base;
+                let borderColor = style.border;
+                let boxShadow = '';
+
+                if (isSelected && !showCorrectAnswer) {
+                  bg = style.selected;
+                  borderColor = style.glow.replace('0.3)', '0.7)');
+                  boxShadow = `0 0 24px ${style.glow}`;
+                }
+                if (showAsCorrect) {
+                  bg = 'rgba(16,185,129,0.3)';
+                  borderColor = 'rgba(16,185,129,0.7)';
+                  boxShadow = '0 0 30px rgba(16,185,129,0.4)';
+                }
+                if (showAsWrong) {
+                  bg = 'rgba(239,68,68,0.3)';
+                  borderColor = 'rgba(239,68,68,0.7)';
+                  boxShadow = '0 0 20px rgba(239,68,68,0.3)';
+                }
 
                 return (
                   <motion.button
                     key={index}
-                    initial={{ scale: 0.8, opacity: 0 }}
+                    initial={{ scale: 0.85, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: 0.15 * index, type: 'spring', stiffness: 200 }}
-                    whileHover={{ scale: hasAnswered ? 1 : 1.05 }}
-                    whileTap={{ scale: hasAnswered ? 1 : 0.95 }}
-                    onClick={() => !hasAnswered && !isLoading && timeRemaining > 0 && isPlayer && setSelectedAnswer(index)}
+                    transition={{ delay: 0.12 * index, type: 'spring', stiffness: 200 }}
+                    whileHover={hasAnswered ? {} : { scale: 1.03 }}
+                    whileTap={hasAnswered ? {} : { scale: 0.97 }}
+                    onClick={() => handleOptionSelect(index)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOptionSelect(index); } }}
                     disabled={hasAnswered || isLoading || timeRemaining === 0 || !isPlayer}
-                    className={`
-                      relative p-6 md:p-8 rounded-3xl border-4 font-bold text-left transition-all duration-300
-                      min-h-[140px] flex items-center h-auto shadow-lg
-                      ${!hasAnswered && !isSelected
-                        ? 'border-gray-200 dark:border-white/30 bg-white/60 dark:bg-white/10 backdrop-blur-lg hover:border-blue-400 dark:hover:border-white/50 hover:bg-white/80 dark:hover:bg-white/20'
-                        : ''
-                      }
-                      ${isSelected && !showCorrectAnswer
-                        ? 'border-blue-500 bg-blue-100 dark:bg-blue-500/30 backdrop-blur-lg ring-4 ring-blue-300/50 scale-105'
-                        : ''
-                      }
-                      ${showAsCorrect
-                        ? 'border-green-500 bg-green-100 dark:bg-green-500/30 backdrop-blur-lg ring-4 ring-green-300/50 scale-105'
-                        : ''
-                      }
-                      ${showAsWrong
-                        ? 'border-red-500 bg-red-100 dark:bg-red-500/30 backdrop-blur-lg ring-4 ring-red-300/50'
-                        : ''
-                      }
-                      ${hasAnswered || !isPlayer ? 'cursor-not-allowed opacity-70' : 'cursor-pointer shadow-xl'}
-                    `}
+                    aria-pressed={isSelected}
+                    aria-label={`Option ${String.fromCharCode(65 + index)}: ${option}`}
+                    className="relative p-5 md:p-6 rounded-2xl font-bold text-left transition-all duration-200 min-h-[100px] flex items-center"
+                    style={{ background: bg, border: `2px solid ${borderColor}`, boxShadow, cursor: (hasAnswered || !isPlayer) ? 'not-allowed' : 'pointer', opacity: (hasAnswered && !isSelected && !showAsCorrect) ? 0.5 : 1 }}
+                    tabIndex={0}
                   >
-                    <div className="flex items-center justify-between w-full gap-4">
-                      <div className="flex items-center gap-4 flex-1">
+                    <div className="flex items-center justify-between w-full gap-3">
+                      <div className="flex items-center gap-3 flex-1">
                         <div
-                          className={`
-                            w-16 h-16 rounded-2xl flex items-center justify-center font-bold text-2xl flex-shrink-0 shadow-sm
-                            ${!hasAnswered && !isSelected
-                              ? 'bg-gray-100 dark:bg-white/20 text-gray-900 dark:text-white'
-                              : ''
-                            }
-                            ${isSelected && !showCorrectAnswer ? 'bg-blue-500 text-white' : ''}
-                            ${showAsCorrect ? 'bg-green-500 text-white' : ''}
-                            ${showAsWrong ? 'bg-red-500 text-white' : ''}
-                          `}
+                          className="w-12 h-12 rounded-xl flex items-center justify-center font-black text-xl text-white flex-shrink-0"
+                          style={{ background: style.selected }}
                         >
                           {String.fromCharCode(65 + index)}
                         </div>
-                        <span className={`flex-1 break-words text-lg md:text-2xl leading-tight ${
-                             isSelected ? 'text-gray-900 dark:text-white' : 'text-gray-900 dark:text-white'
-                        }`}>{option}</span>
+                        <span className="text-white font-bold text-base md:text-lg leading-tight flex-1 break-words">
+                          {option}
+                        </span>
                       </div>
-                      
                       <AnimatePresence>
                         {showAsCorrect && (
-                          <motion.div
-                            initial={{ scale: 0, rotate: -180 }}
-                            animate={{ scale: 1, rotate: 0 }}
-                            exit={{ scale: 0 }}
-                            transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                          >
-                            <CheckCircle className="h-12 w-12 text-green-400" />
+                          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ type: 'spring', stiffness: 300 }}>
+                            <CheckCircle className="h-10 w-10 text-emerald-400 flex-shrink-0" />
                           </motion.div>
                         )}
                         {showAsWrong && (
-                          <motion.div
-                            initial={{ scale: 0, rotate: 180 }}
-                            animate={{ scale: 1, rotate: 0 }}
-                            exit={{ scale: 0 }}
-                            transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                          >
-                            <XCircle className="h-12 w-12 text-red-400" />
+                          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ type: 'spring', stiffness: 300 }}>
+                            <XCircle className="h-10 w-10 text-red-400 flex-shrink-0" />
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -976,133 +690,118 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
               })}
             </motion.div>
 
-            {/* Submit Button or Status */}
-            <motion.div
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.7 }}
-              className="flex justify-center"
-            >
+            {/* Submit status */}
+            <motion.div initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.6 }} className="flex justify-center w-full">
               {!hasAnswered ? (
-                <Button
-                  onClick={handleSubmitAnswer}
-                  disabled={selectedAnswer === null || isLoading || timeRemaining === 0 || !isPlayer}
-                  size="lg"
-                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-6 px-12 text-xl rounded-2xl shadow-2xl"
-                >
-                  {isLoading ? (
-                    <><Loader2 className="h-6 w-6 mr-3 animate-spin" /> Submitting...</>
-                  ) : timeRemaining === 0 ? (
-                    <><Clock className="h-6 w-6 mr-3" /> Time's Up!</>
-                  ) : !isPlayer ? (
-                    <><UserCog className="h-6 w-6 mr-3" /> Mediator (No Answer)</>
-                  ) : (
-                    <>Submit Answer <ArrowRight className="h-6 w-6 ml-3" /></>
-                  )}
-                </Button>
+                !isPlayer ? (
+                  <div className="px-6 py-3 rounded-2xl text-white/40 text-sm font-semibold" style={GLASS()}>
+                    <UserCog className="h-4 w-4 mr-2 inline" /> Mediator — no answer required
+                  </div>
+                ) : isLoading ? (
+                  <div className="px-8 py-4 rounded-2xl text-white font-bold" style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
+                    <Loader2 className="h-5 w-5 mr-2 inline animate-spin" /> Submitting…
+                  </div>
+                ) : (
+                  <div className="px-6 py-3 rounded-2xl text-white/50 text-sm text-center" style={GLASS()}>
+                    Tap an option to answer — it submits immediately
+                  </div>
+                )
               ) : (
-                <div className="text-center py-8 bg-white/60 dark:bg-white/20 backdrop-blur-lg rounded-3xl border-2 border-white/50 dark:border-white/30 px-12 shadow-xl">
-                  <CheckCircle className="h-16 w-16 mx-auto text-green-500 dark:text-green-400 mb-4" />
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Answer Submitted!</p>
+                <div
+                  className="text-center py-6 px-10 rounded-3xl"
+                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)' }}
+                >
+                  <CheckCircle className="h-12 w-12 mx-auto text-emerald-400 mb-3" />
+                  <p className="text-xl font-black text-white mb-1">Answer Submitted!</p>
                   {answerResult && (
-                    <p className="text-xl text-gray-700 dark:text-white/80">
-                      {answerResult.isCorrect ? `+${answerResult.points} points` : 'Better luck next time'}
+                    <p className="text-white/70 text-base">
+                      {answerResult.isCorrect ? `✅ +${answerResult.points} points!` : '❌ Better luck next time'}
                     </p>
                   )}
-                  <p className="text-sm text-gray-600 dark:text-white/60 mt-3">
+                  <p className="text-white/40 text-sm mt-2">
                     {isHost
-                      ? session?.advance_mode === 'auto' ? 'Waiting for auto-advance...' : 'Click "Next Question" when ready'
-                      : 'Waiting for next question...'}
+                      ? session?.advance_mode === 'auto' ? 'Waiting for auto-advance…' : 'Click "Next" when ready'
+                      : 'Waiting for next question…'}
                   </p>
                 </div>
               )}
             </motion.div>
           </motion.div>
-          )}
-
-          {/* Host Controls Overlay for Playing Host */}
-          {isHost && isPlayer && (
-            <div className="fixed bottom-6 right-6 z-[60] flex gap-3 p-2 bg-white/80 dark:bg-black/40 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-white/10 shadow-lg dark:shadow-none">
-                 {session?.advance_mode === 'manual' ? (
-                      <Button
-                          onClick={handleNextQuestion}
-                          disabled={isLoading || timeRemaining > 0}
-                          className="bg-indigo-600 dark:bg-white/90 text-white dark:text-indigo-900 hover:bg-indigo-700 dark:hover:bg-white shadow-lg backdrop-blur-sm px-6"
-                      >
-                          {timeRemaining > 0 ? <Clock className="h-4 w-4 mr-2 animate-pulse" /> : <ArrowRight className="h-4 w-4 mr-2" />}
-                          {timeRemaining > 0 ? 'Wait' : 'Next'}
-                      </Button>
-                  ) : (
-                      <Button
-                          onClick={handleNextQuestion}
-                          variant="outline"
-                          disabled={isLoading || timeRemaining > 0}
-                          className="bg-white/50 dark:bg-black/50 border-gray-300 dark:border-white/20 text-gray-700 dark:text-white hover:bg-white/80 dark:hover:bg-black/70 backdrop-blur-sm"
-                      >
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Force Next
-                      </Button>
-                  )}
-                  <Button
-                      onClick={handleEndQuiz}
-                      variant="destructive"
-                      size="icon"
-                      className="rounded-xl shadow-lg hover:bg-red-600"
-                      title="End Quiz"
-                  >
-                      <LogOut className="h-4 w-4" />
-                  </Button>
-            </div>
-          )}
-
-          {/* Feedback Overlay (for Player) */}
-          <AnimatePresence>
-              {isPlayer && hasAnswered && showCorrectAnswer && !isMobile && (
-              <motion.div
-                initial={{ y: 50, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 50, opacity: 0 }}
-                className={`
-                  fixed bottom-8 left-1/2 -translate-x-1/2 
-                  px-8 py-6 rounded-3xl shadow-2xl backdrop-blur-xl border border-white/20
-                  ${answerResult.isCorrect ? 'bg-green-500/80' : 'bg-red-500/80'}
-                  text-white flex items-center gap-6 z-40 w-auto max-w-[90%] sm:min-w-[300px] justify-center
-                `}
-              >
-                {answerResult.isCorrect ? (
-                  <>
-                    <div className="bg-white/20 p-3 rounded-full"><Trophy className="h-8 w-8" /></div>
-                    <div>
-                      <div className="font-bold text-2xl">Correct!</div>
-                      <div className="opacity-90">+{answerResult.points} points</div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="bg-white/20 p-3 rounded-full"><Target className="h-8 w-8" /></div>
-                    <div>
-                      <div className="font-bold text-2xl">Incorrect</div>
-                      <div className="opacity-90">Keep trying!</div>
-                    </div>
-                  </>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Error Display */}
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-4 bg-red-500/20 backdrop-blur-lg border border-red-400/50 rounded-2xl p-4 text-center"
-          >
-            <AlertCircle className="h-6 w-6 text-red-400 inline-block mr-2" />
-            <span className="text-white font-medium">{error}</span>
-          </motion.div>
         )}
       </div>
+
+      {/* Host+Player floating controls */}
+      {isHost && isPlayer && (
+        <div
+          className="fixed bottom-5 right-5 z-[60] flex gap-2 p-2 rounded-2xl"
+          style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(16px)' }}
+        >
+          {session?.advance_mode === 'manual' ? (
+            <Button
+              onClick={handleNextQuestion}
+              disabled={isLoading || timeRemaining > 0}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5"
+              size="sm"
+            >
+              {timeRemaining > 0 ? <><Clock className="h-3.5 w-3.5 mr-1.5 animate-pulse" />Wait</> : <><ArrowRight className="h-3.5 w-3.5 mr-1.5" />Next</>}
+            </Button>
+          ) : (
+            <Button
+              onClick={handleNextQuestion}
+              variant="outline"
+              disabled={isLoading || timeRemaining > 0}
+              className="border-white/20 text-white hover:bg-white/10"
+              size="sm"
+            >
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+              {timeRemaining > 0 ? 'Wait' : 'Force Next'}
+            </Button>
+          )}
+          <Button
+            onClick={handleEndQuiz}
+            variant="destructive"
+            size="icon"
+            className="rounded-xl h-8 w-8"
+            title="End Quiz"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
+
+      {/* Answer feedback overlay (mobile or non-host player) */}
+      <AnimatePresence>
+        {isPlayer && hasAnswered && showCorrectAnswer && answerResult && !isMobile && (
+          <motion.div
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+            className={`fixed bottom-8 left-1/2 -translate-x-1/2 px-8 py-5 rounded-3xl z-40 flex items-center gap-5 ${answerResult.isCorrect ? 'bg-emerald-500/85' : 'bg-red-500/85'}`}
+            style={{ backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.2)' }}
+          >
+            <div className="bg-white/20 p-2.5 rounded-full">
+              {answerResult.isCorrect ? <Trophy className="h-7 w-7 text-white" /> : <Target className="h-7 w-7 text-white" />}
+            </div>
+            <div className="text-white">
+              <div className="font-black text-xl">{answerResult.isCorrect ? 'Correct!' : 'Incorrect'}</div>
+              <div className="text-white/80 text-sm">{answerResult.isCorrect ? `+${answerResult.points} points` : 'Keep trying!'}</div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Error */}
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-red-500/20 border border-red-400/40 rounded-2xl px-5 py-3 z-50 text-center"
+          style={{ backdropFilter: 'blur(8px)' }}
+        >
+          <AlertCircle className="h-5 w-5 text-red-400 inline mr-2" />
+          <span className="text-white/90 text-sm">{error}</span>
+        </motion.div>
+      )}
     </motion.div>
   );
 };

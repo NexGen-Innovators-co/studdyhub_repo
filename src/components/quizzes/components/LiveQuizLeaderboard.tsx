@@ -1,106 +1,114 @@
 // src/components/quizzes/components/LiveQuizLeaderboard.tsx
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
 import { Trophy, Crown, Zap, CheckCircle } from 'lucide-react';
 import { LiveQuizPlayer, LiveQuizQuestion } from '@/services/liveQuizService';
 
 interface LiveQuizLeaderboardProps {
   players: LiveQuizPlayer[];
   currentQuestion: LiveQuizQuestion | null;
-  userId: string;
+  userId?: string;
 }
 
 export const LiveQuizLeaderboard: React.FC<LiveQuizLeaderboardProps> = ({
   players,
   currentQuestion,
-  userId,
+  userId = ''
 }) => {
   const playingPlayers = players.filter(p => p.is_playing);
+  const sorted = [...playingPlayers].sort((a, b) => b.score - a.score);
+
+  const medalColors = [
+    'from-yellow-500 to-amber-600',
+    'from-gray-400 to-gray-500',
+    'from-orange-500 to-amber-600',
+  ];
 
   return (
-    <Card className="rounded-2xl border-2 shadow-lg h-fit">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Trophy className="h-5 w-5 text-yellow-500" />
-          Leaderboard
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-2">
-          {playingPlayers
-            .sort((a, b) => b.score - a.score)
-            .map((player, index) => {
-              const answered =
-                currentQuestion &&
-                player.last_answered_at &&
-                new Date(player.last_answered_at) >=
-                  new Date(currentQuestion.start_time || 0);
+    <div
+      className="rounded-2xl overflow-hidden border h-fit"
+      style={{
+        background: 'rgba(255,255,255,0.04)',
+        borderColor: 'rgba(255,255,255,0.1)',
+        backdropFilter: 'blur(12px)',
+      }}
+    >
+      <div
+        className="px-4 py-3 flex items-center gap-2 border-b"
+        style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.2)' }}
+      >
+        <Trophy className="h-4 w-4 text-yellow-400" />
+        <span className="text-white font-bold text-sm tracking-wide uppercase">Leaderboard</span>
+        <span className="ml-auto text-xs text-white/40">{sorted.length} players</span>
+      </div>
 
-              return (
-                <div
-                  key={player.id}
-                  className={[
-                    'flex items-center justify-between p-2.5 rounded-lg transition-all',
-                    player.user_id === userId
-                      ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500'
-                      : 'bg-gray-50 dark:bg-gray-800 border border-transparent',
-                  ].join(' ')}
+      <div className="p-3 space-y-2">
+        {sorted.map((player, index) => {
+          const answered =
+            currentQuestion &&
+            player.last_answered_at &&
+            new Date(player.last_answered_at) >= new Date(currentQuestion.start_time || 0);
+
+          const isMe = player.user_id === userId;
+
+          return (
+            <div
+              key={player.id}
+              className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all"
+              style={{
+                background: isMe ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.04)',
+                border: isMe ? '1px solid rgba(99,102,241,0.4)' : '1px solid rgba(255,255,255,0.06)'
+              }}
+            >
+              <div
+                className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 text-white ${
+                  index < 3 ? `bg-gradient-to-br ${medalColors[index]}` : ''
+                }`}
+                style={index >= 3 ? { background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)' } : {}}
+              >
+                {index < 3 ? ['🥇', '🥈', '🥉'][index] : index + 1}
+              </div>
+
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                style={{ background: 'rgba(99,102,241,0.4)', color: 'white' }}
+              >
+                {(player.display_name || 'U')[0]?.toUpperCase()}
+              </div>
+
+              <span className="flex-1 min-w-0">
+                <span
+                  className="text-sm font-semibold truncate block"
+                  style={{ color: isMe ? '#a5b4fc' : 'rgba(255,255,255,0.85)' }}
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    {/* Rank badge */}
-                    <span
-                      className={[
-                        'text-sm font-bold w-6 h-6 flex items-center justify-center rounded-full flex-shrink-0',
-                        index === 0
-                          ? 'bg-yellow-500 text-white'
-                          : index === 1
-                            ? 'bg-gray-400 text-white'
-                            : index === 2
-                              ? 'bg-orange-500 text-white'
-                              : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300',
-                      ].join(' ')}
-                    >
-                      {index + 1}
-                    </span>
+                  {index === 0 && <Crown className="h-3 w-3 text-yellow-400 inline mr-1 flex-shrink-0" />}
+                  {player.display_name}
+                  {isMe && <span className="text-xs text-indigo-400 ml-1">(you)</span>}
+                </span>
+              </span>
 
-                    <span className="truncate flex items-center gap-2">
-                      {index === 0 && (
-                        <Crown className="h-3.5 w-3.5 text-yellow-500 flex-shrink-0" />
-                      )}
-                      <Avatar className="h-6 w-6 flex-shrink-0">
-                        <AvatarImage src={player.avatar_url || undefined} />
-                        <AvatarFallback>
-                          {(player.display_name || 'U')[0]?.toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="font-medium text-sm">
-                        {player.display_name}
-                      </span>
-                      {player.user_id === userId && (
-                        <span className="text-xs text-gray-400">(You)</span>
-                      )}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {/* Answered tick for this question */}
-                    {answered ? (
-                      <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-                    ) : (
-                      <div className="h-3.5 w-3.5 rounded-full border-2 border-gray-300 dark:border-gray-600" />
-                    )}
-                    <div className="flex items-center gap-0.5">
-                      <Zap className="h-3.5 w-3.5 text-yellow-500" />
-                      <span className="font-bold text-sm">{player.score}</span>
-                    </div>
-                  </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {answered ? (
+                  <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
+                ) : (
+                  <div
+                    className="h-3.5 w-3.5 rounded-full border-2 flex-shrink-0"
+                    style={{ borderColor: 'rgba(255,255,255,0.2)' }}
+                  />
+                )}
+                <div className="flex items-center gap-0.5">
+                  <Zap className="h-3 w-3 text-yellow-400" />
+                  <span className="font-black text-sm text-yellow-400">{player.score}</span>
                 </div>
-              );
-            })}
-        </div>
-      </CardContent>
-    </Card>
+              </div>
+            </div>
+          );
+        })}
+
+        {sorted.length === 0 && (
+          <div className="text-center py-6 text-white/30 text-sm">No players yet</div>
+        )}
+      </div>
+    </div>
   );
 };
 

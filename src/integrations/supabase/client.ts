@@ -4,9 +4,11 @@ import { createClient } from '@supabase/supabase-js'
 export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 export const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-// In dev, wrap fetch to ensure Accept header and log REST calls for debugging 406 issues
+// Wrap fetch to ensure Accept header for REST calls and optionally log failures.
+// We enable the wrapper in all environments so PostgREST doesn't return 406
+// due to strict Accept negotiation. Detailed logging remains gated to DEV.
 let clientOptions: any = {};
-if (import.meta.env.DEV && typeof window !== 'undefined' && window.fetch) {
+if (typeof window !== 'undefined' && window.fetch) {
 	const originalFetch = window.fetch.bind(window);
 	const wrappedFetch = async (input: RequestInfo, init?: RequestInit) => {
 		try {
@@ -23,8 +25,10 @@ if (import.meta.env.DEV && typeof window !== 'undefined' && window.fetch) {
 				if (!resp.ok) {
 					try {
 						const text = await resp.clone().text();
-						// Log full body to aid debugging 406/Not Acceptable responses
-						// console.warn('[supabase:fetch] non-OK response', { status: resp.status, statusText: resp.statusText, body: text, url });
+						// Log full body to aid debugging 406/Not Acceptable responses (only in dev)
+						if (import.meta.env.DEV) {
+							console.warn('[supabase:fetch] non-OK response', { status: resp.status, statusText: resp.statusText, body: text, url });
+						}
 					} catch (e) {
 						// console.warn('[supabase:fetch] non-OK response', resp.status, resp.statusText, url);
 					}

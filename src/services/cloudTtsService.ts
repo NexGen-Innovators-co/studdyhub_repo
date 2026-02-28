@@ -123,13 +123,26 @@ function speakWithNativeTts(options: CloudTtsOptions): HTMLAudioElement | null {
   utterance.pitch = options.pitch != null ? options.pitch + 1 : 1; // Cloud pitch 0 = neutral → native 1
   utterance.lang = 'en-US';
 
-  // Try to pick a voice matching the requested gender
+  // Try to pick a voice — prefer female first, fall back to male only if explicitly requested
   const voices = window.speechSynthesis.getVoices();
   if (voices.length > 0) {
-    const preferred = options.voice === 'male'
-      ? voices.find(v => /male/i.test(v.name) && !/female/i.test(v.name))
-      : voices.find(v => /female/i.test(v.name));
-    if (preferred) utterance.voice = preferred;
+    const wantMale = options.voice === 'male';
+    const enVoices = voices.filter(v => /^en/i.test(v.lang));
+    const pool = enVoices.length > 0 ? enVoices : voices;
+
+    // Common female voice name patterns across browsers / OS
+    const femalePatterns = /female|samantha|victoria|karen|zira|google.*female|fiona|moira|tessa|allison/i;
+    const malePatterns = /\bmale\b|daniel|david|james|google.*male|alex|tom|fred|aaron/i;
+
+    let picked: SpeechSynthesisVoice | undefined;
+    if (wantMale) {
+      picked = pool.find(v => malePatterns.test(v.name) && !femalePatterns.test(v.name));
+    } else {
+      // Female first — try explicit female names, then any voice that isn't obviously male
+      picked = pool.find(v => femalePatterns.test(v.name))
+        || pool.find(v => !malePatterns.test(v.name));
+    }
+    if (picked) utterance.voice = picked;
   }
 
   // Create a thin wrapper so callers can treat this like an HTMLAudioElement

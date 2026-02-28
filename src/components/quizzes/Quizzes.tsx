@@ -25,6 +25,7 @@ import { useRealtimeSyncForQuizzes } from './hooks/useRealtimeSyncForQuizzes';
 import { seedDefaultBadges, getAllBadges, getUserAchievements } from './utils/seedDefaultBadges';
 import { Badge as BadgeType, Achievement } from '../../types/EnhancedClasses';
 import { AppShell } from '../layout/AppShell';
+import ActiveSessionsLeft from './components/ActiveSessionsLeft';
 import { StickyRail } from '../layout/StickyRail';
 import { HeroHeader } from '../layout/HeroHeader';
 import { QuickActionsCard } from '../layout/QuickActionsCard';
@@ -537,7 +538,9 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
       case 'recordings':
         return (
           <StickyRail>
-            <Card className="rounded-xl shadow-sm">
+            {/* import ActiveSessionsLeft dynamically to avoid circular deps */}
+            <ActiveSessionsLeft userId={userId} onOpenLive={() => setActiveTab('live')} toast={({ title, description, variant }: any) => { /* show toast globally if needed */ }} />
+              <Card className="rounded-xl shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30">
