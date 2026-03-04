@@ -18,7 +18,7 @@ import { useInstitution, type CreateInstitutionInput } from '@/hooks/useInstitut
 import type { InstitutionType } from '@/types/Education';
 
 interface CreateInstitutionFlowProps {
-  onComplete: () => void;
+  onComplete: (institutionId?: string) => void;
   onSkip: () => void;
 }
 
@@ -71,6 +71,7 @@ export const CreateInstitutionFlow: React.FC<CreateInstitutionFlowProps> = ({
 
     if (result) {
       setStep('done');
+      onComplete(result.id); // propagate new institution id
     }
   };
 
@@ -86,7 +87,7 @@ export const CreateInstitutionFlow: React.FC<CreateInstitutionFlowProps> = ({
         <p className="text-gray-500 text-center max-w-sm">
           Your institution is ready. You can invite members and create courses from the educator dashboard.
         </p>
-        <Button onClick={onComplete}>Continue</Button>
+        <Button onClick={(): void => { onComplete(); }}>Continue</Button>
       </div>
     );
   }

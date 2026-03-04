@@ -32,8 +32,14 @@ export const useCourseLibrary = () => {
           }
           // If no education filters are active, fall back to all courses
         } else if (schoolFilter) {
-          // Fetch courses for a specific school
-          query = query.eq('school_name', schoolFilter);
+          // if the filter looks like a UUID, treat it as institution_id
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+          if (uuidRegex.test(schoolFilter)) {
+            query = query.eq('institution_id', schoolFilter);
+          } else {
+            // Fetch courses for a specific school name (legacy)
+            query = query.eq('school_name', schoolFilter);
+          }
         }
         // If schoolFilter is null/undefined, we might want to fetch ALL or handle differently.
         // For "Browse All", we just don't apply a filter.

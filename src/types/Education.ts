@@ -62,6 +62,7 @@ export interface UserEducationContext {
   educationLevel: EducationLevel | null;
   curriculum: Curriculum | null;
   targetExamination: Examination | null;
+  institutionId?: string | null;
   institutionName: string | null;
   yearOrGrade: string | null;
   expectedCompletion: string | null;   // ISO date

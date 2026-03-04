@@ -109,6 +109,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     curriculumId: null,
     examinationId: null,
     selectedSubjectIds: [],
+    institutionId: userProfile?.institution_id || null,
     institutionName: userProfile?.school || '',
     yearOrGrade: '',
   });
@@ -250,9 +251,11 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       const personalContext = buildPersonalContext();
       const chosenRole = selectedRole || 'student';
       const resolvedSchool = educationData.institutionName.trim() || school.trim() || userProfile?.school || null;
+      const resolvedInstitutionId = educationData.institutionId || null;
 
       const { data, error } = await supabase.rpc('complete_onboarding', {
         _full_name: fullName.trim() || userProfile?.full_name || null,
+        _institution_id: resolvedInstitutionId,   // new normalized field
         _school: resolvedSchool,
         _avatar_url: avatarUrl,
         _learning_style: learningStyle,
@@ -369,7 +372,11 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     }
   };
 
-  const handleEducatorSubFlowComplete = () => {
+  const handleEducatorSubFlowComplete = (result?: any) => {
+    // if subflows return an institution id (string), store it
+    if (typeof result === 'string' && result) {
+      setEducationData((prev) => ({ ...prev, institutionId: result }));
+    }
     setShowEducatorSubFlow(null);
     goNext();
   };

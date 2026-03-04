@@ -5,6 +5,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { GraduationCap, Globe, BookOpen, CalendarClock, School, Save, Loader2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
+import { ChevronsUpDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
@@ -23,6 +26,9 @@ export const EducationSettingsTab: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  const [institutionOptions, setInstitutionOptions] = useState<{id:string;name:string}[]>([]);
+  const [openCombobox, setOpenCombobox] = useState(false);
+
   // Local form state
   const [formData, setFormData] = useState<EducationStepData>({
     countryId: null,
@@ -31,6 +37,7 @@ export const EducationSettingsTab: React.FC = () => {
     curriculumId: null,
     examinationId: null,
     selectedSubjectIds: [],
+    institutionId: null,
     institutionName: '',
     yearOrGrade: '',
   });
@@ -45,11 +52,25 @@ export const EducationSettingsTab: React.FC = () => {
         curriculumId: educationContext.curriculum?.id ?? null,
         examinationId: educationContext.targetExamination?.id ?? null,
         selectedSubjectIds: educationContext.subjects.map((s) => s.id),
+        institutionId: educationContext.institutionId ?? null,
         institutionName: educationContext.institutionName ?? '',
         yearOrGrade: educationContext.yearOrGrade ?? '',
       });
     }
   }, [educationContext]);
+
+  // load institutions for combobox
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('institutions')
+        .select('id,name')
+        .eq('is_active', true)
+        .eq('type', 'school');
+      if (data) setInstitutionOptions(data as {id:string;name:string}[]);
+    })();
+  }, []);
+
 
   const { countries, framework, isLoadingCountries, isLoadingFramework } =
     useEducationFramework(formData.countryCode);
@@ -102,11 +123,14 @@ export const EducationSettingsTab: React.FC = () => {
         }
       }
 
-      // Sync school on profiles
-      if (formData.institutionName.trim()) {
+      // Sync school and institution to profiles
+      const profileUpdates: any = {};
+      if (formData.institutionName.trim()) profileUpdates.school = formData.institutionName.trim();
+      if (formData.institutionId) profileUpdates.institution_id = formData.institutionId;
+      if (Object.keys(profileUpdates).length > 0) {
         await supabase
           .from('profiles')
-          .update({ school: formData.institutionName.trim() })
+          .update(profileUpdates)
           .eq('id', user.id);
       }
 
@@ -350,13 +374,62 @@ export const EducationSettingsTab: React.FC = () => {
           <label className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
             <School className="h-4 w-4" /> School / Institution
           </label>
-          <input
-            type="text"
-            value={formData.institutionName}
-            onChange={(e) => setFormData({ ...formData, institutionName: e.target.value })}
-            placeholder="e.g. Achimota School"
-            className="w-full px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-          />
+          <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={openCombobox}
+                className="justify-between w-full"
+              >
+                {formData.institutionName || 'Select institution'}
+                <ChevronsUpDown className="ml-2 w-4 h-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="p-0" align="start">
+              <Command>
+                <CommandInput
+                  placeholder="Search institution..."
+                  value={formData.institutionName}
+                  onValueChange={(v) => {
+                    setFormData({
+                      ...formData,
+                      institutionName: v,
+                      institutionId: institutionOptions.find(i => i.name === v)?.id || null,
+                    });
+                  }}
+                />
+                <CommandList>
+                  <CommandEmpty>No institution found.</CommandEmpty>
+                  <CommandGroup>
+                    {institutionOptions.map((inst) => (
+                      <CommandItem
+                        key={inst.id}
+                        value={inst.name}
+                        onSelect={(currentValue) => {
+                          if (currentValue === formData.institutionName) {
+                            setFormData({
+                              ...formData,
+                              institutionName: '',
+                              institutionId: null,
+                            });
+                          } else {
+                            setFormData({
+                              ...formData,
+                              institutionName: currentValue,
+                              institutionId: inst.id,
+                            });
+                          }
+                        }}
+                      >
+                        {inst.name}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
         <div>
           <label className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1 block">

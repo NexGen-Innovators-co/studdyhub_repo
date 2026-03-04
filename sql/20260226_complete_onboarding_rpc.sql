@@ -8,6 +8,7 @@
 
 CREATE OR REPLACE FUNCTION public.complete_onboarding(
   _full_name          text        DEFAULT NULL,
+  _institution_id     uuid        DEFAULT NULL,
   _school             text        DEFAULT NULL,
   _avatar_url         text        DEFAULT NULL,
   _learning_style     text        DEFAULT NULL,
@@ -31,6 +32,7 @@ BEGIN
   UPDATE public.profiles
   SET
     full_name            = COALESCE(NULLIF(TRIM(_full_name), ''), full_name),
+    institution_id       = COALESCE(_institution_id, institution_id),
     school               = COALESCE(NULLIF(TRIM(_school), ''), school),
     avatar_url           = COALESCE(_avatar_url, avatar_url),
     learning_style       = COALESCE(NULLIF(TRIM(_learning_style), ''), learning_style),
@@ -50,4 +52,4 @@ END;
 $$;
 
 -- Allow any authenticated user to call this function
-GRANT EXECUTE ON FUNCTION public.complete_onboarding(text, text, text, text, jsonb, text, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.complete_onboarding(text, uuid, text, text, text, jsonb, text, text) TO authenticated;

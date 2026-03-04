@@ -103,7 +103,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 }) => {
   const { confirm: confirmAction, ConfirmDialogComponent } = useConfirmDialog();
   // Tab state
-  const [activeTab, setActiveTab] = useState<'profile' | 'education' | 'role' | 'learning' | 'personalization' | 'goals' | 'achievements' | 'study' | 'privacy' | 'notifications' | 'security'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'education' | 'role' | 'learning' | 'personalization' | 'goals' | 'achievements' | 'privacy' | 'notifications' | 'security'>('profile');
 
   // Original form states
   const [learningStyle, setLearningStyle] = useState<UserProfile['learning_style']>('visual');
@@ -135,9 +135,6 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
   const [newGoal, setNewGoal] = useState('');
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [stats, setStats] = useState<UserStats | null>(null);
-  const [preferredStudyTimes, setPreferredStudyTimes] = useState<string[]>([]);
-  const [studyReminders, setStudyReminders] = useState(true);
-  const [breakInterval, setBreakInterval] = useState(45);
   const [dataCollection, setDataCollection] = useState(true);
   const [analytics, setAnalytics] = useState(true);
 
@@ -274,23 +271,6 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
     }
   };
 
-  const loadStudyPreferences = async () => {
-    // Load from user profile or preferences
-    const savedTimes = localStorage.getItem('preferredStudyTimes');
-    if (savedTimes) {
-      setPreferredStudyTimes(JSON.parse(savedTimes));
-    }
-
-    const savedReminders = localStorage.getItem('studyReminders');
-    if (savedReminders) {
-      setStudyReminders(JSON.parse(savedReminders));
-    }
-
-    const savedInterval = localStorage.getItem('breakInterval');
-    if (savedInterval) {
-      setBreakInterval(JSON.parse(savedInterval));
-    }
-  };
 
   // Initial load of stats and achievements for the Profile Snapshot
   useEffect(() => {
@@ -307,9 +287,6 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       case 'achievements':
         fetchAchievements();
         fetchUserStats();
-        break;
-      case 'study':
-        loadStudyPreferences();
         break;
       case 'notifications':
         loadNotificationPreferences();
@@ -652,21 +629,6 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
     }
   };
 
-  // Study Preferences Functions
-  const toggleStudyTime = (time: string) => {
-    const newTimes = preferredStudyTimes.includes(time)
-      ? preferredStudyTimes.filter(t => t !== time)
-      : [...preferredStudyTimes, time];
-
-    setPreferredStudyTimes(newTimes);
-    localStorage.setItem('preferredStudyTimes', JSON.stringify(newTimes));
-  };
-
-  const saveStudyPreferences = () => {
-    localStorage.setItem('studyReminders', JSON.stringify(studyReminders));
-    localStorage.setItem('breakInterval', JSON.stringify(breakInterval));
-    toast.success('Study preferences saved!');
-  };
 
   const saveNotificationPreferences = async () => {
     try {
@@ -809,7 +771,6 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
     { id: 'personalization', label: 'AI Context', icon: Sparkles },
     { id: 'goals', label: 'Goals', icon: Target },
     { id: 'achievements', label: 'Achievements', icon: Trophy },
-    { id: 'study', label: 'Study', icon: Clock },
     { id: 'privacy', label: 'Privacy', icon: Shield },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'security', label: 'Security', icon: Lock }
@@ -1236,75 +1197,6 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
             </CardContent>
           )}
 
-          {/* Study Preferences Section */}
-          {activeTab === 'study' && (
-            <CardContent className="p-8 ">
-              <div className="flex items-center gap-3 mb-6">
-                <Clock className="h-5 w-5 text-blue-500" />
-                <h2 className="text-xl font-semibold">Study Preferences</h2>
-              </div>
-
-              <div className="space-y-6">
-                {/* Preferred Study Times */}
-                <div>
-                  <Label className="text-sm font-medium">Preferred Study Times</Label>
-                  <div className="grid grid-cols-2 gap-3 mt-3">
-                    {timeSlots.map((time) => (
-                      <button
-                        key={time}
-                        onClick={() => toggleStudyTime(time)}
-                        className={`p-3 rounded-xl border-2 transition-all ${preferredStudyTimes.includes(time)
-                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                          : 'border-gray-200 dark:border-gray-600 hover:border-blue-300 bg-white dark:bg-gray-800'
-                          }`}
-                      >
-                        {time}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Break Interval */}
-                <div>
-                  <Label className="text-sm font-medium">
-                    Break Interval: {breakInterval} minutes
-                  </Label>
-                  <input
-                    type="range"
-                    min="15"
-                    max="90"
-                    step="15"
-                    value={breakInterval}
-                    onChange={(e) => setBreakInterval(Number(e.target.value))}
-                    className="w-full mt-2"
-                  />
-                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                    <span>15min</span>
-                    <span>45min</span>
-                    <span>90min</span>
-                  </div>
-                </div>
-
-                {/* Study Reminders */}
-                <div className="flex items-center justify-between p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-                  <div>
-                    <div className="font-medium mb-1">Study Reminders</div>
-                    <div className="text-sm text-gray-600 dark:text-gray-300">
-                      Get notifications for your study sessions
-                    </div>
-                  </div>
-                  <Switch
-                    checked={studyReminders}
-                    onCheckedChange={setStudyReminders}
-                  />
-                </div>
-
-                <Button onClick={saveStudyPreferences} className="w-full">
-                  Save Study Preferences
-                </Button>
-              </div>
-            </CardContent>
-          )}
 
           {/* Privacy Section */}
           {activeTab === 'privacy' && (

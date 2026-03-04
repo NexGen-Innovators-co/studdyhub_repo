@@ -51,10 +51,13 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
   }, [educationContext, activeTab]);
   
   const [userSchool, setUserSchool] = useState<string | null>(null);
+  const [userInstitutionId, setUserInstitutionId] = useState<string | null>(null);
   const [isSchoolDialogOpen, setIsSchoolDialogOpen] = useState(false);
   const [tempSchoolName, setTempSchoolName] = useState('');
+  const [tempInstitutionId, setTempInstitutionId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [availableSchools, setAvailableSchools] = useState<string[]>([]);
+  const [availableInstitutions, setAvailableInstitutions] = useState<{id:string;name:string}[]>([]);
   const [openCombobox, setOpenCombobox] = useState(false);
 
   const handleTabChange = (value: string) => {
@@ -88,7 +91,7 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
     const fetchProfile = async () => {
       if (!user) return;
       
-      // Fetch available schools first
+      // Fetch available schools from courses (legacy fallback)
       const { data: schoolData } = await supabase
         .from('courses')
         .select('school_name')
@@ -98,17 +101,37 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
         const unique = Array.from(new Set(schoolData.map(d => d.school_name).filter(Boolean) as string[]));
         setAvailableSchools(unique.sort());
       }
+
+      // load institutions list for combobox
+      const { data: insts } = await supabase
+        .from('institutions')
+        .select('id,name')
+        .eq('is_active', true)
+        .eq('type', 'school');
+      if (insts) {
+        setAvailableInstitutions(insts as {id:string;name:string}[]);
+      }
       
       const { data, error } = await supabase
         .from('profiles')
-        .select('school') // Assuming 'school' column exists now
+        .select('school,institution_id') // new column
         .eq('id', user.id)
         .single();
       
-      if (data && (data as any).school) {
-        setUserSchool((data as any).school);
-      } else {
-        // If no school set, prompt user or default to global
+      if (data) {
+        if ((data as any).institution_id) {
+          setUserInstitutionId((data as any).institution_id);
+          // lookup name
+          const match = (insts || []).find(i => i.id === (data as any).institution_id);
+          if (match) {
+            setUserSchool(match.name);
+          }
+        } else if ((data as any).school) {
+          setUserSchool((data as any).school);
+        }
+      }
+
+      if (!data || (!data.institution_id && !data.school)) {
         setIsSchoolDialogOpen(true);
         handleTabChange('global');
       }
@@ -119,7 +142,10 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
   // Determine filter based on active tab
   const getFilter = () => {
     if (activeTab === 'for-you') return 'for-you';
-    if (activeTab === 'my-school') return userSchool;
+    if (activeTab === 'my-school') {
+      // prefer institution id if available
+      return userInstitutionId || userSchool;
+    }
     if (activeTab === 'global') return 'global';
     return null; // 'all'
   };
@@ -133,14 +159,20 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
     if (!user || !tempSchoolName.trim()) return;
     
     try {
+      const updates: any = { school: tempSchoolName.trim() };
+      if (tempInstitutionId) {
+        updates.institution_id = tempInstitutionId;
+      }
+
       const { error } = await supabase
         .from('profiles')
-        .update({ school: tempSchoolName.trim() } as any)
+        .update(updates)
         .eq('id', user.id);
 
       if (error) throw error;
 
       setUserSchool(tempSchoolName.trim());
+      if (tempInstitutionId) setUserInstitutionId(tempInstitutionId);
       setIsSchoolDialogOpen(false);
       handleTabChange('my-school');
       toast.success('School updated successfully!');
@@ -299,34 +331,46 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
                     aria-expanded={openCombobox}
                     className="justify-between bg-white dark:bg-slate-800"
                   >
-                    {tempSchoolName
-                      ? availableSchools.find((school) => school === tempSchoolName) || tempSchoolName
-                      : "Select school..."}
+                    {tempSchoolName || "Select school..."}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="p-0 bg-white dark:bg-slate-800" align="start">
                   <Command>
-                    <CommandInput placeholder="Search school..." />
+                    <CommandInput
+                      placeholder="Search school..."
+                      value={tempSchoolName}
+                      onValueChange={(v) => {
+                        setTempSchoolName(v);
+                        const match = availableInstitutions.find(i => i.name === v);
+                        setTempInstitutionId(match ? match.id : null);
+                      }}
+                    />
                     <CommandList>
                       <CommandEmpty>No school found.</CommandEmpty>
                       <CommandGroup>
-                        {availableSchools.map((school) => (
+                        {availableInstitutions.map((inst) => (
                           <CommandItem
-                            key={school}
-                            value={school}
+                            key={inst.id}
+                            value={inst.name}
                             onSelect={(currentValue) => {
-                              setTempSchoolName(currentValue === tempSchoolName ? "" : currentValue);
+                              if (currentValue === tempSchoolName) {
+                                setTempSchoolName("");
+                                setTempInstitutionId(null);
+                              } else {
+                                setTempSchoolName(currentValue);
+                                setTempInstitutionId(inst.id);
+                              }
                               setOpenCombobox(false);
                             }}
                           >
                             <Check
                               className={cn(
                                 "mr-2 h-4 w-4",
-                                tempSchoolName === school ? "opacity-100" : "opacity-0"
+                                tempSchoolName === inst.name ? "opacity-100" : "opacity-0"
                               )}
                             />
-                            {school}
+                            {inst.name}
                           </CommandItem>
                         ))}
                       </CommandGroup>
@@ -342,7 +386,10 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
                 id="school"
                 placeholder="e.g. University of Ghana"
                 value={tempSchoolName}
-                onChange={(e) => setTempSchoolName(e.target.value)}
+                onChange={(e) => {
+                  setTempSchoolName(e.target.value);
+                  setTempInstitutionId(null);
+                }}
                 className="bg-white dark:bg-slate-800"
               />
             </div>

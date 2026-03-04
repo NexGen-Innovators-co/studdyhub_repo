@@ -9,7 +9,7 @@ import { School, Loader2, Check, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface JoinInstitutionFlowProps {
-  onComplete: () => void;
+  onComplete: (institutionId?: string) => void;
   onSkip: () => void;
 }
 
@@ -41,6 +41,11 @@ export const JoinInstitutionFlow: React.FC<JoinInstitutionFlowProps> = ({
       } else {
         setInstitutionName(data?.institution?.name || 'Institution');
         setSuccess(true);
+        if (data?.institution?.id) {
+          onComplete(data.institution.id); // inform parent
+        } else {
+          onComplete();
+        }
       }
     } catch (err: any) {
       setError(err.message ?? 'Failed to join institution');
@@ -61,7 +66,7 @@ export const JoinInstitutionFlow: React.FC<JoinInstitutionFlowProps> = ({
         <p className="text-gray-500 text-center max-w-sm">
           You're now a member. You can access institution courses and resources.
         </p>
-        <Button onClick={onComplete}>Continue</Button>
+        <Button onClick={() => onComplete()}>Continue</Button>
       </div>
     );
   }

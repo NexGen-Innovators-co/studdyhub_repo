@@ -32,7 +32,8 @@ export interface EducationStepData {
   curriculumId: string | null;
   examinationId: string | null;
   selectedSubjectIds: string[];
-  institutionName: string;
+  institutionId?: string | null;   /* normalized institution reference */
+  institutionName: string;         /* free‑text fallback/legacy */
   yearOrGrade: string;
 }
 
@@ -110,6 +111,33 @@ export const EducationContextStep: React.FC<EducationContextStepProps> = ({
   );
 
   const [countrySearch, setCountrySearch] = useState('');
+
+  const [institutionOptions, setInstitutionOptions] = useState<{id:string;name:string}[]>([]);
+
+  // load active "school" institutions once and sync name when we have an id
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: insts, error } = await supabase
+        .from('institutions')
+        .select('id,name')
+        .eq('is_active', true)
+        .eq('type', 'school');
+      if (!cancelled && insts) {
+        const opts = insts as {id:string;name:string}[];
+        setInstitutionOptions(opts);
+        if (data.institutionId) {
+          const match = opts.find((i) => i.id === data.institutionId);
+          if (match && match.name !== data.institutionName) {
+            onChange({ ...data, institutionName: match.name });
+          }
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [data.institutionId]);
 
   // Derived lists from framework
   const levels: EducationFrameworkLevel[] = framework?.education_levels ?? [];
@@ -389,12 +417,26 @@ export const EducationContextStep: React.FC<EducationContextStepProps> = ({
                 <span className="text-gray-400 font-normal">(optional)</span>
               </label>
               <input
+                list="institution-list"
                 type="text"
                 value={data.institutionName}
-                onChange={(e) => onChange({ ...data, institutionName: e.target.value })}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  const match = institutionOptions.find((i) => i.name === name);
+                  onChange({
+                    ...data,
+                    institutionName: name,
+                    institutionId: match ? match.id : undefined,
+                  });
+                }}
                 placeholder="e.g. Achimota School"
                 className="w-full px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
               />
+              <datalist id="institution-list">
+                {institutionOptions.map((i) => (
+                  <option key={i.id} value={i.name} />
+                ))}
+              </datalist>
             </div>
 
             <div>

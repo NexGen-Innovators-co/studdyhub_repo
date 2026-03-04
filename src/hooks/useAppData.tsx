@@ -611,13 +611,13 @@ export const useAppData = (authUser?: any) => {
 
   // Enhanced documents loading with retry logic
   const loadDocumentsPage = useCallback(async (userId: string, isInitial = false, force = false) => {
-    console.log(`[useAppData] loadDocumentsPage called (initial=${isInitial}, force=${force})`);
+    // console.log(`[useAppData] loadDocumentsPage called (initial=${isInitial}, force=${force})`);
     if (loadingLocksRef.current.has('documents')) return;
     if (!isInitial && !dataPagination.documents.hasMore) return;
 
     // stop trying to fetch additional pages while offline
     if (!navigator.onLine && !isInitial) {
-      console.log('[useAppData] offline and not initial; skipping documents fetch');
+      // console.log('[useAppData] offline and not initial; skipping documents fetch');
       return;
     }
 
@@ -630,7 +630,7 @@ export const useAppData = (authUser?: any) => {
     try {
       // If forced, clear loaded IDs to allow full refresh of first page
       if (force) {
-        console.log('[useAppData] force flag set - clearing document IDs');
+        // console.log('[useAppData] force flag set - clearing document IDs');
         loadedIdsRef.current.documents.clear();
       }
 
@@ -648,7 +648,7 @@ export const useAppData = (authUser?: any) => {
 
             // nothing cached – keep whatever is already in state and stop
             if (documents.length > 0) {
-              console.log('[useAppData] offline & no cached docs; keeping existing documents');
+              // console.log('[useAppData] offline & no cached docs; keeping existing documents');
               return;
             }
           } catch (err) {
@@ -706,7 +706,7 @@ export const useAppData = (authUser?: any) => {
       }
 
       if (data) {
-        console.log(`[useAppData] loadDocumentsPage fetched ${data.length} docs`);
+        // console.log(`[useAppData] loadDocumentsPage fetched ${data.length} docs`);
         freshDataApplied = true;
 
         // Filter out duplicates only if not forced (force clears IDs so filter passes all)
@@ -747,7 +747,7 @@ export const useAppData = (authUser?: any) => {
           if (force || formattedDocuments.length > 0) {
             setDocuments(formattedDocuments);
           } else {
-            console.log('[useAppData] initial documents load returned no new items, keeping existing state');
+            // console.log('[useAppData] initial documents load returned no new items, keeping existing state');
           }
         } else {
           setDocuments(prev => [...prev, ...formattedDocuments]);
@@ -1436,6 +1436,7 @@ export const useAppData = (authUser?: any) => {
           school: profileData.school,
           username: profileData.username,
           personal_context: profileData.personal_context || '',
+          institution_id: profileData.institution_id || null,
           onboarding_completed: profileData.onboarding_completed ?? false,
           user_role: profileData.user_role ?? null,
           role_verified_at: profileData.role_verified_at ?? null,
@@ -1464,6 +1465,7 @@ export const useAppData = (authUser?: any) => {
           school: null,
           username: null,
           personal_context: null,
+          institution_id: null,
           onboarding_completed: false,
           user_role: null,
           role_verified_at: null,
@@ -1516,6 +1518,7 @@ export const useAppData = (authUser?: any) => {
         school: null,
         username: null,
         personal_context: null,
+        institution_id: null,
         onboarding_completed: false,
         user_role: null,
         role_verified_at: null,
@@ -2275,7 +2278,7 @@ export const useAppData = (authUser?: any) => {
     // Force refresh function (always fetches, even if already loaded)
     forceRefreshDocuments: useCallback(async () => {
       if (!currentUser?.id) return;
-      console.log('[useAppData] forceRefreshDocuments invoked');
+      // console.log('[useAppData] forceRefreshDocuments invoked');
 
       if (!navigator.onLine) {
         // while offline just populate from IndexedDB if possible, but do not clear UI
@@ -2287,7 +2290,7 @@ export const useAppData = (authUser?: any) => {
             setDataLoaded(prev => new Set([...prev, 'documents']));
           }
         } catch (err) {
-          console.error('[useAppData] failed to load offline docs during forceRefresh', err);
+          // console.error('[useAppData] failed to load offline docs during forceRefresh', err);
         }
         return;
       }
