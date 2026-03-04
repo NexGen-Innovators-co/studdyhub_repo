@@ -623,54 +623,73 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     try {
       const reader = new FileReader();
       reader.onload = async () => {
-        const base64 = reader.result.toString().split(',')[1];
-        const fileData = {
-          name: file.name,
-          mimeType: file.type,
-          data: base64,
-          size: file.size
-        };
+        try {
+          const base64 = reader.result.toString().split(',')[1];
+          const fileData = {
+            name: file.name,
+            mimeType: file.type,
+            data: base64,
+            size: file.size
+          };
 
-        const { data, error } = await supabase.functions.invoke('document-processor', {
-          body: {
-            userId: userProfile.id,
-            files: [fileData]
+          const { data, error } = await supabase.functions.invoke('document-processor', {
+            body: {
+              userId: userProfile.id,
+              files: [fileData]
+            }
+          });
+
+          if (error) {
+            throw new Error(`Extraction failed: ${error.message}`);
           }
-        });
 
-        if (error) {
-          throw new Error(`Extraction failed: ${error.message}`);
-        }
+          const processedDoc = data.documents[0];
+          if (processedDoc.processing_status === 'failed') {
+            throw new Error(processedDoc.processing_error || 'Processing failed');
+          }
 
-        const processedDoc = data.documents[0];
-        if (processedDoc.processing_status === 'failed') {
-          throw new Error(processedDoc.processing_error || 'Processing failed');
-        }
+          const documentId = processedDoc.id;
+          const extracted = processedDoc.content_extracted;
 
-        const documentId = processedDoc.id;
-        const extracted = processedDoc.content_extracted;
+          setExtractedContent(extracted);
+          setDocumentIdForDialog(documentId);
+          setUploadedDocumentPublicUrl(processedDoc.file_url);
 
-        setExtractedContent(extracted);
-        setDocumentIdForDialog(documentId);
-        setUploadedDocumentPublicUrl(processedDoc.file_url);
+          toast.loading('Analyzing document structure...', { id: toastId });
 
-        toast.loading('Analyzing document structure...', { id: toastId });
+          const { data: structureData, error: structureError } = await supabase.functions.invoke(
+            'analyze-document-structure',
+            { body: { documentContent: extracted } }
+          );
 
-        const { data: structureData, error: structureError } = await supabase.functions.invoke(
-          'analyze-document-structure',
-          { body: { documentContent: extracted } }
-        );
+          if (structureError) {
+            throw structureError;
+          }
 
-        if (structureError) {
-          throw structureError;
-        }
-
-        if (structureData.sections && structureData.sections.length > 0) {
-          setDocumentSections(structureData.sections);
-          setIsSectionDialogOpen(true);
-          toast.dismiss(toastId);
-        } else {
-          await generateAIContentForNote(note, userProfile, null, toastId, documentId);
+          if (structureData.sections && structureData.sections.length > 0) {
+            setDocumentSections(structureData.sections);
+            setIsSectionDialogOpen(true);
+            toast.dismiss(toastId);
+          } else {
+            await generateAIContentForNote(note, userProfile, null, toastId, documentId);
+          }
+        } catch (err) {
+          let errorMessage = 'An unknown error occurred during document processing.';
+          if (err instanceof FunctionsHttpError) {
+            errorMessage = `Function error (${err.context.status}): ${err.context.statusText}.`;
+            if (err.message && err.message.includes('The model is overloaded')) {
+              errorMessage = 'AI model is currently overloaded. Please try again in a few moments.';
+            }
+          } else if (err instanceof Error) {
+            errorMessage = err.message;
+            if (err.message.includes('The model is overloaded')) {
+              errorMessage = 'AI model is currently overloaded. Please try again in a few moments.';
+            }
+          }
+          // Replace the loading toast with an error toast
+          toast.error(errorMessage, { id: toastId });
+          setIsUploading(false);
+          if (event.target) event.target.value = '';
         }
       };
       reader.readAsDataURL(file);

@@ -1,5 +1,5 @@
 // src/components/quizzes/components/LiveQuizParticipantLobby.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { Alert, AlertDescription } from '../../ui/alert';
@@ -14,7 +14,9 @@ import {
   UserCog,
   Maximize2,
   Minimize2,
+  Share2
 } from 'lucide-react';
+import { ShareDialog } from '../../ui/ShareDialog';
 import { motion } from 'framer-motion';
 import { LiveQuizSession, LiveQuizPlayer } from '@/services/liveQuizService';
 
@@ -50,6 +52,7 @@ const LiveQuizParticipantLobby: React.FC<LiveQuizParticipantLobbyProps> = ({
   toast,
 }) => {
   const [isFullScreen, setIsFullScreen] = React.useState(true);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [isMobile, setIsMobile] = React.useState(false);
   // Audio refs for lobby
   const bgRef = React.useRef<HTMLAudioElement | null>(null);
@@ -175,6 +178,19 @@ const LiveQuizParticipantLobby: React.FC<LiveQuizParticipantLobbyProps> = ({
           >
             {/* Avatar + name */}
             <div className="flex flex-col items-center gap-3">
+                            <div className="flex justify-center mt-3">
+                              <Button variant="outline" size="sm" onClick={() => setShowShareModal(true)}>
+                                <Share2 className="h-4 w-4 mr-1" /> Share Lobby
+                              </Button>
+                            </div>
+                    {/* ShareDialog for sharing live quiz lobby link and code */}
+                    <ShareDialog
+                      open={showShareModal}
+                      onClose={() => setShowShareModal(false)}
+                      shareUrl={`${window.location.origin}/quizzes/live/${session?.id}`}
+                      title={'Live Quiz Lobby'}
+                      description={`Join this live quiz using code: ${session?.join_code}`}
+                    />
               <div
                 className="w-24 h-24 rounded-full flex items-center justify-center text-3xl font-black text-white shadow-2xl"
                 style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 0 40px rgba(99,102,241,0.4)' }}

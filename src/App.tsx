@@ -15,7 +15,7 @@ import DynamicHead from "./components/seo/DynamicHead";
 import { OfflineIndicator } from "./components/layout/OfflineIndicator";
 import ErrorBoundary from "./components/layout/ErrorBoundary";
 import { OnboardingGuard } from "./components/onboarding/OnboardingGuard";
-
+// SpeedInsights (Next.js) removed — not compatible with Vite/react-router app
 // LinkedIn-style branded loader for protected / heavy routes
 export const BrandedLoader = () => (
   <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-gray-950">

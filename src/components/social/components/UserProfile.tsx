@@ -57,6 +57,8 @@ export const UserProfile: React.FC<any> = ({
   const [followers, setFollowers] = useState<any[]>([]);
   const [following, setFollowing] = useState<any[]>([]);
   const [suggested, setSuggested] = useState<any[]>([]);
+  // Track all shown suggested user IDs for pagination
+  const shownSuggestedIds = React.useRef<Set<string>>(new Set());
   const [isLoadingFollowers, setIsLoadingFollowers] = useState(false);
   const [isLoadingFollowing, setIsLoadingFollowing] = useState(false);
   const [isLoadingSuggested, setIsLoadingSuggested] = useState(false);
@@ -150,18 +152,30 @@ export const UserProfile: React.FC<any> = ({
   const fetchSuggestions = async () => {
     const profileUser = user || currentUser;
     if (!profileUser) return;
-    
     setIsLoadingSuggested(true);
     const page = suggestedPage.current;
 
+    // Collect all shown IDs (including current batch)
+    const allShownIds = new Set([
+      ...shownSuggestedIds.current,
+      ...suggested.map((u: any) => u.id),
+    ]);
+
     try {
       const { data: response, error } = await supabase.functions.invoke('get-suggested-users', {
-        body: { offset: page * PAGE_SIZE, limit: PAGE_SIZE },
+        body: {
+          offset: page * PAGE_SIZE,
+          limit: PAGE_SIZE,
+          previouslyShownIds: Array.from(allShownIds),
+        },
       });
 
       if (error) throw error;
 
       const paginatedUsers = response?.users || [];
+
+      // Add new IDs to the shown set
+      paginatedUsers.forEach((u: any) => shownSuggestedIds.current.add(u.id));
 
       if (paginatedUsers.length === 0) {
         setHasMoreSuggested(false);
@@ -202,19 +216,46 @@ export const UserProfile: React.FC<any> = ({
     }
   }, [activeTab, hasMoreFollowing, isLoadingFollowing, followingObserver.current]);
 
-  // Reset lists when switching tabs, but only when user/currentUser is loaded
+  // Only fetch followers/following/suggestions the first time the tab is shown
+  // (or when the profile user changes).  Avoid wiping the arrays on every
+  // tab switch to prevent unnecessary refetches.
+  const prevProfileId = React.useRef<string | null>(null);
+
   useEffect(() => {
     const profileUser = user || currentUser;
     if (!profileUser) return;
-    if (activeTab === 'followers') {
-      setFollowers([]); followersPage.current = 0; setHasMoreFollowers(true); fetchFollowers();
-    } else if (activeTab === 'following') {
-      setFollowing([]); followingPage.current = 0; setHasMoreFollowing(true); fetchFollowing();
-    } else if (activeTab === 'suggestions') {
-      setSuggested([]); suggestedPage.current = 0; setHasMoreSuggested(true); fetchSuggestions();
+
+    // if we switched to a different profile entirely, clear everything so
+    // new user data will load when their tabs are visited.
+    if (profileUser.id !== prevProfileId.current) {
+      setFollowers([]);
+      setFollowing([]);
+      setSuggested([]);
+      followersPage.current = 0;
+      followingPage.current = 0;
+      suggestedPage.current = 0;
+      setHasMoreFollowers(true);
+      setHasMoreFollowing(true);
+      setHasMoreSuggested(true);
+      shownSuggestedIds.current = new Set();
+      prevProfileId.current = profileUser.id;
     }
-    // eslint-disable-next-line
-  }, [activeTab, user?.id, currentUser?.id]);
+
+    if (activeTab === 'followers' && followers.length === 0) {
+      followersPage.current = 0;
+      setHasMoreFollowers(true);
+      fetchFollowers();
+    } else if (activeTab === 'following' && following.length === 0) {
+      followingPage.current = 0;
+      setHasMoreFollowing(true);
+      fetchFollowing();
+    } else if (activeTab === 'suggestions' && suggested.length === 0) {
+      suggestedPage.current = 0;
+      setHasMoreSuggested(true);
+      shownSuggestedIds.current = new Set(); // reset if we cleared everything above
+      fetchSuggestions();
+    }
+  }, [activeTab, user?.id, currentUser?.id, followers.length, following.length, suggested.length]);
 
   const handleFollowSuggestedUser = async (userId: string) => {
     try {

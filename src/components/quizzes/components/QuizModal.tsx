@@ -1,7 +1,8 @@
 // src/components/quizzes/components/QuizModal.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { Quiz, QuizQuestion } from '../../../types/Class';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../ui/dialog';
+import { ShareDialog } from '../../ui/ShareDialog';
 import { Button } from '../../ui/button';
 import { Card, CardContent } from '../../ui/card';
 import { CheckCircle, XCircle, ArrowLeft, ArrowRight, Trophy, Lightbulb, Info, GraduationCap } from 'lucide-react';
@@ -36,11 +37,16 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   hasExamAccess = false,
   onStartExamMode,
 }) => {
+  const [showShareModal, setShowShareModal] = useState(false);
+
   if (!quizMode) {
     return null;
   }
 
   const { quiz, recording } = quizMode;
+  // Generate quiz link and code
+  const quizLink = `${window.location.origin}/quizzes/${quiz.id || ''}`;
+  const quizCode = quiz.id || '';
   
   // Validate quiz has questions
   if (!quiz.questions || !Array.isArray(quiz.questions) || quiz.questions.length === 0) {
@@ -69,12 +75,18 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const bestAttempt = bestAttempts[quiz.id];
 
   return (
-    <Dialog open={!!quizMode} onOpenChange={onExitQuizMode} >
-      <DialogContent className="sm:max-w-2xl lg:max-w-3xl xl:max-w-4xl p-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg shadow-xl w-full max-w-[90vw]" title='Quiz'>
+    <React.Fragment>
+      <Dialog open={!!quizMode} onOpenChange={onExitQuizMode} >
+        <DialogContent className="sm:max-w-2xl lg:max-w-3xl xl:max-w-4xl p-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg shadow-xl w-full max-w-[90vw]" title="Quiz">
         <DialogHeader className="border-b pb-4 mb-4 dark:border-gray-700">
           <DialogTitle className="text-2xl font-bold text-center flex items-center justify-center gap-2">
             <Lightbulb className="h-6 w-6 text-yellow-500" /> {quiz.title || 'Generated Quiz'}
           </DialogTitle>
+          <div className="flex justify-center mt-2">
+            <Button variant="outline" size="sm" onClick={() => setShowShareModal(true)}>
+              Share Quiz
+            </Button>
+          </div>
           <div className="flex flex-col items-center gap-1">
             {recording && (
               <DialogDescription className="text-center text-gray-600 dark:text-gray-400">
@@ -205,5 +217,14 @@ ${selectedAnswer === optionIndex
         </div>
       </DialogContent>
     </Dialog>
+      {/* ShareDialog for sharing quiz link and code */}
+      <ShareDialog
+        open={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        shareUrl={quizLink}
+        title={quiz.title || 'Quiz'}
+        description={`Join this quiz using code: ${quizCode}`}
+      />
+    </React.Fragment>
   );
 };

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Document } from '../../types/Document';
-import { getFileCategory } from '../../components/documents/documentUtils';
+import { Document } from '../../../types/Document';
+import { getFileCategory } from '../documentUtils';
 
 interface UseDocumentFilteringProps {
   documents: Document[];

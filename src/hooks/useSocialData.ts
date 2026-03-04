@@ -64,10 +64,12 @@ export const useSocialData = (
 
   // Loading states
   const [isLoading, setIsLoading] = useState(() => !loadFromCache(CACHE_KEYS.POSTS));
+  const [isLoadingTrending, setIsLoadingTrending] = useState(() => !loadFromCache(CACHE_KEYS.TRENDING));
   const [isLoadingGroups, setIsLoadingGroups] = useState(() => !loadFromCache(CACHE_KEYS.GROUPS));
   const [isLoadingUserPosts, setIsLoadingUserPosts] = useState(() => !loadFromCache(CACHE_KEYS.USER_POSTS));
   const [isLoadingSuggestedUsers, setIsLoadingSuggestedUsers] = useState(false);
   const [isLoadingMorePosts, setIsLoadingMorePosts] = useState(false);
+  const [isLoadingMoreTrending, setIsLoadingMoreTrending] = useState(false);
   const [isLoadingMoreGroups, setIsLoadingMoreGroups] = useState(false);
   const isFetchedRef = useRef(false); // Ref to track if data has already been fetched to prevent refetch on mount if data exists
 
@@ -174,28 +176,28 @@ export const useSocialData = (
       setPostsCursor(response?.nextCursor ?? null);
       setHasMorePosts(response?.hasMore ?? false);
     } catch (error) {
-      toast.error('Failed to load posts');
+      toast.error('Failed to load trending posts');
     } finally {
-      setIsLoading(false);
-      setIsLoadingMorePosts(false);
+      setIsLoadingTrending(false);
+      setIsLoadingMoreTrending(false);
     }
-  }, [sortBy, filterBy, feedMode, hasMorePosts, isLoadingMorePosts, postsCursor, posts, viewedPostIds]);
+  }, [sortBy, filterBy, feedMode, hasMoreTrendingPosts, isLoadingMoreTrending, trendingPostsCursor, trendingPosts, viewedPostIds]);
 
   // OPTIMIZED: Trending posts via edge function
   const fetchTrendingPosts = useCallback(async (reset: boolean = false) => {
-    if (!reset && (!hasMoreTrendingPosts || isLoadingMorePosts)) return;
+    if (!reset && (!hasMoreTrendingPosts || isLoadingMoreTrending)) return;
 
     if (!navigator.onLine) {
-      setIsLoading(false);
-      setIsLoadingMorePosts(false);
+      setIsLoadingTrending(false);
+      setIsLoadingMoreTrending(false);
       return;
     }
 
     try {
       if (reset) {
-        setIsLoading(true);
+        setIsLoadingTrending(true);
       } else {
-        setIsLoadingMorePosts(true);
+        setIsLoadingMoreTrending(true);
       }
 
       // Send loaded trending post IDs to exclude on server
@@ -469,14 +471,17 @@ export const useSocialData = (
             const patch: Record<string, any> = { updated_at: new Date().toISOString() };
             if (needsAvatarSync) patch.avatar_url = bestAvatar;
             if (needsNameSync) patch.display_name = userProfile.full_name;
-            supabase
-              .from('social_users')
-              .update(patch)
-              .eq('id', user.id)
-              .select()
-              .single()
-              .then(({ data }) => { if (data) setCurrentUser(data); })
-              .catch(() => { /* non-blocking */ });
+            try {
+              const { data: updated } = await supabase
+                .from('social_users')
+                .update(patch)
+                .eq('id', user.id)
+                .select()
+                .single();
+              if (updated) setCurrentUser(updated);
+            } catch {
+              // non-blocking
+            }
           }
           setCurrentUser(socialUser);
         } else {
@@ -1013,7 +1018,7 @@ export const useSocialData = (
   };
 
   const loadMoreTrendingPosts = () => {
-    if (!isLoadingMorePosts && hasMoreTrendingPosts) {
+    if (!isLoadingMoreTrending && hasMoreTrendingPosts) {
       fetchTrendingPosts(false);
     }
   };
@@ -1074,10 +1079,12 @@ export const useSocialData = (
     suggestedUsers,
     setSuggestedUsers,
     isLoading,
+    isLoadingTrending,
     isLoadingGroups,
     isLoadingUserPosts,
     isLoadingSuggestedUsers,
     isLoadingMorePosts,
+    isLoadingMoreTrending,
     isLoadingMoreGroups,
     hasMorePosts,
     hasMoreTrendingPosts,

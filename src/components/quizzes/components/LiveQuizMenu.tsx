@@ -710,7 +710,7 @@ const LiveQuizMenu: React.FC<LiveQuizMenuProps> = ({
                             id="joinCode"
                             value={joinCode}
                             onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                            placeholder={selectedPublicSession ? "ENTER CODE TO VERIFY" : "X7Y9Z"}
+                            placeholder={selectedPublicSession ? "ENTER CODE TO VERIFY" : "X7Y9Z3"}
                             maxLength={6}
                             className={isFullScreen ? "text-2xl font-mono text-center tracking-widest bg-black/5 dark:bg-white/10 border-black/10 dark:border-white/20 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-white/30 focus-visible:ring-blue-500 uppercase" : "text-2xl font-mono text-center tracking-widest"}
                           />

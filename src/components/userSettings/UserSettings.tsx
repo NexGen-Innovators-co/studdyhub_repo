@@ -385,27 +385,58 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
         });
       } else {
         // Use the document-processor edge function for PDF/DOCX
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve((reader.result as string).split(',')[1]);
-          reader.onerror = () => reject(new Error('Failed to read file'));
-          reader.readAsDataURL(file);
-        });
+        // For large files upload to Storage and send a file_url to the function to avoid large base64 payloads
+        if (file.size > 5 * 1024 * 1024) {
+          const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const key = `${profile?.id || 'anon'}/uploads/${Date.now()}_${safeName}`;
 
-        const { data, error } = await supabase.functions.invoke('document-processor', {
-          body: {
-            userId: profile?.id,
-            files: [{ name: file.name, mimeType: file.type, data: base64, size: file.size }],
-          },
-        });
+          const { error: uploadErr } = await supabase.storage
+            .from('documents')
+            .upload(key, file, { upsert: false });
 
-        if (error) throw new Error(error.message);
+          if (uploadErr) throw new Error(uploadErr.message || 'Failed to upload file to storage');
 
-        const doc = data?.documents?.[0];
-        if (!doc || doc.processing_status === 'failed') {
-          throw new Error(doc?.processing_error || 'Failed to extract text from file');
+          const { data: urlData } = supabase.storage.from('documents').getPublicUrl(key);
+          const publicUrl = urlData?.publicUrl;
+          if (!publicUrl) throw new Error('Failed to get public URL for uploaded file');
+
+          const { data, error } = await supabase.functions.invoke('document-processor', {
+            body: {
+              userId: profile?.id,
+              files: [{ name: file.name, mimeType: file.type, file_url: publicUrl, size: file.size }],
+            },
+          });
+
+          if (error) throw new Error(error.message);
+
+          const doc = data?.documents?.[0];
+          if (!doc || doc.processing_status === 'failed') {
+            throw new Error(doc?.processing_error || 'Failed to extract text from file');
+          }
+          extractedText = doc.content_extracted || '';
+        } else {
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve((reader.result as string).split(',')[1]);
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsDataURL(file);
+          });
+
+          const { data, error } = await supabase.functions.invoke('document-processor', {
+            body: {
+              userId: profile?.id,
+              files: [{ name: file.name, mimeType: file.type, data: base64, size: file.size }],
+            },
+          });
+
+          if (error) throw new Error(error.message);
+
+          const doc = data?.documents?.[0];
+          if (!doc || doc.processing_status === 'failed') {
+            throw new Error(doc?.processing_error || 'Failed to extract text from file');
+          }
+          extractedText = doc.content_extracted || '';
         }
-        extractedText = doc.content_extracted || '';
       }
 
       if (!extractedText.trim()) {
@@ -504,16 +535,20 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       if (error) throw error;
 
       // Sync display_name + avatar to social_users so the social profile stays in sync
-      supabase
-        .from('social_users')
-        .update({
-          display_name: fullName,
-          avatar_url: updatedAvatarUrl,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id)
-        .then(() => { /* fire-and-forget */ })
-        .catch(() => { /* non-blocking */ });
+      (async () => {
+        try {
+          await supabase
+            .from('social_users')
+            .update({
+              display_name: fullName,
+              avatar_url: updatedAvatarUrl,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', user.id);
+        } catch (e) {
+          // non-blocking: ignore sync failures
+        }
+      })();
 
       if (newPassword) {
         const { error: passwordError } = await supabase.auth.updateUser({

@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
-import { supabase } from '../../integrations/supabase/client';
-import { Document } from '../../types/Document';
-import { DocumentFolder } from '../../types/Folder';
+import { supabase } from '../../../integrations/supabase/client';
+import { Document } from '../../../types/Document';
+import { DocumentFolder } from '../../../types/Folder';
 import { User } from '@supabase/supabase-js';
 
 interface UseDocumentOperationsProps {

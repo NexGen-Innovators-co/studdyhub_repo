@@ -1,5 +1,5 @@
 // src/components/quizzes/components/LiveQuizHostLobby.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
@@ -8,8 +8,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
 import {
   Users, Play, Crown, Copy, Loader2, AlertCircle,
   LogOut, RefreshCw, Settings, UserCog, Clock,
-  Maximize2, Minimize2, X,
+  Maximize2, Minimize2, X, Share2
 } from 'lucide-react';
+import { ShareDialog } from '../../ui/ShareDialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiveQuizSession, LiveQuizPlayer, startLiveQuizSession } from '@/services/liveQuizService';
 
@@ -42,6 +43,7 @@ const LiveQuizHostLobby: React.FC<LiveQuizHostLobbyProps> = ({
   refreshSessionState, setIsLoading, setSession, setViewMode, resetView, toast,
 }) => {
   const [isFullScreen, setIsFullScreen] = React.useState(true);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [isMobile, setIsMobile] = React.useState(false);
   const bgRef = React.useRef<HTMLAudioElement | null>(null);
   const startRef = React.useRef<HTMLAudioElement | null>(null);
@@ -211,7 +213,20 @@ const LiveQuizHostLobby: React.FC<LiveQuizHostLobbyProps> = ({
               <p className="text-white/30 text-sm mt-2 flex items-center justify-center gap-1.5">
                 <Copy className="h-3.5 w-3.5" /> Click code to copy
               </p>
+              <div className="flex justify-center mt-3">
+                <Button variant="outline" size="sm" onClick={() => setShowShareModal(true)}>
+                  <Share2 className="h-4 w-4 mr-1" /> Share Lobby
+                </Button>
+              </div>
             </div>
+      {/* ShareDialog for sharing live quiz lobby link and code */}
+      <ShareDialog
+        open={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        shareUrl={`${window.location.origin}/quizzes/live/${session.id}`}
+        title={'Live Quiz Lobby'}
+        description={`Join this live quiz using code: ${session.join_code}`}
+      />
 
             {/* Scheduled countdown */}
             {scheduledTime && countdown && (

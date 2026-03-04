@@ -611,8 +611,15 @@ export const useAppData = (authUser?: any) => {
 
   // Enhanced documents loading with retry logic
   const loadDocumentsPage = useCallback(async (userId: string, isInitial = false, force = false) => {
+    console.log(`[useAppData] loadDocumentsPage called (initial=${isInitial}, force=${force})`);
     if (loadingLocksRef.current.has('documents')) return;
     if (!isInitial && !dataPagination.documents.hasMore) return;
+
+    // stop trying to fetch additional pages while offline
+    if (!navigator.onLine && !isInitial) {
+      console.log('[useAppData] offline and not initial; skipping documents fetch');
+      return;
+    }
 
     loadingLocksRef.current.add('documents');
     setDataLoading('documents', true);
@@ -623,6 +630,7 @@ export const useAppData = (authUser?: any) => {
     try {
       // If forced, clear loaded IDs to allow full refresh of first page
       if (force) {
+        console.log('[useAppData] force flag set - clearing document IDs');
         loadedIdsRef.current.documents.clear();
       }
 
@@ -636,6 +644,12 @@ export const useAppData = (authUser?: any) => {
               offlineDocs.forEach(doc => loadedIdsRef.current.documents.add(doc.id));
               setDataLoaded(prev => new Set([...prev, 'documents']));
               return; // finally block will clean up
+            }
+
+            // nothing cached – keep whatever is already in state and stop
+            if (documents.length > 0) {
+              console.log('[useAppData] offline & no cached docs; keeping existing documents');
+              return;
             }
           } catch (err) {
             //console.warn('Failed to load offline documents:', err);
@@ -692,6 +706,7 @@ export const useAppData = (authUser?: any) => {
       }
 
       if (data) {
+        console.log(`[useAppData] loadDocumentsPage fetched ${data.length} docs`);
         freshDataApplied = true;
 
         // Filter out duplicates only if not forced (force clears IDs so filter passes all)
@@ -728,8 +743,12 @@ export const useAppData = (authUser?: any) => {
         offlineStorage.save(STORES.DOCUMENTS, formattedDocuments);
 
         if (isInitial) {
-          // If forced refresh of first page, replace state
-          setDocuments(formattedDocuments);
+          // If forced refresh of first page OR we actually received new docs, replace state
+          if (force || formattedDocuments.length > 0) {
+            setDocuments(formattedDocuments);
+          } else {
+            console.log('[useAppData] initial documents load returned no new items, keeping existing state');
+          }
         } else {
           setDocuments(prev => [...prev, ...formattedDocuments]);
         }
@@ -759,7 +778,7 @@ export const useAppData = (authUser?: any) => {
       loadingLocksRef.current.delete('documents');
       setDataLoading('documents', false);
     }
-  }, [dataLoaded, dataPagination, setDataLoading, recordResponseTime]);
+  }, [dataLoaded, dataPagination, setDataLoading, recordResponseTime, documents]);
 
   // Optimized recordings loading with retry logic
   const loadRecordingsPage = useCallback(async (userId: string, isInitial = false) => {
@@ -1778,7 +1797,9 @@ export const useAppData = (authUser?: any) => {
       setLoading(false);
       setLoadingPhase({ phase: 'complete', progress: 100 });
     }
-  }, [loadUserProfile, loadNotesPage, loadDocumentsPage, loadFolders, loadRecordingsPage, loadSchedulePage, loadQuizzesPage, getConnectionQuality]);// Enhanced loading state computation
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser]);// Enhanced loading state computation, only run on user change (others are stable)
+
   // Only report loading=true when startProgressiveDataLoading has actually begun.
   // Previously `loadingPhase.phase !== 'complete'` caused loading to be true on
   // initial mount (phase starts as 'initial') which blocked tab-level data loading
@@ -2229,13 +2250,13 @@ export const useAppData = (authUser?: any) => {
     // Lazy loading functions — uses ref-based lock for the "currently loading"
     // check so the guard is never stale regardless of React batching.
     loadDataIfNeeded: useCallback((dataType: keyof DataLoadingState, force = false) => {
-      if (!currentUser?.id) return;
+      if (!currentUser?.id) return Promise.resolve();
       // If forced, bypass the loaded check. Also bypass loading check if forced? 
       // Ideally yes, but we should be careful with race conditions.
       // However loadFolders/loadDocumentsPage handle concurrency internally now if force is passed.
-      if (!force && (dataLoaded.has(dataType) || loadingLocksRef.current.has(dataType))) return;
+      if (!force && (dataLoaded.has(dataType) || loadingLocksRef.current.has(dataType))) return Promise.resolve();
 
-      const loaders = {
+      const loaders: Record<string, () => Promise<any> | void> = {
         recordings: () => loadRecordingsPage(currentUser.id, true),
         scheduleItems: () => loadSchedulePage(currentUser.id, true),
         documents: () => loadDocumentsPage(currentUser.id, true, force),
@@ -2246,18 +2267,33 @@ export const useAppData = (authUser?: any) => {
       };
 
       if (loaders[dataType]) {
-        loaders[dataType]();
+        return loaders[dataType]() as Promise<any>;
       }
+      return Promise.resolve();
     }, [currentUser, dataLoaded, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadNotesPage, loadUserProfile, loadFolders]),
 
     // Force refresh function (always fetches, even if already loaded)
-    forceRefreshDocuments: useCallback(() => {
-      return new Promise<void>((resolve) => {
-        if (!currentUser?.id) return resolve();
-        setDocuments([]);
-        loadDocumentsPage(currentUser.id, true);
-        resolve();
-      });
+    forceRefreshDocuments: useCallback(async () => {
+      if (!currentUser?.id) return;
+      console.log('[useAppData] forceRefreshDocuments invoked');
+
+      if (!navigator.onLine) {
+        // while offline just populate from IndexedDB if possible, but do not clear UI
+        try {
+          const offlineDocs = await offlineStorage.getAll<Document>(STORES.DOCUMENTS);
+          if (offlineDocs && offlineDocs.length > 0) {
+            setDocuments(offlineDocs);
+            offlineDocs.forEach(doc => loadedIdsRef.current.documents.add(doc.id));
+            setDataLoaded(prev => new Set([...prev, 'documents']));
+          }
+        } catch (err) {
+          console.error('[useAppData] failed to load offline docs during forceRefresh', err);
+        }
+        return;
+      }
+
+      setDocuments([]);
+      await loadDocumentsPage(currentUser.id, true, true);
     }, [currentUser, loadDocumentsPage, setDocuments]),
 
     // Load more functions

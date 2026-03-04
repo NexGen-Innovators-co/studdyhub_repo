@@ -116,14 +116,25 @@ END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'profiles_update_own' AND tablename = 'profiles') THEN
+    -- qualify id to avoid ambiguous-column errors when the query planner
+    -- aliases the profiles table (e.g. via REST requests)
     CREATE POLICY profiles_update_own ON public.profiles FOR UPDATE
-      USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+      USING (auth.uid() = public.profiles.id) WITH CHECK (auth.uid() = public.profiles.id);
   END IF;
 END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'profiles_delete_own' AND tablename = 'profiles') THEN
     CREATE POLICY profiles_delete_own ON public.profiles FOR DELETE USING (auth.uid() = id);
+  END IF;
+END $$;
+
+-- also update policy if it already exists (run on every deploy)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'profiles_update_own' AND tablename = 'profiles') THEN
+    ALTER POLICY profiles_update_own ON public.profiles
+      USING (auth.uid() = public.profiles.id)
+      WITH CHECK (auth.uid() = public.profiles.id);
   END IF;
 END $$;
 

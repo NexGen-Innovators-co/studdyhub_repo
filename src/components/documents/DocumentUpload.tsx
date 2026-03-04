@@ -33,9 +33,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { DocumentCardItem } from './DocumentCardItem';
 import { DocumentFilters } from './DocumentFilters';
 import { DocumentGridSkeleton, DocumentListSkeleton, FolderTreeSkeleton } from './DocumentSkeletons';
-import { useDocumentFiltering } from '../../hooks/documents/useDocumentFiltering';
-import { useDocumentOperations } from '../../hooks/documents/useDocumentOperations';
-import { useDocumentUpload } from '../../hooks/documents/useDocumentUpload';
+import { useDocumentFiltering } from './hooks/useDocumentFiltering';
+import { useDocumentOperations } from './hooks/useDocumentOperations';
+import { useDocumentUpload } from './hooks/useDocumentUpload';
 import { 
   formatFileSize,  
   formatDate, 
@@ -313,22 +313,20 @@ const allDocuments = contextDocuments || documents;
 
   const handleManualRefresh = useCallback(async () => {
     if (isRefreshing || !user?.id) return;
-    
+    console.log('[DocumentUpload] manual refresh clicked');
     setIsRefreshing(true);
     try {
-      // Refresh both documents and folders with optimized parallel fetching
-      await Promise.all([
-        loadDataIfNeeded('documents'), // Force refresh
-        loadDataIfNeeded('folders')
-      ]);
+      // optionally refresh folder list in background
+      loadDataIfNeeded('folders', true);
+      // force-refresh the document listing
+      await forceRefreshDocuments();
       toast.success('Documents refreshed successfully!');
     } catch (error: any) {
-
       toast.error(`Failed to refresh: ${error.message || 'Unknown error'}`);
     } finally {
       setIsRefreshing(false);
     }
-  }, [isRefreshing, user, loadDataIfNeeded]);
+  }, [isRefreshing, user, forceRefreshDocuments]);
 
   // Listen for trigger-document-upload event from header
   useEffect(() => {

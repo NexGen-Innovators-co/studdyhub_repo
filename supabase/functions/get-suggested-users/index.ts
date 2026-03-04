@@ -89,7 +89,7 @@ serve(async (req) => {
         .select('*')
         .not('id', 'in', `(${excludeIds.slice(0, 100).join(',')})`)
         .order('followers_count', { ascending: false })
-        .limit(50),
+        .limit(200), // Increased from 50 to 200
     ]);
 
     // Merge pools, deduplicating
@@ -230,11 +230,11 @@ Respond JSON only: {"scores":{"0":7,"1":3}}`;
       await logSystemError(_logClient, {
         severity: 'error',
         source: 'get-suggested-users',
-        message: error?.message || String(error),
-        details: { stack: error?.stack },
+        message: (error as any)?.message || String(error),
+        details: { stack: (error as any)?.stack },
       });
     } catch (_logErr) { console.error('[get-suggested-users] Error logging failed:', _logErr); }
-    console.error('get-suggested-users error:', error);
+    console.error('get-suggested-users error:', error as any);
     return new Response(
       JSON.stringify({ error: error.message || 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

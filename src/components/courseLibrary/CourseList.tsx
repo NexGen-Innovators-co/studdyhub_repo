@@ -297,7 +297,7 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
                     variant="outline"
                     role="combobox"
                     aria-expanded={openCombobox}
-                    className="justify-between"
+                    className="justify-between bg-white dark:bg-slate-800"
                   >
                     {tempSchoolName
                       ? availableSchools.find((school) => school === tempSchoolName) || tempSchoolName
@@ -305,7 +305,7 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="p-0" align="start">
+                <PopoverContent className="p-0 bg-white dark:bg-slate-800" align="start">
                   <Command>
                     <CommandInput placeholder="Search school..." />
                     <CommandList>
@@ -343,6 +343,7 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
                 placeholder="e.g. University of Ghana"
                 value={tempSchoolName}
                 onChange={(e) => setTempSchoolName(e.target.value)}
+                className="bg-white dark:bg-slate-800"
               />
             </div>
           </div>

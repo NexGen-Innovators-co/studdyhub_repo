@@ -11,13 +11,14 @@ import { useSocialActions } from './hooks/useSocialActions';
 import { useSocialComments } from './hooks/useSocialComments';
 import { useSocialNotifications } from './hooks/useSocialNotifications';
 import { useSocialPostViews } from './hooks/useSocialPostViews';
-import { useSocialData } from '../../hooks/useSocialData';
+// removed local useSocialData import – using context instead
 import { useFeatureAccess } from '../../hooks/useFeatureAccess';
 import { useGlobalSearch } from '../../hooks/useGlobalSearch';
 import { SEARCH_CONFIGS } from '../../services/globalSearchService';
 import { useChatData } from './hooks/useChatData';
 import { useChatActions } from './hooks/useChatActions';
 import { useUserResources } from './hooks/useUserResources';
+import { useAppContext } from '../../hooks/useAppContext';
 
 // Extracted feed components
 import {
@@ -48,7 +49,6 @@ import { OtherUserProfile } from './components/OtherUserProfile';
 // Types
 import { SortBy, FilterBy, Privacy } from './types/social';
 import { SocialPostWithDetails } from '@/integrations/supabase/socialTypes';
-import { supabase } from '@/integrations/supabase/client';
 
 interface SocialFeedProps {
   activeTab?: string;
@@ -74,7 +74,9 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     const [activeTab, setActiveTab] = useState<'feed' | 'trending' | 'groups' | 'profile' | 'notifications' | 'userProfile'>(initialActiveTab as any || 'feed');
     const [internalSearch, setInternalSearch] = useState('');
     const [showPostDialog, setShowPostDialog] = useState(false);
-    const [userId, setUserId] = useState<string | null>(null);
+    // derive userId from socialData to avoid redundant auth calls
+    const { socialData } = useAppContext();
+    const userId = socialData.currentUser?.id || null;
     const [hasSearched, setHasSearched] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [viewedUserId, setViewedUserId] = useState<string | null>(null);
@@ -82,9 +84,6 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     const effectiveSearch = externalSearchQuery ?? internalSearch;
 
     // ─── User ID ──────────────────────────────────────────
-    useEffect(() => {
-      supabase.auth.getUser().then(({ data: { user } }) => setUserId(user?.id || null));
-    }, []);
 
     // ─── Global search ────────────────────────────────────
     const { search, results: searchResults, isSearching } = useGlobalSearch(SEARCH_CONFIGS.posts, userId, { debounceMs: 500 });
@@ -110,7 +109,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     const [sortBy, setSortBy] = useState<SortBy>('newest');
     const [filterBy, setFilterBy] = useState<FilterBy>('all');
     const [feedMode, setFeedMode] = useState<FeedMode>('all');
-    const [userProfile, setUserProfile] = useState<any>(null);
+    // no local userProfile; socialData.currentUser carries profile info
     const { educationContext } = useEducationContext();
 
     // ─── Post creation state ──────────────────────────────
@@ -181,21 +180,6 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
       return document.scrollingElement || document.documentElement;
     };
 
-    // ─── User profile + resources ─────────────────────────
-    useEffect(() => {
-      const fetchUserProfile = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          setUserProfile({
-            id: user.id,
-            email: user.email,
-            full_name: user.user_metadata?.full_name || user.email?.split('@')[0],
-            avatar_url: user.user_metadata?.avatar_url || '',
-          });
-        }
-      };
-      fetchUserProfile();
-    }, []);
 
     // User resources hook (replaces direct DB calls)
     const { userNotes, userDocuments, userClassRecordings } = useUserResources(userId);
@@ -204,7 +188,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     const {
       posts, trendingPosts, userPosts, groups, currentUser,
       trendingHashtags, suggestedUsers,
-      isLoading, isLoadingGroups, isLoadingUserPosts, isLoadingMorePosts,
+      isLoading, isLoadingTrending, isLoadingGroups, isLoadingUserPosts, isLoadingMorePosts, isLoadingMoreTrending,
       hasMorePosts, hasMoreTrendingPosts, hasMoreUserPosts, hasMoreGroups,
       refetchPosts, refetchTrendingPosts, refetchGroups, refetchUserPosts, refetchCurrentUser,
       loadMorePosts, loadMoreTrendingPosts, loadMoreUserPosts, loadMoreGroups, isLoadingMoreGroups,
@@ -214,7 +198,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
       isLoadingSuggestedUsers, hasMoreSuggestedUsers, loadMoreSuggestedUsers,
       forceRefresh,
       setPosts, setTrendingPosts, setUserPosts, setGroups, setSuggestedUsers, setCurrentUser,
-    } = useSocialData(userProfile, sortBy, filterBy, undefined, feedMode);
+    } = socialData;  // reuse context data instead of creating new hook instance
 
     const {
       chatSessions, activeSessionMessages,
@@ -223,22 +207,22 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
       activeSessionId: activeChatSessionId,
       setActiveSession, refetchSessions: refetchChatSessions,
       editMessage, deleteMessage, addOptimisticMessage,
-    } = useChatData(currentUser?.id || null);
+    } = useChatData(socialData.currentUser?.id || null);
 
     const {
       createP2PChatSession, sendChatMessage, sendMessageWithResource,
       isSending: isSendingMessage, isCreatingSession,
-    } = useChatActions(currentUser?.id || null);
+    } = useChatActions(socialData.currentUser?.id || null);
 
     const {
       createPost, updateProfile, toggleLike, toggleBookmark, sharePost, toggleFollow,
       isUploading, createGroup, joinGroup, leaveGroup, deletePost, editPost,
-    } = useSocialActions(currentUser, posts, setPosts, setSuggestedUsers, groups, setGroups, setTrendingPosts, setUserPosts, setCurrentUser, refetchCurrentUser);
+    } = useSocialActions(socialData.currentUser, posts, setPosts, setSuggestedUsers, groups, setGroups, setTrendingPosts, setUserPosts, setCurrentUser, refetchCurrentUser);
 
     const {
       addComment, updateNewComment, togglePostExpanded, isPostExpanded,
       getPostComments, isLoadingPostComments, isAddingComment, getNewCommentContent,
-    } = useSocialComments(currentUser, posts);
+    } = useSocialComments(socialData.currentUser, posts);
 
     const {
       notifications, unreadCount, isLoading: isLoadingNotifications,
@@ -509,6 +493,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     const hasMoreUserPostsRef = useRef(hasMoreUserPosts);
     const hasMoreSuggestedRef = useRef(hasMoreSuggestedUsers);
     const isLoadingMorePostsRef = useRef(isLoadingMorePosts);
+    const isLoadingMoreTrendingRef = useRef(isLoadingMoreTrending);
     const isLoadingUserPostsRef = useRef(isLoadingUserPosts);
     const isLoadingSuggestedRef = useRef(isLoadingSuggestedUsers);
     const isRefreshingRef = useRef(isRefreshing);
@@ -523,6 +508,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     hasMoreUserPostsRef.current = hasMoreUserPosts;
     hasMoreSuggestedRef.current = hasMoreSuggestedUsers;
     isLoadingMorePostsRef.current = isLoadingMorePosts;
+    isLoadingMoreTrendingRef.current = isLoadingMoreTrending;
     isLoadingUserPostsRef.current = isLoadingUserPosts;
     isLoadingSuggestedRef.current = isLoadingSuggestedUsers;
     isRefreshingRef.current = isRefreshing;
@@ -607,7 +593,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
         if ((scrollTop + clientHeight) / scrollHeight > 0.85) {
           switch (activeTab) {
             case 'feed': if (hasMorePostsRef.current && !isLoadingMorePostsRef.current) loadMorePostsRef.current(); break;
-            case 'trending': if (hasMoreTrendingRef.current && !isLoadingMorePostsRef.current) loadMoreTrendingRef.current(); break;
+            case 'trending': if (hasMoreTrendingRef.current && !isLoadingMoreTrendingRef.current) loadMoreTrendingRef.current(); break;
             case 'profile': if (hasMoreUserPostsRef.current && !isLoadingUserPostsRef.current) loadMoreUserPostsRef.current(); break;
           }
         }

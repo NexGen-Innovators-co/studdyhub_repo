@@ -280,6 +280,7 @@ serve(async (req) => {
     const {
       mode = 'feed',         // 'feed' | 'trending' | 'user' | 'liked' | 'bookmarked'
       sortBy = 'newest',     // 'newest' | 'popular'
+      feedMode = 'all',      // 'for-you' | 'my-school' | 'my-level' | 'all' | 'trending'
       cursor = null,         // cursor-based pagination: ISO timestamp of last post seen
       limit = 15,
       viewedPostIds = [],    // IDs of already-viewed posts for feed algorithm
@@ -289,6 +290,16 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     // Fetch exactly limit + 1 to determine hasMore without over-fetching
     const fetchLimit = limit + 1;
+
+    // optionally load education context for feedMode filtering or ai ranking
+    let eduCtx: ServerEducationContext | null = null;
+    if (mode === 'feed' && ['for-you','my-school','my-level'].includes(feedMode)) {
+      try {
+        eduCtx = await getEducationContext(supabase, userId);
+      } catch {
+        eduCtx = null;
+      }
+    }
 
     let postsData: any[] = [];
 
@@ -395,22 +406,35 @@ serve(async (req) => {
         }
       } else if (mode === 'trending') {
         // IMPROVED: "Hot" score algorithm
-        // Fetch posts from the last 7 days with at least 1 like to compute velocity
+        // Step 1: try to build a candidate set of recent, engaged posts
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-        
         query = query
           .eq('privacy', 'public')
           .neq('author_id', userId)
-          .gte('created_at', sevenDaysAgo) // Focus on recent content
-          .order('likes_count', { ascending: false }) // Initial loose sort
-          .limit(100); // Fetch a larger candidate pool for in-memory re-ranking
+          .gte('created_at', sevenDaysAgo) // target last week only
+          .order('likes_count', { ascending: false }) // pre-sort by likes
+          .limit(100); // larger pool for scoring
 
         if (excludeIds.length > 0) {
           query = query.not('id', 'in', `(${excludeIds.slice(0, 500).join(',')})`);
         }
+
       } else {
-        // Default feed — cursor-based by created_at
+        // Default feed — cursor-based by created_at,
+        // optionally narrow based on feedMode
         query = query.eq('privacy', 'public');
+
+        if (feedMode === 'my-school' && eduCtx?.institution) {
+          try {
+            query = query.eq('metadata->education_context->institution', eduCtx.institution);
+          } catch {}
+        } else if (feedMode === 'my-level' && eduCtx?.educationLevel) {
+          try {
+            query = query.eq('metadata->education_context->education_level', eduCtx.educationLevel);
+          } catch {}
+        }
+        // 'for-you' and 'all' do not add SQL filters; personalization occurs later
+
         if (sortBy === 'popular') {
           query = query.order('likes_count', { ascending: false }).order('created_at', { ascending: false });
           if (excludeIds.length > 0) {
@@ -429,6 +453,24 @@ serve(async (req) => {
       const { data, error } = await query.limit(actualFetchLimit);
       if (error) throw error;
       postsData = data || [];
+
+      // If our strict trending query returned nothing but there are older public
+      // posts available, fall back to a wider search window instead of returning
+      // an empty list.  This keeps the tab from appearing blank when activity is
+      // low but not absent.
+      if (postsData.length === 0) {
+        const { data: fallback, error: fbErr } = await supabase
+          .from('social_posts')
+          .select(`*, author:social_users(*), group:social_groups(*), media:social_media(*)`)
+          .eq('privacy', 'public')
+          .neq('author_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(fetchLimit);
+        if (!fbErr && fallback && fallback.length > 0) {
+          postsData = fallback;
+          // note: hasMore will be recalculated below
+        }
+      }
     }
 
     if (postsData.length === 0) {

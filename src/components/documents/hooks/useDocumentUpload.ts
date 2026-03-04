@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
-import { supabase } from '../../integrations/supabase/client';
-import { Document } from '../../types/Document'; // Update path if needed
+import { supabase } from '../../../integrations/supabase/client';
+import { Document } from '../../../types/Document'; // Update path if needed
 import { User } from '@supabase/supabase-js';
-import { overrideTsMimeType } from '../../components/documents/documentUtils'; // Update path if needed
+import { overrideTsMimeType } from '../documentUtils.tsx';
 
 interface AppOperations {
   addDocumentToFolder: (docId: string, folderId: string) => Promise<void | boolean>;
@@ -152,46 +152,56 @@ export const useDocumentUpload = ({
         duration: 5000,
       });
 
-      const base64Data = await getBase64(selectedFile);
-      setUploadProgress(30);
+      // If the file is large, upload it to Storage and send a file_url
+      const STORAGE_UPLOAD_THRESHOLD = 5 * 1024 * 1024; // 5MB
+      let payloadFiles: any[] = [];
+
+      if (selectedFile.size > STORAGE_UPLOAD_THRESHOLD) {
+        // Upload to storage to avoid sending huge base64 payloads
+        const safeFileName = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const filePath = `${user.id}/uploads/${Date.now()}_${safeFileName}`;
+        const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, selectedFile, { upsert: true });
+        if (uploadError) throw uploadError;
+
+        const { data: publicUrlData } = supabase.storage.from('documents').getPublicUrl(filePath) as any;
+        const publicUrl = publicUrlData?.publicUrl || (publicUrlData && publicUrlData.publicUrl) || null;
+        if (!publicUrl) throw new Error('Failed to obtain public URL for uploaded file');
+
+        payloadFiles.push({ name: selectedFile.name, mimeType: selectedFile.type, file_url: publicUrl, size: selectedFile.size });
+        setUploadProgress(60);
+      } else {
+        const base64Data = await getBase64(selectedFile);
+        setUploadProgress(30);
+        payloadFiles.push({ name: selectedFile.name, mimeType: selectedFile.type, data: base64Data, size: selectedFile.size });
+      }
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         throw new Error('No valid authentication token found');
       }
 
-      const payload = {
-        userId: user.id,
-        files: [{
-          name: selectedFile.name,
-          mimeType: selectedFile.type,
-          data: base64Data,
-          size: selectedFile.size
-        }]
-      };
+      const payload = { userId: user.id, files: payloadFiles };
 
-      setUploadProgress(60);
+      setUploadProgress(75);
 
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify(payload),
+      // warn if the file is in a size range that often triggers long AI work
+      const LARGE_NOTIFY_THRESHOLD = 3 * 1024 * 1024; // 3MB
+      if (selectedFile.size > LARGE_NOTIFY_THRESHOLD) {
+        toast.info('This file is a bit large – processing may take over a minute. It will continue running in the background and appear in your documents when ready.');
+      }
+
+      const { data: result, error: fnError } = await supabase.functions.invoke('document-processor', {
+        body: payload,
       });
 
       setUploadProgress(90);
 
-      if (!response.ok) {
-        const errorBody = await response.json();
-        throw new Error(`Processing failed: ${errorBody.error || 'Unknown error'}`);
+      if (fnError) {
+        throw new Error(fnError.message || 'Function invocation failed');
       }
-
-      const result = await response.json();
       setUploadProgress(100);
 
-      if (result.documents && result.documents.length > 0) {
+      if (result?.documents && result.documents.length > 0) {
         const uploadedDoc = result.documents[0];
 
         if (uploadTargetFolderId) {
@@ -202,11 +212,52 @@ export const useDocumentUpload = ({
           await forceRefreshDocuments();
         }
 
-        toast.success(
-          uploadTargetFolderId
-            ? `Document uploaded and added to folder!`
-            : `Successfully uploaded and processed "${selectedFile.name}"!`
-        );
+        // ── Handle background/resumable processing ──────────────────────────
+
+        if (uploadedDoc.processing_status === 'partial') {
+          // Large file (>40MB): server extracted first chunk, client resumes the rest
+          toast.info(`"${selectedFile.name}" is large — continuing extraction in background…`);
+          resumeDocumentProcessing(uploadedDoc.id, selectedFile.name, user.id);
+
+        } else if (uploadedDoc.processing_status === 'processing') {
+          // Legacy background processing path
+          toast.info("Large file detected, processing in background. We'll notify when complete.");
+          const pollInterval = 5000;
+          const maxAttempts = 60;
+          let attempts = 0;
+          const poller = setInterval(async () => {
+            attempts++;
+            try {
+              const { data: docs, error: pollErr } = await supabase
+                .from('documents')
+                .select('processing_status,processing_metadata')
+                .eq('id', uploadedDoc.id)
+                .single();
+              if (pollErr) throw pollErr;
+              if (docs && docs.processing_status !== 'processing') {
+                clearInterval(poller);
+                if (docs.processing_status === 'completed') {
+                  toast.success(`"${selectedFile.name}" finished processing!`);
+                  forceRefreshDocuments?.();
+                } else {
+                  toast.error(`Processing of "${selectedFile.name}" failed.`);
+                }
+              } else if (attempts >= maxAttempts) {
+                clearInterval(poller);
+                toast.warning('Processing is taking longer than expected. Please check back later.');
+              }
+            } catch {
+              clearInterval(poller);
+            }
+          }, pollInterval);
+
+        } else {
+          toast.success(
+            uploadTargetFolderId
+              ? `Document uploaded and added to folder!`
+              : `Successfully uploaded and processed "${selectedFile.name}"!`
+          );
+        }
 
         setUploadTargetFolderId(null);
       } else {
@@ -217,7 +268,29 @@ export const useDocumentUpload = ({
       if (fileInputRef.current) fileInputRef.current.value = '';
 
     } catch (error: any) {
-      toast.error(`Failed to process file: ${error.message}`);
+      // network issues or gateway timeouts sometimes mean the function
+      // actually succeeded but the client never received the response.
+      console.error('[document upload] error', error);
+      const msg = error?.message || '';
+
+      const isTimeout = msg.includes('504') || msg.toLowerCase().includes('timeout') ||
+                        msg.toLowerCase().includes('network');
+
+      if (isTimeout) {
+        toast.info(
+          `Upload request timed out, but processing is likely still running on the server. ` +
+          `Your document should appear shortly; please refresh the list if it doesn't.`
+        );
+      } else {
+        toast.error(`Failed to process file: ${error.message}`);
+      }
+
+      // attempt to refresh documents regardless so any early-saved record shows up
+      try {
+        await forceRefreshDocuments();
+      } catch (e) {
+        console.error('[document upload] force refresh after error failed', e);
+      }
     } finally {
       clearInterval(progressInterval);
       setIsUploading(false);
@@ -244,17 +317,14 @@ export const useDocumentUpload = ({
     try {
       toast.info(`${doc.processing_status === 'failed' ? 'Retrying' : 'Starting'} analysis for "${doc.file_name}"...`);
 
+      // If we have a file_url stored, prefer sending the URL to the function
+      // so the function can fetch server-side (avoids large client-side transfers).
       let base64Data: string | null = null;
-      try {
-        const response = await fetch(doc.file_url);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch file from URL: ${doc.file_url}`);
-        }
-        const arrayBuffer = await response.arrayBuffer();
-        const binary = String.fromCharCode(...new Uint8Array(arrayBuffer));
-        base64Data = btoa(binary);
-      } catch (fetchError: any) {
-        throw new Error(`Error fetching file for re-analysis: ${fetchError.message}`);
+      let preferFileUrl = false;
+      if (doc.file_url) {
+        preferFileUrl = true;
+      } else {
+        throw new Error('No file URL available for re-analysis');
       }
 
       const { data: { session } } = await supabase.auth.getSession();
@@ -264,13 +334,11 @@ export const useDocumentUpload = ({
 
       const payload = {
         userId: user.id,
-        files: [{
-          name: doc.file_name,
-          mimeType: doc.file_type,
-          data: base64Data,
-          size: doc.file_size,
-          idToUpdate: doc.id
-        }]
+        files: [
+          preferFileUrl
+            ? { name: doc.file_name, mimeType: doc.file_type, file_url: doc.file_url, size: doc.file_size, idToUpdate: doc.id }
+            : { name: doc.file_name, mimeType: doc.file_type, data: base64Data, size: doc.file_size, idToUpdate: doc.id }
+        ]
       };
 
       const fetchResponse = await fetch(functionUrl, {
@@ -311,6 +379,79 @@ export const useDocumentUpload = ({
       });
     }
   }, [user?.id, processingDocuments, onDocumentUpdated]);
+
+  // ============================================================================
+  // RESUME LARGE FILE PROCESSING
+  // ============================================================================
+
+  /**
+   * Calls /resume-processing in a loop until the document is fully extracted
+   * or a max-attempt limit is hit. Runs fire-and-forget (no await needed).
+   */
+  const resumeDocumentProcessing = useCallback(async (
+    documentId: string,
+    fileName: string,
+    uid: string,
+  ): Promise<void> => {
+    const MAX_RESUME_ATTEMPTS = 20;   // up to 20 resume calls per document
+    const RESUME_DELAY_MS     = 3000; // 3s between calls to avoid hammering
+
+    let attempt = 0;
+
+    while (attempt < MAX_RESUME_ATTEMPTS) {
+      attempt++;
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) break;
+
+        const resp = await fetch(
+          'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/resume-processing',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ userId: uid, documentId }),
+          },
+        );
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          console.error('[resume] HTTP error', resp.status, err);
+          break;
+        }
+
+        const result = await resp.json();
+
+        if (result.isComplete) {
+          toast.success(`"${fileName}" has been fully extracted!`);
+          forceRefreshDocuments?.();
+          break;
+        }
+
+        if (!result.canResumeAgain) {
+          // Server says it's done but not complete — surface a warning
+          toast.warning(`"${fileName}" was partially extracted. Some content may be missing.`);
+          forceRefreshDocuments?.();
+          break;
+        }
+
+        // Not done yet — wait and loop
+        await new Promise((r) => setTimeout(r, RESUME_DELAY_MS));
+
+      } catch (err: any) {
+        console.error('[resume] unexpected error:', err.message);
+        break;
+      }
+    }
+
+    if (attempt >= MAX_RESUME_ATTEMPTS) {
+      toast.warning(`"${fileName}" is very large. Extraction stopped after ${MAX_RESUME_ATTEMPTS} rounds — partial content is available.`);
+      forceRefreshDocuments?.();
+    }
+  }, [forceRefreshDocuments]);
 
   return {
     selectedFile,
