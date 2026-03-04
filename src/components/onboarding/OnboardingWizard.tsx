@@ -786,7 +786,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       </div>
 
       {/* Step content */}
-      <div className="flex-1 flex items-center justify-center overflow-y-auto py-6">
+      <div className="flex-1 flex items-center justify-center overflow-y-auto modern-scrollbar py-6">
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
             key={currentStep}

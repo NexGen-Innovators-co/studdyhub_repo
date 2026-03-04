@@ -160,6 +160,50 @@ export const AppHeader: React.FC<{
     checkPWAInstall();
   }, []);
 
+  // Handle Web App installation
+  const handleInstallApp = async () => {
+    if (!deferredPrompt) {
+      // Show instructions for manual installation
+      showInstallInstructions();
+      return;
+    }
+
+    // Prevent multiple clicks
+    if (isInstalling) {
+      toast.info('Installation in progress...');
+      return;
+    }
+
+    setIsInstalling(true);
+    setShowInstallPrompt(false);
+
+    try {
+      // Show the install prompt
+      deferredPrompt.prompt();
+
+      // Wait for the user to respond to the prompt
+      const { outcome } = await deferredPrompt.userChoice;
+
+      if (outcome === 'accepted') {
+        toast.success('StuddyHub installed successfully!');
+        setIsPwaInstalled(true);
+      } else {
+        toast.info('Installation cancelled. You can install later from the menu.');
+      }
+
+      // Clear the deferred prompt
+      setDeferredPrompt(null);
+      setShowInstallPrompt(false);
+    } catch (error) {
+      // // console.error('Error installing app:', error);
+      toast.error('Failed to install app. Please try manual installation.');
+      showInstallInstructions();
+    } finally {
+      setIsInstalling(false);
+      setDeferredPrompt(null);
+    }
+  };
+
   // Listen for beforeinstallprompt event
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -188,55 +232,15 @@ export const AppHeader: React.FC<{
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
+    // allow other components (e.g. Header) to trigger the install flow
+    window.addEventListener('trigger-install-app', handleInstallApp as EventListener);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      window.removeEventListener('trigger-install-app', handleInstallApp as EventListener);
     };
   }, []);
-
-  // Handle Web App installation
-  const handleInstallApp = async () => {
-    if (!deferredPrompt) {
-      // Show instructions for manual installation
-      showInstallInstructions();
-      return;
-    }
-
-    // Prevent multiple clicks
-    if (isInstalling) {
-      toast.info('Installation in progress...');
-      return;
-    }
-
-    setIsInstalling(true);
-    setShowInstallPrompt(false);
-
-    try {
-      // Show the install prompt
-      deferredPrompt.prompt();
-
-      // Wait for the user to respond to the prompt
-      const { outcome } = await deferredPrompt.userChoice;
-
-      if (outcome === 'accepted') {
-        toast.success('🎉 StuddyHub installed successfully!');
-        setIsPwaInstalled(true);
-        setDeferredPrompt(null);
-      } else {
-        toast.info('Installation cancelled. You can install later from the menu.');
-        setTimeout(() => setShowInstallPrompt(true), 3000);
-      }
-    } catch (error) {
-      // console.error('Error installing app:', error);
-      toast.error('Failed to install app. Please try manual installation.');
-      showInstallInstructions();
-      setTimeout(() => setShowInstallPrompt(true), 3000);
-    } finally {
-      setIsInstalling(false);
-      setDeferredPrompt(null);
-    }
-  };
 
   // Show installation instructions
   const showInstallInstructions = () => {

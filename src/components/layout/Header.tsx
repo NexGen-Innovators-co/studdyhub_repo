@@ -153,7 +153,6 @@ const sectionTabs = {
     { id: 'personalization', label: 'AI Context', icon: Sparkles },
     { id: 'goals', label: 'Goals', icon: Target },
     { id: 'achievements', label: 'Achievements', icon: Trophy },
-    { id: 'study', label: 'Study', icon: Clock },
     { id: 'privacy', label: 'Privacy', icon: Shield },
     { id: 'security', label: 'Security', icon: Lock },
     {id:'notifications', label:'notifications', icon:Bell }
@@ -291,67 +290,35 @@ export const Header: React.FC<HeaderProps> = ({
   }, [activeTab]);
 
   // Handle Web App installation
+  // actual installation routine (mirrors LayoutComponents)
   const handleInstallApp = async () => {
-    if (!deferredPrompt) {
-      // Show instructions for manual installation
-      showInstallInstructions();
+    if (isInstalling) {
+      toast.info('Installation in progress...');
       return;
     }
 
     setIsInstalling(true);
-
+    setShowInstallPrompt(false);
     try {
-      // Show the install prompt
       deferredPrompt.prompt();
-
-      // Wait for the user to respond to the prompt
       const { outcome } = await deferredPrompt.userChoice;
-
       if (outcome === 'accepted') {
-        toast.success('Installing StuddyHub as a mobile app...');
+        toast.success('StuddyHub installed successfully!');
         setIsPwaInstalled(true);
       } else {
         toast.info('Installation cancelled. You can install later from the menu.');
+        setTimeout(() => setShowInstallPrompt(true), 3000);
       }
-
-      // Clear the deferred prompt
       setDeferredPrompt(null);
-      setShowInstallPrompt(false);
-    } catch (error) {
-      // // console.error('Error installing app:', error);
+    } catch {
       toast.error('Failed to install app. Please try manual installation.');
-      showInstallInstructions();
+      setTimeout(() => setShowInstallPrompt(true), 3000);
     } finally {
       setIsInstalling(false);
+      setDeferredPrompt(null);
     }
   };
 
-  // Show installation instructions
-  const showInstallInstructions = () => {
-    toast(
-      <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-        <h3 className="font-bold text-lg mb-2">Install StuddyHub on Mobile</h3>
-        <div className="space-y-2 text-sm">
-          <p className="flex items-center gap-2">
-            <Smartphone className="h-4 w-4 text-blue-500" />
-            <strong>iOS (Safari):</strong> Tap Share → Add to Home Screen
-          </p>
-          <p className="flex items-center gap-2">
-            <Smartphone className="h-4 w-4 text-green-500" />
-            <strong>Android (Chrome):</strong> Tap Menu → Install App
-          </p>
-          <p className="flex items-center gap-2">
-            <Smartphone className="h-4 w-4 text-purple-500" />
-            <strong>Other Browsers:</strong> Look for "Install" in the menu
-          </p>
-        </div>
-      </div>,
-      {
-        duration: 10000,
-        position: 'bottom-center',
-      }
-    );
-  };
 
   // Check if device is mobile
   const isMobileDevice = () => {

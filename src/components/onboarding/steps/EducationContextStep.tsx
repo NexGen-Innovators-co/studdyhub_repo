@@ -23,6 +23,7 @@ import type {
   Examination,
   Subject,
 } from '@/types/Education';
+import { supabase } from '@/integrations/supabase/client';
 
 // ─── Props ──────────────────────────────────────────────────────
 export interface EducationStepData {
