@@ -114,25 +114,9 @@ const sectionTabs = {
     { id: 'video', label: 'Video', icon: Video },
     { id: 'image-audio', label: 'Image + Audio', icon: Image },
   ],
-  // notes: [
-  //   // { id: 'all', label: 'All Notes', icon: BookOpen },
-  //   // { id: 'favorites', label: 'Favorites', icon: Sparkles },
-  //   // { id: 'recent', label: 'Recent', icon: Clock },
-  //   // { id: 'archived', label: 'Archived', icon: FileText },
-  // ],
-  // chat: [
-  //   // { id: 'all', label: 'All Chats', icon: MessageCircle },
-  //   // { id: 'recent', label: 'Recent', icon: Clock },
-  //   // { id: 'starred', label: 'Starred', icon: Sparkles },
-  // ],
-  // documents: [
-  //   // { id: 'all', label: 'All Documents', icon: FileText },
-  //   // { id: 'upload', label: 'Upload', icon: Upload },
-  //   // { id: 'recent', label: 'Recent', icon: Clock },
-  // ],
   schedule: [
     { id: 'calendar', label: 'Calendar', icon: Calendar },
-    { id: 'upcoming', label: 'Upcoming', icon:  TrendingUp },
+    { id: 'upcoming', label: 'Upcoming', icon: TrendingUp },
     { id: 'today', label: 'Today', icon: Clock },
     { id: 'past', label: 'Past', icon: History },
   ],
@@ -155,7 +139,7 @@ const sectionTabs = {
     { id: 'achievements', label: 'Achievements', icon: Trophy },
     { id: 'privacy', label: 'Privacy', icon: Shield },
     { id: 'security', label: 'Security', icon: Lock },
-    {id:'notifications', label:'notifications', icon:Bell }
+    { id: 'notifications', label: 'notifications', icon: Bell },
   ],
 };
 
@@ -163,6 +147,14 @@ const getInitials = (name: string | null) => {
   if (!name) return 'U';
   return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 };
+
+// ─── Global PWA prompt store ──────────────────────────────────────────────────
+// beforeinstallprompt fires exactly once per page load. By stashing it on
+// window.__pwaPrompt we share it across any component that mounts later
+// (e.g. Header mounts after AppHeader already captured the event on the
+// landing page).
+const getPwaPrompt = (): any => (window as any).__pwaPrompt ?? null;
+const setPwaPrompt = (val: any) => { (window as any).__pwaPrompt = val; };
 
 export const Header: React.FC<HeaderProps> = ({
   onNewNote,
@@ -197,16 +189,17 @@ export const Header: React.FC<HeaderProps> = ({
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [activeSectionTab, setActiveSectionTab] = useState<string>('');
-  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
   const [isPwaInstalled, setIsPwaInstalled] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  // Local prompt ref — used when Header itself catches beforeinstallprompt
+  // (e.g. user navigates directly to the dashboard without visiting landing page)
+  const localPromptRef = useRef<any>(null);
   const isOnline = useOnlineStatus();
 
   const avatarRef = useRef<HTMLDivElement>(null);
   const appMenuRef = useRef<HTMLDivElement>(null);
 
-  // Handle outside clicks
+  // ── Outside click handler ────────────────────────────────────────────────
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (appMenuRef.current && !appMenuRef.current.contains(event.target as Node)) {
@@ -216,68 +209,48 @@ export const Header: React.FC<HeaderProps> = ({
         setIsAvatarMenuOpen(false);
       }
     };
-
     if (isAppMenuOpen || isAvatarMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    return () => { document.removeEventListener('mousedown', handleClickOutside); };
   }, [isAppMenuOpen, isAvatarMenuOpen]);
 
-  // Check if PWA is already installed
+  // ── PWA install state ────────────────────────────────────────────────────
   useEffect(() => {
-    const checkPWAInstall = () => {
-      // Check if running in standalone mode (installed PWA)
-      if (window.matchMedia('(display-mode: standalone)').matches) {
-        setIsPwaInstalled(true);
-      }
-
-      // TypeScript-safe check for iOS standalone mode
-      const nav = window.navigator as any;
-      if (nav.standalone === true) {
-        setIsPwaInstalled(true);
-      }
-    };
-
-    checkPWAInstall();
-  }, []);
-
-  // Listen for beforeinstallprompt event
-  useEffect(() => {
-    const handleBeforeInstallPrompt = (e: Event) => {
-      // Prevent Chrome 67 and earlier from automatically showing the prompt
-      e.preventDefault();
-      // Stash the event so it can be triggered later
-      setDeferredPrompt(e);
-      setShowInstallPrompt(true);
-
-      // Update UI to notify user they can install
-      toast.info('You can install StuddyHub as a mobile app!', {
-        action: {
-          label: 'Install',
-          onClick: () => handleInstallApp(),
-        },
-      });
-    };
-
-    const handleAppInstalled = () => {
+    // Already installed?
+    if (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true ||
+      (window as any).__pwaInstalled === true  
+    ) {
       setIsPwaInstalled(true);
-      setShowInstallPrompt(false);
-      setDeferredPrompt(null);
+    }
+
+    // If Header is the first component to see beforeinstallprompt (direct
+    // dashboard navigation, no landing page visit), stash the prompt both
+    // locally and globally.
+    const onBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      localPromptRef.current = e;
+      setPwaPrompt(e); // share globally for any other component
+    };
+
+    const onAppInstalled = () => {
+      setIsPwaInstalled(true);
+      localPromptRef.current = null;
+      setPwaPrompt(null);
       toast.success('StuddyHub installed successfully! 🎉');
     };
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
-
+    window.addEventListener('beforeinstallprompt', onBeforeInstall);
+    window.addEventListener('appinstalled', onAppInstalled);
     return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
+      window.removeEventListener('beforeinstallprompt', onBeforeInstall);
+      window.removeEventListener('appinstalled', onAppInstalled);
     };
   }, []);
 
-  // Listen for section tab changes
+  // ── Section tab sync ─────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail;
@@ -289,77 +262,76 @@ export const Header: React.FC<HeaderProps> = ({
     return () => window.removeEventListener('section-tab-active', handler as EventListener);
   }, [activeTab]);
 
-  // Handle Web App installation
-  // actual installation routine (mirrors LayoutComponents)
+  useEffect(() => {
+    if (activeTab === 'podcasts') {
+      if (location.pathname === '/podcasts' || location.pathname === '/podcasts/discover') {
+        setActiveSectionTab('discover');
+      } else if (location.pathname.startsWith('/podcasts/my')) {
+        setActiveSectionTab('my-podcasts');
+      } else if (location.pathname.startsWith('/podcasts/live')) {
+        setActiveSectionTab('live');
+      }
+    }
+  }, [activeTab, location.pathname]);
+
+  // ── PWA install handler ──────────────────────────────────────────────────
+  // Resolution order:
+  //   1. Local ref (Header caught beforeinstallprompt directly)
+  //   2. window.__pwaPrompt (AppHeader / LayoutComponents caught it first)
   const handleInstallApp = async () => {
     if (isInstalling) {
       toast.info('Installation in progress...');
       return;
     }
 
+    const prompt = localPromptRef.current ?? getPwaPrompt();
+
+    if (!prompt) {
+      // No native prompt available — show manual instructions
+      toast(
+        <div className="p-4">
+          <h3 className="font-bold text-lg mb-2">Install StuddyHub</h3>
+          <div className="space-y-2 text-sm">
+            <p><strong>iOS (Safari):</strong> Tap Share → Add to Home Screen</p>
+            <p><strong>Android (Chrome):</strong> Tap Menu → Install App</p>
+          </div>
+        </div>,
+        { duration: 8000, position: 'bottom-center' }
+      );
+      return;
+    }
+
     setIsInstalling(true);
-    setShowInstallPrompt(false);
     try {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
+      await prompt.prompt();
+      const { outcome } = await prompt.userChoice;
       if (outcome === 'accepted') {
         toast.success('StuddyHub installed successfully!');
         setIsPwaInstalled(true);
       } else {
         toast.info('Installation cancelled. You can install later from the menu.');
-        setTimeout(() => setShowInstallPrompt(true), 3000);
       }
-      setDeferredPrompt(null);
-    } catch {
-      toast.error('Failed to install app. Please try manual installation.');
-      setTimeout(() => setShowInstallPrompt(true), 3000);
+    } catch (err) {
+      // console.error('PWA install error:', err);
+      toast.error('Failed to install. Please use your browser\'s "Add to Home Screen" option.');
     } finally {
       setIsInstalling(false);
-      setDeferredPrompt(null);
+      localPromptRef.current = null;
+      setPwaPrompt(null);
     }
   };
 
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const isMobileDevice = () =>
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-  // Check if device is mobile
-  const isMobileDevice = () => {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  };
-
-  // Handle section tab clicks
   const handleSectionTabClick = (tabId: string, path?: string) => {
     setActiveSectionTab(tabId);
-
-    // Dispatch event to notify components
     window.dispatchEvent(
-      new CustomEvent('section-tab-change', {
-        detail: { section: activeTab, tab: tabId }
-      })
+      new CustomEvent('section-tab-change', { detail: { section: activeTab, tab: tabId } })
     );
-
-    // Handle navigation for social tabs
-    if (activeTab === 'social' && path) {
-      navigate(path);
-    }
-    
-    // Handle navigation for podcasts (no path needed, handled by event listener)
-    if (activeTab === 'podcasts') {
-      // Just dispatch the event, PodcastsPage will handle the tab change
-    }
+    if (activeTab === 'social' && path) navigate(path);
   };
-  
-  useEffect(() => {
-  // Podcasts tab sync
-  if (activeTab === 'podcasts') {
-    if (location.pathname === '/podcasts' || location.pathname === '/podcasts/discover') {
-      setActiveSectionTab('discover');
-    } else if (location.pathname.startsWith('/podcasts/my')) {
-      setActiveSectionTab('my-podcasts');
-    } else if (location.pathname.startsWith('/podcasts/live')) {
-      setActiveSectionTab('live');
-    }
-  }
-  // Social tab sync (already handled by socialActiveTab)
-}, [activeTab, location.pathname]);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -380,14 +352,16 @@ export const Header: React.FC<HeaderProps> = ({
     onThemeChange(newTheme);
     toast.success(`Switched to ${newTheme} mode`);
   };
+
   const {
     notes,
     recordings,
     documents,
     scheduleItems,
-    chatSessions
+    chatSessions,
   } = useAppContext();
 
+  // ── Primary action button per tab ────────────────────────────────────────
   const getPrimaryAction = () => {
     switch (activeTab) {
       case 'notes':
@@ -402,30 +376,13 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={onNewNote}
               className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700"
               size="sm"
-               variant='ghost'
+              variant="ghost"
             >
               <Plus className="h-4 w-4 mr-2" />
               <span className="hidden md:inline">New Note</span>
             </Button>
           </SubscriptionGuard>
         );
-      // case 'recordings':
-      //   return (
-      //     <SubscriptionGuard
-      //       feature="Class Recordings"
-      //       limitFeature="maxRecordings"
-      //       currentCount={recordings?.length || 0}
-      //     >
-      //       <Button
-      //         onClick={() => onNewRecording?.()}
-      //         className="bg-green-600 hover:bg-green-700"
-      //         size="sm"
-      //       >
-      //         <Mic className="h-4 w-4 mr-2" />
-      //         <span className="hidden md:inline">Record</span>
-      //       </Button>
-      //     </SubscriptionGuard>
-      //   );
       case 'documents':
         return (
           <SubscriptionGuard
@@ -437,30 +394,13 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={() => onUploadDocument?.()}
               className="bg-blue-600 hover:bg-blue-700"
               size="sm"
-               variant='ghost'
+              variant="ghost"
             >
               <Upload className="h-4 w-4 mr-2" />
               <span className="hidden md:inline">Upload</span>
             </Button>
           </SubscriptionGuard>
         );
-      // case 'schedule':
-      //   return (
-      //     <SubscriptionGuard
-      //       feature="Schedule Items"
-      //       limitFeature="maxScheduleItems"
-      //       currentCount={scheduleItems?.length || 0}
-      //     >
-      //       <Button
-      //         onClick={() => onNewSchedule?.()}
-      //         className="bg-blue-600 hover:bg-blue-700"
-      //         size="sm"
-      //       >
-      //         <Plus className="h-4 w-4 mr-2" />
-      //         <span className="hidden md:inline">Add Event</span>
-      //       </Button>
-      //     </SubscriptionGuard>
-      //   );
       case 'chat':
         return (
           <SubscriptionGuard
@@ -475,7 +415,7 @@ export const Header: React.FC<HeaderProps> = ({
               }}
               className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700"
               size="sm"
-               variant='ghost'
+              variant="ghost"
             >
               <MessageCircle className="h-4 w-4 mr-2" />
               <span className="hidden md:inline">New Chat</span>
@@ -494,7 +434,7 @@ export const Header: React.FC<HeaderProps> = ({
             }}
             className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
             size="sm"
-            variant='ghost'
+            variant="ghost"
             disabled={!canCreatePosts}
             title={!canCreatePosts ? 'Upgrade to Scholar or Genius to create posts' : 'Create a new post'}
           >
@@ -506,22 +446,13 @@ export const Header: React.FC<HeaderProps> = ({
       case 'podcasts':
         return (
           <div className="flex gap-2">
-            {/* <Button
-              onClick={() => onGoLive?.()}
-              variant="outline"
-              size="sm"
-              className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400"
-            >
-              <Radio className="h-4 w-4 mr-2" />
-              <span className="hidden md:inline">Go Live</span>
-            </Button> */}
             <Button
               onClick={() => onCreatePodcast?.()}
-              className=" text-gray-600"
+              className="text-gray-600"
               size="sm"
-              variant='ghost'
+              variant="ghost"
             >
-             <Radio className="h-4 w-4 mr-2" />
+              <Radio className="h-4 w-4 mr-2" />
               <span className="hidden md:inline">Create</span>
             </Button>
           </div>
@@ -531,19 +462,20 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  // Get current section tabs
+  // ── Section tab config ───────────────────────────────────────────────────
   const currentSectionTabs = sectionTabs[activeTab as keyof typeof sectionTabs];
   const showSectionTabs = !!currentSectionTabs;
 
-  // Determine active section tab for social
   const isSocialRoute = location.pathname.startsWith('/social');
   const socialActiveTab = isSocialRoute
-    ? sectionTabs.social.find(tab =>
-      location.pathname === tab.path ||
-      (tab.path !== '/social' && location.pathname.startsWith(tab.path))
-    )?.id || 'feed'
+    ? sectionTabs.social.find(
+        tab =>
+          location.pathname === tab.path ||
+          (tab.path !== '/social' && location.pathname.startsWith(tab.path))
+      )?.id || 'feed'
     : 'feed';
 
+  // ── Sub-components ───────────────────────────────────────────────────────
   const SubscriptionBadge = () => {
     if (subscriptionLoading) {
       return (
@@ -552,15 +484,12 @@ export const Header: React.FC<HeaderProps> = ({
         </Badge>
       );
     }
-
     const tierConfig = {
-      free: { label: 'Free', color: 'bg-gray-100 text-gray-800' },
+      free:    { label: 'Free',    color: 'bg-gray-100 text-gray-800' },
       scholar: { label: 'Scholar', color: 'bg-blue-100 text-blue-800' },
-      genius: { label: 'Genius', color: 'bg-amber-100 text-amber-800' },
+      genius:  { label: 'Genius',  color: 'bg-amber-100 text-amber-800' },
     };
-
     const config = tierConfig[subscriptionTier];
-
     return (
       <button
         onClick={onNavigateToSubscription}
@@ -568,19 +497,17 @@ export const Header: React.FC<HeaderProps> = ({
       >
         {config.label}
         {subscriptionTier !== 'free' && daysRemaining > 0 && (
-          <span className="ml-1 text-xs opacity-75">
-            • {daysRemaining}d
-          </span>
+          <span className="ml-1 text-xs opacity-75">• {daysRemaining}d</span>
         )}
       </button>
     );
   };
 
-  // Install App Button Component
-  const InstallAppButton = () => {
-    // Only show if installed or if installation is possible (prompt available)
-    if (!isPwaInstalled && !deferredPrompt) return null;
+  // Show "Install App" button only when a prompt is available (either locally
+  // captured or carried over from AppHeader via window.__pwaPrompt).
+  const hasInstallPrompt = !isPwaInstalled && (!!localPromptRef.current || !!getPwaPrompt());
 
+  const InstallAppButton = () => {
     if (isPwaInstalled) {
       return (
         <Button
@@ -594,7 +521,7 @@ export const Header: React.FC<HeaderProps> = ({
         </Button>
       );
     }
-
+    if (!hasInstallPrompt) return null;
     return (
       <Button
         variant="outline"
@@ -617,11 +544,13 @@ export const Header: React.FC<HeaderProps> = ({
     );
   };
 
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
     <>
       <header className="bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 relative">
         {/* Main Header Row */}
         <div className="flex items-center justify-between min-h-16 px-3 sm:px-4 py-3 sm:py-0 gap-2 sm:gap-3">
+
           {/* Left: Toggle + App Menu + Title */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink-0">
             <button
@@ -653,14 +582,12 @@ export const Header: React.FC<HeaderProps> = ({
                   {mainNavItems.map(({ label, icon: Icon, tab }) => (
                     <button
                       key={tab}
-                      onClick={() => {
-                        handleNavigateToTab(tab);
-                        setIsAppMenuOpen(false);
-                      }}
-                      className={`w-full px-4 py-3 flex items-center gap-3 transition-colors ${activeTab === tab
-                        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
-                        : 'hover:bg-slate-100 dark:hover:bg-slate-700'
-                        }`}
+                      onClick={() => { handleNavigateToTab(tab); setIsAppMenuOpen(false); }}
+                      className={`w-full px-4 py-3 flex items-center gap-3 transition-colors ${
+                        activeTab === tab
+                          ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+                          : 'hover:bg-slate-100 dark:hover:bg-slate-700'
+                      }`}
                     >
                       <Icon className="h-5 w-5 flex-shrink-0" />
                       <span>{label}</span>
@@ -668,13 +595,10 @@ export const Header: React.FC<HeaderProps> = ({
                     </button>
                   ))}
 
-                  {/* Educator Portal Link */}
+                  {/* Educator Portal */}
                   <div className="border-t border-slate-200 dark:border-slate-700">
                     <button
-                      onClick={() => {
-                        navigate('/educator');
-                        setIsAppMenuOpen(false);
-                      }}
+                      onClick={() => { navigate('/educator'); setIsAppMenuOpen(false); }}
                       className="w-full px-4 py-3 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                     >
                       <GraduationCap className="h-5 w-5 flex-shrink-0 text-blue-500" />
@@ -682,15 +606,16 @@ export const Header: React.FC<HeaderProps> = ({
                     </button>
                   </div>
 
-                  {/* Install App in Menu */}
+                  {/* Install App in menu */}
                   <div className="p-3 border-t border-slate-200 dark:border-slate-700">
                     <button
-                      onClick={handleInstallApp}
+                      onClick={() => { handleInstallApp(); setIsAppMenuOpen(false); }}
                       disabled={isInstalling || isPwaInstalled}
-                      className={`w-full px-4 py-3 flex items-center gap-3 transition-colors rounded-lg ${isPwaInstalled
-                        ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 cursor-default'
-                        : 'hover:bg-slate-100 dark:hover:bg-slate-700'
-                        }`}
+                      className={`w-full px-4 py-3 flex items-center gap-3 transition-colors rounded-lg ${
+                        isPwaInstalled
+                          ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 cursor-default'
+                          : 'hover:bg-slate-100 dark:hover:bg-slate-700'
+                      }`}
                     >
                       {isPwaInstalled ? (
                         <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
@@ -709,27 +634,26 @@ export const Header: React.FC<HeaderProps> = ({
             <h1 className="text-sm sm:text-lg font-bold hidden sm:block truncate">{tabNames[activeTab]}</h1>
           </div>
 
-          {/* Center: Section Tabs - Hidden on mobile */}
+          {/* Center: Section Tabs — desktop only */}
           <div className="flex-1 hidden lg:flex items-center justify-center px-2 xl:px-8 min-w-0">
             {showSectionTabs && (
               <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full p-2 overflow-x-auto scrollbar-hide">
                 <div className="flex gap-1 min-w-max justify-center">
                   {currentSectionTabs.map((tab) => {
                     const Icon = tab.icon;
-                    const isActive = activeTab === 'social'
-                      ? socialActiveTab === tab.id
-                      : activeSectionTab === tab.id;
-
+                    const isActive =
+                      activeTab === 'social' ? socialActiveTab === tab.id : activeSectionTab === tab.id;
                     return (
                       <Button
                         key={tab.id}
                         variant={isActive ? 'outline' : 'ghost'}
                         size="sm"
-                        onClick={() => handleSectionTabClick(tab.id, tab.path)}
-                        className={`${isActive
-                          ? 'text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-700'
-                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                          } rounded-full whitespace-nowrap text-sm flex-shrink-0`}
+                        onClick={() => handleSectionTabClick(tab.id, (tab as any).path)}
+                        className={`${
+                          isActive
+                            ? 'text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-700'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                        } rounded-full whitespace-nowrap text-sm flex-shrink-0`}
                         title={tab.label}
                       >
                         <Icon className="h-4 w-4 flex-shrink-0" />
@@ -742,34 +666,31 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Right: Install App + Create Button + Notifications + Avatar */}
+          {/* Right: Install + Badge + Offline + Notifications + Action + Avatar */}
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            {/* Install App Button - Hidden on smaller screens */}
             <div className="hidden md:block">
               <InstallAppButton />
             </div>
-            
-            {/* Subscription Badge - Always visible on larger screens, handled via mobile menu or icon on small */}
+
             <div className="hidden sm:block">
               <SubscriptionBadge />
             </div>
 
-            {/* Mobile Subscription Indicator - Small Icon */}
+            {/* Mobile subscription indicator */}
             <div className="sm:hidden">
-               <button
-                  onClick={onNavigateToSubscription}
-                  className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold transition-colors ${
-                      subscriptionTier === 'genius' ? 'bg-amber-100 text-amber-800 border-amber-200' :
-                      subscriptionTier === 'scholar' ? 'bg-blue-100 text-blue-800 border-blue-200' :
-                      'bg-gray-100 text-gray-800 border-gray-200'
-                  }`}
-                  title="Subscription Plan"
-                >
-                  {subscriptionTier === 'genius' ? 'G' : subscriptionTier === 'scholar' ? 'S' : 'F'}
-                </button>
+              <button
+                onClick={onNavigateToSubscription}
+                className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold transition-colors ${
+                  subscriptionTier === 'genius' ? 'bg-amber-100 text-amber-800 border-amber-200' :
+                  subscriptionTier === 'scholar' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                  'bg-gray-100 text-gray-800 border-gray-200'
+                }`}
+                title="Subscription Plan"
+              >
+                {subscriptionTier === 'genius' ? 'G' : subscriptionTier === 'scholar' ? 'S' : 'F'}
+              </button>
             </div>
 
-            {/* Offline Indicator in Header */}
             {!isOnline && (
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 text-destructive rounded-full border border-destructive/20 text-xs font-medium animate-pulse">
                 <WifiOff className="h-3.5 w-3.5" />
@@ -777,22 +698,14 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             )}
 
-            {/* Notification Center */}
             <NotificationCenter />
 
-            {/* Create Button - Icons only on mobile */}
             <div className="truncate max-w-[60px] sm:max-w-[80px] md:max-w-none">
               {getPrimaryAction()}
             </div>
 
             {/* Avatar */}
             <div className="flex items-center gap-2 flex-shrink-0">
-              {/* {isAdmin && (
-                <div className="hidden sm:flex items-center gap-1.5 bg-gradient-to-r from-purple-500 to-blue-600 text-white px-2.5 py-1 rounded-full text-xs font-semibold shadow-lg">
-                  <Shield className="h-3.5 w-3.5" />
-                  <span>Admin</span>
-                </div>
-              )} */}
               <div ref={avatarRef} className="relative">
                 <button
                   onClick={() => setIsAvatarMenuOpen(!isAvatarMenuOpen)}
@@ -820,92 +733,86 @@ export const Header: React.FC<HeaderProps> = ({
                       <p className="font-semibold truncate">{fullName || 'User'}</p>
                       <p className="text-sm text-slate-500 dark:text-slate-400">Active Learner</p>
                     </div>
-                  <div className="py-2">
-                    <button onClick={() => { navigate('/social/profile'); setIsAvatarMenuOpen(false); }} className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm sm:text-base">
-                      <User className="h-5 w-5 flex-shrink-0" /> My Profile
-                    </button>
-                    <button onClick={() => { navigate('/podcasts'); setIsAvatarMenuOpen(false); }} className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm sm:text-base">
-                      <Podcast className="h-5 w-5 flex-shrink-0" /> Podcasts
-                    </button>
-                    <button onClick={() => { onGoLive?.(); setIsAvatarMenuOpen(false); }} className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 text-sm sm:text-base">
-                      <Radio className="h-5 w-5 flex-shrink-0" /> Go Live
-                    </button>
-                    <button onClick={() => { navigate('/settings'); setIsAvatarMenuOpen(false); }} className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm sm:text-base">
-                      <Settings className="h-5 w-5 flex-shrink-0" /> Settings
-                    </button>
-                    {isAdmin && (
-                      <button onClick={() => { navigate('/admin'); setIsAvatarMenuOpen(false); }} className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-purple-50 dark:hover:bg-purple-900/20 text-purple-600 dark:text-purple-400 text-sm sm:text-base">
-                        <Shield className="h-5 w-5 flex-shrink-0" /> Admin Panel
+                    <div className="py-2">
+                      <button onClick={() => { navigate('/social/profile'); setIsAvatarMenuOpen(false); }} className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm sm:text-base">
+                        <User className="h-5 w-5 flex-shrink-0" /> My Profile
                       </button>
-                    )}
-                    <button
-                      onClick={handleThemeToggle}
-                      className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm sm:text-base"
-                    >
-                      {currentTheme === 'light' ? (
-                        <Moon className="h-5 w-5 flex-shrink-0" />
-                      ) : (
-                        <Sun className="h-5 w-5 flex-shrink-0" />
+                      <button onClick={() => { navigate('/podcasts'); setIsAvatarMenuOpen(false); }} className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm sm:text-base">
+                        <Podcast className="h-5 w-5 flex-shrink-0" /> Podcasts
+                      </button>
+                      <button onClick={() => { onGoLive?.(); setIsAvatarMenuOpen(false); }} className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 text-sm sm:text-base">
+                        <Radio className="h-5 w-5 flex-shrink-0" /> Go Live
+                      </button>
+                      <button onClick={() => { navigate('/settings'); setIsAvatarMenuOpen(false); }} className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm sm:text-base">
+                        <Settings className="h-5 w-5 flex-shrink-0" /> Settings
+                      </button>
+                      {isAdmin && (
+                        <button onClick={() => { navigate('/admin'); setIsAvatarMenuOpen(false); }} className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-purple-50 dark:hover:bg-purple-900/20 text-purple-600 dark:text-purple-400 text-sm sm:text-base">
+                          <Shield className="h-5 w-5 flex-shrink-0" /> Admin Panel
+                        </button>
                       )}
-                      {currentTheme === 'light' ? 'Dark Mode' : 'Light Mode'}
-                    </button>
-
-                    {/* Install App in Avatar Menu */}
-                    {!isPwaInstalled && (
                       <button
-                        onClick={() => {
-                          handleInstallApp();
-                          setIsAvatarMenuOpen(false);
-                        }}
-                        disabled={isInstalling}
+                        onClick={handleThemeToggle}
                         className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm sm:text-base"
                       >
-                        {isInstalling ? (
-                          <Loader2 className="h-5 w-5 animate-spin flex-shrink-0" />
-                        ) : (
-                          <Smartphone className="h-5 w-5 flex-shrink-0" />
-                        )}
-                        {isInstalling ? 'Installing...' : 'Install App'}
+                        {currentTheme === 'light'
+                          ? <Moon className="h-5 w-5 flex-shrink-0" />
+                          : <Sun className="h-5 w-5 flex-shrink-0" />}
+                        {currentTheme === 'light' ? 'Dark Mode' : 'Light Mode'}
                       </button>
-                    )}
 
-                    <hr className="my-2 border-slate-200 dark:border-slate-700" />
-                    <button
-                      onClick={() => { setShowLogoutConfirm(true); setIsAvatarMenuOpen(false); }}
-                      className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 text-sm sm:text-base"
-                    >
-                      {isLoggingOut ? <Loader2 className="h-5 w-5 animate-spin flex-shrink-0" /> : <LogOut className="h-5 w-5 flex-shrink-0" />}
-                      Sign Out
-                    </button>
+                      {/* Install App in avatar menu */}
+                      {!isPwaInstalled && (
+                        <button
+                          onClick={() => { handleInstallApp(); setIsAvatarMenuOpen(false); }}
+                          disabled={isInstalling}
+                          className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm sm:text-base"
+                        >
+                          {isInstalling
+                            ? <Loader2 className="h-5 w-5 animate-spin flex-shrink-0" />
+                            : <Smartphone className="h-5 w-5 flex-shrink-0" />}
+                          {isInstalling ? 'Installing...' : 'Install App'}
+                        </button>
+                      )}
+
+                      <hr className="my-2 border-slate-200 dark:border-slate-700" />
+                      <button
+                        onClick={() => { setShowLogoutConfirm(true); setIsAvatarMenuOpen(false); }}
+                        className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 text-sm sm:text-base"
+                      >
+                        {isLoggingOut
+                          ? <Loader2 className="h-5 w-5 animate-spin flex-shrink-0" />
+                          : <LogOut className="h-5 w-5 flex-shrink-0" />}
+                        Sign Out
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Mobile Section Tabs (for sections that have tabs) */}
+        {/* Mobile Section Tabs */}
         {showSectionTabs && (
           <div className="lg:hidden border-t border-slate-200 dark:border-slate-700">
             <div className="px-3 sm:px-4 py-2 overflow-x-auto">
               <div className="flex gap-2 min-w-max">
                 {currentSectionTabs.map((tab) => {
                   const Icon = tab.icon;
-                  const isActive = activeTab === 'social'
-                    ? socialActiveTab === tab.id
-                    : activeSectionTab === tab.id;
-
+                  const isActive =
+                    activeTab === 'social' ? socialActiveTab === tab.id : activeSectionTab === tab.id;
                   return (
                     <Button
                       key={tab.id}
                       variant={isActive ? 'outline' : 'ghost'}
                       size="sm"
-                      onClick={() => handleSectionTabClick(tab.id, tab.path)}
-                      className={`${isActive
-                        ? 'text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-700'
-                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                        } rounded-full whitespace-nowrap text-xs sm:text-sm truncate`}
+                      onClick={() => handleSectionTabClick(tab.id, (tab as any).path)}
+                      className={`${
+                        isActive
+                          ? 'text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-700'
+                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                      } rounded-full whitespace-nowrap text-xs sm:text-sm truncate`}
                       title={tab.label}
                     >
                       <Icon className="h-4 w-4 flex-shrink-0" />
@@ -918,48 +825,6 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
       </header>
-
-      {/* Install Prompt Toast (when browser prompts) */}
-      {showInstallPrompt && !isPwaInstalled && (
-        <div className="fixed bottom-52 right-4 z-50 animate-in slide-in-from-bottom">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 p-4 max-w-sm">
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
-                {isMobileDevice() ? (
-                  <Smartphone className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                ) : (
-                  <Download className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                )}
-              </div>
-              <div className="flex-1">
-                <h3 className="font-bold text-lg">Install StuddyHub</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                  {isMobileDevice()
-                    ? 'Install as a mobile app for better experience and offline access.'
-                    : 'Install the app for better experience and offline access.'}
-                </p>
-                <div className="flex gap-2 mt-3">
-                  <Button
-                    onClick={handleInstallApp}
-                    disabled={isInstalling}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700"
-                    size="sm"
-                  >
-                    {isInstalling ? 'Installing...' : 'Install Now'}
-                  </Button>
-                  <Button
-                    onClick={() => setShowInstallPrompt(false)}
-                    variant="outline"
-                    size="sm"
-                  >
-                    Later
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       <ConfirmationModal
         isOpen={showLogoutConfirm}

@@ -102,6 +102,17 @@
 <body>
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
+  <!-- Capture PWA install prompt before React mounts -->
+<script>
+  window.addEventListener('beforeinstallprompt', function(e) {
+    e.preventDefault();
+    window.__pwaPrompt = e;
+  });
+  window.addEventListener('appinstalled', function() {
+    window.__pwaPrompt = null;
+    window.__pwaInstalled = true;
+  });
+</script>
 </body>
 
 </html>

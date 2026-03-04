@@ -1,10 +1,16 @@
- // src/components/layout/AppLayout.tsx
+// src/components/layout/AppLayout.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../ui/button';
 import { Sun, Moon, Menu, X, LocateIcon, MapIcon, PhoneCallIcon, Download, Smartphone, CheckCircle, Loader2, LayoutDashboard, Settings, LogOut, ChevronDown, FileText, MessageSquare, Brain, Mic, Users, BookOpen, GraduationCap, HelpCircle, Newspaper, Code2, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../integrations/supabase/client';
+
+// ─── Global PWA prompt store ──────────────────────────────────────────────────
+// beforeinstallprompt fires once per page load. Storing it on window lets any
+// component that mounts later (e.g. the dashboard Header) still access it.
+const getPwaPrompt = (): any => (window as any).__pwaPrompt ?? null;
+const setPwaPrompt = (val: any) => { (window as any).__pwaPrompt = val; };
 
 // ── Mega Nav Dropdown (hover-based for desktop) ──────────────────────────
 const MegaNavDropdown: React.FC<{
@@ -74,7 +80,10 @@ export const AppHeader: React.FC<{
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [isPwaInstalled, setIsPwaInstalled] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  // Use a ref for the prompt so handleInstallApp never has a stale closure,
+  // even when called from the trigger-install-app event listener.
+  const promptRef = useRef<any>(null);
 
   // Auth-aware state: show user info when logged in
   const [authUser, setAuthUser] = useState<{ fullName: string; avatarUrl: string | null } | null>(null);
@@ -144,33 +153,25 @@ export const AppHeader: React.FC<{
 
   // Check if PWA is already installed
   useEffect(() => {
-    const checkPWAInstall = () => {
-      // Check if running in standalone mode (installed PWA)
-      if (window.matchMedia('(display-mode: standalone)').matches) {
-        setIsPwaInstalled(true);
-      }
-
-      // TypeScript-safe check for iOS standalone mode
-      const nav = window.navigator as any;
-      if (nav.standalone === true) {
-        setIsPwaInstalled(true);
-      }
-    };
-
-    checkPWAInstall();
+    if (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true
+    ) {
+      setIsPwaInstalled(true);
+    }
   }, []);
 
-  // Handle Web App installation
+  // ── Install handler (reads from ref — never stale) ──────────────────────
   const handleInstallApp = async () => {
-    if (!deferredPrompt) {
-      // Show instructions for manual installation
-      showInstallInstructions();
+    if (isInstalling) {
+      toast.info('Installation in progress...');
       return;
     }
 
-    // Prevent multiple clicks
-    if (isInstalling) {
-      toast.info('Installation in progress...');
+    const prompt = promptRef.current ?? getPwaPrompt();
+
+    if (!prompt) {
+      showInstallInstructions();
       return;
     }
 
@@ -178,11 +179,8 @@ export const AppHeader: React.FC<{
     setShowInstallPrompt(false);
 
     try {
-      // Show the install prompt
-      deferredPrompt.prompt();
-
-      // Wait for the user to respond to the prompt
-      const { outcome } = await deferredPrompt.userChoice;
+      await prompt.prompt();
+      const { outcome } = await prompt.userChoice;
 
       if (outcome === 'accepted') {
         toast.success('StuddyHub installed successfully!');
@@ -190,35 +188,28 @@ export const AppHeader: React.FC<{
       } else {
         toast.info('Installation cancelled. You can install later from the menu.');
       }
-
-      // Clear the deferred prompt
-      setDeferredPrompt(null);
-      setShowInstallPrompt(false);
-    } catch (error) {
-      // // console.error('Error installing app:', error);
+    } catch {
       toast.error('Failed to install app. Please try manual installation.');
       showInstallInstructions();
     } finally {
       setIsInstalling(false);
-      setDeferredPrompt(null);
+      promptRef.current = null;
+      setPwaPrompt(null);
+      setShowInstallPrompt(false);
     }
   };
 
-  // Listen for beforeinstallprompt event
+  // ── beforeinstallprompt listener ────────────────────────────────────────
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
-      // Prevent Chrome 67 and earlier from automatically showing the prompt
       e.preventDefault();
-
-      // Stash the event so it can be triggered later
-      setDeferredPrompt(e);
+      // Store in ref (for this component) AND globally (for Header.tsx, etc.)
+      promptRef.current = e;
+      setPwaPrompt(e);
       setShowInstallPrompt(true);
 
-      // Show notification
       if (!sessionStorage.getItem('install-toast-shown')) {
-        toast.info('Install StuddyHub as a mobile app for better experience!', {
-          duration: 5000,
-        });
+        toast.info('Install StuddyHub as a mobile app for better experience!', { duration: 5000 });
         sessionStorage.setItem('install-toast-shown', 'true');
       }
     };
@@ -226,21 +217,27 @@ export const AppHeader: React.FC<{
     const handleAppInstalled = () => {
       setIsPwaInstalled(true);
       setShowInstallPrompt(false);
-      setDeferredPrompt(null);
+      promptRef.current = null;
+      setPwaPrompt(null);
       toast.success('StuddyHub installed successfully! 🎉');
     };
 
+    // Allow other components (e.g. Header) to trigger the install flow via
+    // a custom event. Because handleInstallApp reads from promptRef (a ref),
+    // this listener will never have a stale-closure problem.
+    const handleTrigger = () => handleInstallApp();
+
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
-    // allow other components (e.g. Header) to trigger the install flow
-    window.addEventListener('trigger-install-app', handleInstallApp as EventListener);
+    window.addEventListener('trigger-install-app', handleTrigger);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
-      window.removeEventListener('trigger-install-app', handleInstallApp as EventListener);
+      window.removeEventListener('trigger-install-app', handleTrigger);
     };
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // handleInstallApp is stable because it only references refs and setters
 
   // Show installation instructions
   const showInstallInstructions = () => {
@@ -264,17 +261,13 @@ export const AppHeader: React.FC<{
           View Detailed Guide
         </Button>
       </div>,
-      {
-        duration: 10000,
-        position: 'bottom-center',
-      }
+      { duration: 10000, position: 'bottom-center' }
     );
   };
 
   // Check if device is mobile
-  const isMobileDevice = () => {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  };
+  const isMobileDevice = () =>
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
   // Install App Button Component
   const InstallAppButton = () => {
@@ -300,10 +293,9 @@ export const AppHeader: React.FC<{
         size="sm"
         onClick={handleInstallApp}
         disabled={isInstalling}
-        className={`hidden md:inline-flex rounded-full transition-all duration-300 ${isInstalling
-          ? 'opacity-50 cursor-not-allowed'
-          : 'hover:scale-105 active:scale-95'
-          } bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200`}
+        className={`hidden md:inline-flex rounded-full transition-all duration-300 ${
+          isInstalling ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95'
+        } bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200`}
       >
         {isInstalling ? (
           <>
@@ -326,10 +318,9 @@ export const AppHeader: React.FC<{
   };
 
   return (
-    <header className={`fixed top-0 left-0 w-full px-4 md:px-8 py-4 flex justify-between items-center z-50 transition-all duration-300 ${scrollY > 50
-      ? 'bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md'
-      : 'bg-transparent'
-      }`}>
+    <header className={`fixed top-0 left-0 w-full px-4 md:px-8 py-4 flex justify-between items-center z-50 transition-all duration-300 ${
+      scrollY > 50 ? 'bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md' : 'bg-transparent'
+    }`}>
       {/* Site Icon and Name - Linked to home */}
       <Link to="/" className="flex items-center gap-3 group">
         <img
@@ -430,11 +421,9 @@ export const AppHeader: React.FC<{
             </button>
             {isAvatarDropdownOpen && (
               <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-lg ring-1 ring-gray-200 dark:ring-gray-700 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                {/* User info */}
                 <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
                   <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{authUser.fullName}</p>
                 </div>
-                {/* Menu items */}
                 <button
                   onClick={() => { setIsAvatarDropdownOpen(false); navigate('/dashboard'); }}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
@@ -474,14 +463,14 @@ export const AppHeader: React.FC<{
           size="icon"
           onClick={toggleDarkMode}
           className="min-w-[40px] min-h-[40px] w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-          title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-          aria-label={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          aria-label={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
         >
           {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </Button>
       </nav>
 
-      {/* Mobile Menu Button - Touch targets min 44x44px for WCAG compliance */}
+      {/* Mobile Menu Button */}
       <div className="flex items-center md:hidden gap-1">
         {showInstallPrompt && !isPwaInstalled && (
           <Button
@@ -504,8 +493,8 @@ export const AppHeader: React.FC<{
           size="icon"
           onClick={toggleDarkMode}
           className="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-          title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-          aria-label={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          aria-label={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
         >
           {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </Button>
@@ -514,7 +503,7 @@ export const AppHeader: React.FC<{
           size="icon"
           className="min-w-[44px] min-h-[44px] w-11 h-11 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           onClick={() => setIsMenuOpen(!isMenuOpen)}
-          aria-label={isMenuOpen ? "Close menu" : "Open menu"}
+          aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
         >
           {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
         </Button>
@@ -527,10 +516,7 @@ export const AppHeader: React.FC<{
             {/* Install App in Mobile Menu */}
             {showInstallPrompt && !isPwaInstalled && (
               <Button
-                onClick={() => {
-                  handleInstallApp();
-                  setIsMenuOpen(false);
-                }}
+                onClick={() => { handleInstallApp(); setIsMenuOpen(false); }}
                 disabled={isInstalling}
                 className="w-full mb-2 min-h-[44px]"
               >
@@ -735,9 +721,7 @@ export const AppLayout: React.FC<{
   const [isDarkMode, setIsDarkMode] = React.useState(() => {
     if (typeof window !== 'undefined') {
       const savedTheme = localStorage.getItem('theme');
-      if (savedTheme) {
-        return savedTheme === 'dark';
-      }
+      if (savedTheme) return savedTheme === 'dark';
       return window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
     return false;
@@ -755,9 +739,7 @@ export const AppLayout: React.FC<{
     }
   }, [isDarkMode]);
 
-  const toggleDarkMode = () => {
-    setIsDarkMode(prevMode => !prevMode);
-  };
+  const toggleDarkMode = () => setIsDarkMode(prevMode => !prevMode);
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased overflow-x-hidden">
@@ -814,7 +796,7 @@ export const PageHeader: React.FC<{
   );
 };
 
-// Full-width hero banner inspired by professional agency designs
+// Full-width hero banner
 export const PageHero: React.FC<{
   title: string;
   subtitle?: string;
@@ -823,15 +805,12 @@ export const PageHero: React.FC<{
 }> = ({ title, subtitle, description, gradient = 'from-blue-600 via-blue-700 to-indigo-800' }) => {
   return (
     <div className={`relative bg-gradient-to-br ${gradient} -mx-4 md:-mx-8 -mt-12 mb-12 md:mb-16 overflow-hidden`}>
-      {/* Decorative shapes */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-24 -right-24 w-96 h-96 bg-white/5 rounded-full blur-3xl" />
         <div className="absolute -bottom-32 -left-32 w-[500px] h-[500px] bg-white/5 rounded-full blur-3xl" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-white/[0.02] rounded-full" />
       </div>
-      {/* Grid pattern overlay */}
       <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'40\' height=\'40\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M0 0h40v40H0z\' fill=\'none\' stroke=\'%23fff\' stroke-width=\'.5\'/%3E%3C/svg%3E")' }} />
-
       <div className="relative container mx-auto px-4 md:px-8 py-20 md:py-28 text-center">
         {subtitle && (
           <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 backdrop-blur-sm border border-white/20 text-white/90 rounded-full text-sm font-medium mb-5 tracking-wide uppercase">
@@ -882,12 +861,6 @@ export const Card: React.FC<{
 
 /**
  * ThemedImg — renders a light-mode image and its dark-mode counterpart.
- *
- * Pass only the `-light.jpg` path as `src` and the component will automatically
- * derive the dark variant by replacing `-light.` with `-dark.`.
- * Override with explicit `darkSrc` if the naming convention differs.
- *
- * Uses Tailwind's `dark:hidden` / `hidden dark:block` so it's zero-JS.
  */
 export const ThemedImg: React.FC<{
   src: string;
