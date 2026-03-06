@@ -21,7 +21,7 @@ export function arrayBufferToBase64(buffer: ArrayBuffer): string {
 // ============================================================================
 
 const BREAK_PATTERNS: Record<string, RegExp[]> = {
-  text:     [/\n\n\n+/, /\n\n/, /\.\s+/, /\!\s+/, /\?\s+/],
+  text:     [/\n\n\n+/, /\n\n/, /\.\s+/, /!\s+/, /\?\s+/],
   pdf:      [/\n\n\n+/, /\n\n/, /\.\s+/, /Page \d+/, /Chapter \d+/],
   document: [/\n\n\n+/, /\n\n/, /\.\s+/, /^#+ /, /^\d+\./],
   csv:      [/\n(?=\d+,)/, /\n(?=[A-Za-z]+,)/, /\n/],

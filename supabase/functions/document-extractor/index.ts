@@ -1835,7 +1835,7 @@ This is an archive file that contains compressed data. Without extraction capabi
 * Save file metadata and extracted content to the database
 */ async function saveFileToDatabase(file, userId) {
     let fileUrl = null;
-    let contentExtracted = file.content;
+    const contentExtracted = file.content;
     let processingStatus = file.processing_status;
     let processingError = file.processing_error;
     // Only upload to storage if it's a binary file or explicitly requires URL
@@ -1891,9 +1891,9 @@ This is an archive file that contains compressed data. Without extraction capabi
         });
     }
     const startTime = Date.now();
-    let files = [];
+    const files = [];
     let userId = null;
-    let uploadedDocumentIds = [];
+    const uploadedDocumentIds = [];
     try {
         const contentType = req.headers.get('content-type') || '';
         if (!contentType.includes('application/json')) {

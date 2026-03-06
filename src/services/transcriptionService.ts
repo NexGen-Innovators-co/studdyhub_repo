@@ -193,7 +193,7 @@ export const transcribeLivePodcast = async (
     };
 
     // Call dedicated podcast transcription function
-    let attemptBody: any = { file_url: fileUrl, title: title, duration: duration };
+    const attemptBody: any = { file_url: fileUrl, title: title, duration: duration };
     let resp: any;
     
     try {

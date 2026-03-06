@@ -118,7 +118,7 @@ CHUNK CONTENT:
 ${chunks[i]}`;
 
     // Initial call for this chunk
-    let response = await callEnhancedGeminiAPI(
+    const response = await callEnhancedGeminiAPI(
       [{ role: 'user', parts: [{ text: chunkPrompt }] }],
       geminiApiKey,
     );

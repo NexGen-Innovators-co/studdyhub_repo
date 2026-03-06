@@ -72,7 +72,7 @@ serve(async (req) => {
     // Check group limit based on tier (skip for admins)
     if (!isAdmin) {
       const subscription = await validator.getUserSubscription(userId);
-      let maxGroups = subscription.subscription_tier === 'free' ? 0 : 
+      const maxGroups = subscription.subscription_tier === 'free' ? 0 : 
                       subscription.subscription_tier === 'scholar' ? 10 : 100;
 
       if (subscription.subscription_tier === 'scholar' || subscription.subscription_tier === 'genius') {

@@ -90,7 +90,7 @@ serve(async (req: Request) => {
     // Determine filename
     let filename: string;
     let finalFileSize: number;
-    let finalMimeType = mimeType;
+    const finalMimeType = mimeType;
 
     if (explicitStoragePath) {
         // Mode 1: Metadata registration only (file already uploaded)

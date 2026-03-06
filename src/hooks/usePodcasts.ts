@@ -166,11 +166,11 @@ export const usePodcasts = (activeTab: PodcastTab, options?: { lightweight?: boo
         // Transform podcasts with minimal data
         const transformedPodcasts: PodcastWithMeta[] = data.map((podcast: any) => {
           // Parse audio_segments and visual_assets only when needed
-          let audioSegments: AudioSegment[] = [];
-          let visualAssets = null;
+          const audioSegments: AudioSegment[] = [];
+          const visualAssets = null;
 
           // Calculate duration
-          let totalDuration = podcast.duration_minutes || 0;
+          const totalDuration = podcast.duration_minutes || 0;
 
           return {
             ...podcast,

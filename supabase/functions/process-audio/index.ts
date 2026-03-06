@@ -159,7 +159,7 @@ async function processAudioInBackground(file_url: string, target_language: strin
     };
 
     const transcriptionResult = await callGeminiWithModelChain(transcriptionPayload, GEMINI_API_KEY);
-    let transcript = extractTextFromGeminiResponse(transcriptionResult, 'No transcription available.');
+    const transcript = extractTextFromGeminiResponse(transcriptionResult, 'No transcription available.');
 
     // 5. Generate Summary from Transcript (in parallel with translation if needed)
     const summaryPromise = generateSummary(transcript);

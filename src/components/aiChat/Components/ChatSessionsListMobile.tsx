@@ -4,6 +4,9 @@ import { Plus, MessageCircle, Trash2, Edit2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatDistanceToNow } from 'date-fns';
+import { useGlobalSearch } from '@/hooks/useGlobalSearch';
+import { SEARCH_CONFIGS } from '@/services/globalSearchService';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ChatSession {
   id: string;
@@ -35,6 +38,15 @@ export const ChatSessionsListMobile: React.FC<ChatSessionsListMobileProps> = ({
   onLoadMoreChatSessions,
   isLoading,
 }) => {
+  // search state
+  const { user } = useAuth();
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const { search, results: searchResults, isSearching } = useGlobalSearch<any>(
+    SEARCH_CONFIGS.chat_sessions,
+    user?.id || '',
+    { debounceMs: 500 }
+  );
+
   // Infinite scroll: observe the sentinel div at the end of the list
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const loadingRef = useRef(isLoading);
@@ -65,9 +77,9 @@ export const ChatSessionsListMobile: React.FC<ChatSessionsListMobileProps> = ({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
+      {/* Header + search */}
       <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-2">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
             AI Assistant
           </h1>
@@ -79,11 +91,22 @@ export const ChatSessionsListMobile: React.FC<ChatSessionsListMobileProps> = ({
             <Plus className="h-5 w-5" />
           </Button>
         </div>
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => {
+            const q = e.target.value;
+            setSearchTerm(q);
+            search(q);
+          }}
+          placeholder="Search conversations..."
+          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring focus:border-blue-300"
+        />
+        {isSearching && <p className="text-sm text-gray-500 mt-1">Searching...</p>}
       </div>
 
-      {/* Sessions List */}
       <div className="flex-1 overflow-y-auto">
-        {chatSessions.length === 0 ? (
+        {((searchTerm && searchResults.length) ? searchResults : chatSessions).length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center p-8">
             <MessageCircle className="h-16 w-16 text-gray-300 dark:text-gray-600 mb-4" />
             <p className="text-lg text-gray-500 dark:text-gray-400">No conversations yet</p>
@@ -93,7 +116,7 @@ export const ChatSessionsListMobile: React.FC<ChatSessionsListMobileProps> = ({
           </div>
         ) : (
           <div className="divide-y divide-slate-200 dark:divide-slate-700">
-            {chatSessions.map((session) => (
+            {((searchTerm && searchResults.length) ? searchResults : chatSessions).map((session: any) => (
               <Card
                 key={session.id}
                 className={`m-2 border-0 shadow-sm cursor-pointer transition-all hover:shadow-md ${

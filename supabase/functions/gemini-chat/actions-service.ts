@@ -412,7 +412,7 @@ export class StuddyHubActionsService {
                 const heavyCols = HEAVY_COLUMNS[table] || [];
 
                 // Use select('*') for single-record fetches; exclude heavy cols for listings
-                let selectCols = '*';
+                const selectCols = '*';
                 if (isListing && heavyCols.length > 0) {
                     // We can't do "select all EXCEPT" in PostgREST, so we
                     // still select('*') but will strip heavy fields after fetch.

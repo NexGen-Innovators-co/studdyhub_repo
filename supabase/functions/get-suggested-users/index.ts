@@ -64,7 +64,7 @@ serve(async (req) => {
     const excludeIds = [userId, ...followingIds];
 
     // 3. Calculate mutual follows
-    let mutualFollowsMap: Record<string, number> = {};
+    const mutualFollowsMap: Record<string, number> = {};
     if (followingIds.length > 0) {
       const { data: mutuals } = await supabase
         .from('social_follows')

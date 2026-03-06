@@ -76,13 +76,9 @@ serve(async (req) => {
       // Non-critical — continue without education context
     }
 
-    // Use GEMINI_API_KEY for Gemini 2.0
-    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-    if (!geminiApiKey) {
-      throw new Error('Gemini API key not configured. Please set the GEMINI_API_KEY environment variable.');
-    }
+    // Use shared Gemini helper which includes built-in model chaining/fallback
+    const { callGeminiJSON } = await import('../utils/gemini.ts');
 
-    // Prepare the prompt for quiz generation dynamically
     const prompt = `Based on the following transcript, create a comprehensive quiz with exactly ${parsedNumQuestions} multiple-choice questions. 
 The difficulty level of the questions should be: ${safeDifficulty}.
 
@@ -97,116 +93,37 @@ Transcript:
 
 Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
 
-    // Construct the payload for Gemini API
-    const payload = {
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: prompt
-            }
-          ]
-        }
-      ],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: {
-            "title": {
-              "type": "STRING"
-            },
-            "questions": {
-              "type": "ARRAY",
-              "items": {
-                type: "OBJECT",
-                properties: {
-                  "question": {
-                    "type": "STRING"
-                  },
-                  "options": {
-                    "type": "ARRAY",
-                    "items": {
-                      "type": "STRING"
-                    }
-                  },
-                  "correctAnswer": {
-                    "type": "NUMBER"
-                  },
-                  "explanation": {
-                    "type": "STRING"
-                  }
-                },
-                required: [
-                  "question",
-                  "options",
-                  "correctAnswer"
-                ]
-              }
-            }
-          },
-          required: [
-            "title",
-            "questions"
-          ]
-        }
-      },
-      // Using gemini-2.0-flash as requested
-      model: "gemini-2.0-flash"
-    };
+    // callGeminiJSON handles chain + OpenRouter fallback and returns parsed JSON
+    const aiResult = await callGeminiJSON<any>(prompt, { maxOutputTokens: 2000 });
 
-    const MODEL_CHAIN = [
-      'gemini-2.5-flash',
-      'gemini-3-pro-preview',
-      'gemini-2.0-flash',
-      'gemini-2.0-flash-lite',
-      'gemini-2.5-pro',
-    ];
-
-    async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 3): Promise<any> {
-      for (let attempt = 0; attempt < Math.min(maxAttempts, MODEL_CHAIN.length); attempt++) {
-        const model = MODEL_CHAIN[attempt % MODEL_CHAIN.length];
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        try {
-          const resp = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
-          });
-          if (resp.ok) return await resp.json();
-          const txt = await resp.text();
-          // console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
-          if (resp.status === 429 || resp.status === 503) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
-        } catch (err) {
-          // console.error(`Error calling Gemini ${model}:`, err);
-          if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
-        }
-      }
+    let quizData: any;
+    if (aiResult.success && aiResult.data) {
+      quizData = aiResult.data;
+    } else {
+      // if ai call failed or produced no data, log and fall back
       logSystemError(supabaseAdmin, {
-        severity: 'error',
+        severity: 'warning',
         source: 'generate-quiz',
-        component: 'gemini-model-chain',
-        error_code: 'ALL_MODELS_FAILED',
-        message: `All ${maxAttempts} Gemini model attempts failed for quiz generation`,
-        details: { modelsAttempted: MODEL_CHAIN.slice(0, maxAttempts) },
+        component: 'ai-call',
+        error_code: 'GEMINI_FAILURE',
+        message: `Gemini JSON call failed: ${aiResult.error || 'no data'}`,
         user_id: logUserId,
       });
-      // OpenRouter fallback
-      const orResult = await callOpenRouterFallback(requestBody.contents, { source: 'generate-quiz' });
-      if (orResult.success && orResult.content) {
-        return { candidates: [{ content: { parts: [{ text: orResult.content }] } }] };
-      }
-      throw new Error('All AI models failed (Gemini + OpenRouter)');
     }
 
-    const result = await callGeminiWithModelChain(payload, geminiApiKey);
-    if (!result.candidates || !result.candidates[0] || !result.candidates[0].content || !result.candidates[0].content.parts || result.candidates[0].content.parts.length === 0) {
-      throw new Error('Invalid response structure from Gemini API');
+    // Validate structure; if invalid or missing questions, create fallback
+    if (!quizData || !quizData.title || !Array.isArray(quizData.questions) || quizData.questions.length === 0) {
+      // fallback creation still uses required number of questions to avoid single-question issue
+      quizData = {
+        title: `Quiz: ${name}`,
+        questions: Array(parsedNumQuestions).fill(null).map((_, idx) => ({
+          question: `Fallback question #${idx+1}`,
+          options: ['Option A','Option B','Option C','Option D'],
+          correctAnswer: 0,
+          explanation: 'Fallback content due to AI failure.'
+        }))
+      };
     }
-    const generatedContent = result.candidates[0].content.parts[0].text;
-    
-    let quizData;
     try {
       // Direct parse the JSON response
       quizData = JSON.parse(generatedContent);

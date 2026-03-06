@@ -176,12 +176,12 @@ export const useSocialData = (
       setPostsCursor(response?.nextCursor ?? null);
       setHasMorePosts(response?.hasMore ?? false);
     } catch (error) {
-      toast.error('Failed to load trending posts');
+      toast.error('Failed to load posts');
     } finally {
-      setIsLoadingTrending(false);
-      setIsLoadingMoreTrending(false);
+      setIsLoading(false);
+      setIsLoadingMorePosts(false);
     }
-  }, [sortBy, filterBy, feedMode, hasMoreTrendingPosts, isLoadingMoreTrending, trendingPostsCursor, trendingPosts, viewedPostIds]);
+  }, [sortBy, filterBy, feedMode, hasMorePosts, isLoadingMorePosts, postsCursor, posts, viewedPostIds]);
 
   // OPTIMIZED: Trending posts via edge function
   const fetchTrendingPosts = useCallback(async (reset: boolean = false) => {
@@ -233,10 +233,10 @@ export const useSocialData = (
     } catch (error) {
       toast.error('Failed to load trending posts');
     } finally {
-      setIsLoading(false);
-      setIsLoadingMorePosts(false);
+      setIsLoadingTrending(false);
+      setIsLoadingMoreTrending(false);
     }
-  }, [hasMoreTrendingPosts, isLoadingMorePosts, trendingPostsCursor, trendingPosts, viewedPostIds]);
+  }, [hasMoreTrendingPosts, isLoadingMoreTrending, trendingPostsCursor, trendingPosts, viewedPostIds]);
 
   // OPTIMIZED: User posts via edge function
   const fetchUserPosts = useCallback(async (reset: boolean = false) => {

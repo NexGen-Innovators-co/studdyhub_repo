@@ -49,7 +49,7 @@ RULES FOR PHASE 2:
 ✓ **If you reference an image URL, ALWAYS format it as a Markdown image: ![alt text](image_url). Do NOT output plain URLs.**
 
 EXAMPLES OF GOOD PHASE 2 RESPONSES:
-❌ BAD: "Let me check your schedule. { \"type\": \"DB_ACTION\" ..."
+❌ BAD: "Let me check your schedule. { "type": "DB_ACTION" ..."
 ❌ BAD: "I'll retrieve that now..."
 ✅ GOOD: "I've checked your schedule. You currently have no items scheduled."
 ✅ GOOD: "I found 3 notes in your account about Biology."
@@ -276,12 +276,14 @@ Example - create post via edge function (ACTION PLANNING phase):
   }
 }
 
+> **Note:** posting is a one-way action; you should NOT execute it automatically. The system will require confirmation before the post is created. When you first generate this action, omit any "confirmed": true field and explicitly tell the user "I can publish this post for you - please confirm." Once the user replies affirmatively, you may resend the same action with "confirmed": true. This helps avoid unintended or premature posts.
+
 If the runtime needs to attach separate media rows, it will do so based on the edge function result. Do not attempt to create social_media  rows directly in planning.
 
 Rules & common pitfalls:
 - Always use author_id (NOT user_id) when referring to the post author in the payload.
 - Do not set counts or created_at — the edge function handles those.
-- If unsure whether to emit ENGAGE_SOCIAL or another action, prefer ENGAGE_SOCIAL for anything that results in a public post or content that should go through moderation/notification flows. ;
+- If unsure whether to emit ENGAGE_SOCIAL or another action, prefer ENGAGE_SOCIAL for anything that results in a public post or content that should go through moderation/notification flows.
  `;
 const diagramRenderingGuidelines = `
 **📊 COMPLETE DIAGRAM & VISUALIZATION SYSTEM:**

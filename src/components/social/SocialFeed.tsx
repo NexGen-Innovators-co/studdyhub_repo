@@ -564,7 +564,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
           if (o) observers.push(o); break;
         }
         case 'trending': {
-          const o = createObserver(trendingObserverRef, hasMoreTrendingRef, isLoadingMorePostsRef, loadMoreTrendingRef);
+          const o = createObserver(trendingObserverRef, hasMoreTrendingRef, isLoadingMoreTrendingRef, loadMoreTrendingRef);
           if (o) observers.push(o); break;
         }
         case 'profile': {
@@ -756,8 +756,8 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
                     <TabsContent value="trending" className="outline-none space-y-1 lg:space-y-4">
                       <TrendingTabContent
                         posts={trendingPosts}
-                        isLoading={isLoading}
-                        isLoadingMorePosts={isLoadingMorePosts}
+                        isLoading={isLoadingTrending}
+                        isLoadingMorePosts={isLoadingMoreTrending}
                         trendingObserverRef={trendingObserverRef}
                         currentUser={currentUser}
                         onLike={toggleLike}
@@ -841,7 +841,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
                         searchQuery={effectiveSearch}
                       />
                       <div ref={profileObserverRef} className="h-10" />
-                      {isLoadingMorePosts && (
+                      {isLoadingUserPosts && (
                         <div className="flex flex-col items-center justify-center py-12">
                           <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
                           <p className="text-sm text-slate-500 mt-2">Loading posts...</p>

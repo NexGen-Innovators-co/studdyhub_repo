@@ -289,7 +289,7 @@ serve(async (req) => {
 
     // 1. Fetch content from notes and documents
     let content = "";
-    let sources: string[] = [];
+    const sources: string[] = [];
 
     if (noteIds.length > 0) {
       const { data: notes } = await supabase
@@ -521,7 +521,7 @@ Title:`;
         }
 
         // Clean the text: remove stage directions and action indicators
-        let cleanedText = segment.text
+        const cleanedText = segment.text
           .replace(/\[laughs?\]/gi, '') // Remove [laugh] or [laughs]
           .replace(/\[pause\]/gi, '') // Remove [pause]
           .replace(/\[.*?\]/g, '') // Remove any other [actions]
@@ -594,7 +594,7 @@ Title:`;
     const validAudioSegments = audioSegments.filter(segment => segment !== null);
 
     // 4.5. Generate images for visual podcast types
-    let visualAssets: any[] = [];
+    const visualAssets: any[] = [];
     let coverImageUrl = providedCoverImageUrl || '';
 
     // ══════════════════════════════════════════════════════════════
@@ -667,13 +667,13 @@ Return ONLY valid JSON array: [{"concept":"...", "description":"...", "dialogue"
         const sceneText = sceneData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
         const jsonMatch = sceneText.match(/\[[\s\S]*\]/);
         if (jsonMatch) {
-          let rawJson = jsonMatch[0];
+          const rawJson = jsonMatch[0];
           try {
             scenes = JSON.parse(rawJson);
           } catch (_firstErr) {
             // LLM JSON is often malformed — attempt common repairs
             try {
-              let fixed = rawJson
+              const fixed = rawJson
                 // Remove trailing commas before ] or }
                 .replace(/,\s*([\]}])/g, '$1')
                 // Replace literal newlines/tabs inside strings with escape sequences
@@ -1523,7 +1523,7 @@ Format: [{"concept": "brief title", "description": "detailed visual description"
 
     // AI-driven mapping: assign images to segments based on segmentIndices from visualAssets
 
-    let segmentImageMap: string[] = Array(segments.length).fill(null);
+    const segmentImageMap: string[] = Array(segments.length).fill(null);
     if (visualAssets.length > 0 && segments.length > 0) {
       visualAssets.forEach(asset => {
         // Support both segmentIndices (array) and segmentIndex (number)

@@ -591,7 +591,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
         .eq('id', recording.document_id)
         .single();
 
-      let contentToUse = documentData?.content_extracted || '';
+      const contentToUse = documentData?.content_extracted || '';
 
       if (!contentToUse || contentToUse === 'Processing audio for content...') {
         toast.error('Audio content not yet extracted. Please wait for audio processing to complete or re-process the audio.', { id: toastId });

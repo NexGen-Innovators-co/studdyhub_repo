@@ -234,7 +234,7 @@ Do NOT interpret the meaning, provide educational context, highlight key concept
       });
     } catch (_logErr) { console.error('[image-analyzer] Error logging failed:', _logErr); }
     console.error('Error in image-analyzer function:', error);
-    let errorResponse = {
+    const errorResponse = {
       error: error.message || 'Internal Server Error',
       timestamp: new Date().toISOString()
     };

@@ -120,7 +120,7 @@ export const useMessageHandlers = () => {
     dispatch({ type: 'SET_IS_SUBMITTING_USER_MESSAGE', payload: true });
     dispatch({ type: 'SET_IS_AI_LOADING', payload: true });
 
-    let cleanupTimeout: NodeJS.Timeout | null = null;
+    const cleanupTimeout: NodeJS.Timeout | null = null;
 
     try {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
@@ -156,7 +156,7 @@ export const useMessageHandlers = () => {
 
       // Use selectedDocumentIds from app context as the source-of-truth
       // for attached documents when the caller doesn't provide explicit ids.
-      let finalAttachedDocumentIds = (attachedDocumentIds && attachedDocumentIds.length > 0)
+      const finalAttachedDocumentIds = (attachedDocumentIds && attachedDocumentIds.length > 0)
         ? attachedDocumentIds
         : (selectedDocumentIds || []);
       const finalAttachedNoteIds = attachedNoteIds || [];

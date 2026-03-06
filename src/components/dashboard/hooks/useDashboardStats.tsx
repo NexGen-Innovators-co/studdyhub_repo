@@ -500,7 +500,7 @@ export const useDashboardStats = (userId: string | undefined) => {
 
           // Calculate weekday activity from the 30-day data we already have
           const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-          let weekdayActivity: any = daysOfWeek.map(day => ({ day, activity: 0 }));
+          const weekdayActivity: any = daysOfWeek.map(day => ({ day, activity: 0 }));
           
           if (activityData30Days && activityData30Days.length > 0) {
               activityData30Days.forEach((dayStat: any) => {

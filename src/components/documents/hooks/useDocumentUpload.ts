@@ -154,7 +154,7 @@ export const useDocumentUpload = ({
 
       // If the file is large, upload it to Storage and send a file_url
       const STORAGE_UPLOAD_THRESHOLD = 5 * 1024 * 1024; // 5MB
-      let payloadFiles: any[] = [];
+      const payloadFiles: any[] = [];
 
       if (selectedFile.size > STORAGE_UPLOAD_THRESHOLD) {
         // Upload to storage to avoid sending huge base64 payloads
@@ -319,7 +319,7 @@ export const useDocumentUpload = ({
 
       // If we have a file_url stored, prefer sending the URL to the function
       // so the function can fetch server-side (avoids large client-side transfers).
-      let base64Data: string | null = null;
+      const base64Data: string | null = null;
       let preferFileUrl = false;
       if (doc.file_url) {
         preferFileUrl = true;

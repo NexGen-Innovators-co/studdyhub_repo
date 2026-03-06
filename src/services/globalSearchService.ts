@@ -79,8 +79,44 @@ export const globalSearchService = {
     query: string
   ): Promise<SearchResult<T>> {
     try {
-      // Don't escape or lowercase for now - let Supabase handle it
       const searchTerm = query.trim();
+
+      // if the config requests AI assistance, call the edge function first
+      if ((config as any).useAi) {
+        try {
+          const resp = await fetch(`${process.env.VITE_SUPABASE_URL}/functions/v1/ai-chat-session-search`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${process.env.VITE_SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify({ query: searchTerm })
+          });
+          const json = await resp.json();
+          const ids: string[] = json.ids || [];
+          if (ids.length) {
+            // fetch those sessions in order returned
+            const { data, error } = await supabase
+              .from(config.tableName)
+              .select('*')
+              .in('id', ids);
+            if (error) throw error;
+            // preserve order
+            const ordered = ids
+              .map(id => (data || []).find((d: any) => d.id === id))
+              .filter(Boolean) as T[];
+            return {
+              data: ordered,
+              totalCount: ordered.length,
+              query,
+              timestamp: Date.now(),
+            };
+          }
+          // if AI returned no ids, fall back to regular search below
+        } catch (err) {
+          console.error('AI search failed, falling back to normal query', err);
+        }
+      }
 
       // Build the main query
       let supabaseQuery = supabase
@@ -140,22 +176,11 @@ export const globalSearchService = {
       }
 
       // Apply client-side filters for array fields
-      // NOTE: These are ADDITIONAL filters that work in OR with the database filters
-      // If no clientFilters are defined, return all database results as-is
       let filteredData = data || [];
       
       if (config.clientFilters && config.clientFilters.length > 0) {
         const searchLower = searchTerm.toLowerCase();
-        
-        // Filter: return items that match the search in clientFilter fields
-        // This is used for fields that the database query couldn't search
-        // OR return all items if database already found them through searchFields
-        filteredData = filteredData.filter((item: any) => {
-          // First, check if item was already matched by database search (searchFields)
-          // We assume it was if the database returned it
-          // So we DON'T apply additional filtering here - just return all results
-          return true;
-        });
+        filteredData = filteredData.filter((item: any) => true);
       }
 
       return {
@@ -256,5 +281,14 @@ export const SEARCH_CONFIGS = {
     userIdField: 'author_id',
     sortField: 'created_at',
     limit: 50
+  } as SearchConfig,
+
+  chat_sessions: {
+    tableName: 'chat_sessions',
+    searchFields: ['title'],
+    userIdField: 'user_id',
+    sortField: 'last_message_at',
+    limit: 100,
+    useAi: true // enable AI-assisted matching via edge function
   } as SearchConfig
 };

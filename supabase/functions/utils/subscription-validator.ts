@@ -10,6 +10,7 @@ interface SubscriptionData {
   maxScheduleItems?: number;
   maxDailyQuizzes?: number;
   maxAiMessages?: number;
+  maxChatSessions?: number;
   canPostSocials?: boolean;
   canAccessSocial?: boolean;
 }
@@ -198,6 +199,41 @@ export class SubscriptionValidator {
     }
 
     return { allowed: true };
+  }
+
+  /**
+   * Check if user has exceeded their allowed number of chat sessions
+   */
+  async checkChatSessionLimit(userId: string): Promise<ValidationResult> {
+    const isAdmin = await this.isAdmin(userId);
+    if (isAdmin) {
+      return { allowed: true };
+    }
+
+    const subscription = await this.getUserSubscription(userId);
+    const maxSessions = subscription.maxChatSessions || 10;
+
+    const { count, error } = await this.supabase
+      .from('chat_sessions')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    if (error) {
+      // console.error('Error counting chat sessions:', error);
+      return { allowed: true };
+    }
+
+    const currentCount = count || 0;
+    if (currentCount >= maxSessions) {
+      return {
+        allowed: false,
+        message: `You have reached the limit of ${maxSessions} chat sessions for your plan.`,
+        currentUsage: currentCount,
+        limit: maxSessions,
+      };
+    }
+
+    return { allowed: true, currentUsage: currentCount, limit: maxSessions };
   }
 
   /**

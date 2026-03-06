@@ -58,6 +58,32 @@ export async function runAction(actionsService: any, userId: string, sessionId: 
         }
 
         if (actionType === 'ENGAGE_SOCIAL') {
+            // Determine whether this is a post creation or a simple like/comment
+            // The model may emit a variety of shapes; support both the documented
+            // `handler: "create-social-post"` pattern as well as the older
+            // `content`/`privacy` payload.  Fallback to engageSocial for likes/comments.
+            const p = params || {};
+
+            const isLikeComment = p.action === 'like' || p.action === 'comment';
+            const isPost = !isLikeComment && (p.handler === 'create-social-post' || typeof p.content === 'string');
+
+            if (isPost) {
+                if (!actionsService.createSocialPost) throw new Error('Social post creation not implemented');
+                // normalize payload
+                let postData: any;
+                if (p.handler === 'create-social-post' && p.data) {
+                    postData = p.data;
+                } else {
+                    postData = {
+                        content: p.content || '',
+                        privacy: p.privacy || 'public',
+                        group_name: p.group_name || null
+                    };
+                }
+                return await actionsService.createSocialPost(userId, postData);
+            }
+
+            // otherwise treat it as a standard like/comment
             if (!actionsService.engageSocial) throw new Error('Social engagement not implemented');
             return await actionsService.engageSocial(userId, params || {});
         }
@@ -105,6 +131,26 @@ export async function executeParsedActions(
 
         try {
             console.log(`[ActionExecution] Executing action: ${action.type}`);
+
+            // If this is a social post creation, we treat it like a destructive operation
+            // from a confirmation perspective even though it does not modify existing data.
+            // Posts should not be published without explicit user permission.
+            if (action.type === 'ENGAGE_SOCIAL') {
+                const p = action.params || {};
+                // detect if it's a new-post request (not a simple like/comment)
+                const isLikeComment = p.action === 'like' || p.action === 'comment';
+                const isPost = !isLikeComment && (p.handler === 'create-social-post' || typeof p.content === 'string');
+                if (isPost && p.confirmed !== true) {
+                    executedActions.push({
+                        type: action.type,
+                        success: false,
+                        data: { needsConfirmation: true, params: action.params },
+                        timestamp: new Date().toISOString()
+                    });
+                    console.log(`[ActionExecution] ${action.type} requires confirmation before posting`, action.params);
+                    continue;
+                }
+            }
 
             // If this is a destructive DB action, perform a preflight SELECT to
             // fetch candidate row ids and require an explicit confirmation flag

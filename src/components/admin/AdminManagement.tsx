@@ -77,7 +77,7 @@ const AdminManagement = () => {
         password += symbolChars.charAt(Math.floor(Math.random() * symbolChars.length));
 
         // Fill the rest of the password with random characters
-        let allChars = uppercaseChars + lowercaseChars + numberChars + symbolChars;
+        const allChars = uppercaseChars + lowercaseChars + numberChars + symbolChars;
         while (password.length < minLength) {
             password += allChars.charAt(Math.floor(Math.random() * allChars.length));
         }

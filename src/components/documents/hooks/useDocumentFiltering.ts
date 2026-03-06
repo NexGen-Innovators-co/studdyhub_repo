@@ -73,7 +73,7 @@ export const useDocumentFiltering = ({
   }, [documents]);
 
   const filteredAndSortedDocuments = useMemo(() => {
-    let filtered = (hasSearched && effectiveSearch.trim() && searchResults) 
+    const filtered = (hasSearched && effectiveSearch.trim() && searchResults) 
         ? searchResults 
         : documents.filter(doc => {
             const matchesSearch = doc.title.toLowerCase().includes(effectiveSearch.toLowerCase()) ||

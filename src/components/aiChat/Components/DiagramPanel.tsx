@@ -64,7 +64,7 @@ interface ThreeJSRendererProps {
  */
 function parseSlides(raw: string): Slide[] {
   // Strip markdown fence markers
-  let text = raw
+  const text = raw
     .replace(/^```\w*\n?/, '')
     .replace(/\n?```\s*$/, '')
     .trim();
@@ -375,7 +375,7 @@ export const DiagramPanel = memo(({
     }
     let filename = `diagram-${effectiveDiagramType}`;
     let blob: Blob | null = null;
-    let mimeType = 'text/plain';
+    const mimeType = 'text/plain';
     switch (effectiveDiagramType) {
       case 'mermaid':
       case 'dot':
@@ -513,7 +513,7 @@ export const DiagramPanel = memo(({
       if (!innerContentWrapperRef.current) return;
 
       // Find the actual content element to capture
-      let targetElement: HTMLElement = innerContentWrapperRef.current;
+      const targetElement: HTMLElement = innerContentWrapperRef.current;
 
       const canvas = await html2canvas(targetElement, {
         useCORS: true,

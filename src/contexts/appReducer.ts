@@ -109,9 +109,11 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case 'ADD_CHAT_SESSION':
       return {
         ...state,
-        chatSessions: [action.payload, ...state.chatSessions].sort(
-          (a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
-        ),
+        chatSessions: [action.payload, ...state.chatSessions].sort((a, b) => {
+          const aTime = new Date(a.last_message_at || a.updated_at || a.created_at).getTime();
+          const bTime = new Date(b.last_message_at || b.updated_at || b.created_at).getTime();
+          return bTime - aTime;
+        }),
       };
     case 'UPDATE_CHAT_SESSION':
       return {
@@ -120,7 +122,11 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           session.id === action.payload.id 
             ? { ...session, ...action.payload.updates }
             : session
-        ).sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()),
+        ).sort((a, b) => {
+          const aTime = new Date(a.last_message_at || a.updated_at || a.created_at).getTime();
+          const bTime = new Date(b.last_message_at || b.updated_at || b.created_at).getTime();
+          return bTime - aTime;
+        }),
       };
     case 'REMOVE_CHAT_SESSION':
       return {

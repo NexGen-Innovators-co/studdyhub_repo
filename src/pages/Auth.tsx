@@ -306,6 +306,16 @@ const Auth = () => {
     fetchData();
   }, []);
 
+  // preload all testimonial avatar images once data is available
+  useEffect(() => {
+    if (!authTestimonials.length) return;
+    authTestimonials.forEach((t) => {
+      const url = t.imageUrl || '/default-avatar.png';
+      const img = new Image();
+      img.src = url;
+    });
+  }, [authTestimonials]);
+
   // typing / fade animation for testimonials
   useEffect(() => {
     if (rightView !== 'testimonials') return;

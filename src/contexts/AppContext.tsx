@@ -581,7 +581,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           .from('chat_sessions')
           .select('*')
           .eq('user_id', user.id)
+          // sort by most recently active, then most recently modified
           .order('last_message_at', { ascending: false })
+          .order('updated_at', { ascending: false })
           .range(0, state.chatSessionsLoadedCount - 1),
         API_TIMEOUT,
         'Failed to load chat sessions'
@@ -641,60 +643,68 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return null;
       }
 
-      const { data, error } = await withTimeout<SupabaseChatSession>(
-        supabase
-          .from('chat_sessions')
-          .insert({
-            user_id: user.id,
-            title: 'New Chat',
-            document_ids: state.selectedDocumentIds,
-            message_count: 0,
-          })
-          .select()
-          .single(),
-        API_TIMEOUT,
-        'Failed to create chat session'
-      );
+      // if offline, fall back to local behaviour (same as before)
+      if (!navigator.onLine) {
+        const offlineId = `offline-${Date.now()}`;
+        const newSession: ChatSession = {
+          id: offlineId,
+          title: 'New Chat (Offline)',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          last_message_at: new Date().toISOString(),
+          document_ids: state.selectedDocumentIds,
+          message_count: 0,
+          user_id: user.id,
+        };
 
-      if (error) {
-        if (!navigator.onLine) {
-          const offlineId = `offline-${Date.now()}`;
-          const newSession: ChatSession = {
-            id: offlineId,
-            title: 'New Chat (Offline)',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            last_message_at: new Date().toISOString(),
-            document_ids: state.selectedDocumentIds,
-            message_count: 0,
-            user_id: user.id,
-          };
+        await offlineStorage.save(STORES.CHAT_SESSIONS, newSession);
+        await offlineStorage.addPendingSync('create', STORES.CHAT_SESSIONS, {
+          user_id: user.id,
+          title: 'New Chat',
+          document_ids: state.selectedDocumentIds,
+          message_count: 0,
+        });
 
-          await offlineStorage.save(STORES.CHAT_SESSIONS, newSession);
-          await offlineStorage.addPendingSync('create', STORES.CHAT_SESSIONS, {
-            user_id: user.id,
-            title: 'New Chat',
-            document_ids: state.selectedDocumentIds,
-            message_count: 0,
-          });
-
-          dispatch({ type: 'ADD_CHAT_SESSION', payload: newSession });
-          dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: offlineId });
-          return offlineId;
-        }
-        throw error;
+        dispatch({ type: 'ADD_CHAT_SESSION', payload: newSession });
+        dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: offlineId });
+        return offlineId;
       }
-      if (!data) throw new Error('No data returned from session creation');
+
+      // online: delegate to edge function which performs subscription/limit checks
+      const { data: result, error: fnError } = await supabase.functions.invoke('create-ai-chat-session', {
+        body: { document_ids: state.selectedDocumentIds },
+      });
+
+      if (fnError) throw fnError;
+      if (!result || !('id' in result)) {
+        throw new Error('Unexpected response from create-ai-chat-session');
+      }
+
+      const sessionId = (result as any).id as string;
+      const existing = (result as any).existing;
+      if (existing && sessionId) {
+        // reuse existing empty session
+        navigate(`/chat/${sessionId}`, { replace: true });
+        return sessionId;
+      }
+
+      // fetch newly created session details so we can update state
+      const { data: sessionData, error: sessionError } = await supabase
+        .from('chat_sessions')
+        .select('*')
+        .eq('id', sessionId)
+        .single();
+      if (sessionError || !sessionData) throw sessionError || new Error('Session not found');
 
       const newSession: ChatSession = {
-        id: data.id,
-        title: data.title,
-        created_at: data.created_at,
-        updated_at: data.updated_at,
-        last_message_at: data.last_message_at || new Date().toISOString(),
-        document_ids: data.document_ids || [],
-        message_count: 0,
-        user_id: data.user_id,
+        id: sessionData.id,
+        title: sessionData.title,
+        created_at: sessionData.created_at,
+        updated_at: sessionData.updated_at,
+        last_message_at: sessionData.last_message_at || new Date().toISOString(),
+        document_ids: sessionData.document_ids || [],
+        message_count: sessionData.message_count || 0,
+        user_id: sessionData.user_id,
       };
 
       dispatch({ type: 'ADD_CHAT_SESSION', payload: newSession });

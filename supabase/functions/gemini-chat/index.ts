@@ -114,6 +114,10 @@ function truncateActionResults(actions: any[]): any[] {
     return slim;
   });
 }
+
+function isNeedsConfirmationAction(action: any): boolean {
+  return !!(action?.data?.needsConfirmation || action?.data?.data?.needsConfirmation);
+}
 // ========== ACTION EXECUTION FUNCTION ==========
 async function executeAIActions(userId: string, sessionId: string, aiResponse: string): Promise<{
   executedActions: any[];
@@ -1043,8 +1047,8 @@ async function buildEnhancedGeminiConversation(
     const queryType = classifyUserQuery(currentMessage);
 
     // Get conversation history
-    let conversationData = await buildIntelligentContext(userId, sessionId, currentMessage, [], []);
-    let geminiContents: any[] = [];
+    const conversationData = await buildIntelligentContext(userId, sessionId, currentMessage, [], []);
+    const geminiContents: any[] = [];
     let systemInstruction = null;
 
     if (systemPrompt) {
@@ -1125,7 +1129,7 @@ async function buildEnhancedGeminiConversation(
       });
     }
 
-    let recentMessages = conversationData.recentMessages;
+    const recentMessages = conversationData.recentMessages;
     // We rely on buildIntelligentContext to provide the correct number of messages (token-based)
     // No further truncation needed.
 
@@ -2266,7 +2270,7 @@ NOW: Return ONLY the JSON action plan (nothing else, no markdown, no explanation
           }
 
           // Check if actions require confirmation
-          const needsConfirmation = executedActions.filter((a: any) => a.data && a.data.needsConfirmation);
+          const needsConfirmation = executedActions.filter((a: any) => isNeedsConfirmationAction(a));
           if (needsConfirmation.length > 0) {
             handler.sendThinkingStep('action', 'Awaiting confirmation', `One or more actions require confirmation before proceeding.`, 'completed');
             finalResponseContext += '\n\n=== ACTIONS REQUIRING CONFIRMATION ===\n';
@@ -2279,7 +2283,8 @@ NOW: Return ONLY the JSON action plan (nothing else, no markdown, no explanation
           if (failures.length === 0) {
             finalResponseContext += '\n\n=== EXECUTED ACTIONS RESULTS ===\n';
             finalResponseContext += JSON.stringify(truncateActionResults(executedActions), null, 2);
-            handler.sendThinkingStep('action', 'Actions executed', `Successfully executed ${executedActions.length} actions.`, 'completed');
+            const successfulActions = executedActions.filter((a: any) => a.success && !isNeedsConfirmationAction(a));
+            handler.sendThinkingStep('action', 'Actions executed', `Successfully executed ${successfulActions.length} actions.`, 'completed');
             break;
           }
 
@@ -2333,6 +2338,9 @@ Please provide a corrected JSON action plan that ONLY re-does the FAILED actions
 
       const finalContents = [...conversationData.contents];
       if (executedActions.length > 0) {
+        const successfulActions = executedActions.filter((a: any) => a.success && !isNeedsConfirmationAction(a));
+        const confirmationRequiredActions = executedActions.filter((a: any) => isNeedsConfirmationAction(a));
+        const failedActions = executedActions.filter((a: any) => !a.success && !isNeedsConfirmationAction(a));
         const slimResults = truncateActionResults(executedActions);
 
         // Collect image URLs from successful GENERATE_IMAGE actions to include in the instruction
@@ -2353,17 +2361,33 @@ Please provide a corrected JSON action plan that ONLY re-does the FAILED actions
           imageInstruction += `          You MUST include each image URL in your response using ![description](url) format so the user can see them.`;
         }
 
+        const statusLines: string[] = [];
+        if (successfulActions.length > 0) {
+          statusLines.push(`- Executed successfully: ${successfulActions.length}`);
+        }
+        if (confirmationRequiredActions.length > 0) {
+          statusLines.push(`- Awaiting user confirmation: ${confirmationRequiredActions.length}`);
+        }
+        if (failedActions.length > 0) {
+          statusLines.push(`- Failed: ${failedActions.length}`);
+        }
+
         finalContents.push({
           role: 'user',
-          parts: [{ text: `System Update: The following actions were executed successfully.
+          parts: [{ text: `System Update: Action execution results are below.
           
+          Status Summary:
+          ${statusLines.join('\n')}
+
           Results: ${JSON.stringify(slimResults)}
           
           CRITICAL INSTRUCTION FOR FINAL RESPONSE:
-          1. The actions are DONE. Do NOT output any raw JSON action objects, "DB_ACTION", or action code blocks.
-          2. Just confirm to the user naturally (e.g., "I've created your note." or "Here's the image you requested.").
-          3. If the results show a total_count higher than the records shown, tell the user how many total exist.
-          4. Keep the response concise.${imageInstruction}` }]
+          1. Do NOT output any raw JSON action objects, "DB_ACTION", or action code blocks.
+          2. Only confirm actions as completed when they are in "Executed successfully".
+          3. If any action is "Awaiting user confirmation", explicitly ask for confirmation and do NOT claim it was completed.
+          4. If any action failed, clearly say it failed and provide the shortest helpful next step.
+          5. If the results show a total_count higher than the records shown, tell the user how many total exist.
+          6. Keep the response concise.${imageInstruction}` }]
         });
       }
 
@@ -2402,7 +2426,10 @@ Please provide a corrected JSON action plan that ONLY re-does the FAILED actions
       handler.sendThinkingStep('action', 'Response generated', 'Successfully generated response', 'completed');
       console.log('✅ Action phase complete');
 
-      console.log('✅ Actions executed (summary):', executedActions.length, 'actions');
+      const successfulActionsCount = executedActions.filter((a: any) => a.success && !isNeedsConfirmationAction(a)).length;
+      const confirmationRequiredCount = executedActions.filter((a: any) => isNeedsConfirmationAction(a)).length;
+      const failedActionsCount = executedActions.filter((a: any) => !a.success && !isNeedsConfirmationAction(a)).length;
+      console.log('✅ Actions executed (summary):', `${successfulActionsCount} successful, ${confirmationRequiredCount} awaiting confirmation, ${failedActionsCount} failed`);
 
       // Detect embedded image code blocks like ```image\n{ "url": "...", "alt": "..." }\n```
       function extractImageBlocks(text: string): { cleaned: string; images: Array<{ url: string; alt?: string }> } {
@@ -2499,7 +2526,9 @@ Please provide a corrected JSON action plan that ONLY re-does the FAILED actions
           userMessageId,
           sessionId,
           userId,
-          actionCount: executedActions.length,
+          actionCount: successfulActionsCount,
+          awaitingConfirmationCount: confirmationRequiredCount,
+          failedActionCount: failedActionsCount,
           imageCount: images.length,
         };
         console.log('SENT_DONE_PAYLOAD', JSON.stringify(donePayloadSummary));
@@ -2574,11 +2603,11 @@ serve(async (req) => {
 
   const startTime = Date.now();
   let requestData: any = null;
-  let rawFiles: File[] = [];
+  const rawFiles: File[] = [];
   let jsonFiles: any[] = [];
   let uploadedDocumentIds: string[] = [];
-  let userMessageImageUrl: string | null = null;
-  let userMessageImageMimeType: string | null = null;
+  const userMessageImageUrl: string | null = null;
+  const userMessageImageMimeType: string | null = null;
   let processingResults: any[] = [];
 
   try {

@@ -29,9 +29,9 @@ serve(async (req) => {
   }
 
   const startTime           = Date.now();
-  let files: any[]          = [];
+  const files: any[]          = [];
   let userId: string | null = null;
-  let uploadedDocumentIds: string[] = [];
+  const uploadedDocumentIds: string[] = [];
 
   try {
     // ── Validate Content-Type ──────────────────────────────────────────────
