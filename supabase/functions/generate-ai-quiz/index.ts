@@ -1,6 +1,9 @@
 // supabase/functions/generate-ai-quiz/index.ts
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractUserIdFromAuth } from '../utils/subscription-validator.ts';
+import { getEducationContext, formatEducationContextForPrompt } from '../_shared/educationContext.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,30 +22,61 @@ serve(async (req) => {
     const { 
       user_topics = ['General Knowledge'], 
       focus_areas = [], 
+      num_questions = 8,
+      difficulty = 'auto',
       recent_performance = [],
       learning_style = 'adaptive'
     } = await req.json();
+
+    // Clamp question count to safe range
+    const questionCount = Math.max(1, Math.min(20, Number(num_questions) || 8));
     
     console.log('Generating AI Smart Quiz');
     console.log('User topics:', user_topics);
     console.log('Focus areas:', focus_areas);
+    console.log('Requested questions:', questionCount);
+    console.log('Requested difficulty:', difficulty);
     console.log('Recent performance samples:', recent_performance.length);
     console.log('Learning style:', learning_style);
 
+    // Fetch education context for curriculum-aligned questions
+    let educationBlock = '';
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      if (supabaseUrl && supabaseServiceKey) {
+        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+        const userId = await extractUserIdFromAuth(req, supabaseUrl, supabaseServiceKey);
+        if (userId) {
+          const eduCtx = await getEducationContext(supabaseAdmin, userId);
+          if (eduCtx) {
+            educationBlock = `\n${formatEducationContextForPrompt(eduCtx)}\nAlign questions to this student's curriculum, exam format, and subject focus where relevant.\n`;
+          }
+        }
+      }
+    } catch (_eduErr) {
+      // Non-critical — continue without education context
+    }
+
     // Analyze performance to personalize the quiz
     const performanceAnalysis = analyzePerformance(recent_performance);
+
+    // Override difficulty if user selected a specific one
+    if (difficulty !== 'auto') {
+      performanceAnalysis.recommendedDifficulty = difficulty;
+    }
     
     // Determine question types based on learning style
     const questionTypes = getQuestionTypesForStyle(learning_style);
     
     // Build personalized prompt
-    const prompt = buildAIPrompt(user_topics, focus_areas, performanceAnalysis, questionTypes);
+    const prompt = buildAIPrompt(user_topics, focus_areas, performanceAnalysis, questionTypes, educationBlock, questionCount);
 
     console.log('Calling Gemini API for AI Smart Quiz...');
 
     // call shared helper which handles model chain and OpenRouter fallback
     const { callGeminiJSON } = await import('../utils/gemini.ts');
-    const aiResult = await callGeminiJSON<any>(prompt, { maxOutputTokens: 2000 });
+    const aiResult = await callGeminiJSON<any>(prompt, { maxOutputTokens: 4096 });
 
     let quizData: any;
     if (aiResult.success && aiResult.data) {
@@ -54,9 +88,24 @@ serve(async (req) => {
 
     // validate result
     if (!quizData || !quizData.title || !Array.isArray(quizData.questions) || quizData.questions.length === 0) {
-      // fallback quiz using default 8‑question adaptive template
-      quizData = createAdaptiveFallbackQuiz(user_topics, focus_areas, performanceAnalysis, 8);
+      // fallback quiz using adaptive template
+      quizData = createAdaptiveFallbackQuiz(user_topics, focus_areas, performanceAnalysis, questionCount);
       console.warn('Falling back to adaptive quiz due to invalid AI output.');
+    }
+
+    // Validate each question's structure and filter out bad ones
+    quizData.questions = quizData.questions.filter((q: any, index: number) => {
+      if (!q.question || !Array.isArray(q.options) || q.options.length !== 4 ||
+          typeof q.correctAnswer !== 'number' || q.correctAnswer < 0 || q.correctAnswer > 3) {
+        console.warn(`Dropping invalid AI question at index ${index}`);
+        return false;
+      }
+      return true;
+    });
+
+    // If all questions filtered out, use fallback
+    if (quizData.questions.length === 0) {
+      quizData = createAdaptiveFallbackQuiz(user_topics, focus_areas, performanceAnalysis, questionCount);
     }
 
     console.log('AI Smart Quiz generated successfully:', quizData.title);
@@ -127,36 +176,47 @@ function getQuestionTypesForStyle(learningStyle: string) {
 }
 
 // Helper function to build the AI prompt
-function buildAIPrompt(topics: string[], focusAreas: string[], performance: any, questionTypes: string[]) {
-  return `Create an adaptive, personalized quiz with 8 questions that:
+function buildAIPrompt(topics: string[], focusAreas: string[], performance: any, questionTypes: string[], educationBlock: string = '', questionCount: number = 8) {
+  const difficultyInstruction = performance.recommendedDifficulty === 'easy'
+    ? 'All questions should be at an easy/introductory level.'
+    : performance.recommendedDifficulty === 'hard'
+    ? 'All questions should be at a hard/advanced level requiring deep understanding.'
+    : 'Questions should gradually increase in complexity from easy to hard.';
+
+  return `Create an adaptive, personalized quiz with exactly ${questionCount} multiple-choice questions on the following topics.
 
 LEARNING CONTEXT:
 - Topics to cover: ${topics.join(', ')}
 - Focus areas: ${focusAreas.length > 0 ? focusAreas.join(', ') : 'general comprehension'}
 - User's recent performance: ${performance.averageScore.toFixed(1)}% average
-- Recommended difficulty: ${performance.recommendedDifficulty}
+- Difficulty level: ${performance.recommendedDifficulty}
 - Question styles: ${questionTypes.join(', ')}
-
+${educationBlock}
 QUIZ REQUIREMENTS:
-1. Create 8 questions that gradually increase in complexity
-2. Mix question types to engage different learning styles
-3. Include 2-3 questions that address identified focus areas
-4. Ensure questions test both recall and application of knowledge
-5. Each question must have:
-   - Clear, unambiguous question text
-   - 4 plausible answer options
-   - One correct answer (correctAnswer: 0-3)
-   - Detailed explanation
-   - Difficulty level (easy/medium/hard)
-   - Topic classification
+1. Create exactly ${questionCount} questions. ${difficultyInstruction}
+2. Each question MUST test real factual knowledge about the specified topics — not generic filler
+3. Include questions that address identified focus areas
+4. Questions should test both recall and application of knowledge
+5. Make all 4 options plausible — avoid obviously wrong distractors
+6. Each question must have exactly 4 options and one correct answer
 
-PERSONALIZATION GOALS:
-- Start with confidence-building questions
-- Include challenging questions to promote growth
-- Balance between familiar topics and new applications
-- Provide explanations that enhance learning
+You MUST respond with ONLY a valid JSON object (no markdown, no extra text) in this exact format:
+{
+  "title": "Quiz title here",
+  "questions": [
+    {
+      "question": "A specific, factual question about the topic?",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswer": 0,
+      "explanation": "Clear explanation of why this is correct.",
+      "difficulty": "easy",
+      "topic": "Topic name"
+    }
+  ],
+  "personalization_notes": "Brief note about quiz personalization."
+}
 
-Respond with a JSON object containing the quiz title, questions array, and personalization notes.`;
+IMPORTANT: correctAnswer must be 0, 1, 2, or 3. Each question must have exactly 4 options. Return ONLY valid JSON.`;
 }
 
 // Fallback function for adaptive quiz generation

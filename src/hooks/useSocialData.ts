@@ -48,11 +48,16 @@ const normalizePosts = (posts: any[]): SocialPostWithDetails[] => {
 
 export const useSocialData = (
   userProfile: any,
-  sortBy: SortBy,
-  filterBy: FilterBy,
+  initialSortBy: SortBy = 'newest',
+  initialFilterBy: FilterBy = 'all',
   onNotificationReceived?: (notification: any) => void,
-  feedMode: FeedMode = 'all'
+  initialFeedMode: FeedMode = 'all'
 ) => {
+  // Controllable filter/sort/feed state (initialized from params, settable from consumers)
+  const [sortBy, setSortBy] = useState<SortBy>(initialSortBy);
+  const [filterBy, setFilterBy] = useState<FilterBy>(initialFilterBy);
+  const [feedMode, setFeedMode] = useState<FeedMode>(initialFeedMode);
+
   // State initialization remains the same
   const [posts, setPosts] = useState<SocialPostWithDetails[]>(() => loadFromCache(CACHE_KEYS.POSTS) || []);
   const [trendingPosts, setTrendingPosts] = useState<SocialPostWithDetails[]>(() => loadFromCache(CACHE_KEYS.TRENDING) || []);
@@ -577,12 +582,12 @@ export const useSocialData = (
     }
   }, [currentUser]);
 
-  // Fetch initial data when user is loaded OR filters change
+  // Fetch initial data when user is loaded OR filters/feedMode change
   useEffect(() => {
     if (currentUser && isInitializedRef.current) {
       resetAndFetchData();
     }
-  }, [sortBy, filterBy]);
+  }, [sortBy, filterBy, feedMode]);
 
   // Fetch data when currentUser becomes available for the first time
   // Load viewedPostIds FIRST so the feed scoring can differentiate seen/unseen posts
@@ -1113,5 +1118,12 @@ export const useSocialData = (
     showNewPosts,
     clearNewPosts,
     forceRefresh, // Export this for manual cache clearing if needed
+    // Feed control setters
+    feedMode,
+    setFeedMode,
+    sortBy,
+    setSortBy,
+    filterBy,
+    setFilterBy,
   };
 };

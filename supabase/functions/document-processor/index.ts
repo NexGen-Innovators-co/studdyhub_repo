@@ -42,6 +42,7 @@ serve(async (req) => {
       );
     }
 
+    console.log('[dp] v3 – handler invoked');
     const requestData      = await req.json();
     userId                 = requestData.userId;
     const incomingFilesData: any[] = requestData.files;

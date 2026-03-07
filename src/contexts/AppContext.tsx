@@ -433,7 +433,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshData: retryAllData,
     isAdmin,
   });
-  const socialData = useSocialData(userProfile, 'newest', 'all');
+  const socialData = useSocialData(userProfile);
 
   // Education context — loaded once per auth session, skipped during onboarding
   const {

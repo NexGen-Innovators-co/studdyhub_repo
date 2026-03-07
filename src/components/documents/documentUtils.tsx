@@ -70,7 +70,10 @@ export const getStatusColor = (status: string | null) => {
     case 'completed':
       return 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10';
     case 'pending':
+    case 'processing':
       return 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10';
+    case 'partial':
+      return 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-500/10';
     case 'failed':
       return 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10';
     default:
@@ -84,7 +87,10 @@ export const getStatusIcon = (status: string | null) => {
     case 'completed':
       return <Check className="h-4 w-4" />;
     case 'pending':
+    case 'processing':
       return <Loader2 className="h-4 w-4 animate-spin" />;
+    case 'partial':
+      return <AlertTriangle className="h-4 w-4 text-orange-500" />;
     case 'failed':
       return <AlertTriangle className="h-4 w-4" />;
     default:

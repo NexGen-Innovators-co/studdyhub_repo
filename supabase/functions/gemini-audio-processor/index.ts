@@ -6,7 +6,11 @@ import { logSystemError } from '../_shared/errorLogger.ts';
 interface RequestBody {
   file_url?: string;
   recording_id?: string; // If provided, uses async background processing
-  target_language?: string; 
+  target_language?: string;
+  mode?: 'transcribe' | 'summarize' | 'full'; // Processing mode
+  transcript?: string; // For 'summarize' mode — pass in existing transcript
+  chunk_index?: number; // For chunked processing — current chunk (0-based)
+  total_chunks?: number; // For chunked processing — total number of chunks
 }
 
 // Initialize Supabase client
@@ -161,7 +165,7 @@ async function processAudioBackground(recordingId: string, fileUrl: string, targ
       contents: [{
         role: "user",
         parts: [
-          { text: `You are a professional lecture transcription assistant. Process this audio recording and return a JSON object with the following structure:
+          { text: `You are a professional audio transcription assistant. Process this audio recording and return a JSON object with the following structure:
 
 {
   "transcript": "...",
@@ -172,7 +176,8 @@ async function processAudioBackground(recordingId: string, fileUrl: string, targ
 Transcript guidelines:
 - Clean up filler words (um, uh, like, you know, right) and false starts
 - Organize into clear paragraphs by topic or speaker change
-- If multiple speakers are detected, label them (e.g., "**Lecturer:**", "**Student:**", "**Speaker 1:**")
+- If multiple speakers are detected, label them as "**Speaker 1:**", "**Speaker 2:**", etc.
+- If only one speaker is detected, do NOT add any speaker labels
 - Fix grammar and incomplete sentences while preserving the original meaning
 - Use proper punctuation and capitalization
 - Keep technical terms and proper nouns accurate
@@ -181,7 +186,7 @@ Transcript guidelines:
 Summary guidelines:
 - Provide a structured summary with key points and takeaways
 - Use bullet points or numbered lists for main topics covered
-- Include any action items, assignments, or important dates mentioned
+- Include any action items or important dates mentioned
 - Keep it concise but comprehensive (aim for 150-300 words)
 
 The "duration" should be the estimated length of the audio in seconds.` },
@@ -264,7 +269,36 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { file_url, recording_id, target_language = 'en' }: RequestBody = await req.json();
+    const { file_url, recording_id, target_language = 'en', mode = 'full', transcript: inputTranscript, chunk_index, total_chunks }: RequestBody = await req.json();
+
+    // === Summarize-only mode — no audio needed ===
+    if (mode === 'summarize') {
+      if (!inputTranscript) {
+        return new Response(JSON.stringify({ error: 'transcript is required for summarize mode' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400,
+        });
+      }
+      const summaryPayload = {
+        contents: [{ role: 'user', parts: [
+          { text: `Create a structured, comprehensive summary of the following transcript. Include:
+
+1. **Overview** - Brief description of what was discussed
+2. **Key Points** - Main topics and concepts covered (use bullet points)
+3. **Important Details** - Technical terms, definitions, examples mentioned
+4. **Action Items** - Any tasks, deadlines, or follow-ups mentioned
+5. **Takeaways** - Key conclusions and lessons
+
+Keep it concise but comprehensive (150-300 words).\n\nTranscript:\n${inputTranscript}` }
+        ]}],
+      };
+      const summaryResult = await callGeminiWithModelChain(summaryPayload, GEMINI_API_KEY);
+      const summary = summaryResult?.candidates?.[0]?.content?.parts?.[0]?.text || 'No summary available.';
+      return new Response(JSON.stringify({ summary }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      });
+    }
 
     if (!file_url && !recording_id) {
        return new Response(JSON.stringify({ error: 'file_url OR recording_id is required' }), {
@@ -329,32 +363,49 @@ serve(async (req) => {
     }
 
     // 2. Transcribe Audio using Gemini model chain
+    const chunkHint = (typeof chunk_index === 'number' && typeof total_chunks === 'number')
+      ? `\n\nNote: This is segment ${chunk_index + 1} of ${total_chunks} from a longer recording. Transcribe only the audio content in this segment.`
+      : '';
     const transcriptionPayload = {
       contents: [{ role: 'user', parts: [
-        { text: `You are a professional lecture transcription assistant. Transcribe this audio recording with the following guidelines:
+        { text: `You are a professional audio transcription assistant. Transcribe this audio recording with the following guidelines:
 
 - Clean up filler words (um, uh, like, you know, right) and false starts
-- Organize into clear paragraphs by topic or speaker change  
-- If multiple speakers are detected, label them (e.g., "Lecturer:", "Student:", "Speaker 1:")
+- Organize into clear paragraphs by topic or speaker change
+- If multiple speakers are detected, label them as "Speaker 1:", "Speaker 2:", etc.
+- If only one speaker is detected, do NOT add any speaker labels — just transcribe the speech directly
 - Fix grammar and incomplete sentences while preserving the original meaning
 - Use proper punctuation and capitalization
 - Keep technical terms and proper nouns accurate
-- Break long monologues into logical paragraphs` },
+- Break long monologues into logical paragraphs${chunkHint}` },
         syncContentPart
       ]}],
     };
     const transcriptionResult = await callGeminiWithModelChain(transcriptionPayload, GEMINI_API_KEY);
     const transcript = transcriptionResult?.candidates?.[0]?.content?.parts?.[0]?.text || 'No transcription available.';
 
+    // If transcribe-only mode, return just the transcript (skip summary/translation)
+    if (mode === 'transcribe') {
+      let estimatedChunkDuration = 0;
+      if (transcript && transcript !== 'No transcription available.') {
+        const wc = transcript.split(/\s+/).filter((w: string) => w.length > 0).length;
+        estimatedChunkDuration = Math.floor((wc / 150) * 60);
+      }
+      return new Response(JSON.stringify({ transcript, duration: estimatedChunkDuration }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      });
+    }
+
     // 3. Generate Summary from Transcript
     const summaryPayload = {
       contents: [{ role: 'user', parts: [
-        { text: `Create a structured, comprehensive summary of the following lecture transcript. Include:
+        { text: `Create a structured, comprehensive summary of the following transcript. Include:
 
-1. **Overview** - Brief description of the topic covered
-2. **Key Points** - Main topics and concepts discussed (use bullet points)
+1. **Overview** - Brief description of what was discussed
+2. **Key Points** - Main topics and concepts covered (use bullet points)
 3. **Important Details** - Technical terms, definitions, examples mentioned
-4. **Action Items** - Any assignments, deadlines, or tasks mentioned
+4. **Action Items** - Any tasks, deadlines, or follow-ups mentioned
 5. **Takeaways** - Key conclusions and lessons
 
 Keep it concise but comprehensive (150-300 words).\n\nTranscript:\n${transcript}` }

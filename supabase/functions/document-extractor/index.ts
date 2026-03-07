@@ -7,7 +7,6 @@ import JSZIP from 'https://esm.sh/jszip@3.10.1';
 import xml2js from 'https://esm.sh/xml2js@0.5.0';
 import Papa from 'https://esm.sh/papaparse@5.4.1';
 import cheerio from 'https://esm.sh/cheerio@1.0.0-rc.12';
-import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.min.js';
 import { logSystemError } from '../_shared/errorLogger.ts';
 // Define CORS headers for cross-origin requests
 const corsHeaders = {
@@ -898,11 +897,10 @@ ${chunk}`;
  * Enhanced PDF processing with PDF.js for complete text extraction
  */ async function extractPdfTextWithPdfjs(buffer) {
     try {
-        // Set up PDF.js worker URL
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.js';
-        const loadingTask = pdfjsLib.getDocument({
-            data: buffer
-        });
+        // Lazy-load pdf.js legacy build (no worker needed)
+        const mod = await import('https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.mjs');
+        mod.GlobalWorkerOptions.workerSrc = '';
+        const loadingTask = mod.getDocument({ data: buffer });
         const pdf = await loadingTask.promise;
         let fullText = '';
         const totalPages = pdf.numPages;

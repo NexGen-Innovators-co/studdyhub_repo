@@ -13,6 +13,7 @@ let clientOptions: any = {};
 // token endpoint returns 429. This prevents many repeated refresh attempts
 // from overwhelming the auth endpoint and causing immediate sign-out loops.
 let refreshCooldownUntil = 0;
+let consecutiveRefreshFailures = 0;
 if (typeof window !== 'undefined' && window.fetch) {
 	const originalFetch = window.fetch.bind(window);
 	const wrappedFetch = async (input: RequestInfo, init?: RequestInit) => {
@@ -32,8 +33,14 @@ if (typeof window !== 'undefined' && window.fetch) {
 			if (url && url.includes('/token') && url.includes('grant_type=refresh_token')) {
 				const resp = await originalFetch(input, init);
 				if (resp.status === 429) {
-					// 5 second cooldown (adjustable)
-					refreshCooldownUntil = Date.now() + 5000;
+					consecutiveRefreshFailures++;
+					// Escalating cooldown: 2s, 4s, 8s, max 10s
+					const delay = Math.min(2000 * Math.pow(2, consecutiveRefreshFailures - 1), 10000);
+					refreshCooldownUntil = Date.now() + delay;
+				} else if (resp.ok) {
+					// Reset on success
+					consecutiveRefreshFailures = 0;
+					refreshCooldownUntil = 0;
 				}
 				return resp;
 			}

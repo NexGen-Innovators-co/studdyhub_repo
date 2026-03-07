@@ -1727,6 +1727,18 @@ export const useAppData = (authUser?: any) => {
   const startProgressiveDataLoading = useCallback(async (user: any) => {
     if (!user?.id) return;
 
+    // Verify we have a valid session before firing a burst of parallel queries.
+    // Without this guard, expired-token requests cascade into 401s that trigger
+    // Supabase's internal SIGNED_OUT event, logging the user out unexpectedly.
+    try {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (!currentSession?.access_token) {
+        return;
+      }
+    } catch {
+      return;
+    }
+
     // Check if we already have active requests to prevent duplicate loading
     const activeCount = activeRequestsRef.current.size;
     if (activeCount > 3) {

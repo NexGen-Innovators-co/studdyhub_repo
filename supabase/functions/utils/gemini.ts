@@ -10,7 +10,7 @@ const MODEL_CHAIN = [
   'gemini-3-pro-preview',
 ];
 
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 5;
 
 interface GeminiOptions {
   temperature?: number;
@@ -121,11 +121,16 @@ export async function callGeminiJSON<T = any>(
 
   try {
     let jsonText = result.text.trim();
-    // Strip markdown code fences
-    if (jsonText.startsWith('```json')) {
-      jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    } else if (jsonText.startsWith('```')) {
-      jsonText = jsonText.replace(/```\n?/g, '').trim();
+    // Strip markdown code fences (```json ... ``` or ``` ... ```)
+    jsonText = jsonText.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```\s*$/i, '').trim();
+
+    // Sometimes the model wraps JSON in prose — try to extract the JSON object
+    if (!jsonText.startsWith('{') && !jsonText.startsWith('[')) {
+      const firstBrace = jsonText.indexOf('{');
+      const lastBrace = jsonText.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        jsonText = jsonText.substring(firstBrace, lastBrace + 1);
+      }
     }
 
     const data = JSON.parse(jsonText) as T;

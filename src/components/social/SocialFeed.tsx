@@ -35,7 +35,7 @@ import {
   getNotificationTitle,
   getNotificationMessage,
 } from './components/feed';
-import type { FeedMode } from './components/feed';
+// FeedMode type comes from socialData via context
 import { useEducationContext } from '@/hooks/useEducationContext';
 
 // Other existing components
@@ -47,7 +47,7 @@ import { GroupDetailPage } from './components/GroupDetail';
 import { OtherUserProfile } from './components/OtherUserProfile';
 
 // Types
-import { SortBy, FilterBy, Privacy } from './types/social';
+import { Privacy } from './types/social';
 import { SocialPostWithDetails } from '@/integrations/supabase/socialTypes';
 
 interface SocialFeedProps {
@@ -106,9 +106,8 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     const [isScrolledDeep, setIsScrolledDeep] = useState(false);
 
     // ─── Sort / filter / profile state ────────────────────
-    const [sortBy, setSortBy] = useState<SortBy>('newest');
-    const [filterBy, setFilterBy] = useState<FilterBy>('all');
-    const [feedMode, setFeedMode] = useState<FeedMode>('all');
+    // Use socialData's internal state and setters (managed via context)
+    const { feedMode, setFeedMode, sortBy, setSortBy, filterBy, setFilterBy } = socialData;
     // no local userProfile; socialData.currentUser carries profile info
     const { educationContext } = useEducationContext();
 

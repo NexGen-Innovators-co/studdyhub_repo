@@ -25,7 +25,7 @@ export const ENHANCED_PROCESSING_CONFIG = {
   SUMMARY_THRESHOLD: 20,
   CONTEXT_RELEVANCE_SCORE: 0.7,
 
-  PDF_PAGES_PER_CHUNK: 20,
+  PDF_PAGES_PER_CHUNK: 5,
   LARGE_PDF_THRESHOLD: 30,
 
   // ── Tiered memory thresholds (base64 string size) ─────────────────────────

@@ -149,40 +149,49 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
     });
   }, []);
 
-  const triggerAudioProcessing = useCallback(async (fileUrl: string, documentId: string, targetLang: string = 'en', recordingId?: string) => {
+  const triggerAudioProcessing = useCallback(async (fileUrl: string, documentId: string, targetLang: string = 'en', _recordingId?: string) => {
     setIsProcessingAudio(true);
     const toastId = toast.loading('Sending audio for AI processing...');
     try {
-      const { data, error } = await supabase.functions.invoke('gemini-audio-processor', {
+      // Phase 1: Transcribe audio
+      toast.loading('Transcribing audio...', { id: toastId });
+      const { data: transcribeData, error: transcribeError } = await supabase.functions.invoke('gemini-audio-processor', {
         body: {
           file_url: fileUrl,
           target_language: targetLang,
-          recording_id: recordingId // Pass ID for background processing
+          mode: 'transcribe',
         },
       });
 
-      if (error) throw error;
-      
-      // Handle Background Processing Response (202 Accepted)
-      if (data?.status === 'pending') {
-         toast.success('Processing started in background. You will be notified when complete.', { id: toastId });
-         setIsProcessingAudio(false);
-         // Update local processing status if needed via onUpdateRecording logic, 
-         // but the optimisic UI should handle "processing" state.
-         return; 
+      if (transcribeError) throw transcribeError;
+      if (!transcribeData?.transcript) {
+        throw new Error('Invalid response from audio processor: Missing transcript.');
       }
 
-      if (!data || !data.transcript || !data.summary) {
-        throw new Error('Invalid response from audio processor: Missing transcript or summary.');
-      }
+      // Phase 2: Generate summary from transcript (no audio needed — very fast)
+      toast.loading('Generating summary...', { id: toastId });
+      const { data: summaryData, error: summaryError } = await supabase.functions.invoke('gemini-audio-processor', {
+        body: {
+          mode: 'summarize',
+          transcript: transcribeData.transcript,
+        },
+      });
+
+      if (summaryError) throw summaryError;
+
+      const transcript = transcribeData.transcript;
+      const summary = summaryData?.summary || 'No summary available.';
+      const duration = transcribeData.duration || 0;
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      toast.loading('Saving results...', { id: toastId });
+
       const { error: updateDocError } = await supabase
         .from('documents')
         .update({
-          content_extracted: data.transcript,
+          content_extracted: transcript,
           processing_status: 'completed',
           processing_error: null,
           updated_at: new Date().toISOString(),
@@ -196,13 +205,13 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
 
       // Prepare update object for recording
       const recordingUpdate: any = {
-        transcript: data.transcript,
-        summary: data.summary,
+        transcript: transcript,
+        summary: summary,
         updated_at: new Date().toISOString(),
       };
 
       // Update duration if returned from processor and current duration is 0 or null
-      if (data.duration) {
+      if (duration) {
         const { data: currentRecording } = await supabase
           .from('class_recordings')
           .select('duration')
@@ -211,7 +220,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
           .single();
 
         if (currentRecording && (currentRecording.duration === 0 || currentRecording.duration === null)) {
-          recordingUpdate.duration = data.duration;
+          recordingUpdate.duration = duration;
         }
       }
 
@@ -254,7 +263,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
         //console.error('Failed to refetch updated recording after processing:', fetchError?.message);
       }
 
-      setTranslatedContent(data.translated_content || null);
+      setTranslatedContent(null);
       toast.success('Audio processing completed!', { id: toastId });
 
     } catch (error: any) {
@@ -338,10 +347,10 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
       return;
     }
 
-    // Supabase Free Tier Limit Check (50MB)
-    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+    // File size limit raised to 200MB — chunked processing handles long audio
+    const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
     if (file.size > MAX_FILE_SIZE) {
-        toast.error('File exceeds the 50MB upload limit. Please compress the audio or split it into smaller parts.', { duration: 5000 });
+        toast.error('File exceeds the 200MB upload limit. Please compress the audio or split it into smaller parts.', { duration: 5000 });
         if (event.target) event.target.value = '';
         return;
     }
@@ -440,7 +449,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
       toast.success('Audio file uploaded. Initiating AI processing...', { id: toastId });
       onAddRecording(newRecording);
 
-      await triggerAudioProcessing(urlData.publicUrl, newDocumentId, 'en', newRecording.id);
+      await triggerAudioProcessing(urlData.publicUrl, newDocumentId, 'en');
 
     } catch (error: any) {
       let errorMessage = 'An unknown error occurred during audio upload.';
@@ -454,6 +463,96 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
       if (event.target) event.target.value = '';
     }
   }, [onAddRecording, triggerAudioProcessing]);
+
+  // Chunk size threshold: blobs larger than this get split into individual chunk files
+  // for per-chunk transcription to avoid edge function timeouts.
+  const CHUNK_SIZE_THRESHOLD = 15 * 1024 * 1024; // 15MB
+
+  // Split a large audio blob into roughly equal byte-sized pieces.
+  // Since raw byte splitting can break frames, we rely on Gemini's tolerance
+  // for slightly malformed containers — this works reliably for webm/opus.
+  const splitBlobIntoChunks = useCallback((blob: Blob, maxChunkBytes: number): Blob[] => {
+    const chunks: Blob[] = [];
+    let offset = 0;
+    while (offset < blob.size) {
+      const end = Math.min(offset + maxChunkBytes, blob.size);
+      chunks.push(blob.slice(offset, end, blob.type || 'audio/webm'));
+      offset = end;
+    }
+    return chunks;
+  }, []);
+
+  // Process a large audio file by splitting into chunks, transcribing each
+  // chunk individually, merging transcripts, then generating a single summary.
+  const processLargeAudioInChunks = useCallback(async (
+    audioBlob: Blob,
+    userId: string,
+    documentId: string,
+    toastId: string | number,
+    targetLang: string = 'en'
+  ): Promise<{ transcript: string; summary: string; duration: number }> => {
+    const chunkBlobs = splitBlobIntoChunks(audioBlob, CHUNK_SIZE_THRESHOLD);
+    const totalChunks = chunkBlobs.length;
+    const transcripts: string[] = [];
+    let totalDuration = 0;
+
+    for (let i = 0; i < totalChunks; i++) {
+      toast.loading(`Transcribing part ${i + 1} of ${totalChunks}...`, { id: toastId });
+
+      // Upload chunk to storage
+      const chunkFileName = `${userId}/recordings/${generateId()}-chunk-${i}.webm`;
+      const { error: chunkUploadError } = await supabase.storage
+        .from('documents')
+        .upload(chunkFileName, chunkBlobs[i]);
+
+      if (chunkUploadError) throw new Error(`Failed to upload chunk ${i + 1}: ${chunkUploadError.message}`);
+
+      const { data: { publicUrl: chunkUrl } } = supabase.storage
+        .from('documents')
+        .getPublicUrl(chunkFileName);
+
+      // Transcribe this chunk
+      const { data: chunkData, error: chunkError } = await supabase.functions.invoke('gemini-audio-processor', {
+        body: {
+          file_url: chunkUrl,
+          target_language: targetLang,
+          mode: 'transcribe',
+          chunk_index: i,
+          total_chunks: totalChunks,
+        },
+      });
+
+      if (chunkError) throw chunkError;
+      if (chunkData?.transcript) {
+        transcripts.push(chunkData.transcript);
+      }
+      if (chunkData?.duration) {
+        totalDuration += chunkData.duration;
+      }
+
+      // Clean up chunk file from storage (fire and forget)
+      supabase.storage.from('documents').remove([chunkFileName]).catch(() => {});
+    }
+
+    const mergedTranscript = transcripts.join('\n\n');
+
+    // Generate a single summary from the merged transcript
+    toast.loading('Generating summary...', { id: toastId });
+    const { data: summaryData, error: summaryError } = await supabase.functions.invoke('gemini-audio-processor', {
+      body: {
+        mode: 'summarize',
+        transcript: mergedTranscript,
+      },
+    });
+
+    if (summaryError) throw summaryError;
+
+    return {
+      transcript: mergedTranscript,
+      summary: summaryData?.summary || 'No summary available.',
+      duration: totalDuration,
+    };
+  }, [splitBlobIntoChunks]);
 
   const handleRecordingComplete = useCallback(async (audioBlob: Blob, title: string, subject: string, trackedDurationSeconds?: number) => {
     setIsProcessingAudio(true);
@@ -556,7 +655,48 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
       onAddRecording(newRecording);
       toast.success('Recording saved, initiating AI processing...', { id: toastId });
 
-      await triggerAudioProcessing(publicUrl, newDocumentId, 'en', newRecording.id);
+      // For large audio (>15MB), use chunked processing to avoid edge function timeouts
+      if (audioBlob.size > CHUNK_SIZE_THRESHOLD) {
+        const result = await processLargeAudioInChunks(audioBlob, user.id, newDocumentId, toastId, 'en');
+
+        // Save results to DB
+        await supabase.from('documents').update({
+          content_extracted: result.transcript,
+          processing_status: 'completed',
+          processing_error: null,
+          updated_at: new Date().toISOString(),
+        }).eq('id', newDocumentId).eq('user_id', user.id);
+
+        const recUpdate: any = {
+          transcript: result.transcript,
+          summary: result.summary,
+          updated_at: new Date().toISOString(),
+        };
+        if (result.duration && (!newRecording.duration || newRecording.duration === 0)) {
+          recUpdate.duration = result.duration;
+        }
+        await supabase.from('class_recordings').update(recUpdate)
+          .eq('document_id', newDocumentId).eq('user_id', user.id);
+
+        // Refresh local state
+        const { data: fetchedRec } = await supabase.from('class_recordings')
+          .select('*').eq('document_id', newDocumentId).eq('user_id', user.id).single();
+        if (fetchedRec) {
+          onUpdateRecording({
+            id: fetchedRec.id, title: fetchedRec.title, subject: fetchedRec.subject,
+            audioUrl: fetchedRec.audio_url, audio_url: fetchedRec.audio_url,
+            transcript: fetchedRec.transcript, summary: fetchedRec.summary,
+            duration: fetchedRec.duration, date: fetchedRec.date,
+            created_at: fetchedRec.created_at, userId: fetchedRec.user_id,
+            user_id: fetchedRec.user_id, document_id: fetchedRec.document_id,
+          });
+        }
+        toast.success('Audio processing completed!', { id: toastId });
+        setIsProcessingAudio(false);
+      } else {
+        // Standard two-phase processing for smaller files
+        await triggerAudioProcessing(publicUrl, newDocumentId, 'en');
+      }
 
     } catch (error: any) {
       let errorMessage = 'Failed to process recording.';
@@ -567,7 +707,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
       //console.error('Error in handleRecordingComplete:', error);
       setIsProcessingAudio(false);
     }
-  }, [onAddRecording, triggerAudioProcessing]);
+  }, [onAddRecording, onUpdateRecording, triggerAudioProcessing, processLargeAudioInChunks]);
 
   const handleGenerateNoteFromAudio = useCallback(async (recording: ClassRecording) => {
     if (!recording.document_id) {

@@ -909,11 +909,11 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
                   <select
                     value={selectedRecording}
                     onChange={(e) => setSelectedRecording(e.target.value)}
-                    className="w-full px-3 py-2  rounded-lg bg-white dark:bg-gray-800 "
+                    className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600"
                   >
-                    <option value="">Choose a recording</option>
+                    <option value="" className="bg-background text-foreground dark:bg-gray-800 dark:text-gray-100">Choose a recording</option>
                     {recordings.map((rec) => (
-                      <option key={rec.id} value={rec.id}>
+                      <option key={rec.id} value={rec.id} className="bg-background text-foreground dark:bg-gray-800 dark:text-gray-100">
                         {rec.title}
                       </option>
                     ))}
@@ -924,12 +924,12 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
                   <select
                     value={numQuestions}
                     onChange={(e) => setNumQuestions(parseInt(e.target.value))}
-                    className="w-full px-3 py-2  rounded-lg bg-white dark:bg-gray-800  "
+                    className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600"
                   >
-                    <option value="5">5 Questions</option>
-                    <option value="10">10 Questions</option>
-                    <option value="15">15 Questions</option>
-                    <option value="20">20 Questions</option>
+                    <option value="5" className="dark:bg-gray-800 dark:text-gray-100">5 Questions</option>
+                    <option value="10" className="dark:bg-gray-800 dark:text-gray-100">10 Questions</option>
+                    <option value="15" className="dark:bg-gray-800 dark:text-gray-100">15 Questions</option>
+                    <option value="20" className="dark:bg-gray-800 dark:text-gray-100">20 Questions</option>
                   </select>
                 </div>
                 <div>
@@ -937,11 +937,11 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
                   <select
                     value={difficulty}
                     onChange={(e) => setDifficulty(e.target.value)}
-                    className="w-full px-3 py-2  rounded-lg bg-white dark:bg-gray-800 "
+                    className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600"
                   >
-                    <option value="easy">Easy</option>
-                    <option value="intermediate">Intermediate</option>
-                    <option value="hard">Hard</option>
+                    <option value="easy" className="dark:bg-gray-800 dark:text-gray-100">Easy</option>
+                    <option value="intermediate" className="dark:bg-gray-800 dark:text-gray-100">Intermediate</option>
+                    <option value="hard" className="dark:bg-gray-800 dark:text-gray-100">Hard</option>
                   </select>
                 </div>
               </div>

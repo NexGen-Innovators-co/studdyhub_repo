@@ -3,11 +3,11 @@
 // Allows switching between: For You, My School, My Level, All, Trending.
 
 import React from 'react';
-import { Sparkles, School, GraduationCap, Globe, TrendingUp } from 'lucide-react';
+import { Sparkles, School, GraduationCap, Globe, TrendingUp, Users, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UserEducationContext } from '@/types/Education';
 
-export type FeedMode = 'for-you' | 'my-school' | 'my-level' | 'all' | 'trending';
+export type FeedMode = 'for-you' | 'following' | 'my-school' | 'my-level' | 'my-subjects' | 'all' | 'trending';
 
 interface FeedModeSelectorProps {
   mode: FeedMode;
@@ -35,8 +35,20 @@ export const FeedModeSelector: React.FC<FeedModeSelectorProps> = ({
       id: 'for-you',
       label: 'For You',
       icon: <Sparkles className="w-3.5 h-3.5" />,
+      description: 'Personalized posts based on your interests',
+    },
+    {
+      id: 'following',
+      label: 'Following',
+      icon: <Users className="w-3.5 h-3.5" />,
+      description: 'Posts from people you follow',
+    },
+    {
+      id: 'my-subjects',
+      label: 'My Subjects',
+      icon: <BookOpen className="w-3.5 h-3.5" />,
       requiresEducation: true,
-      description: 'Posts matching your curriculum & subjects',
+      description: 'Posts matching your enrolled subjects',
     },
     {
       id: 'my-school',

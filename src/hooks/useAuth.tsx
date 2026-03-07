@@ -1,5 +1,5 @@
 
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, useRef, createContext, useContext, ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../integrations/supabase/client';
@@ -36,6 +36,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [loading, setLoading] = useState(true);
   const queryClient = useQueryClient();
 
+  // Refs to distinguish user-initiated sign-outs from spurious ones
+  // (e.g. token refresh failures / 429 rate limits).
+  const isIntentionalSignOutRef = useRef(false);
+  const lastSessionRef = useRef<Session | null>(null);
+  const recoveryAttemptedRef = useRef(false);
+  const isRecoveringRef = useRef(false);
+
   useEffect(() => {
     let resolved = false;
     const resolveAuth = (s: Session | null) => {
@@ -55,14 +62,84 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
     }, 8000);
 
+    // Helper to run sign-out cleanup (caches, push, offline stores).
+    const performSignOutCleanup = () => {
+      clearCache();
+      resetPushInitialization();
+      try { offlineStorage.clearAll(); } catch (_) { /* non-blocking */ }
+    };
+
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        // Keep track of the last valid session so we can attempt recovery
+        // if Supabase fires SIGNED_OUT due to a transient refresh failure.
+        if (session) {
+          lastSessionRef.current = session;
+          recoveryAttemptedRef.current = false;
+          isRecoveringRef.current = false;
+        }
+
         resolveAuth(session);
-        // Also handle subsequent auth changes after initial resolve
+
+        // Handle subsequent auth changes after the initial resolve.
         if (resolved) {
-          setSession(session);
-          setUser(session?.user ?? null);
+          if (event === 'SIGNED_OUT') {
+            // ── User-initiated sign-out: apply immediately ──────────
+            if (isIntentionalSignOutRef.current) {
+              setSession(null);
+              setUser(null);
+              performSignOutCleanup();
+
+            // ── Recovery already in progress: ignore duplicate events ─
+            } else if (isRecoveringRef.current) {
+              // Another SIGNED_OUT fired while we are recovering — ignore it.
+              return;
+
+            // ── Unexpected SIGNED_OUT (likely a rate-limited token refresh).
+            //    Attempt to recover the session once before accepting. ──
+            } else if (!recoveryAttemptedRef.current && lastSessionRef.current?.refresh_token) {
+              recoveryAttemptedRef.current = true;
+              isRecoveringRef.current = true;
+              console.warn('[useAuth] Unexpected SIGNED_OUT — attempting session recovery…');
+
+              const refreshToken = lastSessionRef.current.refresh_token;
+              // Wait briefly so any 429 cooldown can expire, then retry.
+              setTimeout(async () => {
+                try {
+                  const { data, error } = await supabase.auth.refreshSession(
+                    { refresh_token: refreshToken }
+                  );
+                  if (data?.session) {
+                    // Recovery succeeded — onAuthStateChange will fire
+                    // TOKEN_REFRESHED with the new session automatically.
+                    console.log('[useAuth] Session recovered after transient SIGNED_OUT');
+                  } else {
+                    console.warn('[useAuth] Session recovery failed:', error?.message);
+                    setSession(null);
+                    setUser(null);
+                    performSignOutCleanup();
+                  }
+                } catch {
+                  setSession(null);
+                  setUser(null);
+                  performSignOutCleanup();
+                } finally {
+                  isRecoveringRef.current = false;
+                }
+              }, 2000);
+
+            // ── Recovery already failed or no session to recover: accept. ─
+            } else {
+              setSession(null);
+              setUser(null);
+              performSignOutCleanup();
+            }
+          } else {
+            // Normal auth events (SIGNED_IN, TOKEN_REFRESHED, etc.)
+            setSession(session);
+            setUser(session?.user ?? null);
+          }
         }
 
         // Touch profiles.updated_at on any authenticated session event so the
@@ -76,17 +153,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           supabase.rpc('touch_profile_active').then(({ error }) => {
             if (error) console.warn('[useAuth] Failed to touch profile active:', error.message);
           });
-        }
-
-        // Clear cache when user signs out
-        if (event === 'SIGNED_OUT') {
-          clearCache();
-          resetPushInitialization();
-          try {
-            offlineStorage.clearAll();
-          } catch (e) {
-            // non-blocking
-          }
         }
       }
     );
@@ -107,6 +173,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signOut = async () => {
     try {
+      // Mark as intentional so the auth listener doesn't try session recovery.
+      isIntentionalSignOutRef.current = true;
+
       // Capture user ID before clearing auth for push unsubscription
       const currentUserId = user?.id;
 
@@ -182,6 +251,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       localStorage.clear();
       sessionStorage.clear();
       try { await supabase.removeAllChannels(); } catch (e) {}
+    } finally {
+      // Reset the flag after a short delay so the auth listener can process
+      // the SIGNED_OUT event before we reset the flag.
+      setTimeout(() => { isIntentionalSignOutRef.current = false; }, 1000);
     }
   };
 

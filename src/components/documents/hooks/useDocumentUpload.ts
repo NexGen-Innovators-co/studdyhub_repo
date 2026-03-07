@@ -298,6 +298,96 @@ export const useDocumentUpload = ({
     }
   }, [selectedFile, user?.id, isUploading, uploadTargetFolderId, appOperations, forceRefreshDocuments, setUploadTargetFolderId, getBase64]);
 
+  // ============================================================================
+  // RESUME LARGE FILE PROCESSING
+  // ============================================================================
+
+  /**
+   * Calls /resume-processing in a loop until the document is fully extracted
+   * or a max-attempt limit is hit. Runs fire-and-forget (no await needed).
+   */
+  const resumeDocumentProcessing = useCallback(async (
+    documentId: string,
+    fileName: string,
+    uid: string,
+  ): Promise<void> => {
+    const MAX_RESUME_ATTEMPTS = 50;   // up to 50 resume calls per document
+    const RESUME_DELAY_MS     = 5000; // 5s between calls to avoid hammering
+
+    let attempt = 0;
+
+    let exitedCleanly = false;
+
+    while (attempt < MAX_RESUME_ATTEMPTS) {
+      attempt++;
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          toast.error(`Session expired while extracting "${fileName}". Please retry from the document menu.`);
+          break;
+        }
+
+        if (attempt % 5 === 1) {
+          toast.info(`Extracting "${fileName}"… (round ${attempt}/${MAX_RESUME_ATTEMPTS})`, { duration: 4000 });
+        }
+
+        const resp = await fetch(
+          'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/resume-processing',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ userId: uid, documentId }),
+          },
+        );
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          console.error('[resume] HTTP error', resp.status, err);
+          toast.error(`Extraction of "${fileName}" failed (HTTP ${resp.status}). You can retry from the document menu.`);
+          break;
+        }
+
+        const result = await resp.json();
+
+        if (result.isComplete) {
+          toast.success(`"${fileName}" has been fully extracted!`);
+          exitedCleanly = true;
+          forceRefreshDocuments?.();
+          break;
+        }
+
+        if (!result.canResumeAgain) {
+          // Server says it's done but not complete — surface a warning
+          toast.warning(`"${fileName}" was partially extracted. Some content may be missing.`);
+          exitedCleanly = true;
+          forceRefreshDocuments?.();
+          break;
+        }
+
+        // Not done yet — wait and loop
+        await new Promise((r) => setTimeout(r, RESUME_DELAY_MS));
+
+      } catch (err: any) {
+        console.error('[resume] unexpected error:', err.message);
+        toast.error(`Extraction of "${fileName}" hit an error. You can retry from the document menu.`);
+        break;
+      }
+    }
+
+    if (attempt >= MAX_RESUME_ATTEMPTS) {
+      toast.warning(`"${fileName}" is very large. Extraction stopped after ${MAX_RESUME_ATTEMPTS} rounds — partial content is available.`);
+    }
+
+    // Always refresh so the user sees the latest status (partial, failed, etc.)
+    if (!exitedCleanly) {
+      forceRefreshDocuments?.();
+    }
+  }, [forceRefreshDocuments]);
+
   const triggerAnalysis = useCallback(async (doc: Document): Promise<void> => {
     if (!user?.id) {
       toast.error('User not authenticated.');
@@ -306,6 +396,13 @@ export const useDocumentUpload = ({
 
     if (processingDocuments.has(doc.id) || (doc.processing_status as string) === 'pending') {
       toast.warning('Analysis is already in progress for this document.');
+      return;
+    }
+
+    // For partial documents, resume extraction instead of re-processing from scratch
+    if ((doc.processing_status as string) === 'partial') {
+      toast.info(`Resuming extraction for "${doc.file_name}"…`);
+      resumeDocumentProcessing(doc.id, doc.file_name || 'document', user.id);
       return;
     }
 
@@ -378,80 +475,7 @@ export const useDocumentUpload = ({
         return newSet;
       });
     }
-  }, [user?.id, processingDocuments, onDocumentUpdated]);
-
-  // ============================================================================
-  // RESUME LARGE FILE PROCESSING
-  // ============================================================================
-
-  /**
-   * Calls /resume-processing in a loop until the document is fully extracted
-   * or a max-attempt limit is hit. Runs fire-and-forget (no await needed).
-   */
-  const resumeDocumentProcessing = useCallback(async (
-    documentId: string,
-    fileName: string,
-    uid: string,
-  ): Promise<void> => {
-    const MAX_RESUME_ATTEMPTS = 20;   // up to 20 resume calls per document
-    const RESUME_DELAY_MS     = 3000; // 3s between calls to avoid hammering
-
-    let attempt = 0;
-
-    while (attempt < MAX_RESUME_ATTEMPTS) {
-      attempt++;
-
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) break;
-
-        const resp = await fetch(
-          'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/resume-processing',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({ userId: uid, documentId }),
-          },
-        );
-
-        if (!resp.ok) {
-          const err = await resp.json().catch(() => ({}));
-          console.error('[resume] HTTP error', resp.status, err);
-          break;
-        }
-
-        const result = await resp.json();
-
-        if (result.isComplete) {
-          toast.success(`"${fileName}" has been fully extracted!`);
-          forceRefreshDocuments?.();
-          break;
-        }
-
-        if (!result.canResumeAgain) {
-          // Server says it's done but not complete — surface a warning
-          toast.warning(`"${fileName}" was partially extracted. Some content may be missing.`);
-          forceRefreshDocuments?.();
-          break;
-        }
-
-        // Not done yet — wait and loop
-        await new Promise((r) => setTimeout(r, RESUME_DELAY_MS));
-
-      } catch (err: any) {
-        console.error('[resume] unexpected error:', err.message);
-        break;
-      }
-    }
-
-    if (attempt >= MAX_RESUME_ATTEMPTS) {
-      toast.warning(`"${fileName}" is very large. Extraction stopped after ${MAX_RESUME_ATTEMPTS} rounds — partial content is available.`);
-      forceRefreshDocuments?.();
-    }
-  }, [forceRefreshDocuments]);
+  }, [user?.id, processingDocuments, onDocumentUpdated, resumeDocumentProcessing]);
 
   return {
     selectedFile,

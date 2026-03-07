@@ -89,12 +89,25 @@ Each question should:
 4. Include a brief explanation for the correct answer
 ${educationBlock}
 Transcript:
-"${transcript.substring(0, 3000)}"
+"${transcript.substring(0, 6000)}"
 
-Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
+You MUST respond with ONLY a valid JSON object (no markdown, no extra text) in this exact format:
+{
+  "title": "Quiz title here",
+  "questions": [
+    {
+      "question": "Question text here?",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswer": 0,
+      "explanation": "Why this answer is correct."
+    }
+  ]
+}
+
+IMPORTANT: Return exactly ${parsedNumQuestions} questions. The correctAnswer must be 0, 1, 2, or 3. Each question must have exactly 4 options.`;
 
     // callGeminiJSON handles chain + OpenRouter fallback and returns parsed JSON
-    const aiResult = await callGeminiJSON<any>(prompt, { maxOutputTokens: 2000 });
+    const aiResult = await callGeminiJSON<any>(prompt, { maxOutputTokens: 4096 });
 
     let quizData: any;
     if (aiResult.success && aiResult.data) {
@@ -124,47 +137,25 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
         }))
       };
     }
-    try {
-      // Direct parse the JSON response
-      quizData = JSON.parse(generatedContent);
-      // Validate the structure
-      if (!quizData.title || !quizData.questions || !Array.isArray(quizData.questions)) {
-        throw new Error('Invalid quiz data structure: missing title or questions array.');
+
+    // Validate each question's structure and sanitize
+    quizData.questions = quizData.questions.filter((q: any, index: number) => {
+      if (!q.question || !Array.isArray(q.options) || q.options.length !== 4 ||
+          typeof q.correctAnswer !== 'number' || q.correctAnswer < 0 || q.correctAnswer > 3) {
+        console.warn(`Dropping invalid question at index ${index}`);
+        return false;
       }
-      // Validate each question
-      quizData.questions.forEach((q: any, index: number) => {
-        if (!q.question || !Array.isArray(q.options) || q.options.length !== 4 || typeof q.correctAnswer !== 'number' || q.correctAnswer < 0 || q.correctAnswer > 3) {
-          throw new Error(`Invalid question structure at index ${index}: ${JSON.stringify(q)}`);
-        }
-      });
-    } catch (parseError) {
-      logSystemError(supabaseAdmin, {
-        severity: 'warning',
-        source: 'generate-quiz',
-        component: 'json-parse',
-        error_code: 'QUIZ_JSON_PARSE_FAILED',
-        message: `Quiz JSON parse/validation failed, using fallback quiz`,
-        details: { error: String(parseError), rawContentLength: generatedContent?.length },
-        user_id: logUserId,
-      });
-      // Fallback: create a simple quiz based on the content
-      quizData = {
-        title: `Quiz: ${name}`,
-        questions: [
-          {
-            question: "What is the main topic discussed in this recording?",
-            options: [
-              "The content covers multiple educational topics",
-              "Technical documentation review",
-              "Personal experiences and stories",
-              "Business and professional matters"
-            ],
-            correctAnswer: 0,
-            explanation: "Based on the transcript content, this appears to cover educational material."
-          }
-        ]
-      };
-      // console.warn('Falling back to default quiz due to parsing error.');
+      return true;
+    });
+
+    // If all questions were filtered out, create fallback
+    if (quizData.questions.length === 0) {
+      quizData.questions = Array(parsedNumQuestions).fill(null).map((_, idx) => ({
+        question: `Fallback question #${idx+1}`,
+        options: ['Option A','Option B','Option C','Option D'],
+        correctAnswer: 0,
+        explanation: 'Fallback content due to AI failure.'
+      }));
     }
 
     return new Response(JSON.stringify(quizData), {

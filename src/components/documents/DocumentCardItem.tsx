@@ -140,7 +140,7 @@ export const DocumentCardItem = React.memo(React.forwardRef<HTMLDivElement, Docu
                         <DropdownMenuItem onClick={() => onPreview(doc)}>
                           <Eye className="mr-2 h-4 w-4" /> Preview
                         </DropdownMenuItem>
-                        {doc.processing_status === 'failed' && (
+                        {['failed', 'partial', 'processing'].includes(doc.processing_status as string) && (
                            <DropdownMenuItem onClick={() => onRetry(doc)}>
                              <RefreshCw className="mr-2 h-4 w-4" /> Retry Analysis
                            </DropdownMenuItem>
@@ -191,7 +191,7 @@ export const DocumentCardItem = React.memo(React.forwardRef<HTMLDivElement, Docu
                         <DropdownMenuItem onClick={() => onPreview(doc)}>
                           <Eye className="mr-2 h-4 w-4" /> Preview
                         </DropdownMenuItem>
-                        {doc.processing_status === 'failed' && (
+                        {['failed', 'partial', 'processing'].includes(doc.processing_status as string) && (
                            <DropdownMenuItem onClick={() => onRetry(doc)}>
                              <RefreshCw className="mr-2 h-4 w-4" /> Retry Analysis
                            </DropdownMenuItem>

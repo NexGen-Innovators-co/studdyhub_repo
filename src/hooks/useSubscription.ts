@@ -123,6 +123,20 @@ export function useSubscription(): UseSubscriptionReturn {
       return;
     }
 
+    // Verify we have a confirmed session before hitting the DB.
+    // This prevents firing requests while auth is still resolving or
+    // after a token refresh failure, which can cascade into sign-out loops.
+    try {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (!currentSession?.access_token) {
+        setIsLoading(false);
+        return;
+      }
+    } catch {
+      setIsLoading(false);
+      return;
+    }
+
     try {
       // Fetch subscription
       const { data: subData, error: subError } = await supabase

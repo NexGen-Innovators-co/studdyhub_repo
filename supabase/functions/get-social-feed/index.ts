@@ -30,7 +30,7 @@ async function aiRankPosts(
   educationContext?: ServerEducationContext | null
 ): Promise<any[]> {
   // Get or compute user preferences
-  const preferences = await getUserPreferences(supabase, userId);
+  const preferences = await getUserPreferences(supabase, userId, educationContext);
 
   // If user has no interaction history and no interests, skip AI ranking
   if (preferences.interaction_count === 0 && Object.keys(preferences.category_scores).length === 0) {
@@ -155,7 +155,7 @@ Respond JSON only: {"scores":{"0":5,"1":8}}`;
 /**
  * Get or compute user preferences from interaction signals
  */
-async function getUserPreferences(supabase: any, userId: string) {
+async function getUserPreferences(supabase: any, userId: string, educationContext?: ServerEducationContext | null) {
   // Check cache
   const cached = preferencesCache.get(userId);
   if (cached && cached.expires > Date.now()) return cached.data;
@@ -201,6 +201,20 @@ async function getUserPreferences(supabase: any, userId: string) {
     // Fall back to declared interests
     for (const interest of userInterests) {
       categoryScores[interest.toLowerCase()] = 5;
+    }
+    // Seed from education profile subjects for better cold-start
+    if (educationContext?.subjects) {
+      for (const subj of educationContext.subjects) {
+        const key = subj.toLowerCase();
+        categoryScores[key] = Math.max(categoryScores[key] || 0, 7);
+      }
+    }
+    // Boost curriculum and exam topics
+    if (educationContext?.curriculum) {
+      categoryScores[educationContext.curriculum.toLowerCase()] = Math.max(categoryScores[educationContext.curriculum.toLowerCase()] || 0, 6);
+    }
+    if (educationContext?.targetExam) {
+      categoryScores['exam-prep'] = Math.max(categoryScores['exam-prep'] || 0, 6);
     }
   } else {
     for (const signal of signals) {
@@ -280,7 +294,7 @@ serve(async (req) => {
     const {
       mode = 'feed',         // 'feed' | 'trending' | 'user' | 'liked' | 'bookmarked'
       sortBy = 'newest',     // 'newest' | 'popular'
-      feedMode = 'all',      // 'for-you' | 'my-school' | 'my-level' | 'all' | 'trending'
+      feedMode = 'all',      // 'for-you' | 'following' | 'my-school' | 'my-level' | 'my-subjects' | 'all' | 'trending'
       cursor = null,         // cursor-based pagination: ISO timestamp of last post seen
       limit = 15,
       viewedPostIds = [],    // IDs of already-viewed posts for feed algorithm
@@ -291,9 +305,9 @@ serve(async (req) => {
     // Fetch exactly limit + 1 to determine hasMore without over-fetching
     const fetchLimit = limit + 1;
 
-    // optionally load education context for feedMode filtering or ai ranking
+    // Load education context for any mode that benefits from it
     let eduCtx: ServerEducationContext | null = null;
-    if (mode === 'feed' && ['for-you','my-school','my-level'].includes(feedMode)) {
+    if (mode === 'feed') {
       try {
         eduCtx = await getEducationContext(supabase, userId);
       } catch {
@@ -424,7 +438,34 @@ serve(async (req) => {
         // optionally narrow based on feedMode
         query = query.eq('privacy', 'public');
 
-        if (feedMode === 'my-school' && eduCtx?.institution) {
+        if (feedMode === 'following') {
+          // Get following list and filter to only their posts
+          const { data: followingData } = await supabase
+            .from('social_follows')
+            .select('following_id')
+            .eq('follower_id', userId);
+          const followingIds = (followingData || []).map((f: any) => f.following_id);
+          if (followingIds.length > 0) {
+            query = query.in('author_id', followingIds);
+          } else {
+            // User follows nobody — return empty
+            return new Response(JSON.stringify({ posts: [], hasMore: false, nextCursor: null }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+        } else if (feedMode === 'my-subjects' && eduCtx?.subjects && eduCtx.subjects.length > 0) {
+          // Match posts whose ai_categories overlap with user's subjects
+          // Map subject names to known category slugs for better matching
+          const subjectKeywords = eduCtx.subjects.map(s => s.toLowerCase().replace(/\s+/g, '-'));
+          // Also include simplified single-word forms (e.g. "further mathematics" → "mathematics")
+          const expandedKeywords = new Set(subjectKeywords);
+          for (const s of eduCtx.subjects) {
+            for (const word of s.toLowerCase().split(/\s+/)) {
+              if (word.length > 3) expandedKeywords.add(word);
+            }
+          }
+          query = query.overlaps('ai_categories', [...expandedKeywords]);
+        } else if (feedMode === 'my-school' && eduCtx?.institution) {
           try {
             query = query.eq('metadata->education_context->institution', eduCtx.institution);
           } catch {}
@@ -505,14 +546,9 @@ serve(async (req) => {
     // Take only what we need (drop the extra +1 probe row)
     let selectedPosts = postsData.slice(0, limit);
 
-    // AI-powered re-ranking for feed mode
-    if (mode === 'feed' && selectedPosts.length > 0) {
+    // AI-powered re-ranking for all personalized feed modes
+    if (mode === 'feed' && selectedPosts.length > 0 && feedMode !== 'all') {
       try {
-        // Fetch user's education context for affinity scoring
-        let eduCtx: ServerEducationContext | null = null;
-        try {
-          eduCtx = await getEducationContext(supabase, userId);
-        } catch { /* non-critical */ }
         selectedPosts = await aiRankPosts(supabase, userId, selectedPosts, supabaseUrl, supabaseServiceKey, eduCtx);
       } catch (aiErr) {
         // AI ranking is best-effort — fall back to standard scoring

@@ -19,10 +19,7 @@ import { serve }        from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { logSystemError } from '../_shared/errorLogger.ts';
 
-import { ENHANCED_PROCESSING_CONFIG } from '../document-processor/config.ts';
 import { extractPdfTextWithPdfjsChunked } from '../document-processor/processors/documents.ts';
-import { callEnhancedGeminiAPI } from '../document-processor/geminiApi.ts';
-import { EXTRACTION_PROMPTS } from '../document-processor/prompts.ts';
 
 // ============================================================================
 // CORS
@@ -97,28 +94,21 @@ serve(async (req) => {
       return jsonError(`Failed to fetch file from storage: ${fileResp.status}`, 502, origin);
     }
 
-    const ab       = await fileResp.arrayBuffer();
-    const bytes    = new Uint8Array(ab);
-    let binary     = '';
-    const chunkSz  = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunkSz) {
-      binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSz)) as any);
-    }
-    const fullB64  = btoa(binary);
+    // Use binary buffer directly — avoid the wasteful base64 round-trip
+    // (ArrayBuffer → string → base64 → atob → Uint8Array costs ~3x the file size in memory)
+    const buffer = new Uint8Array(await fileResp.arrayBuffer());
 
     // ── 3. Read resume cursor ─────────────────────────────────────────────────
     const cursor: any = doc.processing_metadata?.resume_cursor ?? {};
-    const geminiKey   = Deno.env.get('GEMINI_API_KEY')!;
 
     let newContent = '';
     let isComplete = false;
     let updatedCursor: any = null;
 
-    // ── 4. Continue extraction ────────────────────────────────────────────────
+    // ── 4. Continue extraction (local only, no LLM) ──────────────────────────
 
     if (cursor.type === 'pdf_pages' || doc.file_type === 'application/pdf') {
-      // PDF: resume page-by-page
-      const buffer    = Uint8Array.from(atob(fullB64), (c) => c.charCodeAt(0));
+      // PDF: resume page-by-page using local pdf.js
       const startPage = cursor.lastPage ? cursor.lastPage + 1 : 1;
 
       const result = await extractPdfTextWithPdfjsChunked(buffer, { startPage });
@@ -134,83 +124,12 @@ serve(async (req) => {
         };
       }
 
-    } else if (cursor.type === 'b64_window') {
-      // Non-PDF: resume windowed base64 extraction
-      const { nextWindowIdx = 0, totalWindows, windowSize } = cursor;
-      const effectiveWindowSize = windowSize ?? ENHANCED_PROCESSING_CONFIG.LARGE_FILE_WINDOW;
-      const prompt = EXTRACTION_PROMPTS[doc.type] ?? EXTRACTION_PROMPTS.document;
-      const extracted: string[] = [];
-
-      for (let winIdx = nextWindowIdx; winIdx < totalWindows; winIdx++) {
-        const winStart  = winIdx * effectiveWindowSize;
-        const winEnd    = Math.min(winStart + effectiveWindowSize, fullB64.length);
-        const windowB64 = fullB64.slice(winStart, winEnd);
-
-        const windowPrompt = `${prompt}
-
-PARTIAL FILE EXTRACTION - Resuming Window ${winIdx + 1} of ${totalWindows}:
-This is a continuation of a large file extraction. Extract all text content from this portion.`;
-
-        try {
-          const response = await callEnhancedGeminiAPI(
-            [{
-              role: 'user',
-              parts: [
-                { text: windowPrompt },
-                { inlineData: { mimeType: doc.file_type, data: windowB64 } },
-              ],
-            }],
-            geminiKey,
-          );
-
-          extracted.push(
-            response.success && response.content
-              ? response.content
-              : `[Window ${winIdx + 1} failed: ${response.error}]`,
-          );
-        } catch (err: any) {
-          extracted.push(`[Window ${winIdx + 1} error: ${err.message}]`);
-        }
-
-        // Check content cap
-        const currentLen = (doc.content_extracted?.length ?? 0) +
-          extracted.reduce((s, c) => s + c.length, 0);
-        if (currentLen >= ENHANCED_PROCESSING_CONFIG.MAX_SINGLE_FILE_CONTENT) {
-          updatedCursor = {
-            type: 'b64_window',
-            nextWindowIdx: winIdx + 1,
-            totalWindows,
-            windowSize: effectiveWindowSize,
-            windowsProcessed: (cursor.windowsProcessed ?? 0) + extracted.length,
-          };
-          break;
-        }
-
-        if (winIdx === totalWindows - 1) isComplete = true;
-
-        await new Promise((r) => setTimeout(r, ENHANCED_PROCESSING_CONFIG.RATE_LIMIT_DELAY));
-      }
-
-      newContent = extracted.join('\n\n---\n\n');
     } else {
-      // Unknown cursor / no cursor — try a fresh full extraction
-      const response = await callEnhancedGeminiAPI(
-        [{
-          role: 'user',
-          parts: [
-            { text: EXTRACTION_PROMPTS[doc.type] ?? EXTRACTION_PROMPTS.document },
-            { inlineData: { mimeType: doc.file_type, data: fullB64 } },
-          ],
-        }],
-        geminiKey,
-      );
+      // Non-PDF or unknown cursor: use local ZIP-based extraction
+      const { extractTextFromZip } = await import('../document-processor/processors/documents.ts');
 
-      if (response.success && response.content) {
-        newContent = response.content;
-        isComplete = true;
-      } else {
-        return jsonError(`Re-extraction failed: ${response.error}`, 500, origin);
-      }
+      newContent = await extractTextFromZip(buffer, doc.file_name ?? 'unknown');
+      isComplete = true;
     }
 
     // ── 5. Append + update DB ─────────────────────────────────────────────────

@@ -357,12 +357,16 @@ const allDocuments = contextDocuments || documents;
   const processingDocIds = useMemo(() => {
     const set = new Set<string>();
     for (const doc of documents) {
+      const status = doc.processing_status as string;
       if (processingDocuments.has(doc.id)) {
         // Only mark as processing if no content yet
         if (!doc.content_extracted || doc.content_extracted.trim().length === 0) {
           set.add(doc.id);
         }
-      } else if ((doc.processing_status as string) === 'pending' && (!doc.content_extracted || doc.content_extracted.trim().length === 0)) {
+      } else if (
+        (status === 'pending' || status === 'processing') &&
+        (!doc.content_extracted || doc.content_extracted.trim().length === 0)
+      ) {
         set.add(doc.id);
       }
     }

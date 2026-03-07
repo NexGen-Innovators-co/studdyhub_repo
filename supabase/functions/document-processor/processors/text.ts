@@ -2,15 +2,12 @@ import Papa from 'https://esm.sh/papaparse@5.4.1';
 import cheerio from 'https://esm.sh/cheerio@1.0.0-rc.12';
 
 import { ENHANCED_PROCESSING_CONFIG } from '../config.ts';
-import { EXTRACTION_PROMPTS } from '../prompts.ts';
-import { createIntelligentChunks } from '../utils.ts';
-import { processChunkedContent } from '../geminiApi.ts';
 
 // ============================================================================
 // TEXT / CODE FILES
 // ============================================================================
 
-export async function processTextFileWithChunking(file: any, geminiApiKey: string): Promise<void> {
+export async function processTextFileWithChunking(file: any, _geminiApiKey: string): Promise<void> {
   const decodedContent = atob(file.data ?? '');
   const cap            = ENHANCED_PROCESSING_CONFIG.MAX_SINGLE_FILE_CONTENT;
 
@@ -19,19 +16,13 @@ export async function processTextFileWithChunking(file: any, geminiApiKey: strin
     ? decodedContent.slice(0, cap) + '\n\n[CONTENT TRUNCATED: file exceeded memory-safe limit]'
     : decodedContent;
 
-  if (safeContent.length <= ENHANCED_PROCESSING_CONFIG.INTELLIGENT_CHUNK_SIZE) {
-    if (file.type === 'code') {
-      const ext = file.name.split('.').pop()?.toLowerCase() ?? 'unknown';
-      file.content = `[${ext.toUpperCase()} Code File: ${file.name}]\n\`\`\`${ext}\n${safeContent}\n\`\`\``;
-    } else {
-      file.content = safeContent;
-    }
-    return;
+  // Text/code content is already extracted — no LLM needed.
+  if (file.type === 'code') {
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'unknown';
+    file.content = `[${ext.toUpperCase()} Code File: ${file.name}]\n\`\`\`${ext}\n${safeContent}\n\`\`\``;
+  } else {
+    file.content = safeContent;
   }
-
-  const chunks = createIntelligentChunks(safeContent, file.type);
-  const prompt  = EXTRACTION_PROMPTS[file.type] ?? EXTRACTION_PROMPTS.text;
-  file.content  = await processChunkedContent(chunks, prompt, geminiApiKey);
 }
 
 // ============================================================================
@@ -123,25 +114,16 @@ export async function processHtmlEnhanced(content: string): Promise<string> {
 // STRUCTURED FILE ORCHESTRATOR (CSV / HTML / JSON)
 // ============================================================================
 
-export async function processStructuredFileWithChunking(file: any, geminiApiKey: string): Promise<void> {
+export async function processStructuredFileWithChunking(file: any, _geminiApiKey: string): Promise<void> {
   const decodedContent = atob(file.data ?? '');
+  const cap = ENHANCED_PROCESSING_CONFIG.MAX_SINGLE_FILE_CONTENT;
 
   if (file.type === 'csv') {
-    if (decodedContent.length <= ENHANCED_PROCESSING_CONFIG.INTELLIGENT_CHUNK_SIZE) {
-      file.content = await processCsvEnhanced(decodedContent);
-      return;
-    }
-    const chunks = createIntelligentChunks(decodedContent, 'csv');
-    const prompt = `${EXTRACTION_PROMPTS.text}
-
-SPECIAL CSV INSTRUCTIONS:
-- Preserve all data rows and columns
-- Maintain header information in context
-- Keep data types and formatting
-- Extract all numerical and text data completely
-
-CSV CONTENT TO PROCESS:`;
-    file.content = await processChunkedContent(chunks, prompt, geminiApiKey);
+    // PapaParse handles CSV locally — no LLM needed regardless of size
+    const parsed = await processCsvEnhanced(
+      decodedContent.length > cap ? decodedContent.slice(0, cap) : decodedContent,
+    );
+    file.content = parsed;
 
   } else if (file.type === 'html') {
     file.content = await processHtmlEnhanced(decodedContent);
@@ -149,15 +131,14 @@ CSV CONTENT TO PROCESS:`;
   } else if (file.type === 'json') {
     try {
       const prettyJson = JSON.stringify(JSON.parse(decodedContent), null, 2);
-      if (prettyJson.length <= ENHANCED_PROCESSING_CONFIG.INTELLIGENT_CHUNK_SIZE) {
-        file.content = `[JSON Structure]\n${prettyJson}`;
-      } else {
-        const chunks = createIntelligentChunks(prettyJson, 'json');
-        file.content  = await processChunkedContent(chunks, EXTRACTION_PROMPTS.text, geminiApiKey);
-      }
+      file.content = prettyJson.length > cap
+        ? `[JSON Structure]\n${prettyJson.slice(0, cap)}\n\n[CONTENT TRUNCATED]`
+        : `[JSON Structure]\n${prettyJson}`;
     } catch {
-      // Invalid JSON – fall back to plain text
-      await processTextFileWithChunking(file, geminiApiKey);
+      // Invalid JSON – save as plain text
+      file.content = decodedContent.length > cap
+        ? decodedContent.slice(0, cap) + '\n\n[CONTENT TRUNCATED]'
+        : decodedContent;
     }
   }
 }

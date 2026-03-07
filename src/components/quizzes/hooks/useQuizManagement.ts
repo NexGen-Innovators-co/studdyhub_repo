@@ -146,7 +146,9 @@ export const useQuizManagement = ({
   // Update the handleGenerateAIQuiz function in useQuizManagement.ts
   const handleGenerateAIQuiz = useCallback(async (
     topics: string[],
-    focusAreas: string[]
+    focusAreas: string[],
+    numQuestions: number = 8,
+    difficulty: string = 'auto'
   ) => {
     const toastId = toast.loading('Creating AI-powered quiz...');
     try {
@@ -177,6 +179,8 @@ export const useQuizManagement = ({
         body: {
           user_topics: topics,
           focus_areas: focusAreas,
+          num_questions: numQuestions,
+          difficulty: difficulty,
           recent_performance: recentAttempts?.map(attempt => ({
             score: attempt.percentage,
             time_taken: attempt.time_taken_seconds

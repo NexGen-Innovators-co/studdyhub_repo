@@ -53,7 +53,9 @@ export async function enhancedFileProcessing(file: any, geminiApiKey: string): P
   try {
     file.processing_status     = 'processing';
     file.processing_started_at = new Date().toISOString();
-    file.extraction_model_used = 'gemini-2.0-flash';
+    file.extraction_model_used = fileConfig.strategy === 'vision_analysis' || fileConfig.strategy === 'transcription' || fileConfig.strategy === 'frame_analysis'
+      ? 'gemini-2.0-flash'
+      : 'local';
 
     switch (fileConfig.strategy) {
       case 'chunk_text':            await processTextFileWithChunking(file, geminiApiKey);            break;
@@ -122,11 +124,29 @@ export async function enhancedBatchProcessing(
     return aP !== bP ? aP - bP : a.size - b.size;
   });
 
+  // MIME types whose content can be fully extracted by local libraries.
+  // Window-slicing base64 of ZIP-based binary formats (DOCX, XLSX, PPTX)
+  // produces invalid data that Gemini cannot parse — always use local extraction.
+  const LOCAL_EXTRACT_MIMES = new Set([
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/msword',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/rtf',
+  ]);
+
   // Sequential — one file at a time to avoid memory spikes
   for (const file of filesToProcess) {
     const tier = getFileTier(file);
 
-    if (tier === 'small') {
+    if (LOCAL_EXTRACT_MIMES.has(file.mimeType)) {
+      // ── Structured Office formats: always local extraction ────────────────
+      // Binary window-slicing corrupts ZIP-based formats; local libs handle any size.
+      await enhancedFileProcessing(file, geminiApiKey);
+
+    } else if (tier === 'small') {
       // ── Normal full processing ────────────────────────────────────────────
       await enhancedFileProcessing(file, geminiApiKey);
 
@@ -151,46 +171,42 @@ export async function enhancedBatchProcessing(
 // ============================================================================
 
 /**
- * Processes a large file in safe-sized windows.
+ * Processes a large file in safe-sized windows — PDF only.
  *
- * - Decodes only one base64 window at a time (~7.5 MB)
- * - For PDF: delegates to the page-chunked extractor
- * - For other binary types: sends the windowed data to Gemini
- * - Saves partial extracted text + a resume_cursor into the file object
- * - Sets processing_status to 'partial' so callers know to resume
+ * Non-PDF binary formats (DOCX, XLSX, PPTX) are routed through local
+ * library extraction in enhancedBatchProcessing regardless of size,
+ * so this function only handles PDFs via page-chunked extraction.
  *
- * @param firstWindowOnly  When true (LARGE tier), stop after one window
+ * @param firstWindowOnly  When true (LARGE tier), stop after one chunk
  *                         and let the client call /resume-processing.
  */
 async function processLargeFileTiered(
   file: any,
-  geminiApiKey: string,
+  _geminiApiKey: string,
   firstWindowOnly: boolean,
 ): Promise<void> {
   const startTime = Date.now();
   file.processing_started_at = new Date().toISOString();
-  file.extraction_model_used = 'gemini-2.0-flash';
+  file.extraction_model_used = 'local_pdfjs';
 
   const b64         = file.data as string;
-  const windowSize  = ENHANCED_PROCESSING_CONFIG.LARGE_FILE_WINDOW;
   const totalB64Len = b64.length;
-  const totalWindows = Math.ceil(totalB64Len / windowSize);
+  const fileSizeMB  = Math.round((totalB64Len / 1024 / 1024) * 10) / 10;
 
-  const fileSizeMB = Math.round((totalB64Len / 1024 / 1024) * 10) / 10;
   console.log(
-    `[large-file] ${file.name} is ${fileSizeMB}MB base64 — ` +
-    `${totalWindows} windows, firstWindowOnly=${firstWindowOnly}`,
+    `[large-file] ${file.name} is ${fileSizeMB}MB base64, firstWindowOnly=${firstWindowOnly}`,
   );
 
   const allExtracted: string[] = [];
   let windowsProcessed = 0;
   let isComplete = false;
 
-  // ── PDFs: use page-based chunking which is already memory-safe ────────────
   if (file.mimeType === 'application/pdf') {
     // Decode the entire buffer once (PDF.js needs the whole file)
     // but process only PDF_PAGES_PER_CHUNK pages at a time
     let buffer: Uint8Array | null = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    // Free base64 now that we have the buffer
+    file.data = null;
     const { extractPdfTextWithPdfjsChunked } = await import('./documents.ts');
 
     const resumeCursor = file.processing_metadata?.resume_cursor;
@@ -204,7 +220,7 @@ async function processLargeFileTiered(
 
       if (result.isComplete) { isComplete = true; break; }
 
-      // After one window in firstWindowOnly mode — stop and queue rest
+      // After one chunk in firstWindowOnly mode — stop and queue rest
       if (firstWindowOnly && windowsProcessed === 1) {
         file.processing_metadata = {
           ...(file.processing_metadata ?? {}),
@@ -239,87 +255,21 @@ async function processLargeFileTiered(
     buffer = null;
 
   } else {
-    // ── Non-PDF binary files: window the base64 string itself ────────────────
-    // We send each windowed slice as a self-contained Gemini call.
-    // For file types like DOCX this won't give a perfectly parsed result,
-    // but it extracts as much text as safely possible from each slice.
-    const { callEnhancedGeminiAPI } = await import('../geminiApi.ts');
-    const { EXTRACTION_PROMPTS }    = await import('../prompts.ts');
-    const prompt = EXTRACTION_PROMPTS[file.type] ?? EXTRACTION_PROMPTS.document;
+    // Non-PDF large files: decode to buffer and use local extraction.
+    // This handles text-based large files that somehow bypass the local extract set.
+    const { extractTextFromZip } = await import('./documents.ts');
+    const buffer = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    file.data = null;
 
-    for (let winIdx = 0; winIdx < totalWindows; winIdx++) {
-      const winStart  = winIdx * windowSize;
-      const winEnd    = Math.min(winStart + windowSize, totalB64Len);
-      const windowB64 = b64.slice(winStart, winEnd);
-
-      const windowPrompt = `${prompt}
-
-PARTIAL FILE EXTRACTION - Window ${winIdx + 1} of ${totalWindows}:
-This is a slice of a large file. Extract all text/content you can identify from this portion.
-Do not worry if the content seems to start or end mid-sentence — extract what is present.`;
-
-      try {
-        const response = await callEnhancedGeminiAPI(
-          [{
-            role: 'user',
-            parts: [
-              { text: windowPrompt },
-              { inlineData: { mimeType: file.mimeType, data: windowB64 } },
-            ],
-          }],
-          geminiApiKey,
-        );
-
-        if (response.success && response.content) {
-          allExtracted.push(response.content);
-        } else {
-          allExtracted.push(`[Window ${winIdx + 1} extraction failed: ${response.error}]`);
-        }
-      } catch (err: any) {
-        allExtracted.push(`[Window ${winIdx + 1} error: ${err.message}]`);
-      }
-
-      windowsProcessed++;
-
-      // Stop after first window in firstWindowOnly mode
-      if (firstWindowOnly && windowsProcessed === 1) {
-        file.processing_metadata = {
-          ...(file.processing_metadata ?? {}),
-          resume_cursor: {
-            type: 'b64_window',
-            nextWindowIdx: winIdx + 1,
-            totalWindows,
-            windowSize,
-            windowsProcessed,
-          },
-        };
-        break;
-      }
-
-      // Content cap check
-      const currentLen = allExtracted.reduce((s, c) => s + c.length, 0);
-      if (currentLen >= ENHANCED_PROCESSING_CONFIG.MAX_SINGLE_FILE_CONTENT) {
-        file.processing_metadata = {
-          ...(file.processing_metadata ?? {}),
-          resume_cursor: {
-            type: 'b64_window',
-            nextWindowIdx: winIdx + 1,
-            totalWindows,
-            windowSize,
-            windowsProcessed,
-          },
-        };
-        break;
-      }
-
-      if (winIdx === totalWindows - 1) isComplete = true;
-      await new Promise((r) => setTimeout(r, ENHANCED_PROCESSING_CONFIG.RATE_LIMIT_DELAY));
-    }
+    const text = await extractTextFromZip(buffer, file.name);
+    allExtracted.push(text);
+    windowsProcessed = 1;
+    isComplete = true;
   }
 
   // ── Assemble result ────────────────────────────────────────────────────────
   const cap = ENHANCED_PROCESSING_CONFIG.MAX_SINGLE_FILE_CONTENT;
-  let combined = allExtracted.join('\n\n---\n\n');
+  let combined = allExtracted.join('\n\n');
   if (combined.length > cap) {
     combined = combined.slice(0, cap) + '\n\n[CONTENT CAP REACHED]';
     isComplete = false;
@@ -329,14 +279,13 @@ Do not worry if the content seems to start or end mid-sentence — extract what 
   file.processing_status    = isComplete ? 'completed' : 'partial';
   file.processing_error     = isComplete
     ? null
-    : `Partial extraction: ${windowsProcessed} of ${Math.ceil(totalB64Len / windowSize)} window(s) processed. ` +
+    : `Partial extraction: ${windowsProcessed} chunk(s) processed. ` +
       `Call /resume-processing with document_id to continue.`;
   file.processing_completed_at  = new Date().toISOString();
   file.total_processing_time_ms = Date.now() - startTime;
   file.processing_metadata = {
     ...(file.processing_metadata ?? {}),
     fileSizeMB,
-    totalWindows: Math.ceil(totalB64Len / windowSize),
     windowsProcessed,
     isComplete,
     contentLength: combined.length,
@@ -383,11 +332,41 @@ export async function processFile(file: any): Promise<any | null> {
 export async function processBase64File(fileData: any): Promise<any | null> {
   if (!fileData.name || !fileData.mimeType) return null;
 
-  // Fetch remote file if a URL is provided
+  // For files with a URL that are large, skip fetching into memory entirely.
+  // Create a partial record so resume-processing handles extraction in smaller chunks.
+  // This avoids OOM: a 14MB file becomes ~18MB base64 + ~14MB decoded buffer + pdf.js overhead.
+  const SKIP_FETCH_THRESHOLD = 7 * 1024 * 1024; // 7MB binary
   if (fileData.file_url && typeof fileData.file_url === 'string') {
+    if (fileData.size > SKIP_FETCH_THRESHOLD) {
+      const fileConfig = ENHANCED_FILE_TYPES[fileData.mimeType];
+      if (fileConfig) {
+        console.log(`[intake] Skipping fetch for large file ${fileData.name} (${Math.round(fileData.size / 1024 / 1024)}MB) — will use resume-processing`);
+        return {
+          name: fileData.name,
+          type: fileConfig.type,
+          mimeType: fileData.mimeType,
+          data: null,
+          content: `[Large file pending extraction: ${fileData.name} (${Math.round(fileData.size / 1024 / 1024)}MB)]`,
+          size: fileData.size,
+          processing_status: 'partial',
+          file_url: fileData.file_url,
+          ...(fileData.idToUpdate ? { id: fileData.idToUpdate } : {}),
+          processing_metadata: {
+            resume_cursor: fileData.mimeType === 'application/pdf'
+              ? { type: 'pdf_pages', lastPage: 0, totalPages: null, windowsProcessed: 0 }
+              : null,
+            needsResumeProcessing: true,
+            fileSizeMB: Math.round((fileData.size / 1024 / 1024) * 10) / 10,
+          },
+          ...nullTimings(),
+        };
+      }
+    }
+
+    // Small-to-medium file with URL — fetch into memory for in-process extraction
     try {
       const controller = new AbortController();
-      const to         = setTimeout(() => controller.abort(), 30_000);
+      const to         = setTimeout(() => controller.abort(), 120_000);
       const resp       = await fetch(fileData.file_url, { signal: controller.signal });
       clearTimeout(to);
 
@@ -431,6 +410,8 @@ export async function processBase64File(fileData: any): Promise<any | null> {
     content: decodedContent ?? `[File: ${fileData.name}. Processing ${fileConfig.type} content...]`,
     size: fileData.size ?? (decodedContent ? decodedContent.length : 0),
     processing_status: fileData.processing_status ?? (TEXT_MIME_TYPES.includes(fileConfig.type) ? 'completed' : 'pending'),
+    ...(fileData.idToUpdate ? { id: fileData.idToUpdate } : {}),
+    file_url: fileData.file_url ?? null,
     ...nullTimings(),
   };
 }
