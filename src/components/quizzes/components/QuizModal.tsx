@@ -22,6 +22,7 @@ interface QuizModalProps {
   bestAttempts?: Record<string, QuizAttempt>;
   hasExamAccess?: boolean;
   onStartExamMode?: (quiz: Quiz) => void;
+  isSubmitting?: boolean;
 }
 
 const optionLetters = ['A', 'B', 'C', 'D'];
@@ -39,6 +40,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   bestAttempts = {},
   hasExamAccess = false,
   onStartExamMode,
+  isSubmitting = false,
 }) => {
   const [showShareModal, setShowShareModal] = useState(false);
 
@@ -299,12 +301,12 @@ export const QuizModal: React.FC<QuizModalProps> = ({
 
               <Button
                 onClick={onNextQuestion}
-                disabled={selectedAnswer === null || selectedAnswer === undefined}
+                disabled={(selectedAnswer === null || selectedAnswer === undefined) || isSubmitting}
                 size="sm"
                 className="gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
               >
-                <span>{isLastQuestion ? 'Submit' : 'Next'}</span>
-                <ArrowRight className="h-4 w-4" />
+                <span>{isSubmitting ? 'Submitting...' : isLastQuestion ? 'Submit' : 'Next'}</span>
+                {!isSubmitting && <ArrowRight className="h-4 w-4" />}
               </Button>
             </div>
           )}

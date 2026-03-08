@@ -16,6 +16,7 @@ interface QuizModalProps {
   onPreviousQuestion: () => void;
   onExitQuizMode: () => void;
   calculateScore: () => number; // Changed from onCalculateScore to calculateScore
+  isSubmitting?: boolean;
 }
 
 export const QuizModal: React.FC<QuizModalProps> = ({
@@ -28,6 +29,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   onPreviousQuestion,
   onExitQuizMode,
   calculateScore, // Changed from onCalculateScore
+  isSubmitting = false,
 }) => {
   if (!quizMode) {
     return null; // Don't render modal if not in quiz mode
@@ -150,9 +152,10 @@ ${selectedAnswer === optionIndex
                 </Button>
                 <Button
                   onClick={onNextQuestion}
+                  disabled={isSubmitting}
                   className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-500 text-white hover:from-blue-600 hover:to-blue-600 w-full sm:w-auto"
                 >
-                  {isLastQuestion ? 'Submit Quiz' : 'Next Question'} <ArrowRight className="h-4 w-4" />
+                  {isSubmitting ? 'Submitting...' : isLastQuestion ? 'Submit Quiz' : 'Next Question'} {!isSubmitting && <ArrowRight className="h-4 w-4" />}
                 </Button>
               </div>
             </div>

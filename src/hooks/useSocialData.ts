@@ -111,6 +111,14 @@ export const useSocialData = (
   const [viewedPostIds, setViewedPostIds] = useState<Set<string>>(new Set());
   const groupPageRef = useRef<number>(0);
 
+  // In-memory cache per feedMode to avoid refetching when switching tabs
+  const feedModeCacheRef = useRef<Record<string, {
+    posts: SocialPostWithDetails[];
+    cursor: string | null;
+    hasMore: boolean;
+  }>>({});
+  const prevFeedModeRef = useRef<FeedMode>(initialFeedMode);
+
 
 
   // OPTIMIZED: Fetch posts via edge function with cursor-based pagination
@@ -582,12 +590,43 @@ export const useSocialData = (
     }
   }, [currentUser]);
 
-  // Fetch initial data when user is loaded OR filters/feedMode change
+  // When sortBy or filterBy changes, invalidate all feed mode caches and do full reset
   useEffect(() => {
     if (currentUser && isInitializedRef.current) {
+      feedModeCacheRef.current = {};
       resetAndFetchData();
     }
-  }, [sortBy, filterBy, feedMode]);
+  }, [sortBy, filterBy]);
+
+  // When feedMode changes, save current posts to cache and restore/fetch for new mode
+  useEffect(() => {
+    if (!currentUser || !isInitializedRef.current) return;
+    const prev = prevFeedModeRef.current;
+    if (prev === feedMode) return;
+
+    // Save current feed state to cache under the previous feedMode
+    feedModeCacheRef.current[prev] = {
+      posts: posts,
+      cursor: postsCursor,
+      hasMore: hasMorePosts,
+    };
+    prevFeedModeRef.current = feedMode;
+
+    // Check if we have cached data for the new feedMode
+    const cached = feedModeCacheRef.current[feedMode];
+    if (cached && cached.posts.length > 0) {
+      setPosts(cached.posts);
+      setPostsCursor(cached.cursor);
+      setHasMorePosts(cached.hasMore);
+      setIsLoading(false);
+    } else {
+      // No cache — fetch only the main feed, not trending/groups/etc.
+      setPostsCursor(null);
+      setHasMorePosts(true);
+      setPosts([]);
+      fetchPosts(true);
+    }
+  }, [feedMode]);
 
   // Fetch data when currentUser becomes available for the first time
   // Load viewedPostIds FIRST so the feed scoring can differentiate seen/unseen posts
@@ -926,7 +965,9 @@ export const useSocialData = (
     setNewPostsBuffer([]);
     setHasNewPosts(false);
 
-    // Pass false for loading if we have data? No, fetchPosts decides.
+    // Clear feed mode cache since this is a full reset
+    feedModeCacheRef.current = {};
+
     fetchPosts(true);
     fetchTrendingPosts(true);
     fetchUserPosts(true);

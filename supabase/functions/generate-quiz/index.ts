@@ -125,38 +125,38 @@ IMPORTANT: Return exactly ${parsedNumQuestions} questions. The correctAnswer mus
     }
 
     // Validate structure; if invalid or missing questions, create fallback
-    if (!quizData || !quizData.title || !Array.isArray(quizData.questions) || quizData.questions.length === 0) {
-      // fallback creation still uses required number of questions to avoid single-question issue
-      quizData = {
-        title: `Quiz: ${name}`,
-        questions: Array(parsedNumQuestions).fill(null).map((_, idx) => ({
-          question: `Fallback question #${idx+1}`,
-          options: ['Option A','Option B','Option C','Option D'],
-          correctAnswer: 0,
-          explanation: 'Fallback content due to AI failure.'
-        }))
-      };
-    }
+    // // if (!quizData || !quizData.title || !Array.isArray(quizData.questions) || quizData.questions.length === 0) {
+    // //   // fallback creation still uses required number of questions to avoid single-question issue
+    // //   quizData = {
+    // //     title: `Quiz: ${name}`,
+    // //     questions: Array(parsedNumQuestions).fill(null).map((_, idx) => ({
+    // //       question: `Fallback question #${idx+1}`,
+    // //       options: ['Option A','Option B','Option C','Option D'],
+    // //       correctAnswer: 0,
+    // //       explanation: 'Fallback content due to AI failure.'
+    // //     }))
+    // //   };
+    // // }
 
-    // Validate each question's structure and sanitize
-    quizData.questions = quizData.questions.filter((q: any, index: number) => {
-      if (!q.question || !Array.isArray(q.options) || q.options.length !== 4 ||
-          typeof q.correctAnswer !== 'number' || q.correctAnswer < 0 || q.correctAnswer > 3) {
-        console.warn(`Dropping invalid question at index ${index}`);
-        return false;
-      }
-      return true;
-    });
+    // // Validate each question's structure and sanitize
+    // quizData.questions = quizData.questions.filter((q: any, index: number) => {
+    //   if (!q.question || !Array.isArray(q.options) || q.options.length !== 4 ||
+    //       typeof q.correctAnswer !== 'number' || q.correctAnswer < 0 || q.correctAnswer > 3) {
+    //     console.warn(`Dropping invalid question at index ${index}`);
+    //     return false;
+    //   }
+    //   return true;
+    // });
 
-    // If all questions were filtered out, create fallback
-    if (quizData.questions.length === 0) {
-      quizData.questions = Array(parsedNumQuestions).fill(null).map((_, idx) => ({
-        question: `Fallback question #${idx+1}`,
-        options: ['Option A','Option B','Option C','Option D'],
-        correctAnswer: 0,
-        explanation: 'Fallback content due to AI failure.'
-      }));
-    }
+    // // If all questions were filtered out, create fallback
+    // if (quizData.questions.length === 0) {
+    //   quizData.questions = Array(parsedNumQuestions).fill(null).map((_, idx) => ({
+    //     question: `Fallback question #${idx+1}`,
+    //     options: ['Option A','Option B','Option C','Option D'],
+    //     correctAnswer: 0,
+    //     explanation: 'Fallback content due to AI failure.'
+    //   }));
+    // }
 
     return new Response(JSON.stringify(quizData), {
       headers: {

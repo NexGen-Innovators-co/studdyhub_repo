@@ -386,6 +386,18 @@ const allDocuments = contextDocuments || documents;
     );
   }, []);
 
+  const handleDeleteWithConfirm = useCallback(async (documentId: string, fileUrl: string) => {
+    const confirmed = await confirmAction({
+      title: 'Delete Document',
+      description: 'Are you sure you want to delete this document? This action cannot be undone.',
+      confirmLabel: 'Delete',
+      variant: 'destructive',
+    });
+    if (confirmed) {
+      handleDeleteDocument(documentId, fileUrl);
+    }
+  }, [confirmAction, handleDeleteDocument]);
+
   const openPreview = (document: Document) => {
     setSelectedDocument(document);
     setPreviewOpen(true);
@@ -608,6 +620,24 @@ const lastDocumentElementRef = useCallback(
               <Clock className="h-4 w-4 text-amber-600" />
               <span className="text-sm font-medium">{documentStats.pending} Pending</span>
             </div>
+            {documentStats.processing > 0 && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-white dark:bg-slate-800 rounded-full shadow-sm">
+                <Loader2 className="h-4 w-4 text-amber-500 animate-spin" />
+                <span className="text-sm font-medium">{documentStats.processing} Processing</span>
+              </div>
+            )}
+            {documentStats.partial > 0 && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-white dark:bg-slate-800 rounded-full shadow-sm">
+                <AlertTriangle className="h-4 w-4 text-orange-500" />
+                <span className="text-sm font-medium">{documentStats.partial} Partial</span>
+              </div>
+            )}
+            {documentStats.failed > 0 && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-white dark:bg-slate-800 rounded-full shadow-sm">
+                <XCircle className="h-4 w-4 text-red-500" />
+                <span className="text-sm font-medium">{documentStats.failed} Failed</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -998,7 +1028,7 @@ const lastDocumentElementRef = useCallback(
                           showSelection={showSelection}
                           onToggleSelect={handleToggleDocSelect}
                           onPreview={openPreview}
-                          onDelete={handleDeleteDocument}
+                          onDelete={handleDeleteWithConfirm}
                           onMove={handleMoveDocument}
                           onRetry={triggerAnalysis}
                           onSelectFolder={setSelectedFolderId}
@@ -1306,6 +1336,32 @@ const lastDocumentElementRef = useCallback(
                         </div>
                        )}
 
+                       {selectedDocument.processing_status === 'partial' && (
+                        <div className="p-4 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 flex flex-col gap-3">
+                           <div className="flex items-start gap-3">
+                              <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400 shrink-0 mt-0.5" />
+                              <div className="flex-1">
+                                <h4 className="text-sm font-semibold text-orange-900 dark:text-orange-200">Partially Extracted</h4>
+                                <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
+                                  This document was only partially processed. Some content may be missing.
+                                </p>
+                              </div>
+                           </div>
+                           <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              handleClosePreview();
+                              triggerAnalysis(selectedDocument);
+                            }}
+                            className="bg-white dark:bg-transparent border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/20 w-fit ml-auto"
+                          >
+                            <RefreshCw className="h-3.5 w-3.5 mr-2" />
+                            Resume Extraction
+                          </Button>
+                        </div>
+                       )}
+
                        {selectedDocument.content_extracted ? (
                          <div className="prose prose-sm dark:prose-invert max-w-none prose-slate">
                             {/* Simple markdown check and render */}
@@ -1355,6 +1411,7 @@ const lastDocumentElementRef = useCallback(
                         variant="destructive" 
                         size="sm"
                         className="col-span-2"
+                        disabled={processingDocuments.has(selectedDocument.id)}
                         onClick={async () => {
                           const confirmed = await confirmAction({
                             title: 'Delete Document',

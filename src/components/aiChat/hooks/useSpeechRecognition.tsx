@@ -49,8 +49,10 @@ export const useSpeechRecognition = ({
     const [isRecognizing, setIsRecognizing] = useState(false);
     const [micPermissionStatus, setMicPermissionStatus] = useState<'unknown' | 'granted' | 'denied' | 'checking'>('unknown');
     const recognitionRef = useRef<SpeechRecognition | null>(null);
-    const lastInterimTranscriptRef = useRef<string>('');
     const isRecognizingRef = useRef(false);
+    // Accumulator approach: track text components separately to avoid fragile stripping
+    const preExistingTextRef = useRef<string>('');
+    const accumulatedFinalRef = useRef<string>('');
 
     useEffect(() => {
         checkMicrophonePermission().then(status => {
@@ -78,55 +80,30 @@ export const useSpeechRecognition = ({
         (recognition as any).maxAlternatives = 1;
 
         recognition.onresult = (event: SpeechRecognitionResultEvent) => {
-            let finalTranscript = '';
+            let newFinals = '';
             let interimTranscript = '';
 
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 const transcript = event.results[i][0].transcript;
                 if (event.results[i].isFinal) {
-                    finalTranscript += transcript + ' ';
+                    newFinals += transcript + ' ';
                 } else {
                     interimTranscript = transcript;
                 }
             }
 
-            const currentInput = inputMessageRef.current;
-            let baseMessage = currentInput;
-            const lastInterim = lastInterimTranscriptRef.current;
-            
-            // Robust stripping: Check endsWith with and without trimming to handle whitespace edge cases
-            if (lastInterim) {
-                 if (baseMessage.endsWith(lastInterim)) {
-                     baseMessage = baseMessage.slice(0, -lastInterim.length);
-                 } else if (baseMessage.trimEnd().endsWith(lastInterim.trimEnd())) {
-                     // Fallback: try ignoring trailing spaces mismatch
-                     const lastInterimTrimmed = lastInterim.trimEnd();
-                     const baseTrimmed = baseMessage.trimEnd();
-                     // We need to keep the part BEFORE the match
-                     // Calculate the index of the match
-                     const matchIndex = baseMessage.lastIndexOf(lastInterimTrimmed);
-                      if (matchIndex !== -1 && matchIndex + lastInterimTrimmed.length === baseTrimmed.length) {
-                           baseMessage = baseMessage.substring(0, matchIndex);
-                      }
-                 }
+            if (newFinals) {
+                accumulatedFinalRef.current += newFinals;
             }
-            
-            baseMessage = baseMessage.trimEnd();
-            
-            if (finalTranscript) {
-                const newMessage = baseMessage + (baseMessage ? ' ' : '') + finalTranscript.trim();
-                lastInterimTranscriptRef.current = '';
-                // Immediate update for final results to ensure consistency
-                setInputMessage(newMessage);
-                resizeTextareaThrottled();
-            } else if (interimTranscript) {
-                const newMessage = baseMessage + (baseMessage ? ' ' : '') + interimTranscript;
-                lastInterimTranscriptRef.current = interimTranscript;
-                // Immediate update for interim too, to prevent ref staleness causing duplication
-                // We only throttle the resize which is the expensive DOM operation
-                setInputMessage(newMessage);
-                resizeTextareaThrottled();
-            }
+
+            // Reconstruct the full message from known components
+            const base = preExistingTextRef.current;
+            const finals = accumulatedFinalRef.current.trimEnd();
+            const parts = [base, finals, interimTranscript].filter(Boolean);
+            const newMessage = parts.join(' ');
+
+            setInputMessage(newMessage);
+            resizeTextareaThrottled();
         };
 
         recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -155,7 +132,6 @@ export const useSpeechRecognition = ({
                 }
             } else {
                 setIsRecognizing(false);
-                lastInterimTranscriptRef.current = '';
             }
         };
 
@@ -189,7 +165,8 @@ export const useSpeechRecognition = ({
         }
 
         try {
-            lastInterimTranscriptRef.current = '';
+            preExistingTextRef.current = inputMessageRef.current.trimEnd();
+            accumulatedFinalRef.current = '';
             isRecognizingRef.current = true;
             recognitionRef.current.start();
             setIsRecognizing(true);
@@ -208,7 +185,8 @@ export const useSpeechRecognition = ({
             isRecognizingRef.current = false;
             recognitionRef.current.stop();
             setIsRecognizing(false);
-            lastInterimTranscriptRef.current = '';
+            preExistingTextRef.current = '';
+            accumulatedFinalRef.current = '';
             toast.success('Speech recognition stopped.');
         }
     }, []);

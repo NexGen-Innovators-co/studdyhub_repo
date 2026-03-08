@@ -467,11 +467,11 @@ serve(async (req) => {
           query = query.overlaps('ai_categories', [...expandedKeywords]);
         } else if (feedMode === 'my-school' && eduCtx?.institution) {
           try {
-            query = query.eq('metadata->education_context->institution', eduCtx.institution);
+            query = query.contains('metadata', { education_context: { institution: eduCtx.institution } });
           } catch {}
         } else if (feedMode === 'my-level' && eduCtx?.educationLevel) {
           try {
-            query = query.eq('metadata->education_context->education_level', eduCtx.educationLevel);
+            query = query.contains('metadata', { education_context: { education_level: eduCtx.educationLevel } });
           } catch {}
         }
         // 'for-you' and 'all' do not add SQL filters; personalization occurs later

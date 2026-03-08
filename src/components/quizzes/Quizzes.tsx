@@ -155,6 +155,7 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
     handlePreviousQuestion,
     handleExitQuizMode,
     calculateScore,
+    isSubmitting,
     setQuizMode,
     setShowResults,
     setUserAnswers,
@@ -1213,6 +1214,7 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
         bestAttempts={bestAttempts}
         hasExamAccess={hasExamAccess}
         onStartExamMode={handleOpenExamSetup}
+        isSubmitting={isSubmitting}
       />
 
       {/* Exam Mode Setup Dialog */}

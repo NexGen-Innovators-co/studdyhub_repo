@@ -13,17 +13,17 @@ interface SectionSelectionDialogProps {
 export const SectionSelectionDialog: React.FC<SectionSelectionDialogProps> = ({ isOpen, sections, onSectionSelect, onCancel }) => {
   return (
     <Dialog open={isOpen} onOpenChange={onCancel}>
-      <DialogContent>
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Document Structure Found</DialogTitle>
           <DialogDescription>
             We found several sections in your document. Would you like to generate a note from a specific section or the entire document?
           </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-2 my-4">
-          <Button onClick={() => onSectionSelect(null)} variant="outline">Generate from Full Document</Button>
+        <div className="flex flex-col gap-2 my-4 overflow-y-auto min-h-0 pr-1">
+          <Button onClick={() => onSectionSelect(null)} variant="outline" className="shrink-0">Generate from Full Document</Button>
           {sections.map((section, index) => (
-            <Button key={index} onClick={() => onSectionSelect(section)}>
+            <Button key={index} onClick={() => onSectionSelect(section)} className="shrink-0 whitespace-normal text-left h-auto py-2">
               {section}
             </Button>
           ))}

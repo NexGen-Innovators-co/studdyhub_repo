@@ -101,6 +101,14 @@ export const DocumentCardItem = React.memo(React.forwardRef<HTMLDivElement, Docu
                   </div>
                 )}
 
+                {/* Status Badge for non-completed */}
+                {doc.processing_status && doc.processing_status !== 'completed' && !isProcessing && (
+                  <div className={`absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium shadow-md ${getStatusColor(doc.processing_status)}`}>
+                    {getStatusIcon(doc.processing_status)}
+                    <span className="capitalize">{doc.processing_status}</span>
+                  </div>
+                )}
+
                 {/* Processing Overlay */}
                 {isProcessing && (
                   <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
@@ -173,9 +181,15 @@ export const DocumentCardItem = React.memo(React.forwardRef<HTMLDivElement, Docu
                  
                  <div className="flex-1 min-w-0">
                     <h3 className="font-semibold truncate text-slate-800 dark:text-slate-200">{doc.title}</h3>
-                    <p className="text-xs text-slate-500 mt-1 flex gap-3">
+                    <p className="text-xs text-slate-500 mt-1 flex items-center gap-3">
                         <span>{formatFileSize(doc.file_size)}</span>
                         <span>{formatDate(doc.created_at)}</span>
+                        {doc.processing_status && doc.processing_status !== 'completed' && (
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(doc.processing_status)}`}>
+                            {getStatusIcon(doc.processing_status)}
+                            <span className="capitalize">{doc.processing_status}</span>
+                          </span>
+                        )}
                     </p>
                  </div>
                  

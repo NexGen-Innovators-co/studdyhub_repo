@@ -382,15 +382,6 @@ export const useQuizManagement = ({
     setQuizStartTime(Date.now());
   }, []);
 
-  const handleNextQuestion = useCallback(() => {
-    const totalQuestions = quizMode?.quiz?.questions?.length || 0;
-    if (currentQuestionIndex < totalQuestions - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
-    } else {
-      handleSubmitQuiz();
-    }
-  }, [currentQuestionIndex, quizMode]);
-
   const handlePreviousQuestion = useCallback(() => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(currentQuestionIndex - 1);
@@ -475,6 +466,16 @@ export const useQuizManagement = ({
       setIsSubmitting(false);
     }
   }, [quizMode, userAnswers, quizStartTime, recordQuizAttempt, fetchUserStats, isSubmitting, confirmAction]);
+
+  const handleNextQuestion = useCallback(() => {
+    if (isSubmitting) return;
+    const totalQuestions = quizMode?.quiz?.questions?.length || 0;
+    if (currentQuestionIndex < totalQuestions - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
+    } else {
+      handleSubmitQuiz();
+    }
+  }, [currentQuestionIndex, quizMode, handleSubmitQuiz, isSubmitting]);
 
   const handleExitQuizMode = useCallback(async () => {
     if (!showResults && userAnswers.some(answer => answer !== null)) {
