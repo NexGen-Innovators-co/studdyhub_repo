@@ -733,8 +733,8 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
   const deleteAccount = async () => {
     const confirmed = await confirmAction({
       title: 'Delete Account',
-      description: 'Are you sure you want to delete your account? This action cannot be undone.',
-      confirmLabel: 'Delete Account',
+      description: 'Are you sure you want to delete your account? This will permanently delete ALL your data (posts, chats, quizzes, documents, flashcards, social content, etc.). Your login will be preserved but you will start completely fresh. This action cannot be undone.',
+      confirmLabel: 'Delete My Account Data',
       variant: 'destructive',
       confirmPhrase: 'DELETE',
       confirmPhraseLabel: 'Type "DELETE" to confirm',
@@ -742,10 +742,27 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
     if (!confirmed) return;
 
     try {
-      toast.info('Account deletion feature would be implemented here');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('You must be logged in to delete your account');
+        return;
+      }
+
+      const { error } = await supabase.rpc('purge_user_data' as any, {
+        p_user_id: user.id,
+      });
+      if (error) throw error;
+
+      toast.success('All your data has been deleted. You will now be signed out.');
+
+      // Sign out after a short delay so the toast is visible
+      setTimeout(async () => {
+        await supabase.auth.signOut();
+        window.location.href = '/';
+      }, 2000);
     } catch (error) {
       //console.error('Error deleting account:', error);
-      toast.error('Failed to delete account');
+      toast.error('Failed to delete account. Please try again or contact support.');
     }
   };
 

@@ -13,6 +13,8 @@ import { Select as PlanSelect, SelectTrigger as PlanSelectTrigger, SelectValue a
 import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
 import { useNavigate } from 'react-router-dom';
+import { Textarea } from '../ui/textarea';
+import { AlertTriangle } from 'lucide-react';
 
 interface UserProfile {
   id: string;
@@ -89,6 +91,10 @@ const UserManagement = () => {
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [isSuspendOpen, setIsSuspendOpen] = useState(false);
   const [suspendReason, setSuspendReason] = useState('');
+  const [isPurgeOpen, setIsPurgeOpen] = useState(false);
+  const [purgeReason, setPurgeReason] = useState('');
+  const [purgeConfirmText, setPurgeConfirmText] = useState('');
+  const [isPurging, setIsPurging] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -150,6 +156,43 @@ const UserManagement = () => {
       fetchUsers();
     } catch (err) {
       toast({ title: 'Error', description: `${err}`, variant: 'destructive' });
+    }
+  };
+
+  const handlePurgeUser = async () => {
+    if (!selectedUser || purgeConfirmText !== 'PURGE') return;
+    setIsPurging(true);
+    try {
+      const { error } = await supabase.rpc('purge_user_data' as any, {
+        p_user_id: selectedUser.id,
+      });
+      if (error) throw error;
+
+      // Log the purge action
+      const { data: { user: adminUser } } = await supabase.auth.getUser();
+      if (adminUser) {
+        await supabase.from('admin_activity_logs').insert({
+          admin_id: adminUser.id,
+          action: 'purge_user_data',
+          target_type: 'user',
+          target_id: selectedUser.id,
+          details: {
+            reason: purgeReason || 'No reason provided',
+            username: selectedUser.username,
+            email: selectedUser.email,
+          },
+        });
+      }
+
+      toast({ title: 'User Data Purged', description: `All data for ${selectedUser.username} has been deleted. The account can still log in but will start fresh.` });
+      setPurgeReason('');
+      setPurgeConfirmText('');
+      setIsPurgeOpen(false);
+      fetchUsers();
+    } catch (err) {
+      toast({ title: 'Purge Failed', description: `${err}`, variant: 'destructive' });
+    } finally {
+      setIsPurging(false);
     }
   };
 
@@ -261,6 +304,17 @@ const UserManagement = () => {
                 >
                   {u.is_verified ? 'Suspend' : 'Activate'}
                 </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedUser(u);
+                    setIsPurgeOpen(true);
+                  }}
+                  className="bg-red-700 hover:bg-red-800"
+                >
+                  Purge Data
+                </Button>
                     {/* Manual Upgrade Dialog */}
                     <Dialog open={isUpgradeOpen} onOpenChange={setIsUpgradeOpen}>
                       <DialogContent>
@@ -291,6 +345,47 @@ const UserManagement = () => {
           ))}
         </TableBody>
       </Table>
+
+      {/* Purge User Data Dialog */}
+      <Dialog open={isPurgeOpen} onOpenChange={(open) => { setIsPurgeOpen(open); if (!open) { setPurgeConfirmText(''); setPurgeReason(''); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" />
+              Purge All Data for {selectedUser?.username}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
+              <strong>Warning:</strong> This will permanently delete ALL user data (posts, chats, quizzes, documents, flashcards, social content, etc.). The user&apos;s login will be preserved but they will start completely fresh like a new user.
+            </div>
+            <div>
+              <Label>Reason for purge</Label>
+              <Textarea
+                placeholder="Why is this user's data being purged?"
+                value={purgeReason}
+                onChange={e => setPurgeReason(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Type <strong>PURGE</strong> to confirm</Label>
+              <Input
+                placeholder="PURGE"
+                value={purgeConfirmText}
+                onChange={e => setPurgeConfirmText(e.target.value)}
+              />
+            </div>
+            <Button
+              variant="destructive"
+              onClick={handlePurgeUser}
+              disabled={purgeConfirmText !== 'PURGE' || isPurging}
+              className="w-full"
+            >
+              {isPurging ? 'Purging...' : 'Permanently Purge All User Data'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isSuspendOpen} onOpenChange={setIsSuspendOpen}>
         <DialogContent>

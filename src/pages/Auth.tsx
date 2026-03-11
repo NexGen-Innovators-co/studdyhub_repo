@@ -1,13 +1,16 @@
-import React, { useState, useEffect, useCallback, useMemo, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { Mail, Lock, User, Eye, EyeOff, Loader2, CheckCircle2, XCircle, RefreshCw, Clock, Ticket, BookOpen, FileText, Play, TrendingUp } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, Loader2, CheckCircle2, XCircle, RefreshCw, Clock, Ticket, BookOpen, FileText, Play, TrendingUp, Check, Sparkles } from 'lucide-react';
 import { supabase } from '../integrations/supabase/client';
 import { toast } from 'sonner';
 import { BrandedLoader } from '../App';
 
 const DISPOSABLE_EMAIL_DOMAINS = ['mailinator.com','tempmail.com','10minutemail.com','guerrillamail.com','sharklasers.com'];
+
+// Module-level cache for already-loaded image URLs
+const loadedImageCache = new Set<string>();
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
@@ -15,19 +18,51 @@ const OptimizedImage = React.memo(({ src, alt, className, fallbackSrc }: {
   src: string; alt: string; className?: string; fallbackSrc?: string;
 }) => {
   const [imgSrc, setImgSrc] = useState(src);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!loadedImageCache.has(src));
   const [hasError, setHasError] = useState(false);
+
+  // Sync internal state when src prop changes
+  useEffect(() => {
+    setImgSrc(src);
+    setHasError(false);
+    setIsLoading(!loadedImageCache.has(src));
+  }, [src]);
+
   return (
     <div className={`relative ${className}`}>
       {isLoading && <div className="absolute inset-0 flex items-center justify-center bg-slate-200 dark:bg-slate-800 rounded-full animate-pulse"><Loader2 className="h-4 w-4 animate-spin text-slate-400" /></div>}
       <img src={imgSrc} alt={alt} className={`${className} transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
-        onLoad={() => { setIsLoading(false); setHasError(false); }}
+        onLoad={() => { setIsLoading(false); setHasError(false); loadedImageCache.add(imgSrc); }}
         onError={() => { setIsLoading(false); setHasError(true); if (fallbackSrc && imgSrc !== fallbackSrc) setImgSrc(fallbackSrc); }}
-        loading="lazy" />
+        loading="eager" />
       {hasError && !fallbackSrc && <div className={`${className} bg-slate-200 dark:bg-slate-800 flex items-center justify-center rounded-full`}><User className="h-4 w-4 text-slate-400" /></div>}
     </div>
   );
 });
+
+const STATIC_TESTIMONIALS = [
+  {
+    name: "Doris",
+    role: "SHS student",
+    content: "StuddyHub AI has completely revolutionized how I study. The AI chat is incredibly helpful, and the document analysis saves me so much time!",
+    verified: true,
+    imageUrl: "/testimonial1.jpg"
+  },
+  {
+    name: "Isabel",
+    role: "Computer Science student at UMaT",
+    content: "The voice recording feature with AI transcription is a game-changer for my research interviews. Absolutely incredible!",
+    verified: true,
+    imageUrl: '/testimonial3.jpg'
+  },
+  {
+    name: "Dr. Effah Emmanuel",
+    role: "Computer Science lecturer at UMaT",
+    content: "Finally, an AI tool that actually understands my learning style. My productivity has increased by 300%!",
+    verified: true,
+    imageUrl: '/testimonial2.jpg'
+  },
+];
 
 const LoadingButton = React.memo(({ isLoading, children, className, ...props }: {
   isLoading: boolean; children: React.ReactNode; className?: string; [key: string]: any;
@@ -169,29 +204,18 @@ const Auth = () => {
   // guided walkthrough component displayed as a vertical path of key features
   const Walkthrough = ({ onFinish }: { onFinish?: () => void }) => {
     const steps = [
-      { title: 'Create notes', desc: 'Write, categorize, and review your study notes.', Icon: BookOpen },
-      { title: 'Record lectures', desc: 'Save audio with automatic AI transcription.', Icon: Play },
-      { title: 'Upload documents', desc: 'Import PDFs and images for AI analysis.', Icon: FileText },
-      { title: 'Track progress', desc: 'View your streaks, summaries, and activity.', Icon: Clock },
-      { title: 'Get insights', desc: 'AI gives study tips tailored to you.', Icon: TrendingUp }
+      { title: 'Create notes', desc: 'Write, categorize, and review your study notes with rich formatting and smart organisation.', Icon: BookOpen, color: 'from-blue-500 to-cyan-400' },
+      { title: 'Record lectures', desc: 'Capture audio live and get automatic AI-powered transcriptions in seconds.', Icon: Play, color: 'from-violet-500 to-purple-400' },
+      { title: 'Upload documents', desc: 'Import PDFs, slides, and images — AI extracts key points instantly.', Icon: FileText, color: 'from-amber-500 to-orange-400' },
+      { title: 'Track progress', desc: 'See your streaks, weekly summaries, and study-time analytics at a glance.', Icon: Clock, color: 'from-emerald-500 to-green-400' },
+      { title: 'Get insights', desc: 'Personalised AI study tips and recommendations that adapt to your habits.', Icon: TrendingUp, color: 'from-rose-500 to-pink-400' }
     ];
 
     const containerRef = useRef<HTMLDivElement>(null);
     const stepRefs = useRef<Array<HTMLDivElement | null>>([]);
     const [currentStep, setCurrentStep] = useState(0);
-    const [arrowPos, setArrowPos] = useState(0);
     const [displayText, setDisplayText] = useState('');
     const [typingDone, setTypingDone] = useState(false);
-
-    // compute arrow position when step changes or layout, and scroll into view
-    useLayoutEffect(() => {
-      if (containerRef.current && stepRefs.current[currentStep]) {
-        const cRect = containerRef.current.getBoundingClientRect();
-        const sRect = stepRefs.current[currentStep]!.getBoundingClientRect();
-        setArrowPos(sRect.top - cRect.top + sRect.height / 2);
-        stepRefs.current[currentStep]!.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }, [currentStep]);
 
     // typing effect for current step description
     const text = steps[currentStep].desc || '';
@@ -205,7 +229,7 @@ const Auth = () => {
           const ch = text[i];
           if (ch !== undefined) setDisplayText((p) => p + ch);
           i += 1;
-          timer = setTimeout(typeNext, 40);
+          timer = setTimeout(typeNext, 30);
         } else {
           setTypingDone(true);
         }
@@ -218,69 +242,132 @@ const Auth = () => {
     useEffect(() => {
       if (!typingDone) return;
       if (currentStep >= steps.length - 1) {
-        const t = setTimeout(() => onFinish?.(), 2000);
+        const t = setTimeout(() => onFinish?.(), 2500);
         return () => clearTimeout(t);
       }
       const t = setTimeout(() => setCurrentStep((s) => s + 1), 2000);
       return () => clearTimeout(t);
     }, [typingDone, currentStep, steps.length, onFinish]);
 
+    const progress = ((currentStep + (typingDone ? 1 : 0.5)) / steps.length) * 100;
+
     return (
-      <div ref={containerRef} className="text-white max-w-md relative">
-        <h2 className="text-2xl mb-4">Explore StuddyHub</h2>
-        <div className="absolute left-0 w-1 bg-gray-400 h-full" />
-        <div
-          className="absolute w-4 h-4 bg-blue-500 rounded-full transition-all duration-500"
-          style={{ top: arrowPos, left: -10 }}
-        />
-        <div className="space-y-8">
-          {steps.map((s, idx) => {
-            const isActive = idx === currentStep;
-            return (
-              <div
-                key={idx}
-                ref={(el) => (stepRefs.current[idx] = el)}
-                className={`pl-8 py-4 transition-opacity duration-500 ${
-                  isActive ? 'opacity-100' : 'opacity-30'
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <s.Icon className="h-5 w-5 text-blue-400" />
-                  <h4 className="font-semibold">{s.title}</h4>
+      <div ref={containerRef} className="text-white max-w-lg relative select-none">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="h-5 w-5 text-blue-400" />
+            <span className="text-xs font-medium uppercase tracking-widest text-blue-400/80">Guided tour</span>
+          </div>
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-white via-blue-100 to-blue-300 bg-clip-text text-transparent">
+            What you can do
+          </h2>
+          <p className="text-sm text-slate-400 mt-1">Everything you need to study smarter — all in one place.</p>
+        </div>
+
+        {/* Progress bar */}
+        <div className="h-1 w-full rounded-full bg-slate-700/50 mb-10 overflow-hidden">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-blue-500 via-violet-500 to-pink-500 transition-all duration-700 ease-out"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+
+        {/* Steps */}
+        <div className="relative">
+          {/* Vertical line behind nodes */}
+          <div className="absolute left-5 top-2 bottom-2 w-px bg-gradient-to-b from-slate-600/60 via-slate-700/40 to-transparent" />
+
+          <div className="space-y-2">
+            {steps.map((s, idx) => {
+              const isActive = idx === currentStep;
+              const isCompleted = idx < currentStep;
+              const isPending = idx > currentStep;
+
+              return (
+                <div
+                  key={idx}
+                  ref={(el) => (stepRefs.current[idx] = el)}
+                  className={`relative flex items-start gap-4 rounded-xl px-3 py-4 transition-all duration-500 ${
+                    isActive
+                      ? 'bg-white/[0.04] backdrop-blur-sm shadow-lg shadow-blue-500/5 scale-100'
+                      : 'scale-[0.97]'
+                  }`}
+                >
+                  {/* Node */}
+                  <div className="relative flex-shrink-0 z-10">
+                    <div
+                      className={`flex items-center justify-center h-10 w-10 rounded-xl transition-all duration-500 ${
+                        isCompleted
+                          ? 'bg-gradient-to-br from-emerald-500 to-green-400 shadow-lg shadow-emerald-500/25'
+                          : isActive
+                          ? `bg-gradient-to-br ${s.color} shadow-lg shadow-blue-500/25`
+                          : 'bg-slate-800 border border-slate-700/50'
+                      }`}
+                    >
+                      {isCompleted ? (
+                        <Check className="h-4.5 w-4.5 text-white" />
+                      ) : (
+                        <s.Icon className={`h-4.5 w-4.5 transition-colors duration-300 ${
+                          isActive ? 'text-white' : 'text-slate-500'
+                        }`} />
+                      )}
+                    </div>
+                    {/* Glow ring on active */}
+                    {isActive && (
+                      <div className={`absolute -inset-1 rounded-xl bg-gradient-to-br ${s.color} opacity-20 blur-sm animate-pulse`} />
+                    )}
+                  </div>
+
+                  {/* Content */}
+                  <div className={`flex-1 min-w-0 pt-1 transition-opacity duration-500 ${isPending ? 'opacity-35' : 'opacity-100'}`}>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h4 className={`font-semibold text-sm transition-colors duration-300 ${
+                        isActive ? 'text-white' : isCompleted ? 'text-slate-300' : 'text-slate-500'
+                      }`}>
+                        {s.title}
+                      </h4>
+                      {isCompleted && (
+                        <span className="text-[10px] font-medium text-emerald-400/80 uppercase tracking-wider">Done</span>
+                      )}
+                    </div>
+                    {isActive && (
+                      <p className="text-sm text-slate-300/90 leading-relaxed">
+                        {displayText}
+                        {!typingDone && <span className="inline-block w-0.5 h-4 bg-blue-400 ml-0.5 align-middle animate-pulse" />}
+                      </p>
+                    )}
+                    {isCompleted && (
+                      <p className="text-xs text-slate-500 leading-relaxed truncate">{s.desc}</p>
+                    )}
+                  </div>
                 </div>
-                {isActive && <p className="text-sm whitespace-pre-wrap">{displayText}</p>}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Step counter */}
+        <div className="mt-8 flex items-center justify-between text-xs text-slate-500">
+          <span>Step {currentStep + 1} of {steps.length}</span>
+          <div className="flex gap-1.5">
+            {steps.map((_, i) => (
+              <div
+                key={i}
+                className={`h-1.5 rounded-full transition-all duration-500 ${
+                  i <= currentStep
+                    ? 'w-4 bg-gradient-to-r from-blue-500 to-violet-500'
+                    : 'w-1.5 bg-slate-700'
+                }`}
+              />
+            ))}
+          </div>
         </div>
       </div>
     );
   };
 
   // ── Testimonials / carousel logic ──────────────────────────────────────
-  const staticTestimonials = [
-    {
-      name: "Doris",
-      role: "SHS student",
-      content: "StuddyHub AI has completely revolutionized how I study. The AI chat is incredibly helpful, and the document analysis saves me so much time!",
-      verified: true,
-      imageUrl: "/testimonial1.jpg"
-    },
-    {
-      name: "Isabel",
-      role: "Computer Science student at UMaT",
-      content: "The voice recording feature with AI transcription is a game-changer for my research interviews. Absolutely incredible!",
-      verified: true,
-      imageUrl: '/testimonial3.jpg'
-    },
-    {
-      name: "Dr. Effah Emmanuel",
-      role: "Computer Science lecturer at UMaT",
-      content: "Finally, an AI tool that actually understands my learning style. My productivity has increased by 300%!",
-      verified: true,
-      imageUrl: '/testimonial2.jpg'
-    },
-  ];
 
   useEffect(() => {
     // fetch user-approved testimonials and append static fallbacks
@@ -295,26 +382,19 @@ const Auth = () => {
             verified: true,
             imageUrl: t.author_avatar_url || ''
           }));
-          setAuthTestimonials([...mapped, ...staticTestimonials]);
+          setAuthTestimonials([...mapped, ...STATIC_TESTIMONIALS]);
         } else {
-          setAuthTestimonials(staticTestimonials);
+          setAuthTestimonials(STATIC_TESTIMONIALS);
         }
       } catch {
-        setAuthTestimonials(staticTestimonials);
+        setAuthTestimonials(STATIC_TESTIMONIALS);
       }
     };
     fetchData();
   }, []);
 
-  // preload all testimonial avatar images once data is available
-  useEffect(() => {
-    if (!authTestimonials.length) return;
-    authTestimonials.forEach((t) => {
-      const url = t.imageUrl || '/default-avatar.png';
-      const img = new Image();
-      img.src = url;
-    });
-  }, [authTestimonials]);
+  // No separate preload needed — all testimonial images are rendered
+  // simultaneously in the DOM and cached via loadedImageCache on load.
 
   // typing / fade animation for testimonials
   useEffect(() => {
@@ -720,11 +800,12 @@ const Auth = () => {
         {/* Content */}
         <div className="relative z-10 flex flex-col justify-center px-16 xl:px-20 py-16 w-full">
 
-          {rightView === 'walkthrough' ? (
+          {/* Both panels stay mounted; only one is visible at a time so images are never re-fetched */}
+          <div className={rightView === 'walkthrough' ? '' : 'hidden'}>
             <Walkthrough onFinish={() => setRightView('testimonials')} />
-          ) : (
-            /* testimonial panel */
-            <div className={`${isFading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-500`}> 
+          </div>
+
+          <div className={`${rightView === 'testimonials' ? '' : 'hidden'} ${isFading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-500`}> 
               <blockquote className="relative mb-10 max-w-lg">
                 <span className="absolute -top-4 -left-2 text-6xl text-blue-500/30 font-serif leading-none select-none">"</span>
                 <p className="text-xl xl:text-2xl font-semibold leading-relaxed text-white/85 pl-6 whitespace-pre-wrap">
@@ -733,23 +814,27 @@ const Auth = () => {
                 <span className="text-6xl text-blue-500/30 font-serif leading-none select-none float-right -mt-4">"</span>
               </blockquote>
 
-              {authTestimonials[authIndex] && (
+              {authTestimonials.length > 0 && (
                 <div className="flex items-center gap-4 mb-14 pl-6">
-                  <OptimizedImage
-                    key={authIndex}
-                    src={authTestimonials[authIndex].imageUrl || '/default-avatar.png'}
-                    alt={authTestimonials[authIndex].name}
-                    className="h-12 w-12 rounded-full object-cover ring-2 ring-blue-500/30 ring-offset-2 ring-offset-slate-900"
-                    fallbackSrc="/default-avatar.png"
-                  />
+                  <div className="relative h-12 w-12 flex-shrink-0">
+                    {authTestimonials.map((t, i) => (
+                      <div key={i} className={`absolute inset-0 transition-opacity duration-300 ${i === authIndex ? 'opacity-100' : 'opacity-0'}`}>
+                        <OptimizedImage
+                          src={t.imageUrl || '/default-avatar.png'}
+                          alt={t.name}
+                          className="h-12 w-12 rounded-full object-cover ring-2 ring-blue-500/30 ring-offset-2 ring-offset-slate-900"
+                          fallbackSrc="/default-avatar.png"
+                        />
+                      </div>
+                    ))}
+                  </div>
                   <div>
-                    <p className="text-white font-semibold text-sm">{authTestimonials[authIndex].name}</p>
-                    <p className="text-slate-400 text-xs mt-0.5">{authTestimonials[authIndex].role}</p>
+                    <p className="text-white font-semibold text-sm">{authTestimonials[authIndex]?.name}</p>
+                    <p className="text-slate-400 text-xs mt-0.5">{authTestimonials[authIndex]?.role}</p>
                   </div>
                 </div>
               )}
-            </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

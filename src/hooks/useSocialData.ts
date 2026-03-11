@@ -10,6 +10,8 @@ import {
   CACHE_KEYS,
   saveToCache,
   loadFromCache,
+  clearCache,
+  setCacheOwner,
 } from '../utils/socialCache';
 import { offlineStorage, STORES } from '../utils/offlineStorage';
 
@@ -429,8 +431,9 @@ export const useSocialData = (
           return;
         }
 
-        // 🔥 NEW: If user changed, clear everything first
+        // 🔥 If user changed, clear everything — state, refs, and caches
         if (currentUserIdRef.current && currentUserIdRef.current !== user.id) {
+          clearCache();
           setPosts([]);
           setTrendingPosts([]);
           setUserPosts([]);
@@ -438,10 +441,24 @@ export const useSocialData = (
           setTrendingHashtags([]);
           setSuggestedUsers([]);
           setCurrentUser(null);
+          setLikedPosts([]);
+          setBookmarkedPosts([]);
+          setNewPostsBuffer([]);
+          setHasNewPosts(false);
+          setViewedPostIds(new Set());
+          setPostsCursor(null);
+          setTrendingPostsCursor(null);
+          setUserPostsCursor(null);
+          setHasMorePosts(true);
+          setHasMoreTrendingPosts(true);
+          setHasMoreUserPosts(true);
           isInitializedRef.current = false;
+          isFetchedRef.current = false;
+          feedModeCacheRef.current = {};
         }
 
         currentUserIdRef.current = user.id;
+        setCacheOwner(user.id);
 
         const { data: socialUser, error: fetchError } = await supabase
           .from('social_users')

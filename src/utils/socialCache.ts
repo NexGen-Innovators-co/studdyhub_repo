@@ -6,9 +6,28 @@ export const CACHE_KEYS = {
   SUGGESTED: 'social_cache_suggested',
   HASHTAGS: 'social_cache_hashtags',
   TIMESTAMP: 'social_cache_timestamp',
+  OWNER: 'social_cache_owner',
 };
 
 export const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+/** Set the user ID that owns the current cache. Call on login / user change. */
+export const setCacheOwner = (userId: string) => {
+  try {
+    sessionStorage.setItem(CACHE_KEYS.OWNER, userId);
+  } catch (_) {}
+};
+
+/** Return true when the cached data belongs to a different user. */
+const isCacheStale = (currentUserId?: string | null): boolean => {
+  if (!currentUserId) return true;
+  try {
+    const owner = sessionStorage.getItem(CACHE_KEYS.OWNER);
+    return owner !== currentUserId;
+  } catch {
+    return true;
+  }
+};
 
 export const saveToCache = (key: string, data: any) => {
   try {
@@ -19,8 +38,18 @@ export const saveToCache = (key: string, data: any) => {
   }
 };
 
-export const loadFromCache = (key: string) => {
+/**
+ * Load cached data. If an optional `currentUserId` is provided the cache is
+ * discarded when it belongs to a different user.
+ */
+export const loadFromCache = (key: string, currentUserId?: string | null) => {
   try {
+    // If the cache belongs to a different user, discard it entirely
+    if (currentUserId && isCacheStale(currentUserId)) {
+      clearCache();
+      return null;
+    }
+
     const timestamp = sessionStorage.getItem(CACHE_KEYS.TIMESTAMP);
     if (timestamp) {
       const age = Date.now() - parseInt(timestamp);
