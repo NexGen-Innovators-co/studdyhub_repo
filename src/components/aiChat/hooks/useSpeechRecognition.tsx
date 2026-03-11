@@ -50,9 +50,14 @@ export const useSpeechRecognition = ({
     const [micPermissionStatus, setMicPermissionStatus] = useState<'unknown' | 'granted' | 'denied' | 'checking'>('unknown');
     const recognitionRef = useRef<SpeechRecognition | null>(null);
     const isRecognizingRef = useRef(false);
-    // Accumulator approach: track text components separately to avoid fragile stripping
+    // Track text components separately to avoid fragile stripping
     const preExistingTextRef = useRef<string>('');
-    const accumulatedFinalRef = useRef<string>('');
+    // Finals from previous (auto-restarted) recognition sessions
+    const previousSessionsTextRef = useRef<string>('');
+    // Finals from the current active recognition session (rebuilt from event.results each onresult)
+    const currentSessionFinalsRef = useRef<string>('');
+    // What onresult last wrote to the textarea, so we can detect manual user edits
+    const lastSetValueRef = useRef<string>('');
 
     useEffect(() => {
         checkMicrophonePermission().then(status => {
@@ -80,28 +85,40 @@ export const useSpeechRecognition = ({
         (recognition as any).maxAlternatives = 1;
 
         recognition.onresult = (event: SpeechRecognitionResultEvent) => {
-            let newFinals = '';
+            // Detect if the user manually edited the textarea (e.g. select-all + delete)
+            // by comparing the current value with what we last set.
+            const currentInput = inputMessageRef.current;
+            if (currentInput !== lastSetValueRef.current) {
+                // User changed the text — re-sync: treat current input as new base
+                preExistingTextRef.current = currentInput.trimEnd();
+                previousSessionsTextRef.current = '';
+                currentSessionFinalsRef.current = '';
+            }
+
+            // Rebuild *this session's* finals from all results (idempotent)
+            // to avoid double-counting when the browser re-reports indices.
+            let sessionFinals = '';
             let interimTranscript = '';
 
-            for (let i = event.resultIndex; i < event.results.length; i++) {
+            for (let i = 0; i < event.results.length; i++) {
                 const transcript = event.results[i][0].transcript;
                 if (event.results[i].isFinal) {
-                    newFinals += transcript + ' ';
+                    sessionFinals += transcript + ' ';
                 } else {
                     interimTranscript = transcript;
                 }
             }
 
-            if (newFinals) {
-                accumulatedFinalRef.current += newFinals;
-            }
+            // Overwrite (not append) so repeated events can't duplicate text
+            currentSessionFinalsRef.current = sessionFinals;
 
             // Reconstruct the full message from known components
             const base = preExistingTextRef.current;
-            const finals = accumulatedFinalRef.current.trimEnd();
-            const parts = [base, finals, interimTranscript].filter(Boolean);
+            const allFinals = (previousSessionsTextRef.current + currentSessionFinalsRef.current).trimEnd();
+            const parts = [base, allFinals, interimTranscript].filter(Boolean);
             const newMessage = parts.join(' ');
 
+            lastSetValueRef.current = newMessage;
             setInputMessage(newMessage);
             resizeTextareaThrottled();
         };
@@ -123,6 +140,9 @@ export const useSpeechRecognition = ({
         recognition.onend = () => {
             // Auto-restart if we're supposed to be recognizing
             if (isRecognizingRef.current) {
+                // Carry over this session's finals before restarting
+                previousSessionsTextRef.current += currentSessionFinalsRef.current;
+                currentSessionFinalsRef.current = '';
                 try {
                     recognition.start();
                 } catch (err) {
@@ -166,7 +186,8 @@ export const useSpeechRecognition = ({
 
         try {
             preExistingTextRef.current = inputMessageRef.current.trimEnd();
-            accumulatedFinalRef.current = '';
+            previousSessionsTextRef.current = '';
+            currentSessionFinalsRef.current = '';
             isRecognizingRef.current = true;
             recognitionRef.current.start();
             setIsRecognizing(true);
@@ -186,7 +207,8 @@ export const useSpeechRecognition = ({
             recognitionRef.current.stop();
             setIsRecognizing(false);
             preExistingTextRef.current = '';
-            accumulatedFinalRef.current = '';
+            previousSessionsTextRef.current = '';
+            currentSessionFinalsRef.current = '';
             toast.success('Speech recognition stopped.');
         }
     }, []);
