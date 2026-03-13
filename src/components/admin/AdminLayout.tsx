@@ -63,6 +63,8 @@ export const AdminLayout = () => {
     { to: '/admin/institutions', icon: Building2, label: 'Institutions', perm: permissions.canManageSettings },
     { to: '/admin/logs', icon: FileText, label: 'Activity Logs', perm: permissions.canViewLogs },
     { to: '/admin/errors', icon: Bug, label: 'System Errors', perm: permissions.canViewLogs },
+    { to: '/admin/notification_analytics', icon: BarChart3, label: 'Notification Analytics', perm: permissions.canViewLogs },
+
   ].filter(i => i.perm);
 
   // Loading state

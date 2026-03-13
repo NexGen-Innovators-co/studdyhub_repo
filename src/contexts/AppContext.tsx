@@ -377,7 +377,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       retryLoading('recordings');
       retryLoading('scheduleItems');
       retryLoading('quizzes');
-      // Also refresh social feed on reconnect
+      // Also refresh social feed on reconnect (throttled — max once per 30s)
       socialRefreshRef.current?.();
     }
   }, [user?.id, retryLoading]);
@@ -451,8 +451,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Wire social refresh into the ref so retryAllData can trigger it
   useEffect(() => {
-    socialRefreshRef.current = socialData.refetchPosts;
-  }, [socialData.refetchPosts]);
+    socialRefreshRef.current = socialData.throttledRefresh;
+  }, [socialData.throttledRefresh]);
   const navigateToNote = useCallback((noteId: string | null) => {
     if (noteId) {
       navigate(`/notes/${noteId}`, { replace: true });

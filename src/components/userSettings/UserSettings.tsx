@@ -150,6 +150,20 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
   const [quietHoursEnd, setQuietHoursEnd] = useState('08:00');
   const [reminderTime, setReminderTime] = useState(30);
 
+  // Daily engagement notification preferences
+  const [dailyStudyPlanning, setDailyStudyPlanning] = useState(true);
+  const [dailyStudyPlanningTime, setDailyStudyPlanningTime] = useState('07:00');
+  const [dailyQuizChallenge, setDailyQuizChallenge] = useState(true);
+  const [dailyQuizChallengeTime, setDailyQuizChallengeTime] = useState('14:00');
+  const [dailyGroupNudge, setDailyGroupNudge] = useState(true);
+  const [dailyGroupNudgeTime, setDailyGroupNudgeTime] = useState('17:00');
+  const [dailyPodcastDiscovery, setDailyPodcastDiscovery] = useState(true);
+  const [dailyPodcastDiscoveryTime, setDailyPodcastDiscoveryTime] = useState('19:00');
+  const [dailyProgressTracking, setDailyProgressTracking] = useState(true);
+  const [dailyProgressTrackingTime, setDailyProgressTrackingTime] = useState('20:00');
+  const [userTimezone, setUserTimezone] = useState('UTC');
+  const [maxNotificationsPerDay, setMaxNotificationsPerDay] = useState(3);
+
   // Handle push notification toggle
   const handlePushNotificationToggle = async (checked: boolean) => {
     if (checked) {
@@ -630,6 +644,61 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
   };
 
 
+  const sendTestNotification = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      toast.loading('Sending test notification...');
+
+      const response = await supabase.functions.invoke('send-notification', {
+        body: {
+          user_id: user.id,
+          type: 'test_notification',
+          title: '🎉 Test Notification',
+          message: 'If you see this, StudyHub notifications are working!',
+          data: { test: true },
+          action_url: '/dashboard',
+        }
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || 'Failed to send test notification');
+      }
+
+      toast.dismiss();
+      toast.success('Test notification sent! Check your device.');
+    } catch (error) {
+      console.error('Error sending test notification:', error);
+      toast.dismiss();
+      toast.error(error instanceof Error ? error.message : 'Failed to send test notification');
+    }
+  };
+
+  const runDailyEngineNow = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      toast.loading('Running daily notifications engine...');
+
+      const response = await supabase.functions.invoke('daily-notifications-engine', {
+        body: { force_run_for_user: user.id }
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || 'Failed to run engine');
+      }
+
+      toast.dismiss();
+      toast.success('Daily engine ran! Check notifications in 5 minutes (dispatcher runs every 5 min).');
+    } catch (error) {
+      console.error('Error running daily engine:', error);
+      toast.dismiss();
+      toast.error(error instanceof Error ? error.message : 'Failed to run engine');
+    }
+  };
+
   const saveNotificationPreferences = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -646,7 +715,31 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
         quiet_hours_enabled: quietHoursEnabled,
         quiet_hours_start: quietHoursStart,
         quiet_hours_end: quietHoursEnd,
-        reminder_time: reminderTime
+        reminder_time: reminderTime,
+        user_timezone: userTimezone,
+        max_notifications_per_day: maxNotificationsPerDay,
+        daily_categories: {
+          study_planning: {
+            enabled: dailyStudyPlanning,
+            time: dailyStudyPlanningTime
+          },
+          quiz_challenge: {
+            enabled: dailyQuizChallenge,
+            time: dailyQuizChallengeTime
+          },
+          group_nudge: {
+            enabled: dailyGroupNudge,
+            time: dailyGroupNudgeTime
+          },
+          podcast_discovery: {
+            enabled: dailyPodcastDiscovery,
+            time: dailyPodcastDiscoveryTime
+          },
+          progress_tracking: {
+            enabled: dailyProgressTracking,
+            time: dailyProgressTrackingTime
+          }
+        }
       };
 
       const { error } = await supabase
@@ -659,6 +752,29 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
     } catch (error) {
       //console.error('Error saving notification preferences:', error);
       toast.error('Failed to save notification settings');
+    }
+  };
+
+  // Detect user timezone from IP using free geolocation API
+  const detectTimezoneFromIP = async (): Promise<string> => {
+    try {
+      // Using ip-api.com free tier (45 requests/min from single IP)
+      const response = await fetch('https://ip-api.com/json/?fields=timezone', {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch timezone');
+      
+      const data = await response.json();
+      if (data.timezone) {
+        console.log(`[Timezone] Auto-detected from IP: ${data.timezone}`);
+        return data.timezone;
+      }
+      return 'UTC';
+    } catch (error) {
+      console.warn('[Timezone] Failed to auto-detect, falling back to UTC:', error);
+      return 'UTC';
     }
   };
 
@@ -675,6 +791,8 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 
       if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
 
+      let timezoneToUse = 'UTC';
+      
       if (data) {
         setPushNotifications(data.push_notifications ?? true);
         setEmailNotifications(data.email_notifications ?? true);
@@ -686,9 +804,34 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
         setQuietHoursStart(data.quiet_hours_start ?? '22:00');
         setQuietHoursEnd(data.quiet_hours_end ?? '08:00');
         setReminderTime(data.reminder_time ?? 30);
+
+        // Load daily engagement notification preferences
+        timezoneToUse = data.user_timezone ?? 'UTC';
+        setMaxNotificationsPerDay(data.max_notifications_per_day ?? 3);
+
+        if (data.daily_categories) {
+          const categories = data.daily_categories;
+          setDailyStudyPlanning(categories.study_planning?.enabled ?? true);
+          setDailyStudyPlanningTime(categories.study_planning?.time ?? '07:00');
+          setDailyQuizChallenge(categories.quiz_challenge?.enabled ?? true);
+          setDailyQuizChallengeTime(categories.quiz_challenge?.time ?? '14:00');
+          setDailyGroupNudge(categories.group_nudge?.enabled ?? true);
+          setDailyGroupNudgeTime(categories.group_nudge?.time ?? '17:00');
+          setDailyPodcastDiscovery(categories.podcast_discovery?.enabled ?? true);
+          setDailyPodcastDiscoveryTime(categories.podcast_discovery?.time ?? '19:00');
+          setDailyProgressTracking(categories.progress_tracking?.enabled ?? true);
+          setDailyProgressTrackingTime(categories.progress_tracking?.time ?? '20:00');
+        }
+      } else {
+        // New user - auto-detect timezone from IP
+        console.log('[Timezone] No saved preferences, auto-detecting from IP...');
+        timezoneToUse = await detectTimezoneFromIP();
       }
+      
+      setUserTimezone(timezoneToUse);
     } catch (error) {
-      //console.error('Error loading notification preferences:', error);
+      console.error('[Timezone] Error loading notification preferences:', error);
+      setUserTimezone('UTC'); // Fallback
     }
   };
 
@@ -1454,9 +1597,229 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                   )}
                 </div>
 
-                <Button onClick={saveNotificationPreferences} className="w-full">
-                  Save Notification Settings
-                </Button>
+                {/* Daily Engagement Notifications */}
+                <div className="space-y-4">
+                  <h3 className="font-medium text-sm text-gray-600 dark:text-gray-300">Daily Engagement Notifications</h3>
+
+                  {/* Timezone Setting */}
+                  <div className="p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                    <Label htmlFor="timezone" className="mb-2 block">
+                      Your Timezone
+                    </Label>
+                    <Select
+                      value={userTimezone}
+                      onValueChange={setUserTimezone}
+                    >
+                      <SelectTrigger id="timezone">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="UTC">UTC</SelectItem>
+                        <SelectItem value="US/Pacific">US/Pacific (PST/PDT)</SelectItem>
+                        <SelectItem value="US/Mountain">US/Mountain (MST/MDT)</SelectItem>
+                        <SelectItem value="US/Central">US/Central (CST/CDT)</SelectItem>
+                        <SelectItem value="US/Eastern">US/Eastern (EST/EDT)</SelectItem>
+                        <SelectItem value="Europe/London">Europe/London (GMT/BST)</SelectItem>
+                        <SelectItem value="Europe/Paris">Europe/Paris (CET/CEST)</SelectItem>
+                        <SelectItem value="Asia/Tokyo">Asia/Tokyo (JST)</SelectItem>
+                        <SelectItem value="Asia/Shanghai">Asia/Shanghai (CST)</SelectItem>
+                        <SelectItem value="Asia/Dubai">Asia/Dubai (GST)</SelectItem>
+                        <SelectItem value="Australia/Sydney">Australia/Sydney (AEDT/AEST)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Max Notifications Per Day */}
+                  <div className="p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                    <Label htmlFor="maxNotifications" className="mb-2 block">
+                      Maximum Notifications Per Day: {maxNotificationsPerDay}
+                    </Label>
+                    <input
+                      id="maxNotifications"
+                      type="range"
+                      min="1"
+                      max="5"
+                      value={maxNotificationsPerDay}
+                      onChange={(e) => setMaxNotificationsPerDay(parseInt(e.target.value))}
+                      className="w-full"
+                    />
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                      Limit the number of daily engagement notifications you receive
+                    </div>
+                  </div>
+
+                  {/* Study Planning Notification */}
+                  <div className="p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <div className="font-medium mb-1">📚 Study Planning</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-300">
+                          Morning reminder to plan your study session
+                        </div>
+                      </div>
+                      <Switch
+                        checked={dailyStudyPlanning}
+                        onCheckedChange={setDailyStudyPlanning}
+                      />
+                    </div>
+                    {dailyStudyPlanning && (
+                      <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                        <Label htmlFor="studyTime" className="text-sm mb-2 block">
+                          Preferred Time
+                        </Label>
+                        <input
+                          id="studyTime"
+                          type="time"
+                          value={dailyStudyPlanningTime}
+                          onChange={(e) => setDailyStudyPlanningTime(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Quiz Challenge Notification */}
+                  <div className="p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <div className="font-medium mb-1">🎯 Quiz Challenge</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-300">
+                          Afternoon prompt to take a quick quiz
+                        </div>
+                      </div>
+                      <Switch
+                        checked={dailyQuizChallenge}
+                        onCheckedChange={setDailyQuizChallenge}
+                      />
+                    </div>
+                    {dailyQuizChallenge && (
+                      <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                        <Label htmlFor="quizTime" className="text-sm mb-2 block">
+                          Preferred Time
+                        </Label>
+                        <input
+                          id="quizTime"
+                          type="time"
+                          value={dailyQuizChallengeTime}
+                          onChange={(e) => setDailyQuizChallengeTime(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Group Nudge Notification */}
+                  <div className="p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <div className="font-medium mb-1">👥 Group Nudge</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-300">
+                          Update about activity in your study groups
+                        </div>
+                      </div>
+                      <Switch
+                        checked={dailyGroupNudge}
+                        onCheckedChange={setDailyGroupNudge}
+                      />
+                    </div>
+                    {dailyGroupNudge && (
+                      <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                        <Label htmlFor="groupTime" className="text-sm mb-2 block">
+                          Preferred Time
+                        </Label>
+                        <input
+                          id="groupTime"
+                          type="time"
+                          value={dailyGroupNudgeTime}
+                          onChange={(e) => setDailyGroupNudgeTime(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Podcast Discovery Notification */}
+                  <div className="p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <div className="font-medium mb-1">🎧 Podcast Discovery</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-300">
+                          Daily curated podcast recommendations
+                        </div>
+                      </div>
+                      <Switch
+                        checked={dailyPodcastDiscovery}
+                        onCheckedChange={setDailyPodcastDiscovery}
+                      />
+                    </div>
+                    {dailyPodcastDiscovery && (
+                      <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                        <Label htmlFor="podcastTime" className="text-sm mb-2 block">
+                          Preferred Time
+                        </Label>
+                        <input
+                          id="podcastTime"
+                          type="time"
+                          value={dailyPodcastDiscoveryTime}
+                          onChange={(e) => setDailyPodcastDiscoveryTime(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Progress Tracking Notification */}
+                  <div className="p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <div className="font-medium mb-1">🏆 Progress Celebration</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-300">
+                          Personalized message about your learning progress
+                        </div>
+                      </div>
+                      <Switch
+                        checked={dailyProgressTracking}
+                        onCheckedChange={setDailyProgressTracking}
+                      />
+                    </div>
+                    {dailyProgressTracking && (
+                      <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                        <Label htmlFor="progressTime" className="text-sm mb-2 block">
+                          Preferred Time
+                        </Label>
+                        <input
+                          id="progressTime"
+                          type="time"
+                          value={dailyProgressTrackingTime}
+                          onChange={(e) => setDailyProgressTrackingTime(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Button onClick={saveNotificationPreferences} className="w-full">
+                    Save Notification Settings
+                  </Button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button 
+                      onClick={sendTestNotification} 
+                      variant="outline"
+                      className="w-full"
+                    >
+                      🧪 Send Test
+                    </Button>
+                    <Button 
+                      onClick={runDailyEngineNow} 
+                      variant="outline"
+                      className="w-full"
+                    >
+                      🚀 Run Engine
+                    </Button>
+                  </div>
+                </div>
               </div>
             </CardContent>
           )}

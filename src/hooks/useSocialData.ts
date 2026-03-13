@@ -1176,6 +1176,7 @@ export const useSocialData = (
     showNewPosts,
     clearNewPosts,
     forceRefresh, // Export this for manual cache clearing if needed
+    throttledRefresh: resetAndFetchData, // Throttled version for reconnect/auto paths
     // Feed control setters
     feedMode,
     setFeedMode,

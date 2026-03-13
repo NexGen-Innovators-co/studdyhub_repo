@@ -1,0 +1,10 @@
+{
+  "imports": {
+    "std/": "https://deno.land/std@0.195.0/",
+    "supabase": "https://esm.sh/@supabase/supabase-js@2.38.4",
+    "web-push": "npm:web-push@3.6.7"
+  },
+  "compilerOptions": {
+    "lib": ["deno.window"]
+  }
+}

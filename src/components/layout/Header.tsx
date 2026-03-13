@@ -374,12 +374,12 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Button
               onClick={onNewNote}
-              className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700"
               size="sm"
               variant="ghost"
+              className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+              title="New Note"
             >
-              <Plus className="h-4 w-4 mr-2" />
-              <span className="hidden md:inline">New Note</span>
+              <Plus className="h-4 w-4" />
             </Button>
           </SubscriptionGuard>
         );
@@ -392,12 +392,12 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Button
               onClick={() => onUploadDocument?.()}
-              className="bg-blue-600 hover:bg-blue-700"
               size="sm"
               variant="ghost"
+              className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+              title="Upload Document"
             >
-              <Upload className="h-4 w-4 mr-2" />
-              <span className="hidden md:inline">Upload</span>
+              <Upload className="h-4 w-4" />
             </Button>
           </SubscriptionGuard>
         );
@@ -413,12 +413,12 @@ export const Header: React.FC<HeaderProps> = ({
                 const id = await createNewChatSession?.();
                 if (id) navigate(`/chat/${id}`);
               }}
-              className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700"
               size="sm"
               variant="ghost"
+              className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+              title="New Chat"
             >
-              <MessageCircle className="h-4 w-4 mr-2" />
-              <span className="hidden md:inline">New Chat</span>
+              <MessageCircle className="h-4 w-4" />
             </Button>
           </SubscriptionGuard>
         );
@@ -432,30 +432,30 @@ export const Header: React.FC<HeaderProps> = ({
               }
               onOpenCreatePostDialog();
             }}
-            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
             size="sm"
             variant="ghost"
             disabled={!canCreatePosts}
+            className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
             title={!canCreatePosts ? 'Upgrade to Scholar or Genius to create posts' : 'Create a new post'}
           >
-            {!canCreatePosts && <Lock className="h-4 w-4 mr-2" />}
-            <Plus className={!canCreatePosts ? '' : 'h-4 w-4 mr-2'} />
-            <span className="hidden md:inline">Post</span>
+            {!canCreatePosts ? (
+              <Lock className="h-4 w-4" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
           </Button>
         );
       case 'podcasts':
         return (
-          <div className="flex gap-2">
-            <Button
-              onClick={() => onCreatePodcast?.()}
-              className="text-gray-600"
-              size="sm"
-              variant="ghost"
-            >
-              <Radio className="h-4 w-4 mr-2" />
-              <span className="hidden md:inline">Create</span>
-            </Button>
-          </div>
+          <Button
+            onClick={() => onCreatePodcast?.()}
+            size="sm"
+            variant="ghost"
+            className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+            title="Create Podcast"
+          >
+            <Radio className="h-4 w-4" />
+          </Button>
         );
       default:
         return null;

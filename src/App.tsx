@@ -19,11 +19,6 @@ import { OnboardingGuard } from "./components/onboarding/OnboardingGuard";
 // LinkedIn-style branded loader for protected / heavy routes
 export const BrandedLoader = () => (
   <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-gray-950">
-    <img
-      src="/siteimage.png"
-      alt="StuddyHub AI"
-      className="h-16 w-16 object-contain mb-4 animate-pulse"
-    />
     <span className="text-xl font-semibold text-gray-800 dark:text-gray-100 tracking-tight mb-6">
       StuddyHub <span className="text-blue-600 dark:text-blue-400">AI</span>
     </span>
@@ -77,7 +72,7 @@ const CourseManagement = lazy(() => import("./components/admin/CourseManagement"
 const RoleVerificationAdmin = lazy(() => import("./components/admin/RoleVerificationAdmin"));
 const AdminInstitutions = lazy(() => import("./components/admin/AdminInstitutions"));
 const CourseDashboard = lazy(() => import("./pages/CourseDashboard"));
-
+const NotificationAnalytics = lazy(() => import("./components/admin/NotificationAnalytics"));
 // Lazy load educator components
 const EducatorLayout = lazy(() => import("./components/educator/EducatorLayout"));
 const EducatorDashboard = lazy(() => import("./components/educator/EducatorDashboard"));
@@ -223,6 +218,7 @@ const AppWithSEO = () => {
               <Route path="/admin/updates" element={<Suspense fallback={<Fallback />}><PlatformUpdates /></Suspense>} />
               <Route path="/admin/verification" element={<Suspense fallback={<Fallback />}><RoleVerificationAdmin /></Suspense>} />
               <Route path="/admin/institutions" element={<Suspense fallback={<Fallback />}><AdminInstitutions /></Suspense>} />
+              <Route path="/admin/notification_analytics" element={<Suspense fallback={<Fallback />}><NotificationAnalytics /></Suspense>} />
             </Route>
 
             {/* ==== 404 NOT FOUND ==== */}

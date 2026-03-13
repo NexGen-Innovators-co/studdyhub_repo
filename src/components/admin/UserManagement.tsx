@@ -1,5 +1,5 @@
 // src/components/admin/UserManagement.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../../integrations/supabase/client';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Button } from '../ui/button';
@@ -15,6 +15,7 @@ import { Switch } from '../ui/switch';
 import { useNavigate } from 'react-router-dom';
 import { Textarea } from '../ui/textarea';
 import { AlertTriangle } from 'lucide-react';
+import { AvatarImage } from './AvatarImage';
 
 interface UserProfile {
   id: string;
@@ -26,6 +27,7 @@ interface UserProfile {
   is_verified: boolean | null;
   posts_count: number | null;
   followers_count: number | null;
+  avatar_url: string | null;
 }
 
 const UserManagement = () => {
@@ -95,14 +97,32 @@ const UserManagement = () => {
   const [purgeReason, setPurgeReason] = useState('');
   const [purgeConfirmText, setPurgeConfirmText] = useState('');
   const [isPurging, setIsPurging] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(10); // Items per page
+  const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => {
-    fetchUsers();
+    fetchUsers(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async (page: number = 1) => {
     try {
       setLoading(true);
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      // Fetch total count
+      const { count, error: countError } = await supabase
+        .from('social_users')
+        .select('id', { count: 'exact', head: true });
+
+      if (countError) throw countError;
+      setTotalCount(count || 0);
+
+      // Fetch paginated users
       const { data, error } = await supabase
         .from('social_users')
         .select(`
@@ -116,16 +136,40 @@ const UserManagement = () => {
           posts_count,
           followers_count
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(from, to);
 
       if (error) throw error;
-      setUsers((data ?? []) as UserProfile[]);
+      
+      // Fetch avatars from profiles table
+      const userIds = (data ?? []).map(u => u.id);
+      let avatarMap: Record<string, string | null> = {};
+      
+      if (userIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('id, avatar_url')
+          .in('id', userIds);
+        
+        profilesData?.forEach(profile => {
+          avatarMap[profile.id] = profile.avatar_url;
+        });
+      }
+      
+      // Merge avatar data into users
+      const flattenedData = (data ?? []).map((user: any) => ({
+        ...user,
+        avatar_url: avatarMap[user.id] || null
+      }));
+
+      setUsers(flattenedData as UserProfile[]);
+      setCurrentPage(page);
     } catch (err) {
       toast({ title: 'Error fetching users', description: `${err}`, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
-  };
+  }, [pageSize, toast]);
 
   const toggleActive = async (userId: string, makeActive: boolean) => {
     try {
@@ -237,7 +281,7 @@ const UserManagement = () => {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h2 className="text-3xl font-bold">User Management</h2>
-        <Button onClick={fetchUsers}>Refresh</Button>
+        <Button onClick={() => { fetchUsers(currentPage); }}>Refresh</Button>
       </div>
 
       <div className="flex flex-col md:flex-row gap-4">
@@ -262,6 +306,7 @@ const UserManagement = () => {
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead>Avatar</TableHead>
             <TableHead>Username</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Joined</TableHead>
@@ -273,6 +318,9 @@ const UserManagement = () => {
         <TableBody>
           {filtered.map(u => (
             <TableRow key={u.id}>
+              <TableCell>
+                <AvatarImage url={u.avatar_url} username={u.username} className="w-10 h-10 rounded-full object-cover" />
+              </TableCell>
               <TableCell>{u.username}</TableCell>
               <TableCell>{u.email ?? '-'}</TableCell>
               <TableCell>{new Date(u.created_at).toLocaleDateString()}</TableCell>
@@ -345,6 +393,34 @@ const UserManagement = () => {
           ))}
         </TableBody>
       </Table>
+
+      {/* Pagination Controls */}
+      <div className="flex items-center justify-between mt-6">
+        <div className="text-sm text-gray-600 dark:text-gray-400">
+          Showing {users.length === 0 ? 0 : (currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} users
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchUsers(currentPage - 1)}
+            disabled={currentPage === 1 || loading}
+          >
+            Previous
+          </Button>
+          <div className="flex items-center px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-900">
+            <span className="text-sm font-medium">Page {currentPage} of {Math.ceil(totalCount / pageSize)}</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchUsers(currentPage + 1)}
+            disabled={currentPage * pageSize >= totalCount || loading}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
 
       {/* Purge User Data Dialog */}
       <Dialog open={isPurgeOpen} onOpenChange={(open) => { setIsPurgeOpen(open); if (!open) { setPurgeConfirmText(''); setPurgeReason(''); } }}>

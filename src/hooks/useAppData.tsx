@@ -1467,7 +1467,7 @@ export const useAppData = (authUser?: any) => {
           personal_context: null,
           institution_id: null,
           onboarding_completed: false,
-          user_role: null,
+          user_role: 'student',
           role_verified_at: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -1476,8 +1476,26 @@ export const useAppData = (authUser?: any) => {
         // Create in background without blocking
         setTimeout(async () => {
           try {
+            const profileInsertPayload = {
+              id: user.id,
+              email: user.email || '',
+              full_name: '',
+              avatar_url: '',
+              learning_style: 'visual',
+              learning_preferences: {
+                explanation_style: 'detailed',
+                examples: true,
+                difficulty: 'intermediate'
+              },
+              bonus_ai_credits: 0,
+              is_public: false,
+              points_balance: 0,
+              onboarding_completed: false,
+              user_role: 'student'
+            };
+
             await withTimeout(
-              supabase.from('profiles').insert(finalProfile),
+              supabase.from('profiles').upsert(profileInsertPayload, { onConflict: 'id' }),
               API_TIMEOUT,
               'Failed to create profile'
             );
@@ -1520,7 +1538,7 @@ export const useAppData = (authUser?: any) => {
         personal_context: null,
         institution_id: null,
         onboarding_completed: false,
-        user_role: null,
+        user_role: 'student',
         role_verified_at: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()

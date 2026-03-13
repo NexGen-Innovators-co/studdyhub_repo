@@ -266,12 +266,12 @@ const Auth = () => {
         </div>
 
         {/* Progress bar */}
-        <div className="h-1 w-full rounded-full bg-slate-700/50 mb-10 overflow-hidden">
+        {/* <div className="h-1 w-full rounded-full bg-slate-700/50 mb-10 overflow-hidden">
           <div
             className="h-full rounded-full bg-gradient-to-r from-blue-500 via-violet-500 to-pink-500 transition-all duration-700 ease-out"
             style={{ width: `${progress}%` }}
           />
-        </div>
+        </div> */}
 
         {/* Steps */}
         <div className="relative">
@@ -301,7 +301,7 @@ const Auth = () => {
                         isCompleted
                           ? 'bg-gradient-to-br from-emerald-500 to-green-400 shadow-lg shadow-emerald-500/25'
                           : isActive
-                          ? `bg-gradient-to-br ${s.color} shadow-lg shadow-blue-500/25`
+                          ? `bg-gradient-to-br ${s.color} shadow-sm shadow-blue-500/25`
                           : 'bg-slate-800 border border-slate-700/50'
                       }`}
                     >
@@ -314,9 +314,9 @@ const Auth = () => {
                       )}
                     </div>
                     {/* Glow ring on active */}
-                    {isActive && (
+                    {/* {isActive && (
                       <div className={`absolute -inset-1 rounded-xl bg-gradient-to-br ${s.color} opacity-20 blur-sm animate-pulse`} />
-                    )}
+                    )} */}
                   </div>
 
                   {/* Content */}

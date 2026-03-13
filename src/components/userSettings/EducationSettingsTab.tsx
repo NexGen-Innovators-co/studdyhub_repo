@@ -386,7 +386,7 @@ export const EducationSettingsTab: React.FC = () => {
                 <ChevronsUpDown className="ml-2 w-4 h-4" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="p-0" align="start">
+            <PopoverContent className="p-0 bg-white dark:bg-gray-800" align="start">
               <Command>
                 <CommandInput
                   placeholder="Search institution..."

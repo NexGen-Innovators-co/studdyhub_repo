@@ -163,11 +163,15 @@ export function useSubscription(): UseSubscriptionReturn {
       }
 
       // Fetch bonus AI credits from profile
-      const { data: profileData } = await supabase
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('bonus_ai_credits')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
+
+      if (profileError && profileError.code !== 'PGRST116') {
+        //console.error('Error fetching profile credits:', profileError);
+      }
 
       setBonusAiCredits(profileData?.bonus_ai_credits || 0);
     } catch (error) {

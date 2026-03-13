@@ -37,7 +37,14 @@ export type NotificationType =
   | 'podcast_share'
   | 'ai_limit_warning'
   | 'subscription_renewal'
-  | 'general';
+  | 'general'
+  | 'daily_study_planning'
+  | 'daily_quiz_challenge'
+  | 'daily_group_nudge'
+  | 'daily_podcast_discovery'
+  | 'daily_progress_celebration'
+  | 'daily_progress_reengagement'
+  | 'daily_progress_winback';
 
 export interface NotificationPreferences {
   id: string;
