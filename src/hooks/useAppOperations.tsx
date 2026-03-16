@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { Note } from '../types/Note';
+import { Note, NoteCategory } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message, Quiz } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
 import { generateId } from '../components/classRecordings/utils/helpers';
@@ -189,6 +189,111 @@ export const useAppOperations = ({
       if (!isRealtimeConnected) refreshData();
     }
   }, [isRealtimeConnected, refreshData, setActiveNote, setActiveTab, setNotes, navigate]);
+
+  const createNoteWithData = useCallback(async (
+    title: string,
+    content: string,
+    category: NoteCategory = 'general'
+  ) => {
+    try {
+      // Same subscription checks as createNewNote
+      if (!isAdmin) {
+        const noteCount = notes.length;
+        const maxNotes = subscriptionLimits.maxNotes;
+
+        if (subscriptionTier === 'free' && noteCount >= maxNotes) {
+          toast.error(`Note limit reached (${maxNotes}). You have created ${noteCount} notes.`, {
+            action: {
+              label: 'Upgrade',
+              onClick: () => navigate('/subscription')
+            },
+            duration: 5000
+          });
+          return;
+        }
+
+        if (noteCount >= maxNotes && maxNotes !== Infinity) {
+          toast.error(`Note limit reached (${maxNotes}). Upgrade to create more notes.`, {
+            action: {
+              label: 'Upgrade',
+              onClick: () => navigate('/subscription')
+            }
+          });
+          return;
+        }
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('You must be logged in to create notes');
+        return;
+      }
+
+      const newNoteData: Note = {
+        id: crypto.randomUUID(),
+        title: title || 'Untitled Note',
+        content: content || '',
+        category: category || 'general',
+        tags: [] as string[],
+        user_id: user.id,
+        document_id: null,
+        ai_summary: '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      // If offline, save locally
+      if (!navigator.onLine) {
+        await offlineStorage.save(STORES.NOTES, newNoteData);
+        await offlineStorage.addPendingSync('create', 'notes', newNoteData);
+
+        setNotes(prev => [newNoteData, ...prev]);
+        setActiveNote(newNoteData);
+        setActiveTab('notes');
+        toast.success(`Note "${title}" created (offline)!`);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('notes')
+        .insert({
+          title: newNoteData.title,
+          content: newNoteData.content,
+          category: newNoteData.category,
+          tags: newNoteData.tags,
+          user_id: newNoteData.user_id,
+          ai_summary: newNoteData.ai_summary
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (!isRealtimeConnected) {
+        const formattedNote: Note = {
+          id: data.id,
+          title: data.title,
+          content: data.content || '',
+          category: data.category || 'general',
+          tags: data.tags || [],
+          created_at: data.created_at,
+          updated_at: data.updated_at,
+          ai_summary: data.ai_summary || '',
+          document_id: data.document_id || null,
+          user_id: data.user_id
+        };
+        setNotes(prev => [formattedNote, ...prev]);
+        setActiveNote(formattedNote);
+      }
+
+      setActiveTab('notes');
+      toast.success(`Note "${title}" created!`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to create note: ${errorMessage}`);
+      if (!isRealtimeConnected) refreshData();
+    }
+  }, [isRealtimeConnected, refreshData, setActiveNote, setActiveTab, setNotes, navigate, notes.length, subscriptionTier, subscriptionLimits, isAdmin]);
 
   const updateNote = useCallback(async (updatedNote: Note) => {
     try {
@@ -1247,6 +1352,7 @@ export const useAppOperations = ({
 
   return {
     createNewNote,
+    createNoteWithData,
     updateNote,
     deleteNote,
     addRecording,

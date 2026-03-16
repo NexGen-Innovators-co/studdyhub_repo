@@ -6,7 +6,7 @@ import { Note, NoteCategory } from '../../../types/Note';
 import { formatDate, getCategoryColor } from '../../classRecordings/utils/helpers';
 import { Input } from '../../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
-import { PodcastButton } from '../../dashboard/PodcastButton';
+// import { PodcastButton } from '../../dashboard/PodcastButton';
 import { Checkbox } from '../../ui/checkbox';
 import { useGlobalSearch } from '../../../hooks/useGlobalSearch';
 import { SEARCH_CONFIGS } from '../../../services/globalSearchService';
@@ -394,7 +394,7 @@ export const NotesList: React.FC<NotesListProps> = ({
               {showSelection ? <CheckSquare className="h-3 w-3" /> : <Square className="h-3 w-3" />}
               {showSelection ? `Selected (${selectedNoteIds.length})` : 'Select'}
             </Button>
-            
+{/*             
             {showSelection && selectedNoteIds.length > 0 && (
               <PodcastButton 
                 selectedNoteIds={selectedNoteIds}
@@ -402,7 +402,7 @@ export const NotesList: React.FC<NotesListProps> = ({
                 size="sm"
                 className="h-7 text-xs"
               />
-            )}
+            )} */}
           </div>
         )}
 

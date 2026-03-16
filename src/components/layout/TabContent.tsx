@@ -19,6 +19,22 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ChatSessionsListMobile } from '../aiChat/Components/ChatSessionsListMobile';
 import { NotificationsPage } from '../notifications/NotificationsPage';
 import { CourseLibrary } from '../courseLibrary/CourseLibrary';
+import { CreateNoteFlowDialog } from '../notes/components/CreateNoteFlowDialog';
+import { Card } from '../ui/card';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  BookMarked,
+  Lightbulb,
+  Globe,
+  Headphones,
+  Users,
+  Archive,
+  Sparkles,
+  ArrowRight,
+  ChevronRight,
+  Play,
+  Plus,
+} from 'lucide-react';
 // import { PodcastsPage } from '../podcasts/PodcastsPage';
 
 // Lazy load PodcastsPage
@@ -70,6 +86,7 @@ interface TabContentProps {
 
   onNavigateToTab?: (tab: string) => void;
   onCreateNew?: (type: 'note' | 'recording' | 'schedule' | 'document') => void;
+  onCreateNoteWithData?: (title: string, content: string, category: any) => void;
 
   onSendMessage: (
     message: string,
@@ -152,7 +169,266 @@ interface TabContentProps {
   onSearchNotes?: (searchQuery: string) => Promise<Note[]>;
 }
 
+
+export const EmptyNotesState: React.FC<{ 
+  recordings?: ClassRecording[];
+  documents?: Document[];
+  onCreateNote?: () => void;
+  onToggleSidebar?: () => void;
+  onCreateNoteWithTemplate?: (data: { title: string; content: string; category: any }) => void;
+}> = ({ recordings, documents, onCreateNote, onToggleSidebar, onCreateNoteWithTemplate }) => {
+  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+  
+  const features = [
+    {
+      id: 'organization',
+      icon: BookMarked,
+      title: 'Smart Organization',
+      description: 'Categorize by subject, add tags, and find notes with powerful search',
+      color: 'from-blue-500 to-blue-600',
+      accentColor: 'text-blue-600 dark:text-blue-400',
+      bgColor: 'bg-blue-50 dark:bg-blue-950/20',
+    },
+    {
+      id: 'ai-insights',
+      icon: Sparkles,
+      title: 'AI-Powered Insights',
+      description: 'Get summaries, explanations, and study guides instantly',
+      color: 'from-purple-500 to-purple-600',
+      accentColor: 'text-purple-600 dark:text-purple-400',
+      bgColor: 'bg-purple-50 dark:bg-purple-950/20',
+    },
+    {
+      id: 'languages',
+      icon: Globe,
+      title: 'Multi-Language',
+      description: 'Study in 100+ languages with instant translation',
+      color: 'from-emerald-500 to-emerald-600',
+      accentColor: 'text-emerald-600 dark:text-emerald-400',
+      bgColor: 'bg-emerald-50 dark:bg-emerald-950/20',
+    },
+    {
+      id: 'audio',
+      icon: Headphones,
+      title: 'Audio Learning',
+      description: 'Listen to your notes with natural-sounding text-to-speech',
+      color: 'from-orange-500 to-orange-600',
+      accentColor: 'text-orange-600 dark:text-orange-400',
+      bgColor: 'bg-orange-50 dark:bg-orange-950/20',
+    },
+    {
+      id: 'collaborate',
+      icon: Users,
+      title: 'Collaborate',
+      description: 'Share with classmates and build study groups together',
+      color: 'from-pink-500 to-pink-600',
+      accentColor: 'text-pink-600 dark:text-pink-400',
+      bgColor: 'bg-pink-50 dark:bg-pink-950/20',
+    },
+    {
+      id: 'export',
+      icon: Archive,
+      title: 'Export & Share',
+      description: 'Download as PDF, export to different formats',
+      color: 'from-indigo-500 to-indigo-600',
+      accentColor: 'text-indigo-600 dark:text-indigo-400',
+      bgColor: 'bg-indigo-50 dark:bg-indigo-950/20',
+    },
+  ];
+
+  const hasRecordings = recordings && recordings.length > 0;
+  const hasDocuments = documents && documents.length > 0;
+
+  return (
+    <>
+      <CreateNoteFlowDialog
+        isOpen={isTemplateDialogOpen}
+        onClose={() => setIsTemplateDialogOpen(false)}
+        onCreateNote={(data) => {
+          setIsTemplateDialogOpen(false);
+          onCreateNoteWithTemplate?.(data);
+        }}
+      />
+      
+      <div className="h-full w-full overflow-y-auto pb-24 sm:pb-0">
+        <div className="min-h-full bg-gradient-to-br from-white via-blue-50/30 to-white dark:from-slate-900 dark:via-slate-800/50 dark:to-slate-900">
+          {/* Hero Header - Mobile optimized */}
+          <div className="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-12 lg:pt-16 pb-4 sm:pb-8 border-b border-slate-200/50 dark:border-slate-700/50">
+            <div className="max-w-6xl mx-auto text-center">
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+              >
+                <div className="flex justify-center mb-3 sm:mb-4">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-500 rounded-2xl opacity-10 blur-xl"></div>
+                    <BookMarked className="relative h-10 w-10 sm:h-16 sm:w-16 text-blue-600 dark:text-blue-400" />
+                  </div>
+                </div>
+                
+                <h1 className="text-2xl sm:text-4xl lg:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600 dark:from-gray-100 dark:to-gray-300 mb-2">
+                  Start Taking Notes
+                </h1>
+                <p className="text-sm sm:text-base lg:text-lg text-slate-600 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">
+                  {hasRecordings && !hasDocuments && `You have ${recordings?.length} recording${recordings?.length !== 1 ? 's' : ''}. Create your first note.`}
+                  {hasDocuments && !hasRecordings && `You have ${documents?.length} document${documents?.length !== 1 ? 's' : ''}. Organize your learning.`}
+                  {hasRecordings && hasDocuments && `You have ${recordings?.length} recording${recordings?.length !== 1 ? 's' : ''} and ${documents?.length} document${documents?.length !== 1 ? 's' : ''}.`}
+                  {!hasRecordings && !hasDocuments && "Begin your learning journey with powerful organization and AI."}
+                </p>
+              </motion.div>
+            </div>
+          </div>
+
+          {/* Main Content */}
+          <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-12 lg:py-16 pb-8">
+            <div className="max-w-6xl mx-auto">
+              {/* Action Button - Mobile First (moved up) */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="flex justify-center mb-8 sm:mb-12"
+              >
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setIsTemplateDialogOpen(true)}
+                  className="w-full sm:w-auto relative px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl sm:rounded-2xl font-semibold text-base sm:text-lg shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden group"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-700 to-blue-800 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <BookMarked className="h-5 w-5 sm:h-6 sm:w-6 relative" />
+                  <span className="relative">Create with Template</span>
+                </motion.button>
+              </motion.div>
+
+              {/* Feature Cards Grid - Mobile optimized with fewer cards showing */}
+              <motion.div
+                layout
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 lg:gap-6 mb-8 sm:mb-12"
+              >
+                <AnimatePresence>
+                  {features.map((feature, idx) => {
+                    // Only show first 3 features on mobile, all on larger screens
+                    const isMobileHidden = idx >= 3 && typeof window !== 'undefined' && window.innerWidth < 640;
+                    if (isMobileHidden) return null;
+
+                    const Icon = feature.icon;
+                    return (
+                      <motion.div
+                        key={feature.id}
+                        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        transition={{ duration: 0.4, delay: idx * 0.05 }}
+                        className="h-full group hidden sm:block lg:block"
+                        onMouseEnter={() => setHoveredCard(feature.id)}
+                        onMouseLeave={() => setHoveredCard(null)}
+                      >
+                        <Card className="overflow-hidden h-full relative bg-white dark:bg-slate-900/70 border border-slate-200/60 dark:border-slate-700/60 transition-all duration-300 hover:shadow-lg hover:border-slate-300/80 dark:hover:border-slate-600/80 cursor-pointer">
+                          {/* Background Gradient */}
+                          <motion.div
+                            className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-5 transition-opacity duration-500`}
+                          />
+
+                          {/* Content */}
+                          <div className="relative p-4 sm:p-5 lg:p-6 flex flex-col h-full">
+                            {/* Icon Container */}
+                            <motion.div
+                              className={`mb-3 ${feature.bgColor} rounded-lg p-2.5 sm:p-3 lg:p-4 w-fit`}
+                              animate={{
+                                y: hoveredCard === feature.id ? -4 : 0,
+                              }}
+                              transition={{ duration: 0.3 }}
+                            >
+                              <Icon className={`h-5 w-5 sm:h-6 sm:w-6 lg:h-7 lg:w-7 ${feature.accentColor} transition-transform duration-300 group-hover:scale-110`} />
+                            </motion.div>
+
+                            {/* Text Content */}
+                            <div className="flex-1">
+                              <h3 className="text-base sm:text-lg lg:text-xl font-bold text-slate-800 dark:text-gray-100 mb-1.5 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r transition-all duration-300" style={{backgroundImage: hoveredCard === feature.id ? `linear-gradient(to right, var(--color-start), var(--color-end))` : 'none'}}>
+                                {feature.title}
+                              </h3>
+                              <p className="text-xs sm:text-sm lg:text-base text-slate-600 dark:text-gray-400 leading-snug">
+                                {feature.description}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Hover Border Accent */}
+                          <motion.div
+                            className={`absolute bottom-0 left-0 h-1 bg-gradient-to-r ${feature.color}`}
+                            animate={{
+                              width: hoveredCard === feature.id ? '100%' : '0%',
+                            }}
+                            transition={{ duration: 0.4 }}
+                          />
+                        </Card>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </motion.div>
+
+              {/* Mobile-only: Show feature highlights as simple list */}
+              <div className="sm:hidden mb-8 space-y-3">
+                {features.slice(0, 3).map((feature, idx) => {
+                  const Icon = feature.icon;
+                  return (
+                    <motion.div
+                      key={feature.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: idx * 0.1 }}
+                      className={`flex gap-3 p-3 rounded-lg ${feature.bgColor} border border-slate-200/40 dark:border-slate-700/40`}
+                    >
+                      <Icon className={`h-5 w-5 flex-shrink-0 mt-0.5 ${feature.accentColor}`} />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-semibold text-slate-800 dark:text-gray-100">{feature.title}</h3>
+                        <p className="text-xs text-slate-600 dark:text-gray-400 leading-snug">{feature.description}</p>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+
+              {/* Quick Suggestion Banner */}
+              {(hasRecordings || hasDocuments) && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="bg-gradient-to-r from-blue-50/80 to-purple-50/80 dark:from-blue-950/30 dark:to-purple-950/30 border border-blue-200/60 dark:border-blue-800/40 rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-7 mb-8 sm:mb-12 backdrop-blur-sm"
+                >
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    <Lightbulb className="h-5 w-5 sm:h-6 sm:w-6 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-slate-800 dark:text-gray-100 mb-1 text-sm sm:text-base">Quick Suggestion</h3>
+                      {hasRecordings && (
+                        <p className="text-xs sm:text-sm text-slate-700 dark:text-gray-300 leading-snug">
+                          You have <strong>{recordings?.length} recording{recordings?.length !== 1 ? 's' : ''}</strong> ready. Create a note and reference them later.
+                        </p>
+                      )}
+                      {hasDocuments && (
+                        <p className="text-xs sm:text-sm text-slate-700 dark:text-gray-300 leading-snug">
+                          You have <strong>{documents?.length} document{documents?.length !== 1 ? 's' : ''}</strong> ready. Organize your learning now.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
 export const TabContent: React.FC<TabContentProps> = (props) => {
+
   // Shared ref for SocialFeed, available in both social and podcasts tabs
   const socialFeedRef = useRef<SocialFeedHandle>(null);
   const { activeTab, userProfile, isAILoading, isNotesHistoryOpen, onToggleNotesHistory, activeSocialTab, socialPostId, podcastId } = props;
@@ -499,7 +775,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
                       </div>
 
                       {/* Editor Area - Centered content */}
-                      <div className="flex-1 h-full lg:max-h-[90vh] bg-white dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
+                      <div className="flex-1 h-full lg:max-h-[90vh] bg-white dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-y-auto">
                         {notesProps.activeNote ? (
                           <NoteEditor
                             note={notesProps.activeNote}
@@ -510,13 +786,15 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
                             readOnly={!!userProfile?.id && notesProps.activeNote.user_id !== userProfile.id}
                           />
                         ) : (
-                          <div className="h-full flex items-center justify-center text-slate-400 p-4 dark:text-gray-500">
-                            <div className="text-center">
-                              <div className="text-4xl sm:text-6xl mb-4">📝</div>
-                              <h3 className="text-lg sm:text-xl font-medium mb-2">No note selected</h3>
-                              <p className="text-sm sm:text-base">Select a note to start editing or create a new one</p>
-                            </div>
-                          </div>
+                          <EmptyNotesState 
+                            recordings={props.recordings}
+                            documents={props.documents}
+                            onCreateNote={() => props.onCreateNew?.('note')}
+                            onToggleSidebar={onToggleNotesHistory}
+                            onCreateNoteWithTemplate={(data) => {
+                              props.onCreateNoteWithData?.(data.title, data.content, data.category);
+                            }}
+                          />
                         )}
                       </div>
                     </div>

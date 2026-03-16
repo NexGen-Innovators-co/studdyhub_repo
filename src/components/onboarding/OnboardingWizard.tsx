@@ -32,6 +32,7 @@ import { CreateInstitutionFlow } from '@/components/educator/onboarding/CreateIn
 import { JoinInstitutionFlow } from '@/components/educator/onboarding/JoinInstitutionFlow';
 import { IndependentTutorSetup } from '@/components/educator/onboarding/IndependentTutorSetup';
 import type { UserRole } from '@/types/Education';
+import OnboardingSuccessScreen from './OnboardingSuccessScreen';
 
 // ─── Types ────────────────────────────────────────────────────
 interface OnboardingWizardProps {
@@ -100,6 +101,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const [currentStep, setCurrentStep] = useState<Step>('welcome');
   const [direction, setDirection] = useState(1);
   const [isSaving, setIsSaving] = useState(false);
+  const [showSuccessScreen, setShowSuccessScreen] = useState(false);
+  const [completedProfile, setCompletedProfile] = useState<UserProfile | undefined>(undefined);
 
   // Education step state
   const [educationData, setEducationData] = useState<EducationStepData>({
@@ -346,13 +349,15 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         ...userProfile,
         ...(profileData || {}),
       } as UserProfile;
-      onComplete(updatedProfile);
+      setCompletedProfile(updatedProfile);
+      setShowSuccessScreen(true);
       toast.success('Welcome to StuddyHub! 🎉');
     } catch (err) {
       console.error('Onboarding save error:', err);
       toast.error('Failed to save — you can update later in Settings.');
       markComplete();
-      onComplete();
+      setCompletedProfile(undefined);
+      setShowSuccessScreen(true);
     } finally {
       setIsSaving(false);
     }
@@ -747,6 +752,15 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   // ─── Render ──────────────────────────────────────────────────
   const stepLabels = ['Welcome', 'About You', 'Learning', 'Ready!'];
+
+  if (showSuccessScreen) {
+    return (
+      <OnboardingSuccessScreen
+        autoNavigate={false}
+        onDone={() => onComplete(completedProfile)}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[60] bg-white dark:bg-gray-900 flex flex-col overflow-hidden">

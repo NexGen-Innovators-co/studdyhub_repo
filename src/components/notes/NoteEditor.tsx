@@ -11,6 +11,7 @@ import { Chart, registerables } from 'chart.js';
 import katex from 'katex';
 import { Button } from '../ui/button';
 import { Sparkles, RotateCw, Lightbulb, Eye } from 'lucide-react';
+import { useUserActivityLogger } from '@/hooks/useUserActivityLogger';
 
 Chart.register(...registerables);
 
@@ -246,6 +247,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   isNotesHistoryOpen,
   readOnly = false
 }) => {
+  const { logUserActivity } = useUserActivityLogger();
 
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content); // Markdown
@@ -438,6 +440,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
     setTimeout(() => {
       onNoteUpdate(updatedNote);
+      void logUserActivity(userProfile?.id, 'note', 30);
       setIsContentModified(false);
       setIsloading(false);
       toast.success("Note saved successfully");
@@ -446,7 +449,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         currentAudioRef.current = null;
       }
     }, 1000);
-  }, [content, note, title, category, tags, onNoteUpdate]);
+  }, [content, note, title, category, tags, onNoteUpdate, logUserActivity, userProfile?.id]);
 
   const handleContentChange = useCallback((newContent: string) => {
     setContent(newContent);

@@ -16,8 +16,17 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
 
+const MODERATION_CONFIG = {
+  RETRY_ATTEMPTS: 3,
+  BACKOFF_MS: 1000
+};
+
+function sleep(ms: number): Promise<void> {
+  const jitter = Math.random() * 500;
+  return new Promise((resolve) => setTimeout(resolve, ms + jitter));
+}
+
 serve(async (req) => {
-  // console.log('create-social-post function called:', req.method);
   
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -25,8 +34,6 @@ serve(async (req) => {
   }
 
   try {
-    // console.log('Starting post creation process...');
-    
     // Extract config and parse body early so we can accept author_id fallback
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
@@ -74,301 +81,370 @@ serve(async (req) => {
     // Initialize Supabase client
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // ===== CONTENT MODERATION: Check if content is educational =====
+    // ===== CONTENT MODERATION: Quick keyword check only (AI runs async) =====
     try {
-      // console.log('Starting content moderation...');
-      
-      // Get moderation settings
-      const { data: settings } = await supabase
-        .from('system_settings')
-        .select('*')
-        .eq('key', 'content_moderation')
-        .single();
+      // Quick keyword check
+      const blockedKeywords = ['spam', 'advertisement', 'buy now', 'click here'];
+      const lowerContent = content.toLowerCase();
+      const hasBlockedKeywords = blockedKeywords.some(keyword =>
+        lowerContent.includes(keyword.toLowerCase())
+      );
 
-      // console.log('Moderation settings:', settings ? 'found' : 'not found');
-
-      const moderationSettings = settings?.value || {
-        enabled: true,
-        strictness: 'medium',
-        allowedCategories: [
-          'Science', 'Mathematics', 'Technology', 'Engineering',
-          'History', 'Literature', 'Language Learning', 'Arts',
-          'Business', 'Economics', 'Health', 'Medicine',
-          'Philosophy', 'Psychology', 'Social Sciences',
-          'Study Tips', 'Exam Preparation', 'Career Guidance'
-        ],
-        blockedKeywords: ['spam', 'advertisement', 'buy now', 'click here'],
-        minEducationalScore: 0.6
-      };
-
-      // console.log('Moderation enabled:', moderationSettings.enabled);
-
-      if (moderationSettings.enabled) {
-        // console.log('Starting keyword check...');
-        
-        // Quick keyword check
-        const lowerContent = content.toLowerCase();
-        const hasBlockedKeywords = moderationSettings.blockedKeywords.some((keyword: string) =>
-          lowerContent.includes(keyword.toLowerCase())
-        );
-
-        if (hasBlockedKeywords) {
-          // Log the rejection
-          await supabase.from('content_moderation_log').insert({
-            user_id: userId,
-            content_preview: content.substring(0, 200),
-            content_type: 'post',
-            decision: 'rejected',
-            reason: 'Content contains blocked keywords or spam-like patterns',
-            confidence: 1.0,
-            educational_score: 0
-          });
-
-          return new Response(JSON.stringify({
-            success: false,
-            moderation: {
-              approved: false,
-              reason: 'Content contains spam-like keywords or promotional language',
-              suggestions: [
-                'Remove promotional or spam-like language',
-                'Focus on educational value',
-                'Share knowledge or ask genuine questions'
-              ]
-            }
-          }), {
-            status: 200,
-            headers: {
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*'
-            }
-          });
-        }
-
-        // console.log('Keyword check passed, starting AI analysis...');
-        
-        // AI-powered educational analysis using direct API
-        const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || '';
-
-        const prompt = `You are an educational content moderator for StuddyHub, a learning platform.
-
-Analyze this post and determine if it is educational in nature.
-
-CONTENT TO ANALYZE:
-"""
-${content}
-"""
-
-EVALUATION CRITERIA:
-1. Is this content related to learning, education, academics, or skill development?
-2. Does it provide educational value (teaching, explaining, asking genuine questions, sharing study resources)?
-3. Does it belong to these categories: ${moderationSettings.allowedCategories.join(', ')}
-4. Is it free from spam, advertisements, inappropriate content, or off-topic discussions?
-
-STRICTNESS: ${moderationSettings.strictness || 'medium'}
-
-Respond in JSON format:
-{
-  "isEducational": boolean,
-  "confidence": number (0-1),
-  "category": string,
-  "topics": array of strings,
-  "educationalValue": {
-    "score": number (0-1),
-    "reasoning": string
-  },
-  "reason": string,
-  "suggestions": array of strings
-}`;
-
-        // console.log('Calling Gemini API...');
-
-        const MODEL_CHAIN = [
-          'gemini-2.5-flash',
-          'gemini-2.0-flash',
-          'gemini-2.0-flash-lite',
-          'gemini-2.5-pro',
-          'gemini-3-pro-preview'
-        ];
-
-        async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 3): Promise<any> {
-          for (let attempt = 0; attempt < Math.min(maxAttempts, MODEL_CHAIN.length); attempt++) {
-            const model = MODEL_CHAIN[attempt % MODEL_CHAIN.length];
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-            try {
-              const resp = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
-              });
-              if (resp.ok) return await resp.json();
-              const txt = await resp.text();
-              // console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
-              if (resp.status === 429 || resp.status === 503) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
-            } catch (err) {
-              // console.error(`Error calling Gemini ${model}:`, err);
-              if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
-            }
-          }
-          // OpenRouter fallback
-          const orResult = await callOpenRouterFallback(requestBody.contents, { source: 'create-social-post' });
-          if (orResult.success && orResult.content) {
-            return { candidates: [{ content: { parts: [{ text: orResult.content }] } }] };
-          }
-          throw new Error('All AI models failed (Gemini + OpenRouter)');
-        }
-
-        const result = await callGeminiWithModelChain({ contents: [{ parts: [{ text: prompt }] }] }, geminiApiKey);
-        // console.log('Gemini API result received, parsing...');
-        
-        const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        
-        if (!responseText) {
-          // console.error('Empty response from Gemini API:', JSON.stringify(result));
-          throw new Error('Empty response from Gemini API');
-        }
-        
-        // console.log('Response text length:', responseText.length);
-        let jsonText = responseText.trim();
-        if (jsonText.startsWith('```json')) {
-          jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        } else if (jsonText.startsWith('```')) {
-          jsonText = jsonText.replace(/```\n?/g, '').trim();
-        }
-        
-        // console.log('Parsing AI analysis JSON...');
-        const aiAnalysis = JSON.parse(jsonText);
-        // console.log('AI analysis result:', aiAnalysis.isEducational, 'score:', aiAnalysis.educationalValue?.score);
-        // console.log('AI analysis parsed, isEducational:', aiAnalysis.isEducational);
-
-        const approved = aiAnalysis.isEducational && 
-                        aiAnalysis.educationalValue.score >= moderationSettings.minEducationalScore &&
-                        aiAnalysis.confidence >= 0.5;
-
-        // Log the moderation decision
+      if (hasBlockedKeywords) {
+        // Log the rejection
         await supabase.from('content_moderation_log').insert({
           user_id: userId,
           content_preview: content.substring(0, 200),
           content_type: 'post',
-          decision: approved ? 'approved' : 'rejected',
-          reason: approved ? 'Content meets educational standards' : aiAnalysis.reason,
-          confidence: aiAnalysis.confidence,
-          ai_analysis: aiAnalysis,
-          educational_score: aiAnalysis.educationalValue.score,
-          category: aiAnalysis.category,
-          topics: aiAnalysis.topics
+          decision: 'rejected',
+          reason: 'Content contains blocked keywords or spam-like patterns',
+          confidence: 1.0,
+          educational_score: 0
         });
 
-        if (!approved) {
-          // Check for repeat offenders
-          const { data: recentRejections } = await supabase
-            .from('content_moderation_log')
-            .select('id')
-            .eq('user_id', userId)
-            .eq('decision', 'rejected')
-            .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-
-          if (recentRejections && recentRejections.length >= 5) {
-            await supabase.from('content_moderation_queue').insert({
-              content_id: userId,
-              content_type: 'user',
-              reason: 'Multiple rejected posts (5+ in 24 hours)',
-              status: 'pending',
-              priority: 10
-            });
+        return new Response(JSON.stringify({
+          success: false,
+          moderation: {
+            approved: false,
+            reason: 'Content contains spam-like keywords or promotional language',
+            suggestions: [
+              'Remove promotional or spam-like language',
+              'Focus on educational value',
+              'Share knowledge or ask genuine questions'
+            ]
           }
+        }), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
+      }
+      
+    } catch (moderationError) {
+      console.error('[create-social-post] Moderation keyword check error:', moderationError);
+      // Don't block post creation on keyword check errors
+    }
+    
+    // ===== AI MODERATION: Run async in background (non-blocking) =====
+    // Fire-and-forget: Run AI analysis after post is created
+    (async () => {
+    let moderationApproved = true;
+    let moderationReason = 'No moderation checks enabled';
+    
+      try {
+        const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+        const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
+        
+        if (!geminiApiKey) {
+          await supabase.from('content_moderation_log').insert({
+            user_id: userId,
+            content_preview: content.substring(0, 200),
+            content_type: 'post',
+            decision: 'pending_review',
+            reason: 'No AI API key configured',
+            confidence: 0
+          });
+          return;
+        }
+        
+        
+        const prompt = `You are an educational content moderator for StuddyHub.
+Analyze if this post is educational in nature.
 
-          return new Response(JSON.stringify({
-            success: false,
-            moderation: {
-              approved: false,
-              isEducational: aiAnalysis.isEducational,
-              confidence: aiAnalysis.confidence,
-              category: aiAnalysis.category,
-              reason: aiAnalysis.reason,
-              suggestions: aiAnalysis.suggestions || [],
-              topics: aiAnalysis.topics || [],
-              educationalValue: aiAnalysis.educationalValue
+Post content: "${content.substring(0, 500)}"
+
+Respond with ONLY valid JSON (no markdown, no code blocks):
+{"isEducational": boolean, "confidence": number, "reason": "string"}`;
+
+        const MODEL_CHAIN = ['gemini-2.5-flash', 'gemini-3-pro-preview', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+        let moderationSuccess = false;
+        let lastGeminiError = '';
+
+        // === GEMINI RETRY LOOP ===
+        for (let attempt = 0; attempt < MODERATION_CONFIG.RETRY_ATTEMPTS; attempt++) {
+          if (moderationSuccess) break;
+          
+          const currentModel = MODEL_CHAIN[attempt % MODEL_CHAIN.length];
+          console.log(`[AI-MOD] Attempt ${attempt + 1}/${MODERATION_CONFIG.RETRY_ATTEMPTS} using ${currentModel}`);
+          
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${geminiApiKey}`;
+          
+          try {
+            const requestBody = {
+              contents: [{ 
+                role: 'user',
+                parts: [{ text: prompt }] 
+              }],
+              generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 1024,
+                topK: 40,
+                topP: 0.95
+              }
+            };
+            
+            const resp = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(requestBody)
+            });
+            
+            if (resp.ok) {
+              const result = await resp.json();
+              const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+              
+              if (responseText) {
+                let jsonString = responseText.trim();
+                if (jsonString.includes('```')) {
+                  jsonString = jsonString.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                }
+                
+                try {
+                  const analysis = JSON.parse(jsonString);
+                  console.log(`[AI-MOD] Success with ${currentModel}: isEducational=${analysis.isEducational}`);
+                  
+                  await supabase.from('content_moderation_log').insert({
+                    user_id: userId,
+                    content_preview: content.substring(0, 200),
+                    content_type: 'post',
+                    decision: analysis.isEducational ? 'approved' : 'pending_review',
+                    reason: analysis.reason || 'AI analysis complete',
+                    confidence: analysis.confidence || 0.5,
+                    educational_score: analysis.isEducational ? 0.8 : 0.3
+                  });
+                  moderationSuccess = true;
+                } catch (parseErr) {
+                  lastGeminiError = `${currentModel}: JSON parse error`;
+                  console.log(`[AI-MOD] Parse error: ${parseErr}`);
+                }
+              } else {
+                lastGeminiError = `${currentModel}: No response text`;
+                console.log(`[AI-MOD] ${lastGeminiError}`);
+              }
+            } else {
+              const errorText = await resp.text();
+              const status = resp.status;
+              lastGeminiError = `${currentModel}: HTTP ${status}`;
+              console.error(`[AI-MOD] Error ${status} with ${currentModel}: ${errorText.substring(0, 200)}`);
+              
+              logSystemError(supabase, {
+                severity: 'error',
+                source: 'create-social-post',
+                component: 'moderation-gemini',
+                error_code: `GEMINI_HTTP_${status}`,
+                message: `Gemini ${currentModel} returned HTTP ${status}`,
+                details: { model: currentModel, status, attempt, errorSnippet: errorText.substring(0, 500) }
+              });
+              
+              // Handle rate limiting: backoff and retry
+              if ((status === 429 || status === 503) && attempt < MODERATION_CONFIG.RETRY_ATTEMPTS - 1) {
+                console.warn(`[AI-MOD] Rate limit/overload for ${currentModel}. Backing off...`);
+                await sleep(MODERATION_CONFIG.BACKOFF_MS * (attempt + 1));
+                continue;
+              }
+              
+              // Bad request: don't retry
+              if (status === 400) {
+                console.error(`[AI-MOD] Bad request to ${currentModel}. Not retrying.`);
+                break;
+              }
             }
-          }), {
-            status: 200,
-            headers: {
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*'
+          } catch (err) {
+            lastGeminiError = `${currentModel}: ${String(err)}`;
+            console.error(`[AI-MOD] Network error with ${currentModel}:`, err);
+            
+            logSystemError(supabase, {
+              severity: 'error',
+              source: 'create-social-post',
+              component: 'moderation-gemini',
+              error_code: 'GEMINI_NETWORK_ERROR',
+              message: `Gemini ${currentModel} network error: ${String(err)}`,
+              details: { model: currentModel, attempt, error: String(err) }
+            });
+            
+            if (attempt < MODERATION_CONFIG.RETRY_ATTEMPTS - 1) {
+              await sleep(MODERATION_CONFIG.BACKOFF_MS * (attempt + 1));
             }
+          }
+        }
+        
+        // === OPENROUTER FALLBACK ===
+        if (!moderationSuccess && openRouterApiKey) {
+          console.log('[AI-MOD] All Gemini attempts failed. Trying OpenRouter fallback...');
+          try {
+            const orResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${openRouterApiKey}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                model: 'openrouter/free',
+                messages: [
+                  {
+                    role: 'user',
+                    content: prompt
+                  }
+                ],
+                max_tokens: 1024,
+                temperature: 0.7,
+                top_p: 0.95
+              })
+            });
+            
+            if (orResp.ok) {
+              const orData = await orResp.json();
+              const orContent = orData.choices?.[0]?.message?.content;
+              
+              if (orContent) {
+                let jsonString = orContent.trim();
+                if (jsonString.includes('```')) {
+                  jsonString = jsonString.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                }
+                
+                try {
+                  const analysis = JSON.parse(jsonString);
+                  console.log('[AI-MOD] OpenRouter fallback succeeded');
+                  
+                  await supabase.from('content_moderation_log').insert({
+                    user_id: userId,
+                    content_preview: content.substring(0, 200),
+                    content_type: 'post',
+                    decision: analysis.isEducational ? 'approved' : 'pending_review',
+                    reason: (analysis.reason || 'AI analysis complete') + ' [OpenRouter]',
+                    confidence: analysis.confidence || 0.5,
+                    educational_score: analysis.isEducational ? 0.8 : 0.3
+                  });
+                  moderationSuccess = true;
+                } catch (oParseErr) {
+                  console.log('[AI-MOD] OpenRouter parse error:', oParseErr);
+                }
+              }
+            } else {
+              const orErr = await orResp.text();
+              console.error('[AI-MOD] OpenRouter error:', orResp.status, orErr.substring(0, 200));
+            }
+          } catch (orNetErr) {
+            console.error('[AI-MOD] OpenRouter network error:', orNetErr);
+          }
+        }
+        
+        // If all attempts failed, log it
+        if (!moderationSuccess) {
+          console.log(`[AI-MOD] All moderation attempts failed. Last error: ${lastGeminiError}`);
+          await supabase.from('content_moderation_log').insert({
+            user_id: userId,
+            content_preview: content.substring(0, 200),
+            content_type: 'post',
+            decision: 'pending_review',
+            reason: `AI analysis failed: ${lastGeminiError}`,
+            confidence: 0
           });
         }
+      } catch (aiErr) {
+        console.error('[AI-MOD] Background AI moderation error:', aiErr);
+        console.log(`[AI-MOD] Error details: ${JSON.stringify(aiErr)}`);
       }
-    } catch (moderationError) {
-      // console.error('Content moderation error:', moderationError);
-      // Don't block post creation if moderation fails, just log it
-      await supabase.from('content_moderation_log').insert({
-        user_id: userId,
-        content_preview: content.substring(0, 200),
-        content_type: 'post',
-        decision: 'error',
-        reason: 'Moderation service error',
-        confidence: 0
-      });
-    }
-    // ===== END CONTENT MODERATION =====
+    })();
+    // ===== END ASYNC AI MODERATION =====
 
     // Auto-tag post with author's education context for feed affinity scoring
     let enrichedMetadata = metadata || {};
     try {
-      const eduCtx = await getEducationContext(supabase, userId);
-      if (eduCtx) {
-        enrichedMetadata = {
-          ...enrichedMetadata,
-          education_context: {
-            country: eduCtx.country,
-            education_level: eduCtx.educationLevel,
-            curriculum: eduCtx.curriculum,
-            subjects: eduCtx.subjects,
-          },
-        };
+      // Add timeout for education context (takes too long, skip if it hangs)
+      const contextPromise = getEducationContext(supabase, userId);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Education context timeout')), 1500)
+      );
+      
+      try {
+        const eduCtx = await Promise.race([contextPromise, timeoutPromise]) as any;
+        if (eduCtx) {
+          enrichedMetadata = {
+            ...enrichedMetadata,
+            education_context: {
+              country: eduCtx.country,
+              education_level: eduCtx.educationLevel,
+              curriculum: eduCtx.curriculum,
+              subjects: eduCtx.subjects,
+            },
+          };
+        }
+      } catch (_ctxErr) {
+        // Context fetch timeout or error - skip, non-critical
       }
     } catch { /* non-critical — don't block post creation */ }
 
     // Create the social post (without media_urls - that column doesn't exist)
-    const { data: post, error } = await supabase
-      .from('social_posts')
-      .insert({
-        author_id: userId,
-        content,
-        privacy,
-        group_id,
-        metadata: enrichedMetadata,
-        created_at: new Date().toISOString(),
-        likes_count: 0,
-        comments_count: 0
-      })
-      .select('*')
-      .single();
+    let post;
+    try {
+      console.log('[create-social-post] Inserting post to social_posts table');
+      const { data: insertedPost, error } = await supabase
+        .from('social_posts')
+        .insert({
+          author_id: userId,
+          content,
+          privacy: privacy || 'public',
+          group_id: group_id || null,
+          metadata: enrichedMetadata || null,
+          created_at: new Date().toISOString(),
+          likes_count: 0,
+          comments_count: 0,
+          bookmarks_count: 0,
+          shares_count: 0,
+          views_count: 0,
+          ai_categories: null,
+          ai_quality_score: null,
+          ai_sentiment: null
+        })
+        .select('*')
+        .single();
 
-    if (error) {
-      // console.error('Error creating post:', error);
-      return createErrorResponse('Failed to create post', 500);
+      if (error) {
+        console.error('[create-social-post] Post insert error:', error);
+        return createErrorResponse('Failed to create post: ' + (error?.message || 'Unknown error'), 500);
+      }
+      
+      if (!insertedPost) {
+        console.error('[create-social-post] Post insert returned no data');
+        return createErrorResponse('Failed to create post: No post data returned', 500);
+      }
+      
+      post = insertedPost;
+      console.log('[create-social-post] Post created successfully:', post.id);
+    } catch (postErr) {
+      console.error('[create-social-post] Unexpected error during post creation:', postErr);
+      return createErrorResponse('Internal error creating post', 500);
     }
+    
 
     // Insert media records into social_media table
     if (media && media.length > 0) {
-      const mediaRecords = media.map((item: any) => ({
-        post_id: post.id,
-        type: item.type,
-        url: item.url,
-        filename: item.filename || 'untitled',
-        size_bytes: item.size_bytes || 0,
-        mime_type: item.mime_type || 'application/octet-stream',
-        thumbnail_url: item.thumbnail_url || null
-      }));
+      try {
+        console.log('[create-social-post] Inserting', media.length, 'media records');
+        const mediaRecords = media.map((item: any) => ({
+          post_id: post.id,
+          type: item.type,
+          url: item.url,
+          filename: item.filename || 'untitled',
+          size_bytes: item.size_bytes || 0,
+          mime_type: item.mime_type || 'application/octet-stream',
+          thumbnail_url: item.thumbnail_url || null
+        }));
 
-      const { error: mediaError } = await supabase
-        .from('social_media')
-        .insert(mediaRecords);
+        const { error: mediaError } = await supabase
+          .from('social_media')
+          .insert(mediaRecords);
 
-      if (mediaError) {
-        // console.error('Error creating media:', mediaError);
-        // Don't fail the whole request, just log the error
+        if (mediaError) {
+          console.error('[create-social-post] Media insertion warning:', mediaError);
+        } else {
+          console.log('[create-social-post] Media inserted successfully');
+        }
+      } catch (mediaErr) {
+        console.error('[create-social-post] Error during media insertion:', mediaErr);
       }
     }
 
@@ -397,6 +473,7 @@ Respond in JSON format:
         }
       }
     }
+    
 
     // Update user's posts count
     const { data: userProfile } = await supabase
@@ -421,6 +498,7 @@ Respond in JSON format:
           .select('display_name')
           .eq('id', userId)
           .single();
+        
         
         const authorName = author?.display_name || 'Someone';
         let recipientIds: string[] = [];
@@ -496,6 +574,7 @@ Respond in JSON format:
       }
     })();
 
+    console.log('[create-social-post] All steps completed successfully. Returning post:', post.id);
     return new Response(JSON.stringify({
       success: true,
       post
@@ -508,18 +587,36 @@ Respond in JSON format:
     });
 
   } catch (error) {
-    // ── Log to system_error_logs ──
+    console.error('[create-social-post] Unhandled error:', error);
     try {
       const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      
+      const errorDetails: Record<string, any> = {
+        message: error?.message || String(error),
+        stack: error?.stack || '',
+        type: error?.constructor?.name || 'Unknown',
+        timestamp: new Date().toISOString()
+      };
+      
+      // Try to extract more details if it's an error object
+      if (error instanceof Error) {
+        errorDetails.name = error.name;
+        errorDetails.message = error.message;
+      }
+      
       await logSystemError(_logClient, {
         severity: 'error',
         source: 'create-social-post',
-        message: error?.message || String(error),
-        details: { stack: error?.stack },
+        error_code: 'POST_CREATION_FAILED',
+        message: `Post creation failed: ${error?.message || String(error)}`,
+        details: errorDetails,
       });
-    } catch (_logErr) { console.error('[create-social-post] Error logging failed:', _logErr); }
-    // console.error('Error in create-social-post:', error);
+    } catch (_logErr) { 
+      console.error('[create-social-post] Error logging failed:', _logErr); 
+    }
     return createErrorResponse('Internal server error', 500);
   }
 });
+
+
 

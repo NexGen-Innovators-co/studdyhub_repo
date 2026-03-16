@@ -4,7 +4,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../integrations/supabase/client';
 import { clearCache } from '../utils/socialCache'; // Import the utility
-import { clearDashboardCache } from '@/components/dashboard/hooks/useDashboardStats';
 import { offlineStorage, STORES } from '../utils/offlineStorage';
 import { pushNotificationService } from '@/services/pushNotificationService';
 import { resetPushInitialization } from '@/services/notificationInitService';
@@ -213,7 +212,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       // Clear all caches BEFORE signing out
       clearCache(); // Social cache
-      clearDashboardCache(); // Dashboard stats cache
 
           // Clear offline IndexedDB stores
           try {
@@ -246,7 +244,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       ////console.error('❌ Error during sign out:', error);
       // Still try to clear caches even if signout fails
       clearCache();
-      clearDashboardCache();
       resetPushInitialization();
       localStorage.clear();
       sessionStorage.clear();

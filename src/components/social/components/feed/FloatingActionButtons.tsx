@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RefreshCw, ArrowUp, Sparkles, MessageCircle, Lightbulb, ChevronUp, ChevronDown } from 'lucide-react';
+import { RefreshCw, ArrowUp, Sparkles, MessageCircle, Lightbulb, ChevronUp, ChevronDown, Edit3 } from 'lucide-react';
 
 interface FloatingActionButtonsProps {
   isScrolled: boolean;
@@ -10,10 +10,12 @@ interface FloatingActionButtonsProps {
   newPostsCount: number;
   totalUnread: number;
   showChatList: boolean;
+  canCreatePosts?: boolean;
   onRefresh: () => void;
   onScrollToTop: () => void;
   onShowNewPosts: () => void;
   onToggleChatList: () => void;
+  onCreatePost?: () => void;
 }
 
 export const FloatingActionButtons: React.FC<FloatingActionButtonsProps> = ({
@@ -25,16 +27,33 @@ export const FloatingActionButtons: React.FC<FloatingActionButtonsProps> = ({
   newPostsCount,
   totalUnread,
   showChatList,
+  canCreatePosts = false,
   onRefresh,
   onScrollToTop,
   onShowNewPosts,
   onToggleChatList,
+  onCreatePost,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
     <div className="fixed bottom-16 right-2 flex flex-col gap-3 z-40 pointer-events-none">
       <div className="flex flex-col items-center gap-3 pointer-events-auto">
+        {/* Create Post Button */}
+        {canCreatePosts && isMenuOpen && (
+          <button
+            onClick={() => {
+              onCreatePost?.();
+              setIsMenuOpen(false);
+            }}
+            className="h-11 w-11 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl transition-all flex items-center justify-center backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2 duration-200"
+            aria-label="Create post"
+            title="Create Post"
+          >
+            <Edit3 className="h-5 w-5" />
+          </button>
+        )}
+
         {/* Tips Button */}
         {(window as any).__toggleTips && isMenuOpen && (
           <button

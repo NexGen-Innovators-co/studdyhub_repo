@@ -1803,7 +1803,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                   <Button onClick={saveNotificationPreferences} className="w-full">
                     Save Notification Settings
                   </Button>
-                  <div className="grid grid-cols-2 gap-3">
+                  {/* <div className="grid grid-cols-2 gap-3">
                     <Button 
                       onClick={sendTestNotification} 
                       variant="outline"
@@ -1818,7 +1818,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                     >
                       🚀 Run Engine
                     </Button>
-                  </div>
+                  </div> */}
                 </div>
               </div>
             </CardContent>

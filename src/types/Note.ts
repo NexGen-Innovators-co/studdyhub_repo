@@ -1,5 +1,5 @@
 // types/Note.ts
-export type NoteCategory = 'general' | 'math' | 'science' | 'history' | 'language' | 'other';
+export type NoteCategory = string; // Allow any custom category
 
 export interface Note {
   id: string;

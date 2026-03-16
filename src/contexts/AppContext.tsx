@@ -93,6 +93,7 @@ interface AppContextType extends AppState {
   // Navigation
   handleNavigateToTab: (tab: string) => void;
   handleCreateNew: (type: 'note' | 'recording' | 'schedule' | 'document') => void;
+  handleCreateNoteWithData: (title: string, content: string, category: any) => void;
 
   // Data setters from useAppData
   setNotes: (notes: Note[] | ((prev: Note[]) => Note[])) => void;
@@ -1120,6 +1121,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [appOperations.createNewNote, handleNavigateToTab]);
 
+  const handleCreateNoteWithData = useCallback(
+    (title: string, content: string, category: any) => {
+      appOperations.createNoteWithData(title, content, category);
+    },
+    [appOperations.createNoteWithData]
+  );
+
   // Load data and effects
   useEffect(() => {
     if (user) {
@@ -1321,6 +1329,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Navigation
     handleNavigateToTab,
     handleCreateNew,
+    handleCreateNoteWithData,
 
     // Data setters
     setNotes,

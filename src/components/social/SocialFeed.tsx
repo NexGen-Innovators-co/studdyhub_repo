@@ -923,10 +923,12 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
             newPostsCount={newPostsCount}
             totalUnread={totalUnread}
             showChatList={showChatList}
+            canCreatePosts={canCreatePosts}
             onRefresh={handleRefresh}
             onScrollToTop={scrollToTop}
             onShowNewPosts={showNewPosts}
             onToggleChatList={() => setShowChatList(prev => !prev)}
+            onCreatePost={() => setShowPostDialog(true)}
           />
         </div>
 

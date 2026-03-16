@@ -4,8 +4,10 @@ import { supabase } from '../../../integrations/supabase/client';
 import { toast } from 'sonner';
 import { QuizAttempt, UserStats, Achievement, Badge } from '../../../types/EnhancedClasses';
 import { trackCourseResourceCompletion } from '../../../services/courseProgressService';
+import { useUserActivityLogger } from '@/hooks/useUserActivityLogger';
 
 export const useQuizTracking = (userId: string) => {
+  const { logUserActivity } = useUserActivityLogger();
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [recentAchievements, setRecentAchievements] = useState<Achievement[]>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
@@ -156,6 +158,7 @@ export const useQuizTracking = (userId: string) => {
 
       // Track course progress (fire-and-forget)
       trackCourseResourceCompletion(userId, 'quiz', quizId, { score: percentage });
+      void logUserActivity(userId, 'quiz', xpEarned);
 
       return data;
     } catch (error) {

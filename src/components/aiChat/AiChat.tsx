@@ -36,6 +36,7 @@ import { PodcastGenerator, type PodcastData } from '../podcasts/PodcastGenerator
 import { PodcastPanel } from '../podcasts/PodcastPanel';
 import { ImageGenerator } from './Components/ImageGenerator';
 import { useImageGenerationDetector } from '@/hooks/useImageGenerationDetector';
+import { useUserActivityLogger } from '@/hooks/useUserActivityLogger';
 
 export interface AttachedFile {
   file: File;
@@ -350,6 +351,7 @@ const AIChat: React.FC<AIChatProps> = ({
 
 
   const [autoTypeInPanel, setAutoTypeInPanel] = useState(false);
+  const { logUserActivity } = useUserActivityLogger();
   const lastProcessedMessageIdRef = useRef<string | null>(null);
   const [isAiTyping, setIsAiTyping] = useState(false);
   const [isLastAiMessageDisplayed, setIsLastAiMessageDisplayed] = useState(true);
@@ -649,6 +651,7 @@ const AIChat: React.FC<AIChatProps> = ({
         noteIds,
         filesForBackend
       );
+      void logUserActivity(userProfile?.id, 'chat', 10);
 
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (cameraInputRef.current) cameraInputRef.current.value = '';
@@ -705,6 +708,7 @@ const AIChat: React.FC<AIChatProps> = ({
     stopRecognition,
     detectImageGenerationRequest,
     setInputValue,
+    logUserActivity,
   ]);
   const handleMarkMessageDisplayed = useCallback(async (messageId: string) => {
     if (!userProfile?.id || !activeChatSessionId) {

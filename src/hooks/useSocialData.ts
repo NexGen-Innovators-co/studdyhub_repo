@@ -399,7 +399,10 @@ export const useSocialData = (
   const fetchCurrentUser = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        console.warn('[useSocialData] No auth user found');
+        return;
+      }
 
       const { data: socialUser, error } = await supabase
         .from('social_users')
@@ -407,11 +410,16 @@ export const useSocialData = (
         .eq('id', user.id)
         .single();
 
-      if (!error && socialUser) {
+      if (error) {
+        console.error('[useSocialData] Failed to refetch current user:', error);
+        return;
+      }
+
+      if (socialUser) {
         setCurrentUser(socialUser);
       }
     } catch (error) {
-      ////console.error('Error refetching current user:', error);
+      console.error('[useSocialData] Error refetching current user:', error);
     }
   }, []);
 
@@ -514,18 +522,22 @@ export const useSocialData = (
             }
           }
           setCurrentUser(socialUser);
-        } else {
+        } else if (fetchError) {
+          // Handle unexpected fetch errors
+          console.error('[useSocialData] Failed to fetch social_users:', fetchError);
+          toast.error('Failed to load your social profile. Please refresh the page.');
           setIsLoading(false);
           setIsLoadingGroups(false);
         }
       } catch (error) {
-        ////console.error('Error initializing social user:', error);
+        console.error('[useSocialData] Error initializing social user:', error);
+        toast.error('Failed to initialize social profile. Please refresh the page.');
         setIsLoading(false);
         setIsLoadingGroups(false);
       }
     };
     initializeSocialUser();
-  }, []); // Run once on mount
+  }, [userProfile]); // Run when userProfile loads, not just on mount
 
   // Fetch user's viewed post IDs when currentUser is set
   useEffect(() => {

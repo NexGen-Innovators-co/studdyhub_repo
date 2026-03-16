@@ -27,7 +27,6 @@ import { Skeleton } from '../ui/skeleton';
 import DocumentMarkdownRenderer from '../aiChat/Components/DocumentMarkdownRenderer';
 import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 import { useFeatureAccess } from '../../hooks/useFeatureAccess';
-import { PodcastButton } from '../dashboard/PodcastButton';
 import { Checkbox } from '../ui/checkbox';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { DocumentCardItem } from './DocumentCardItem';
@@ -936,14 +935,14 @@ const lastDocumentElementRef = useCallback(
                         {showSelection ? `Selected (${selectedDocumentIds.length})` : 'Select'}
                       </Button>
                       
-                      {/* Podcast button */}
+                      {/* Podcast button
                       {showSelection && selectedDocumentIds.length > 0 && (
                         <PodcastButton 
                           selectedDocumentIds={selectedDocumentIds}
                           variant="default"
                           size="sm"
                         />
-                      )}
+                      )} */}
             </DocumentFilters>
 
             {/* Documents Display */}
