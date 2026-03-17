@@ -59,6 +59,7 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({ children }) =>
         <OnboardingWizard
           userProfile={userProfile}
           userId={user.id}
+          authUser={user}
           onComplete={handleOnboardingComplete}
         />
       </React.Suspense>

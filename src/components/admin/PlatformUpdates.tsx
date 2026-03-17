@@ -171,7 +171,7 @@ const PlatformUpdates: React.FC = () => {
     }
   }, [filterStatus]);
 
-  useEffect(() => { fetchUpdates(); }, [fetchUpdates]);
+  useEffect(() => { fetchUpdates(); }, [filterStatus]);
 
   // ─── Save / Create ────────────────────────────────────────
   const handleSave = async () => {
@@ -725,8 +725,8 @@ const PlatformUpdates: React.FC = () => {
                     <span className="flex items-center gap-1">
                       <Users className="h-3 w-3" /> {u.read_count || 0} reads
                     </span>
-                    {u.video_url && <Video className="h-3 w-3 text-blue-500 dark:text-blue-400" title="Has video" />}
-                    {u.documentation_url && <Link2 className="h-3 w-3 text-blue-500 dark:text-blue-400" title="Has docs" />}
+                    {u.video_url && <Video className="h-3 w-3 text-blue-500 dark:text-blue-400"  />}
+                    {u.documentation_url && <Link2 className="h-3 w-3 text-blue-500 dark:text-blue-400"  />}
                   </div>
 
                   {/* Expanded content */}

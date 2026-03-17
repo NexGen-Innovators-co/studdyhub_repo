@@ -119,7 +119,7 @@ export const PlatformUpdateBanner: React.FC = () => {
     }
   }, [user]);
 
-  useEffect(() => { fetchUpdates(); }, [fetchUpdates]);
+  useEffect(() => { fetchUpdates(); }, [user]);
 
   // Mark as read
   const markAsRead = async (updateId: string) => {

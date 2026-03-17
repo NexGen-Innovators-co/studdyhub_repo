@@ -134,10 +134,12 @@ export function usePodcastCredits(): UsePodcastCreditsReturn {
 
   // ─── Init: load everything ─────────────────────────────────────────────
   useEffect(() => {
-    refreshCredits();
-    fetchCreditPacks();
-    fetchTransactions();
-  }, [refreshCredits, fetchCreditPacks, fetchTransactions]);
+    if (user?.id) {
+      refreshCredits();
+      fetchCreditPacks();
+      fetchTransactions();
+    }
+  }, [user?.id]);
 
   // ─── Helpers ───────────────────────────────────────────────────────────
   const getCost = useCallback((podcastType: string): number => {

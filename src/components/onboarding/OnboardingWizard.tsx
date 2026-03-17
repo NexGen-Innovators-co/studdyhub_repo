@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { User as SupabaseUser } from '@supabase/supabase-js';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -39,6 +40,7 @@ interface OnboardingWizardProps {
   userProfile: UserProfile | null;
   onComplete: (updatedProfile?: UserProfile) => void;
   userId: string;
+  authUser?: SupabaseUser | null;
 }
 
 type Step = 'welcome' | 'about' | 'learning' | 'finish';
@@ -97,6 +99,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   userProfile,
   onComplete,
   userId,
+  authUser,
 }) => {
   const [currentStep, setCurrentStep] = useState<Step>('welcome');
   const [direction, setDirection] = useState(1);
@@ -118,6 +121,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   });
 
   // Profile step state
+  const [userEmail, setUserEmail] = useState(authUser?.email || userProfile?.email || '');
   const [fullName, setFullName] = useState(userProfile?.full_name || '');
   const [school, setSchool] = useState(userProfile?.school || '');
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -257,6 +261,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       const resolvedInstitutionId = educationData.institutionId || null;
 
       const { data, error } = await supabase.rpc('complete_onboarding', {
+        _email: userEmail || authUser?.email || null,
         _full_name: fullName.trim() || userProfile?.full_name || null,
         _institution_id: resolvedInstitutionId,   // new normalized field
         _school: resolvedSchool,

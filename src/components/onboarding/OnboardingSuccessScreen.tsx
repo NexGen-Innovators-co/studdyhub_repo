@@ -13,169 +13,149 @@ export default function OnboardingSuccessScreen({
 }: OnboardingSuccessScreenProps) {
   const navigate = useNavigate();
   const [frameIndex, setFrameIndex] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const frames = [
     {
-      icon: '🎉',
-      title: "You're All Set!",
-      subtitle: 'Welcome to StudyHub',
-      description: 'Your learning journey starts now',
-      color: 'from-green-500 to-emerald-500',
+      title: "You're all set!",
+      description: 'Your profile is ready and your AI assistant is waiting',
     },
     {
-      icon: '🤖',
-      title: 'Chat with AI',
-      subtitle: 'Ask anything, learn anything',
-      description: 'Your personal study assistant',
-      color: 'from-purple-500 to-pink-500',
+      title: 'Ask questions, explore ideas',
+      description: 'Chat with AI to learn about anything you are curious about',
     },
     {
-      icon: '📝',
-      title: 'Create Notes',
-      subtitle: 'Organize your thoughts',
-      description: 'Beautiful study material at your fingertips',
-      color: 'from-blue-500 to-cyan-500',
+      title: 'Organize what matters',
+      description: 'Create notes and save resources to build your personal study library',
     },
     {
-      icon: '👥',
-      title: 'Learn Together',
-      subtitle: 'Connect with others',
-      description: 'Find your study tribe',
-      color: 'from-orange-500 to-red-500',
+      title: 'Study together',
+      description: 'Connect with people learning the same things you are',
     },
   ];
 
+  // Auto-advance frames every 2.5 seconds (but not on final frame)
   useEffect(() => {
-    // Simulate celebration with confetti-like animation
-    const triggerCelebration = () => {
-      // Create floating elements
-      for (let i = 0; i < 20; i++) {
-        const element = document.createElement('div');
-        element.className = 'fixed pointer-events-none';
-        element.innerHTML = ['🎉', '⭐', '✨', '🌟', '💫'][Math.floor(Math.random() * 5)];
-        element.style.left = Math.random() * 100 + '%';
-        element.style.top = '-20px';
-        element.style.fontSize = Math.random() * 20 + 20 + 'px';
-        element.style.animation = `float ${Math.random() * 2 + 3}s linear forwards`;
-        document.body.appendChild(element);
+    if (frameIndex >= frames.length - 1) return; // Stop auto-advancing on final frame
 
-        setTimeout(() => element.remove(), 3500);
-      }
-    };
+    const timer = setTimeout(() => {
+      setIsTransitioning(true);
+      setTimeout(() => {
+        setFrameIndex((prev) => prev + 1);
+        setIsTransitioning(false);
+      }, 300);
+    }, 2500);
 
-    triggerCelebration();
-  }, []);
-
-  useEffect(() => {
-    let hasTriggeredCompletion = false;
-    const interval = setInterval(() => {
-      setFrameIndex((prev) => {
-        if (prev >= frames.length - 1) {
-          if (hasTriggeredCompletion) return prev;
-          hasTriggeredCompletion = true;
-          // Auto-transition to dashboard after final frame
-          setTimeout(() => {
-            if (onDone) {
-              onDone();
-              return;
-            }
-            if (autoNavigate) {
-              navigate('/dashboard?isNewUser=true');
-            }
-          }, 2000);
-          clearInterval(interval);
-          return prev;
-        }
-        return prev + 1;
-      });
-    }, 1500);
-
-    return () => clearInterval(interval);
-  }, [autoNavigate, frames.length, navigate, onDone]);
+    return () => clearTimeout(timer);
+  }, [frameIndex, frames.length]);
 
   const currentFrame = frames[frameIndex];
+  const progress = (frameIndex + 1) / frames.length;
 
   return (
-    <>
+    <div className="fixed inset-0 bg-white dark:bg-gray-950 flex flex-col items-center justify-center overflow-hidden">
+      {/* Subtle animated background */}
+      <div className="absolute inset-0 opacity-40 dark:opacity-20">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-200 dark:bg-blue-900 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob" />
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-200 dark:bg-indigo-900 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000" />
+      </div>
+
+      {/* Content */}
+      <div className="relative z-10 flex flex-col items-center text-center px-6 max-w-lg">
+        {/* Progress indicator */}
+        <div className="mb-12 w-full">
+          <div className="h-1 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 transition-all duration-500"
+              style={{ width: `${progress * 100}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Main content with fade transition */}
+        <div
+          className={`transition-opacity duration-300 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}
+        >
+          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4 leading-tight">
+            {currentFrame.title}
+          </h1>
+          <p className="text-lg text-gray-600 dark:text-gray-300">
+            {currentFrame.description}
+          </p>
+        </div>
+
+        {/* Frame indicators */}
+        <div className="mt-12 flex justify-center gap-1.5">
+          {frames.map((_, i) => (
+            <div
+              key={i}
+              className={`transition-all duration-300 h-1.5 rounded-full ${
+                i < frameIndex
+                  ? 'w-6 bg-blue-600'
+                  : i === frameIndex
+                    ? 'w-6 bg-blue-400'
+                    : 'w-1.5 bg-gray-300 dark:bg-gray-700'
+              }`}
+            />
+          ))}
+        </div>
+
+        {/* CTA - only on final frame */}
+        {frameIndex === frames.length - 1 && (
+          <div className="mt-12 space-y-4 w-full animate-fadeIn">
+            <Button
+              size="lg"
+              onClick={() => {
+                if (onDone) {
+                  onDone();
+                } else if (autoNavigate) {
+                  navigate('/dashboard?isNewUser=true');
+                }
+              }}
+              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg hover:shadow-2xl transition-all duration-200"
+            >
+              Go to Dashboard
+            </Button>
+            {/* <p className="text-sm text-gray-500 dark:text-gray-400">
+              Redirecting in 2 seconds...
+            </p> */}
+          </div>
+        )}
+      </div>
+
       <style>{`
-        @keyframes float {
-          to {
-            transform: translateY(100vh) rotate(360deg);
-            opacity: 0;
+        @keyframes blob {
+          0%, 100% {
+            transform: translate(0, 0) scale(1);
+          }
+          33% {
+            transform: translate(30px, -50px) scale(1.1);
+          }
+          66% {
+            transform: translate(-20px, 20px) scale(0.9);
           }
         }
-        @keyframes slideUp {
+        .animate-blob {
+          animation: blob 7s infinite;
+        }
+        .animation-delay-2000 {
+          animation-delay: 2s;
+        }
+        @keyframes fadeIn {
           from {
             opacity: 0;
-            transform: translateY(20px);
+            transform: translateY(10px);
           }
           to {
             opacity: 1;
             transform: translateY(0);
           }
         }
-        .animate-slideup {
-          animation: slideUp 0.6s ease-out;
+        .animate-fadeIn {
+          animation: fadeIn 0.5s ease-out;
         }
       `}</style>
-
-      <div className={`flex items-center justify-center min-h-screen bg-gradient-to-br ${currentFrame.color} transition-all duration-700`}>
-        <div className="text-center text-white px-6 max-w-md">
-          {/* Icon with bounce animation */}
-          <div className="text-7xl mb-6 animate-slideup" style={{ animation: 'slideUp 0.6s ease-out' }}>
-            {currentFrame.icon}
-          </div>
-
-          {/* Title */}
-          <h1 className="text-4xl md:text-5xl font-bold mb-3 animate-slideup">
-            {currentFrame.title}
-          </h1>
-
-          {/* Subtitle */}
-          <p className="text-xl text-white/90 mb-4 animate-slideup">
-            {currentFrame.subtitle}
-          </p>
-
-          {/* Description */}
-          <p className="text-white/80 mb-8 animate-slideup">
-            {currentFrame.description}
-          </p>
-
-          {/* Progress Indicator */}
-          <div className="flex justify-center gap-2 mb-8">
-            {frames.map((_, i) => (
-              <div
-                key={i}
-                className={`h-2 rounded-full transition-all duration-300 ${
-                  i <= frameIndex ? 'w-8 bg-white' : 'w-2 bg-white/50'
-                }`}
-              />
-            ))}
-          </div>
-
-          {/* Final Frame CTA */}
-          {frameIndex === frames.length - 1 && (
-            <div className="space-y-3 animate-slideup">
-              <Button
-                size="lg"
-                className="w-full bg-white text-current hover:bg-white/90 font-bold text-lg"
-                onClick={() => {
-                  if (onDone) {
-                    onDone();
-                    return;
-                  }
-                  if (autoNavigate) {
-                    navigate('/dashboard?isNewUser=true');
-                  }
-                }}
-              >
-                See Your Dashboard →
-              </Button>
-              <p className="text-sm text-white/70">Redirecting in 2 seconds...</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </>
+    </div>
   );
 }

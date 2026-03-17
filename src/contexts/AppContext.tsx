@@ -94,6 +94,8 @@ interface AppContextType extends AppState {
   handleNavigateToTab: (tab: string) => void;
   handleCreateNew: (type: 'note' | 'recording' | 'schedule' | 'document') => void;
   handleCreateNoteWithData: (title: string, content: string, category: any) => void;
+  isCreateNoteDialogOpen: boolean;
+  setIsCreateNoteDialogOpen: (open: boolean) => void;
 
   // Data setters from useAppData
   setNotes: (notes: Note[] | ((prev: Note[]) => Note[])) => void;
@@ -269,6 +271,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Use loading states with timeouts
   const [isLoadingSessionMessages, setIsLoadingSessionMessages] = useLoadingWithTimeout(false);
   const [isLoadingChatSessions, setIsLoadingChatSessions] = useLoadingWithTimeout(false);
+  const [isCreateNoteDialogOpen, setIsCreateNoteDialogOpen] = useState(false);
   const {
     subscription,
     tier: subscriptionTier,
@@ -1107,7 +1110,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const handleCreateNew = useCallback((type: 'note' | 'recording' | 'schedule' | 'document') => {
     switch (type) {
       case 'note':
-        appOperations.createNewNote();
+        setIsCreateNoteDialogOpen(true);
         break;
       case 'recording':
         handleNavigateToTab('recordings');
@@ -1119,7 +1122,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         handleNavigateToTab('documents');
         break;
     }
-  }, [appOperations.createNewNote, handleNavigateToTab]);
+  }, [handleNavigateToTab]);
 
   const handleCreateNoteWithData = useCallback(
     (title: string, content: string, category: any) => {
@@ -1133,7 +1136,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (user) {
       loadChatSessions();
     }
-  }, [user, loadChatSessions, state.chatSessionsLoadedCount]);
+  }, [user]);
   // Add this effect to handle note ID from URL
   useEffect(() => {
     if (user) {
@@ -1330,6 +1333,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     handleNavigateToTab,
     handleCreateNew,
     handleCreateNoteWithData,
+    isCreateNoteDialogOpen,
+    setIsCreateNoteDialogOpen,
 
     // Data setters
     setNotes,

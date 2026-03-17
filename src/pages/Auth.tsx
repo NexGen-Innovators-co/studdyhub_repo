@@ -524,6 +524,18 @@ const Auth = () => {
           try { const { error: re } = await supabase.rpc('process_referral_reward', { p_referee_id: data.user.id, p_referral_code: referralCode.toUpperCase() }); if (!re) toast.success('Referral bonus applied! +10 credits.'); } catch {}
         }
         if (promoCode?.trim().toUpperCase() === 'CODENIGHT2026') toast.success('Code Night Offer Applied! 1 month free Premium after verification.');
+        
+        // Create default notification preferences for new user
+        if (data.user) {
+          try {
+            const { createDefaultNotificationPreferences } = await import('@/services/notificationPreferencesService');
+            await createDefaultNotificationPreferences(data.user.id);
+          } catch (prefError) {
+            console.warn('[Auth] Failed to create notification preferences:', prefError);
+            // Don't block signup - this is non-critical
+          }
+        }
+        
         toast.success('Account created! Check your email for a confirmation link.');
         setPendingVerificationEmail(email.toLowerCase().trim()); setShowResendVerification(true);
       }

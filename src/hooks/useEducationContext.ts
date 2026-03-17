@@ -90,7 +90,7 @@ export function useEducationContext(onboardingCompleted?: boolean) {
 
   useEffect(() => {
     fetchEducationContext();
-  }, [fetchEducationContext]);
+  }, [user?.id, onboardingCompleted]);
 
   return {
     educationContext,

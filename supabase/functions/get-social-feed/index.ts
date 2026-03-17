@@ -499,7 +499,9 @@ serve(async (req) => {
       // posts available, fall back to a wider search window instead of returning
       // an empty list.  This keeps the tab from appearing blank when activity is
       // low but not absent.
-      if (postsData.length === 0) {
+      // 🔧 CRITICAL FIX: Only apply fallback to 'feed' and 'trending' modes!
+      // 'user' mode should never show other users' posts when target user has no posts.
+      if (postsData.length === 0 && (mode === 'feed' || mode === 'trending')) {
         const { data: fallback, error: fbErr } = await supabase
           .from('social_posts')
           .select(`*, author:social_users(*), group:social_groups(*), media:social_media(*)`)

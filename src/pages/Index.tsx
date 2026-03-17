@@ -9,6 +9,7 @@ import { fetchFullPodcastData, fetchLightPodcastData } from '@/hooks/usePodcasts
 const PodcastPanel = React.lazy(() => import('@/components/podcasts/PodcastPanel').then(m => ({ default: m.PodcastPanel })));
 import { Header } from '../components/layout/Header';
 import { TabContent } from '../components/layout/TabContent';
+import { CreateNoteFlowDialog } from '../components/notes/components/CreateNoteFlowDialog';
 import { useRef } from 'react';
 import { SocialFeedHandle } from '../components/social/SocialFeed';
 import { useAppContext } from '../hooks/useAppContext';
@@ -101,6 +102,8 @@ const Index = () => {
     daysRemaining,
     bonusAiCredits,
     setUserProfile,
+    isCreateNoteDialogOpen,
+    setIsCreateNoteDialogOpen,
   } = useAppContext();
 
   // ─── Onboarding Wizard (handled by OnboardingGuard at app level) ───
@@ -354,7 +357,7 @@ const Index = () => {
 
   // Enhanced header props with error awareness
   const headerProps = useMemo(() => ({
-    onNewNote: appOperations.createNewNote,
+    onNewNote: () => setIsCreateNoteDialogOpen(true),
     isSidebarOpen,
     onToggleSidebar: () => setIsSidebarOpen(prev => !prev),
     activeTab: currentActiveTab as any,
@@ -395,7 +398,7 @@ const Index = () => {
     daysRemaining,
     onNavigateToSubscription: () => handleNavigateToTab('subscription'),
   }), [subscriptionTier, subscriptionLoading, daysRemaining,
-    appOperations.createNewNote, isSidebarOpen, setIsSidebarOpen,
+    isSidebarOpen, setIsSidebarOpen, setIsCreateNoteDialogOpen,
     currentActiveTab, userProfile, activeSocialTab, socialPostId,
     socialGroupId, navigate, dataErrors, currentTheme, handleThemeChange,
   ]);
@@ -704,6 +707,16 @@ const Index = () => {
 
       {/* Platform update announcements */}
       <PlatformUpdateBanner />
+
+      {/* Create Note Flow Dialog */}
+      <CreateNoteFlowDialog
+        isOpen={isCreateNoteDialogOpen}
+        onClose={() => setIsCreateNoteDialogOpen(false)}
+        onCreateNote={(data) => {
+          setIsCreateNoteDialogOpen(false);
+          handleCreateNoteWithData(data.title, data.content, data.category);
+        }}
+      />
 
       <div className="flex-1 flex relative overflow-hidden">
         <div className={`${currentActiveTab === 'chat' ? 'block' : 'lg:hidden'}`}>

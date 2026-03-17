@@ -7,6 +7,7 @@
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.complete_onboarding(
+  _email              text        DEFAULT NULL,
   _full_name          text        DEFAULT NULL,
   _institution_id     uuid        DEFAULT NULL,
   _school             text        DEFAULT NULL,
@@ -31,6 +32,7 @@ BEGIN
 
   UPDATE public.profiles
   SET
+    email                = COALESCE(NULLIF(TRIM(_email), ''), email),
     full_name            = COALESCE(NULLIF(TRIM(_full_name), ''), full_name),
     institution_id       = COALESCE(_institution_id, institution_id),
     school               = COALESCE(NULLIF(TRIM(_school), ''), school),
@@ -52,4 +54,4 @@ END;
 $$;
 
 -- Allow any authenticated user to call this function
-GRANT EXECUTE ON FUNCTION public.complete_onboarding(text, uuid, text, text, text, jsonb, text, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.complete_onboarding(text, text, uuid, text, text, text, jsonb, text, text) TO authenticated;

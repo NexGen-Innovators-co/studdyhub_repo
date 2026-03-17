@@ -13,7 +13,7 @@ import { offlineStorage, STORES } from '@/utils/offlineStorage';
 const INITIAL_LOAD_LIMITS = {
   notes: 12, // Reduced for faster initial load
   recordings: 6,
-  scheduleItems: 1000, // Increased to fetch all schedule items
+  scheduleItems: 50, // FIXED: Reduced from 1000 to ~1 month of events. Lazy-load on scroll
   documents: 10,
   chatMessages: 0,
   quizzes: 6,
@@ -23,7 +23,7 @@ const INITIAL_LOAD_LIMITS = {
 const LOAD_MORE_LIMITS = {
   notes: 20,
   recordings: 12,
-  scheduleItems: 1000, // Increased to fetch all schedule items
+  scheduleItems: 50, // FIXED: Reduced from 1000 to paginate on demand
   documents: 15,
   chatMessages: 50,
   quizzes: 12,
@@ -949,12 +949,16 @@ export const useAppData = (authUser?: any) => {
 
       const limit = isInitial ? INITIAL_LOAD_LIMITS.scheduleItems : LOAD_MORE_LIMITS.scheduleItems;
       const offset = isInitial ? 0 : dataPagination.scheduleItems.offset;
+      
+      // OPTIMIZATION: Only fetch future events and minimal columns
+      const now = new Date().toISOString();
 
       const { data, error } = await withTimeout<SupabaseScheduleItem[]>(
         supabase
           .from('schedule_items')
-          .select('*', { count: 'exact' })
+          .select('id,title,subject,start_time,end_time,type,description,location,color,user_id,created_at,calendar_event_id,is_recurring,recurrence_pattern,recurrence_interval,recurrence_days,recurrence_end_date', { count: 'exact' })
           .eq('user_id', userId)
+          .gte('end_time', now) // Only future/ongoing events
           .order('start_time', { ascending: true })
           .range(offset, offset + limit - 1),
         API_TIMEOUT,
@@ -1499,6 +1503,10 @@ export const useAppData = (authUser?: any) => {
               API_TIMEOUT,
               'Failed to create profile'
             );
+
+            // Create default notification preferences for new user
+            const { createDefaultNotificationPreferences } = await import('@/services/notificationPreferencesService');
+            await createDefaultNotificationPreferences(user.id);
           } catch (error) {
             //console.error('Error creating default profile:', error);
           }
@@ -1510,6 +1518,18 @@ export const useAppData = (authUser?: any) => {
 
       // Save to IndexedDB for offline access
       offlineStorage.save(STORES.PROFILE, finalProfile);
+
+      // Ensure notification preferences exist for user (handles all signup methods)
+      // Non-blocking: runs in background without delaying app load
+      setTimeout(async () => {
+        try {
+          const { createDefaultNotificationPreferences } = await import('@/services/notificationPreferencesService');
+          await createDefaultNotificationPreferences(user.id);
+        } catch (error) {
+          console.warn('[Profile] Failed to ensure notification preferences:', error);
+          // Don't block profile loading if preferences creation fails
+        }
+      }, 100);
 
       setDataLoaded(prev => new Set([...prev, 'profile']));
 
