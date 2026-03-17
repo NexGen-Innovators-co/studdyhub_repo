@@ -10,17 +10,42 @@ export interface AdminLogEntry {
   details?: Record<string, any>;
 }
 
+let cachedAuthUserId: string | null = null;
+let cachedAdminUserId: string | null = null;
+
+async function getAdminUserIdForCurrentUser(): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  if (cachedAuthUserId === user.id && cachedAdminUserId) {
+    return cachedAdminUserId;
+  }
+
+  const { data, error } = await supabase
+    .from('admin_users')
+    .select('id')
+    .eq('user_id', user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data?.id) return null;
+
+  cachedAuthUserId = user.id;
+  cachedAdminUserId = data.id;
+  return data.id;
+}
+
 /**
  * Log an admin action. Resolves the current user automatically.
  * Fire-and-forget — never throws, never blocks the caller.
  */
 export async function logAdminActivity(entry: AdminLogEntry): Promise<void> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    const adminUserId = await getAdminUserIdForCurrentUser();
+    if (!adminUserId) return;
 
     await supabase.from('admin_activity_logs').insert({
-      admin_id: user.id,
+      admin_id: adminUserId,
       action: entry.action,
       target_type: entry.target_type || null,
       target_id: entry.target_id || null,

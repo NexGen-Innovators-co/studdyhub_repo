@@ -23,7 +23,7 @@ export const detectTimezoneFromIP = async (): Promise<string> => {
 
     const data = await response.json();
     if (data.timezone) {
-      console.log(`[Timezone] Auto-detected from IP: ${data.timezone}`);
+      //console.log(`[Timezone] Auto-detected from IP: ${data.timezone}`);
       return data.timezone;
     }
     return 'UTC';
@@ -43,12 +43,12 @@ export const createDefaultNotificationPreferences = async (userId: string): Prom
     // Check if preferences already exist (prevent duplicates)
     const { data: existing } = await supabase
       .from('notification_preferences')
-      .select('id')
+      .select('user_id')
       .eq('user_id', userId)
       .maybeSingle();
 
     if (existing) {
-      console.log('[NotifPrefs] Preferences already exist for user:', userId);
+     // console.log('[NotifPrefs] Preferences already exist for user:', userId);
       return true;
     }
 
@@ -102,7 +102,7 @@ export const createDefaultNotificationPreferences = async (userId: string): Prom
       return false;
     }
 
-    console.log('[NotifPrefs] Default notification preferences created for user:', userId, 'with timezone:', userTimezone);
+    //console.log('[NotifPrefs] Default notification preferences created for user:', userId, 'with timezone:', userTimezone);
     return true;
   } catch (error) {
     console.error('[NotifPrefs] Unexpected error creating notification preferences:', error);

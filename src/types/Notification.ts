@@ -47,7 +47,6 @@ export type NotificationType =
   | 'daily_progress_winback';
 
 export interface NotificationPreferences {
-  id: string;
   user_id: string;
   email_notifications: boolean;
   push_notifications: boolean;
@@ -59,8 +58,8 @@ export interface NotificationPreferences {
   quiet_hours_enabled: boolean;
   quiet_hours_start?: string; // HH:mm format
   quiet_hours_end?: string; // HH:mm format
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface CalendarIntegration {

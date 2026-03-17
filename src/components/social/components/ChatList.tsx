@@ -130,9 +130,29 @@ export const ChatList: React.FC<ChatListProps> = ({
                       <AvatarImage src={getSessionAvatar(session) || undefined} />
                       <AvatarFallback>{getSessionInitials(session)}</AvatarFallback>
                     </Avatar>
-                    {session.chat_type === 'p2p' && (
-                      <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-slate-900" />
-                    )}
+                    {session.chat_type === 'p2p' && (() => {
+                      const otherUser = session.user_id1 === currentUserId ? (session.user2 as any) : (session.user1 as any);
+                      const isOnline = otherUser?.is_online ?? false;
+                      const status = otherUser?.status ?? 'active';
+                      const isActiveUser = status === 'active';
+                      const dotColor = isOnline
+                        ? 'bg-green-500'
+                        : isActiveUser
+                          ? 'bg-gray-400'
+                          : 'bg-red-500';
+                      const title = isOnline
+                        ? 'Online'
+                        : isActiveUser
+                          ? 'Offline'
+                          : 'Inactive';
+
+                      return (
+                        <div
+                          className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white dark:border-slate-900 ${dotColor}`}
+                          title={title}
+                        />
+                      );
+                    })()}
                   </div>
 
                   {/* Content */}

@@ -218,7 +218,7 @@ export const SuggestedUsers: React.FC<SuggestedUsersProps> = ({
                     <p className="text-sm font-medium text-slate-800 dark:text-gray-200 truncate">
                       {user.display_name}
                     </p>
-                    {user.is_verified && (
+                    {user.status === 'active' && (
                       <div className="h-4 w-4 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
                         <div className="h-2 w-2 bg-white rounded-full"></div>
                       </div>

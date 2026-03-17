@@ -339,7 +339,7 @@ const AdminInstitutions: React.FC = () => {
                 </div>
 
                 {/* Action buttons - separate row on mobile */}
-                <div className="flex items-center justify-end gap-1 mt-2 sm:mt-0 sm:-mt-8 sm:ml-14">
+                <div className="flex items-center justify-end gap-1 mt-2  sm:-mt-8 sm:ml-14">
                   <Button
                     variant="ghost"
                     size="icon"

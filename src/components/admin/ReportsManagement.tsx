@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/select';
 import { Shield, AlertTriangle, CheckCircle, XCircle, Eye, Ban, Trash2, User, MessageSquare, FileText } from 'lucide-react';
 import { Database } from '@/integrations/supabase/types';
+import { logAdminActivity } from '@/utils/adminActivityLogger';
 
 type SocialReport = Database['public']['Tables']['social_reports']['Row'];
 type ReportWithDetails = SocialReport & {
@@ -191,11 +192,11 @@ export const ReportsManagement: React.FC = () => {
       banEndDate.setDate(banEndDate.getDate() + parseInt(banDuration));
       const isPermanent = parseInt(banDuration) >= 99999;
 
-      // Suspend the user (using is_verified as active flag)
+      // Ban the user with moderation action
       const { error: userError } = await supabase
         .from('social_users')
         .update({
-          is_verified: false,
+          status: 'banned',
         })
         .eq('id', selectedReport.reported_user_id);
 
@@ -214,8 +215,7 @@ export const ReportsManagement: React.FC = () => {
       if (reportError) throw reportError;
 
       // Log ban details with duration in activity logs for audit trail
-      await supabase.from('admin_activity_logs').insert({
-        admin_id: user.id,
+      logAdminActivity({
         action: 'ban_user',
         target_type: 'user',
         target_id: selectedReport.reported_user_id,

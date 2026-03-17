@@ -834,7 +834,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                         <span className="font-bold text-slate-900 dark:text-slate-100 text-base hover:underline cursor-pointer">
                           {post.author?.display_name}
                         </span>
-                        {(post.author as any)?.is_verified && <Check className="h-3.5 w-3.5 text-blue-500 ml-1" />}
+                        {(post.author as any)?.status === 'active' && <Check className="h-3.5 w-3.5 text-blue-500 ml-1" />}
                       </div>
                       <div className="flex items-center text-slate-500 text-sm gap-1.5">
                         <span>{post.author?.bio} </span>
@@ -1059,7 +1059,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                     <div className="flex flex-col">
                       <div className="flex items-center gap-1">
                         <span className="font-bold text-slate-900 dark:text-slate-100">{post.author?.display_name}</span>
-                        {(post.author as any)?.is_verified && <Check className="h-3.5 w-3.5 text-blue-500" />}
+                        {(post.author as any)?.status === 'active' && <Check className="h-3.5 w-3.5 text-blue-500" />}
                       </div>
                       <div className="text-sm text-slate-500">
                         {(post.author as any)?.followers_count || 0} followers · {getTimeAgo(post.created_at)}

@@ -9,7 +9,8 @@ export interface SocialUser {
     avatar_url?: string;
     bio?: string;
     interests?: string[];
-    is_verified: boolean;
+    status: 'active' | 'suspended' | 'banned' | 'deactivated';
+    is_verified?: boolean; // deprecated - use status instead
     is_contributor: boolean;
     followers_count: number;
     following_count: number;

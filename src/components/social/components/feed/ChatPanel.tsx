@@ -38,7 +38,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-1 mt-11 lg:mt-0 lg:inset-auto lg:right-6 animate-in fade-in duration-500 lg:bottom-24 lg:h-[600px] bg-white dark:bg-slate-900 z-50 lg:rounded-2xl lg:shadow-2xl overflow-hidden flex">
+    <div className="fixed inset-0 lg:inset-auto lg:right-6 animate-in fade-in duration-500 lg:bottom-24 lg:h-[600px] bg-white dark:bg-slate-900 z-50 lg:rounded-2xl lg:shadow-2xl overflow-hidden flex">
       <div className="flex-1 flex max-w-[100vw]">
         {!activeSessionId ? (
           <ChatList

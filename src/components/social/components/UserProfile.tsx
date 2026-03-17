@@ -5,12 +5,14 @@ import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { EditProfileModal } from './EditProfileModal';
 import { PostCard } from './PostCard';
+import { VerifiedBadge, OnlineIndicator } from './VerifiedBadge';
 import { Calendar, MapPin, Link as LinkIcon, Grid, Heart, Bookmark, Users, Loader2, UserPlus, Users2, UsersRound, Sparkles, User2Icon } from 'lucide-react';
 import { formatEngagementCount } from '../utils/postUtils';
 import { useNavigate } from 'react-router-dom';
 import { MessageCircle } from 'lucide-react';
 import { supabase } from '../../../integrations/supabase/client';
 import { SuggestedUsers } from './SuggestedUsers';
+import { useUserVerificationStatus } from '../../../hooks/useUserVerificationStatus';
 export const UserProfile: React.FC<any> = ({
   user,
   isOwnProfile,
@@ -66,6 +68,10 @@ export const UserProfile: React.FC<any> = ({
   const [hasMoreFollowing, setHasMoreFollowing] = useState(true);
   const [hasMoreSuggested, setHasMoreSuggested] = useState(true);
   const followersObserver = React.useRef<HTMLDivElement>(null);
+
+  // Get verification status for the profile user
+  const profileUserId = user?.id || currentUser?.id;
+  const { verificationStatus } = useUserVerificationStatus(profileUserId || null);
   const followingObserver = React.useRef<HTMLDivElement>(null);
   const followersPage = React.useRef(0);
   const followingPage = React.useRef(0);
@@ -451,7 +457,7 @@ export const UserProfile: React.FC<any> = ({
             <div>
               <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 {profileUser.display_name}
-                {profileUser.is_verified && <Badge variant="secondary" className="bg-blue-100 text-blue-700 h-5 px-1.5 text-[10px]">Verified</Badge>}
+                <VerifiedBadge verificationStatus={verificationStatus} showOnlineIndicator={true} />
               </h1>
               <p className="text-slate-500 dark:text-slate-400 font-medium">@{profileUser.username}</p>
             </div>

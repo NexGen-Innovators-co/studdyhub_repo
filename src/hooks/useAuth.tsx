@@ -7,6 +7,7 @@ import { clearCache } from '../utils/socialCache'; // Import the utility
 import { offlineStorage, STORES } from '../utils/offlineStorage';
 import { pushNotificationService } from '@/services/pushNotificationService';
 import { resetPushInitialization } from '@/services/notificationInitService';
+import { trackUserLogin, trackUserLogout } from '../utils/authSessionTracker';
 
 interface AuthContextType {
   user: User | null;
@@ -112,7 +113,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                   if (data?.session) {
                     // Recovery succeeded — onAuthStateChange will fire
                     // TOKEN_REFRESHED with the new session automatically.
-                    console.log('[useAuth] Session recovered after transient SIGNED_OUT');
+                    // console.log('[useAuth] Session recovered after transient SIGNED_OUT');
                   } else {
                     console.warn('[useAuth] Session recovery failed:', error?.message);
                     setSession(null);
@@ -152,6 +153,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           supabase.rpc('touch_profile_active').then(({ error }) => {
             if (error) console.warn('[useAuth] Failed to touch profile active:', error.message);
           });
+        }
+
+        // Track login/logout for real-time status in social_users
+        if (event === 'SIGNED_IN' && session?.user?.id) {
+          trackUserLogin(session.user.id).catch((err) => {
+            console.warn('[useAuth] Failed to track login:', err);
+          });
+        } else if (event === 'SIGNED_OUT') {
+          const userId = lastSessionRef.current?.user?.id || user?.id;
+          if (userId) {
+            trackUserLogout(userId).catch((err) => {
+              console.warn('[useAuth] Failed to track logout:', err);
+            });
+          }
         }
       }
     );

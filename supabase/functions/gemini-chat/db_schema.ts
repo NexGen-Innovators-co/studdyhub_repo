@@ -692,7 +692,7 @@ You may perform INSERT, UPDATE, DELETE, and SELECT operations on the following t
     - avatar_url: text
     - bio: text
     - interests: text[]
-    - is_verified: boolean
+    - status: enum ('active' | 'suspended' | 'banned' | 'deactivated')
     - is_contributor: boolean
     - followers_count: integer
     - following_count: integer

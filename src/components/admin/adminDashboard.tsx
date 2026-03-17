@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Skeleton } from '../ui/skeleton';
-import { LayoutDashboard, Users, Shield, AlertTriangle, Settings, FileText, Flag, Sparkles, Bot, Megaphone, Building2 } from 'lucide-react';
+import { LayoutDashboard, Users, Shield, AlertTriangle, Settings, FileText, Flag, Sparkles, Bot, Megaphone, Building2, CheckCircle2 } from 'lucide-react';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
 
 const AdminOverview = lazy(() => import('./AdminOverview'));
@@ -15,6 +15,7 @@ const ActivityLogs = lazy(() => import('./ActivityLogs'));
 const AIAdminInsights = lazy(() => import('./AIAdminInsights'));
 const PlatformUpdates = lazy(() => import('./PlatformUpdates'));
 const AdminInstitutions = lazy(() => import('./AdminInstitutions'));
+const VerificationMetricsPanel = lazy(() => import('./VerificationMetricsPanel'));
 
 const LoadingFallback = () => (
   <div className="space-y-6">
@@ -31,6 +32,7 @@ const AdminDashboard = () => {
   const tabs = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard, component: AdminOverview, perm: true },
     { id: 'users', label: 'Users', icon: Users, component: UserManagement, perm: permissions.canManageUsers },
+    { id: 'verification', label: 'Verification', icon: CheckCircle2, component: VerificationMetricsPanel, perm: permissions.canManageUsers },
     { id: 'admins', label: 'Admins', icon: Shield, component: AdminManagement, perm: permissions.canManageAdmins },
     { id: 'moderation', label: 'Moderation', icon: AlertTriangle, component: ContentModeration, perm: permissions.canModerateContent },
     { id: 'reports', label: 'Reports', icon: Flag, component: ReportsManagement, perm: permissions.canModerateContent },

@@ -189,11 +189,11 @@ ALTER TABLE social_posts ADD CONSTRAINT social_posts_author_id_fkey
 
 ALTER TABLE social_post_views DROP CONSTRAINT IF EXISTS social_post_views_user_id_fkey;
 ALTER TABLE social_post_views ADD CONSTRAINT social_post_views_user_id_fkey 
-  FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE;
+  FOREIGN KEY (user_id) REFERENCES social_users(id) ON DELETE CASCADE;
 
 ALTER TABLE social_shares DROP CONSTRAINT IF EXISTS social_shares_user_id_fkey;
 ALTER TABLE social_shares ADD CONSTRAINT social_shares_user_id_fkey 
-  FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE;
+  FOREIGN KEY (user_id) REFERENCES social_users(id) ON DELETE CASCADE;
 
 -- 2. SOCIAL COMMENTS
 ALTER TABLE social_comments DROP CONSTRAINT IF EXISTS social_comments_author_id_fkey;
@@ -203,32 +203,32 @@ ALTER TABLE social_comments ADD CONSTRAINT social_comments_author_id_fkey
 -- 3. SOCIAL INTERACTIONS (likes, follows, bookmarks)
 ALTER TABLE social_likes DROP CONSTRAINT IF EXISTS social_likes_user_id_fkey;
 ALTER TABLE social_likes ADD CONSTRAINT social_likes_user_id_fkey 
-  FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE;
+  FOREIGN KEY (user_id) REFERENCES social_users(id) ON DELETE CASCADE;
 
 ALTER TABLE social_follows DROP CONSTRAINT IF EXISTS social_follows_follower_id_fkey;
 ALTER TABLE social_follows ADD CONSTRAINT social_follows_follower_id_fkey 
-  FOREIGN KEY (follower_id) REFERENCES profiles(id) ON DELETE CASCADE;
+  FOREIGN KEY (follower_id) REFERENCES social_users(id) ON DELETE CASCADE;
 
 ALTER TABLE social_follows DROP CONSTRAINT IF EXISTS social_follows_following_id_fkey;
 ALTER TABLE social_follows ADD CONSTRAINT social_follows_following_id_fkey 
-  FOREIGN KEY (following_id) REFERENCES profiles(id) ON DELETE CASCADE;
+  FOREIGN KEY (following_id) REFERENCES social_users(id) ON DELETE CASCADE;
 
 ALTER TABLE social_bookmarks DROP CONSTRAINT IF EXISTS social_bookmarks_user_id_fkey;
 ALTER TABLE social_bookmarks ADD CONSTRAINT social_bookmarks_user_id_fkey 
-  FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE;
+  FOREIGN KEY (user_id) REFERENCES social_users(id) ON DELETE CASCADE;
 
 -- 4. SOCIAL CHAT
 ALTER TABLE social_chat_sessions DROP CONSTRAINT IF EXISTS social_chat_sessions_user_id1_fkey;
 ALTER TABLE social_chat_sessions ADD CONSTRAINT social_chat_sessions_user_id1_fkey 
-  FOREIGN KEY (user_id1) REFERENCES profiles(id) ON DELETE CASCADE;
+  FOREIGN KEY (user_id1) REFERENCES social_users(id) ON DELETE CASCADE;
 
 ALTER TABLE social_chat_sessions DROP CONSTRAINT IF EXISTS social_chat_sessions_user_id2_fkey;
 ALTER TABLE social_chat_sessions ADD CONSTRAINT social_chat_sessions_user_id2_fkey 
-  FOREIGN KEY (user_id2) REFERENCES profiles(id) ON DELETE CASCADE;
+  FOREIGN KEY (user_id2) REFERENCES social_users(id) ON DELETE CASCADE;
 
 ALTER TABLE social_chat_messages DROP CONSTRAINT IF EXISTS social_chat_messages_sender_id_fkey;
 ALTER TABLE social_chat_messages ADD CONSTRAINT social_chat_messages_sender_id_fkey 
-  FOREIGN KEY (sender_id) REFERENCES profiles(id) ON DELETE CASCADE;
+  FOREIGN KEY (sender_id) REFERENCES social_users(id) ON DELETE CASCADE;
 
 ALTER TABLE social_chat_message_reads DROP CONSTRAINT IF EXISTS social_chat_message_reads_user_id_fkey;
 ALTER TABLE social_chat_message_reads ADD CONSTRAINT social_chat_message_reads_user_id_fkey 
@@ -254,7 +254,7 @@ ALTER TABLE social_notifications ADD CONSTRAINT social_notifications_user_id_fke
 
 ALTER TABLE social_notifications DROP CONSTRAINT IF EXISTS social_notifications_actor_id_fkey;
 ALTER TABLE social_notifications ADD CONSTRAINT social_notifications_actor_id_fkey 
-  FOREIGN KEY (actor_id) REFERENCES profiles(id) ON DELETE CASCADE;
+  FOREIGN KEY (actor_id) REFERENCES social_users(id) ON DELETE CASCADE;
 
 -- 7. SOCIAL USER SIGNALS
 ALTER TABLE social_user_signals DROP CONSTRAINT IF EXISTS social_user_signals_user_id_fkey;

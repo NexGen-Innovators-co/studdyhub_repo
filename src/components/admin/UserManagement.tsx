@@ -8,14 +8,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../ui/badge';
 import { Skeleton } from '../ui/skeleton';
 import { useToast } from '../ui/use-toast';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Select as PlanSelect, SelectTrigger as PlanSelectTrigger, SelectValue as PlanSelectValue, SelectContent as PlanSelectContent, SelectItem as PlanSelectItem } from '../ui/select';
 import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
 import { useNavigate } from 'react-router-dom';
 import { Textarea } from '../ui/textarea';
-import { AlertTriangle } from 'lucide-react';
-import { AvatarImage } from './AvatarImage';
+import { AlertTriangle, MoreVertical } from 'lucide-react';
+import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
+import { logAdminActivity } from '../../utils/adminActivityLogger';
 
 interface UserProfile {
   id: string;
@@ -24,7 +31,8 @@ interface UserProfile {
   display_name: string | null;
   created_at: string;
   last_active: string | null;
-  is_verified: boolean | null;
+  status: 'active' | 'suspended' | 'banned' | 'deactivated';
+  is_verified?: boolean | null; // deprecated - will be removed
   posts_count: number | null;
   followers_count: number | null;
   avatar_url: string | null;
@@ -88,6 +96,7 @@ const UserManagement = () => {
   };
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'suspended'>('all');
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
@@ -98,15 +107,38 @@ const UserManagement = () => {
   const [purgeConfirmText, setPurgeConfirmText] = useState('');
   const [isPurging, setIsPurging] = useState(false);
   
+  // Verification states
+  const [isEligibilityOpen, setIsEligibilityOpen] = useState(false);
+  const [isMakeVerifiedOpen, setIsMakeVerifiedOpen] = useState(false);
+  const [isRemoveVerifiedOpen, setIsRemoveVerifiedOpen] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isRemovingVerified, setIsRemovingVerified] = useState(false);
+  const [eligibilityResults, setEligibilityResults] = useState<any>(null);
+  // Store verified_creator badge UUID
+  const [verifiedBadgeId, setVerifiedBadgeId] = useState<string | null>(null);
+    // Fetch verified_creator badge UUID
+    useEffect(() => {
+      const fetchVerifiedBadgeId = async () => {
+        const { data, error } = await supabase
+          .from('badges')
+          .select('id')
+          .eq('name', 'verified_creator')
+          .single();
+        if (error) {
+          toast({ title: 'Error', description: `Failed to fetch badge UUID: ${error.message}`, variant: 'destructive' });
+          setVerifiedBadgeId(null);
+        } else {
+          setVerifiedBadgeId(data?.id || null);
+        }
+      };
+      fetchVerifiedBadgeId();
+    }, [toast]);
+  
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10); // Items per page
   const [totalCount, setTotalCount] = useState(0);
-
-  useEffect(() => {
-    fetchUsers(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const fetchUsers = useCallback(async (page: number = 1) => {
     try {
@@ -114,16 +146,27 @@ const UserManagement = () => {
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      // Fetch total count
-      const { count, error: countError } = await supabase
+      const trimmedSearch = searchTerm.trim();
+
+      let countQuery = supabase
         .from('social_users')
         .select('id', { count: 'exact', head: true });
+
+      if (filterStatus !== 'all') {
+        countQuery = countQuery.eq('status', filterStatus);
+      }
+
+      if (trimmedSearch) {
+        countQuery = countQuery.or(`username.ilike.%${trimmedSearch}%,email.ilike.%${trimmedSearch}%,display_name.ilike.%${trimmedSearch}%`);
+      }
+
+      // Fetch total count
+      const { count, error: countError } = await countQuery;
 
       if (countError) throw countError;
       setTotalCount(count || 0);
 
-      // Fetch paginated users
-      const { data, error } = await supabase
+      let usersQuery = supabase
         .from('social_users')
         .select(`
           id,
@@ -132,10 +175,22 @@ const UserManagement = () => {
           display_name,
           created_at,
           last_active,
-          is_verified,
+          status,
           posts_count,
-          followers_count
-        `)
+          followers_count,
+          is_verified
+        `);
+
+      if (filterStatus !== 'all') {
+        usersQuery = usersQuery.eq('status', filterStatus);
+      }
+
+      if (trimmedSearch) {
+        usersQuery = usersQuery.or(`username.ilike.%${trimmedSearch}%,email.ilike.%${trimmedSearch}%,display_name.ilike.%${trimmedSearch}%`);
+      }
+
+      // Fetch paginated users
+      const { data, error } = await usersQuery
         .order('created_at', { ascending: false })
         .range(from, to);
 
@@ -159,7 +214,8 @@ const UserManagement = () => {
       // Merge avatar data into users
       const flattenedData = (data ?? []).map((user: any) => ({
         ...user,
-        avatar_url: avatarMap[user.id] || null
+        avatar_url: avatarMap[user.id] || null,
+        is_verified: !!user.is_verified,
       }));
 
       setUsers(flattenedData as UserProfile[]);
@@ -169,37 +225,109 @@ const UserManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [pageSize, toast]);
+  }, [pageSize, toast, searchTerm, filterStatus]);
+
+  useEffect(() => {
+    fetchUsers(1);
+  }, [searchTerm, filterStatus, fetchUsers]);
+
+  const applySearch = () => {
+    setSearchTerm(searchInput.trim());
+  };
 
   const toggleActive = async (userId: string, makeActive: boolean) => {
     try {
       const { error } = await supabase
         .from('social_users')
-        .update({ is_verified: makeActive }) // using is_verified as active flag
+        .update({ status: makeActive ? 'active' : 'suspended' })
         .eq('id', userId);
       if (error) throw error;
 
-      // Log the action with suspend reason in activity logs
-      const { data: { user: adminUser } } = await supabase.auth.getUser();
-      if (adminUser) {
-        await supabase.from('admin_activity_logs').insert({
-          admin_id: adminUser.id,
-          action: makeActive ? 'activate_user' : 'suspend_user',
-          target_type: 'user',
-          target_id: userId,
-          details: {
-            reason: suspendReason || 'No reason provided',
-            previous_status: makeActive ? 'suspended' : 'active',
-            new_status: makeActive ? 'active' : 'suspended',
-          },
-        });
-      }
+      logAdminActivity({
+        action: makeActive ? 'activate_user' : 'suspend_user',
+        target_type: 'user',
+        target_id: userId,
+        details: {
+          reason: suspendReason || 'No reason provided',
+          previous_status: makeActive ? 'suspended' : 'active',
+          new_status: makeActive ? 'active' : 'suspended',
+        },
+      });
 
       toast({ title: 'Success', description: makeActive ? 'User activated' : 'User suspended' });
       setSuspendReason('');
       fetchUsers();
     } catch (err) {
       toast({ title: 'Error', description: `${err}`, variant: 'destructive' });
+    }
+  };
+
+  const checkEligibility = async () => {
+    if (!selectedUser) return;
+    setIsChecking(true);
+    try {
+      const { data, error } = await supabase.rpc('check_creator_verification_eligibility' as any, {
+        p_user_id: selectedUser.id,
+      });
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        setEligibilityResults(data[0]);
+      }
+    } catch (err) {
+      toast({ title: 'Error', description: `Failed to check eligibility: ${err}`, variant: 'destructive' });
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  const makeUserVerified = async () => {
+    if (!selectedUser) return;
+    setIsVerifying(true);
+    try {
+      const { error: verifyError } = await supabase.rpc('admin_verify_user' as any, {
+        p_user_id: selectedUser.id,
+      });
+      if (verifyError) throw verifyError;
+      toast({ title: 'Success', description: `${selectedUser.username} is now verified!` });
+      setIsMakeVerifiedOpen(false);
+      fetchUsers();
+    } catch (err) {
+      toast({ title: 'Error', description: `Failed to verify user: ${err}`, variant: 'destructive' });
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // Remove verified handler
+  const removeUserVerified = async () => {
+    if (!selectedUser || !verifiedBadgeId) return;
+    setIsRemovingVerified(true);
+    try {
+      // Update social_users to reflect removal of verified status
+      const { error: updateError } = await supabase
+        .from('social_users')
+        .update({ is_verified: false })
+        .eq('id', selectedUser.id);
+      if (updateError) throw updateError;
+
+      // Also remove the verified_creator badge from achievements (if it exists)
+      if (verifiedBadgeId) {
+        const { error: removeError } = await supabase
+          .from('achievements')
+          .delete()
+          .eq('user_id', selectedUser.id)
+          .eq('badge_id', verifiedBadgeId);
+        if (removeError) throw removeError;
+      }
+
+      toast({ title: 'Success', description: `${selectedUser.username} is no longer verified.` });
+      setIsRemoveVerifiedOpen(false);
+      fetchUsers();
+    } catch (err) {
+      toast({ title: 'Error', description: `Failed to remove verification: ${err}`, variant: 'destructive' });
+    } finally {
+      setIsRemovingVerified(false);
     }
   };
 
@@ -212,21 +340,16 @@ const UserManagement = () => {
       });
       if (error) throw error;
 
-      // Log the purge action
-      const { data: { user: adminUser } } = await supabase.auth.getUser();
-      if (adminUser) {
-        await supabase.from('admin_activity_logs').insert({
-          admin_id: adminUser.id,
-          action: 'purge_user_data',
-          target_type: 'user',
-          target_id: selectedUser.id,
-          details: {
-            reason: purgeReason || 'No reason provided',
-            username: selectedUser.username,
-            email: selectedUser.email,
-          },
-        });
-      }
+      logAdminActivity({
+        action: 'purge_user_data',
+        target_type: 'user',
+        target_id: selectedUser.id,
+        details: {
+          reason: purgeReason || 'No reason provided',
+          username: selectedUser.username,
+          email: selectedUser.email,
+        },
+      });
 
       toast({ title: 'User Data Purged', description: `All data for ${selectedUser.username} has been deleted. The account can still log in but will start fresh.` });
       setPurgeReason('');
@@ -239,17 +362,6 @@ const UserManagement = () => {
       setIsPurging(false);
     }
   };
-
-  const filtered = users.filter(u => {
-    const matchesSearch =
-      u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus =
-      filterStatus === 'all' ||
-      (filterStatus === 'active' && u.is_verified) ||
-      (filterStatus === 'suspended' && !u.is_verified);
-    return matchesSearch && matchesStatus;
-  });
 
   if (loading) {
     return (
@@ -287,10 +399,16 @@ const UserManagement = () => {
       <div className="flex flex-col md:flex-row gap-4">
         <Input
           placeholder="Search by username or email..."
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
+          value={searchInput}
+          onChange={e => setSearchInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              applySearch();
+            }
+          }}
           className="max-w-md"
         />
+        <Button variant="outline" onClick={applySearch}>Search</Button>
         <Select value={filterStatus} onValueChange={(v: typeof filterStatus) => setFilterStatus(v)}>
           <SelectTrigger className="w-[180px]">
             <SelectValue />
@@ -316,83 +434,113 @@ const UserManagement = () => {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filtered.map(u => (
+          {users.map(u => (
             <TableRow key={u.id}>
               <TableCell>
-                <AvatarImage url={u.avatar_url} username={u.username} className="w-10 h-10 rounded-full object-cover" />
+                <Avatar className="h-10 w-10">
+                  <AvatarImage src={u.avatar_url || undefined} alt={u.username} />
+                  <AvatarFallback>
+                    {(u.display_name?.[0] || u.username?.[0] || 'U').toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
               </TableCell>
               <TableCell>{u.username}</TableCell>
               <TableCell>{u.email ?? '-'}</TableCell>
               <TableCell>{new Date(u.created_at).toLocaleDateString()}</TableCell>
               <TableCell>{u.posts_count ?? 0}</TableCell>
               <TableCell>
-                <Badge variant={u.is_verified ? 'default' : 'destructive'}>
-                  {u.is_verified ? 'Active' : 'Suspended'}
+                <Badge variant={u.status === 'active' ? 'default' : u.status === 'banned' ? 'secondary' : 'destructive'}>
+                  {u.status.charAt(0).toUpperCase() + u.status.slice(1)}
                 </Badge>
               </TableCell>
-              <TableCell className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => navigate(`/social/profile/${u.id}`)}>View</Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedUser(u);
-                    setIsUpgradeOpen(true);
-                  }}
-                >
-                  Make Paid
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedUser(u);
-                    setIsSuspendOpen(true);
-                  }}
-                >
-                  {u.is_verified ? 'Suspend' : 'Activate'}
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedUser(u);
-                    setIsPurgeOpen(true);
-                  }}
-                  className="bg-red-700 hover:bg-red-800"
-                >
-                  Purge Data
-                </Button>
-                    {/* Manual Upgrade Dialog */}
-                    <Dialog open={isUpgradeOpen} onOpenChange={setIsUpgradeOpen}>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Grant Paid Access</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <Label>Select Plan</Label>
-                            <PlanSelect value={upgradePlan} onValueChange={v => setUpgradePlan(v as 'scholar' | 'genius')}>
-                              <PlanSelectTrigger className="w-full">
-                                <PlanSelectValue />
-                              </PlanSelectTrigger>
-                              <PlanSelectContent>
-                                <PlanSelectItem value="scholar">Scholar (Standard Paid)</PlanSelectItem>
-                                <PlanSelectItem value="genius">Genius (Full Access)</PlanSelectItem>
-                              </PlanSelectContent>
-                            </PlanSelect>
-                          </div>
-                          <Button onClick={handleManualUpgrade} disabled={isUpgrading} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-                            {isUpgrading ? 'Granting...' : 'Grant Paid Access'}
-                          </Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
+              <TableCell>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => navigate(`/social/profile/${u.id}`)}>
+                      View Profile
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => {
+                      setSelectedUser(u);
+                      setIsUpgradeOpen(true);
+                    }}>
+                      Make Paid
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => {
+                      setSelectedUser(u);
+                      checkEligibility();
+                      setIsEligibilityOpen(true);
+                    }}>
+                      Check Eligibility
+                    </DropdownMenuItem>
+                    {!u.is_verified && (
+                      <DropdownMenuItem onClick={() => {
+                        setSelectedUser(u);
+                        setIsMakeVerifiedOpen(true);
+                      }}>
+                        Make Verified
+                      </DropdownMenuItem>
+                    )}
+                    {u.is_verified && (
+                      <DropdownMenuItem onClick={() => {
+                        setSelectedUser(u);
+                        setIsRemoveVerifiedOpen(true);
+                      }}>
+                        Remove Verified
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onClick={() => {
+                      setSelectedUser(u);
+                      setIsSuspendOpen(true);
+                    }}>
+                      {u.status === 'active' ? 'Suspend' : 'Activate'}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => {
+                      setSelectedUser(u);
+                      setIsPurgeOpen(true);
+                    }} className="text-red-600">
+                      Purge Data
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
+
+      {/* Manual Upgrade Dialog */}
+      <Dialog open={isUpgradeOpen} onOpenChange={setIsUpgradeOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Grant Paid Access</DialogTitle>
+            <DialogDescription>
+              Manually upgrade a user to a paid plan and grant podcast credits
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Select Plan</Label>
+              <PlanSelect value={upgradePlan} onValueChange={v => setUpgradePlan(v as 'scholar' | 'genius')}>
+                <PlanSelectTrigger className="w-full">
+                  <PlanSelectValue />
+                </PlanSelectTrigger>
+                <PlanSelectContent>
+                  <PlanSelectItem value="scholar">Scholar (Standard Paid)</PlanSelectItem>
+                  <PlanSelectItem value="genius">Genius (Full Access)</PlanSelectItem>
+                </PlanSelectContent>
+              </PlanSelect>
+            </div>
+            <Button onClick={handleManualUpgrade} disabled={isUpgrading} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+              {isUpgrading ? 'Granting...' : 'Grant Paid Access'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Pagination Controls */}
       <div className="flex items-center justify-between mt-6">
@@ -430,6 +578,9 @@ const UserManagement = () => {
               <AlertTriangle className="h-5 w-5" />
               Purge All Data for {selectedUser?.username}
             </DialogTitle>
+            <DialogDescription>
+              This action permanently deletes all user content but preserves the login account
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
@@ -467,23 +618,149 @@ const UserManagement = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {selectedUser?.is_verified ? 'Suspend' : 'Activate'} {selectedUser?.username}
+              {selectedUser?.status === 'active' ? 'Suspend' : 'Activate'} {selectedUser?.username}
             </DialogTitle>
+            <DialogDescription>
+              Toggle the account status between active and suspended
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
-              <Switch id="suspend" checked={!selectedUser?.is_verified} />
+              <Switch id="suspend" checked={selectedUser?.status !== 'active'} />
               <Label htmlFor="suspend">Suspend account</Label>
             </div>
             <Input placeholder="Reason..." value={suspendReason} onChange={e => setSuspendReason(e.target.value)} />
             <Button
               onClick={() => {
-                if (selectedUser) toggleActive(selectedUser.id, !selectedUser.is_verified);
+                if (selectedUser) toggleActive(selectedUser.id, selectedUser.status !== 'active');
                 setIsSuspendOpen(false);
               }}
             >
               Confirm
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Check Eligibility Dialog */}
+      <Dialog open={isEligibilityOpen} onOpenChange={setIsEligibilityOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Verification Eligibility Check</DialogTitle>
+            <DialogDescription>
+              Check if the user meets all requirements for the verified creator badge
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {isChecking ? (
+              <div className="text-center py-4">
+                <Skeleton className="h-4 w-full mb-2" />
+                <Skeleton className="h-4 w-full mb-2" />
+                <Skeleton className="h-4 w-2/3" />
+              </div>
+            ) : eligibilityResults ? (
+              <>
+                <div className={`p-3 rounded-lg ${eligibilityResults.eligible ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'}`}>
+                  <p className={`font-semibold ${eligibilityResults.eligible ? 'text-green-700 dark:text-green-300' : 'text-yellow-700 dark:text-yellow-300'}`}>
+                    {eligibilityResults.eligible ? '✓ Eligible for verification' : '✗ Not yet eligible'}
+                  </p>
+                </div>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                    <span>Posts (need 50+)</span>
+                    <span className={eligibilityResults.posts_count >= 50 ? 'text-green-600 font-semibold' : 'text-gray-600'}>{eligibilityResults.posts_count}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                    <span>Followers (need 500+)</span>
+                    <span className={eligibilityResults.followers_count >= 500 ? 'text-green-600 font-semibold' : 'text-gray-600'}>{eligibilityResults.followers_count}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                    <span>Account Age (need 30+ days)</span>
+                    <span className={eligibilityResults.account_age_days >= 30 ? 'text-green-600 font-semibold' : 'text-gray-600'}>{eligibilityResults.account_age_days} days</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                    <span>Engagement Rate (need 2%+)</span>
+                    <span className={eligibilityResults.engagement_rate >= 2 ? 'text-green-600 font-semibold' : 'text-gray-600'}>{eligibilityResults.engagement_rate}%</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                    <span>Days Since Last Active (need ≤15)</span>
+                    <span className={eligibilityResults.last_active_days <= 15 ? 'text-green-600 font-semibold' : 'text-gray-600'}>{eligibilityResults.last_active_days} days</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                    <span>Violations (need 0)</span>
+                    <span className={eligibilityResults.violation_count === 0 ? 'text-green-600 font-semibold' : 'text-red-600'}>{eligibilityResults.violation_count}</span>
+                  </div>
+                </div>
+              </>
+            ) : null}
+            <Button onClick={() => setIsEligibilityOpen(false)} className="w-full">
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Make Verified Dialog */}
+      <Dialog open={isMakeVerifiedOpen} onOpenChange={setIsMakeVerifiedOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Make {selectedUser?.username} Verified?</DialogTitle>
+            <DialogDescription>
+              Award the verified creator badge via admin override
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm">
+              <p className="text-blue-700 dark:text-blue-300">
+                This will award the <strong>Verified Creator</strong> badge to this user. Use this for testing or special admin cases.
+              </p>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              User: <strong>{selectedUser?.username}</strong>
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setIsMakeVerifiedOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={makeUserVerified} 
+                disabled={isVerifying}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {isVerifying ? 'Verifying...' : 'Confirm Verification'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Remove Verified Dialog */}
+      <Dialog open={isRemoveVerifiedOpen} onOpenChange={setIsRemoveVerifiedOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove Verified Badge</DialogTitle>
+            <DialogDescription>
+              This will revoke the verified creator badge from the user.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm">
+              <p className="text-red-700 dark:text-red-300">
+                Are you sure you want to remove the <strong>Verified Creator</strong> badge from <strong>{selectedUser?.username}</strong>?
+              </p>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setIsRemoveVerifiedOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={removeUserVerified} 
+                disabled={isRemovingVerified}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {isRemovingVerified ? 'Removing...' : 'Confirm Remove'}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

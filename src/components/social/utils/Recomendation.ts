@@ -51,8 +51,8 @@ export const calculateRecommendationScore = (
   if (candidate.interests && candidate.interests.length > 0) completenessScore += 1;
   score += completenessScore * RECOMMENDATION_WEIGHTS.PROFILE_COMPLETENESS;
 
-  // Factor 7: Verified users get a small boost
-  if (candidate.is_verified) {
+  // Factor 7: Active users get a small boost
+  if (candidate.status === 'active') {
     score += RECOMMENDATION_WEIGHTS.VERIFIED_BONUS;
   }
 
@@ -90,7 +90,7 @@ export const getRecommendationReason = (
   user: SocialUserWithDetails,
   currentUserInterests: string[] = []
 ): string => {
-  if (user.is_verified) return 'Verified';
+  if (user.status === 'active') return 'Verified';
 
   const commonInterests = user.interests?.filter(interest =>
     currentUserInterests.includes(interest)

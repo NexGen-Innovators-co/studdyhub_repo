@@ -75,12 +75,12 @@ const AdminOverview = ({ onNavigate }: { onNavigate?: (tab: string) => void }) =
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
         supabase.from('profiles').select('*', { count: 'exact', head: true })
           .lt('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
-        supabase.from('profiles').select('*', { count: 'exact', head: true })
-          .gte('updated_at', todayMidnight),
-        supabase.from('profiles').select('*', { count: 'exact', head: true })
-          .gte('updated_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
-        supabase.from('profiles').select('*', { count: 'exact', head: true })
-          .gte('updated_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+        supabase.from('social_users').select('*', { count: 'exact', head: true })
+          .gte('last_login_at', todayMidnight),
+        supabase.from('social_users').select('*', { count: 'exact', head: true })
+          .gte('last_login_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+        supabase.from('social_users').select('*', { count: 'exact', head: true })
+          .gte('last_login_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
         supabase.from('social_posts').select('*', { count: 'exact', head: true }),
         supabase.from('social_comments').select('*', { count: 'exact', head: true }),
         supabase.from('social_groups').select('*', { count: 'exact', head: true }),
@@ -133,7 +133,7 @@ const AdminOverview = ({ onNavigate }: { onNavigate?: (tab: string) => void }) =
         totalPostsCount, totalCommentsCount, totalNotesCount, totalDocsCount, totalGroupsCount, totalPodcastsCount, totalChatSessionsCount
       ] = await Promise.all([
         supabase.from('profiles').select('created_at').gte('created_at', startISO).order('created_at'),
-        supabase.from('profiles').select('id, updated_at').gte('updated_at', startISO).order('updated_at'),
+        supabase.from('social_users').select('id, last_login_at').gte('last_login_at', startISO).order('last_login_at'),
         supabase.from('social_posts').select('created_at')
           .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
         supabase.from('social_comments').select('created_at')
@@ -146,7 +146,7 @@ const AdminOverview = ({ onNavigate }: { onNavigate?: (tab: string) => void }) =
         supabase.from('notes').select('*', { count: 'exact', head: true }),
         supabase.from('documents').select('*', { count: 'exact', head: true }),
         supabase.from('social_groups').select('*', { count: 'exact', head: true }),
-        supabase.from('ai_podcasts').select('*', { count: 'exact', head: true }),
+        supabase.from('ai_podcasts').select('id', { count: 'exact', head: true }),
         supabase.from('chat_sessions').select('*', { count: 'exact', head: true }),
       ]);
 
@@ -165,7 +165,7 @@ const AdminOverview = ({ onNavigate }: { onNavigate?: (tab: string) => void }) =
 
       const activeByDate: Record<string, Set<string>> = {};
       (activeUsersInRange.data || []).forEach((u: any) => {
-        const dateStr = u.updated_at?.split('T')[0];
+        const dateStr = u.last_login_at?.split('T')[0];
         if (dateStr) {
           if (!activeByDate[dateStr]) activeByDate[dateStr] = new Set();
           activeByDate[dateStr].add(u.id); // deduplicate by user id

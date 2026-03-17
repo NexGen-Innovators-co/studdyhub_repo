@@ -89,7 +89,7 @@ async function getProfileSEO(userId) {
       followers_count,
       following_count,
       posts_count,
-      is_verified,
+      status,
       is_contributor,
       interests
     `)
@@ -110,7 +110,7 @@ async function getProfileSEO(userId) {
         followingCount: user.following_count,
         postCount: user.posts_count,
         interests: user.interests,
-        isVerified: user.is_verified,
+        isVerified: user.status === 'active',
         isContributor: user.is_contributor
     };
 }
