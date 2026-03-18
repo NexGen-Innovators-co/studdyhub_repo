@@ -322,7 +322,10 @@ export const useSocialNotifications = () => {
     // If the notification already has a message from the DB, use it
     if (notification.message) return notification.message;
 
-    const actorName = notification.actor?.display_name || 'Someone';
+    const actorName =
+      notification.data?.fromUserName ||
+      notification.actor?.display_name ||
+      'Someone';
 
     switch (notification.type) {
       case 'like':

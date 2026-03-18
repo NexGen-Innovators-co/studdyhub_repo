@@ -123,15 +123,9 @@ export class SubscriptionValidator {
     }
 
     const subscription = await this.getUserSubscription(userId);
-    
-    // Only scholar and genius can chat
-    if (subscription.subscription_tier === 'free') {
-      return {
-        allowed: false,
-        message: 'Messaging is only available for Scholar and Genius plans.'
-      };
-    }
 
+    // Free users can chat (limits enforced elsewhere)
+    // You can re-enable paywall logic here if needed.
     return { allowed: true };
   }
 

@@ -129,7 +129,7 @@ export const useSocialComments = (
           type: 'social_comment',
           title: 'New comment on your post',
           message: `${actorName} commented on your post`,
-          data: { post_id: postId, comment_id: comment.id, actor_id: user.id },
+          data: { post_id: postId, comment_id: comment.id, actor_id: user.id, fromUserName: actorName },
           icon: currentUser?.avatar_url,
           image: post?.media?.[0]?.url,
           saveToDb: false

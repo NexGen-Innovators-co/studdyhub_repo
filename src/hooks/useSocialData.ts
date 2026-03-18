@@ -883,15 +883,21 @@ export const useSocialData = (
   const handleCommentsRealtimeUpdate = (payload: any) => {
     const { eventType, new: newRecord, old: oldRecord } = payload;
     const postId = newRecord?.post_id || oldRecord?.post_id;
+    const userId = newRecord?.author_id || oldRecord?.author_id;
 
     if (postId) {
+      const isCurrentUser = userId === currentUserIdRef.current;
+
       const updatePostComments = (prev: SocialPostWithDetails[]) =>
         prev.map(post => {
           if (post.id === postId) {
+            // Avoid double-counting when the current user already applied an optimistic update.
+            const shouldApplyChange = !isCurrentUser;
             const commentsChange = eventType === 'INSERT' ? 1 : eventType === 'DELETE' ? -1 : 0;
+
             return {
               ...post,
-              comments_count: Math.max(0, post.comments_count + commentsChange)
+              comments_count: Math.max(0, post.comments_count + (shouldApplyChange ? commentsChange : 0))
             };
           }
           return post;

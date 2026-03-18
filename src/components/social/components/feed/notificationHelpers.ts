@@ -40,7 +40,11 @@ export const getNotificationTitle = (notif: SocialNotification): string => {
 };
 
 export const getNotificationMessage = (notif: SocialNotification): string => {
-  const actorName = notif.actor?.display_name || 'Someone';
+  const actorName =
+    notif.data?.fromUserName ||
+    notif.actor?.display_name ||
+    'Someone';
+
   switch (notif.type) {
     case 'like': return `${actorName} liked your post`;
     case 'comment': return `${actorName} commented on your post`;

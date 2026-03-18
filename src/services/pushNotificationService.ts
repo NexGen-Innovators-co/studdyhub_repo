@@ -74,36 +74,20 @@ class PushNotificationService {
       // Check if already subscribed
       const existingSubscription = await this.registration.pushManager.getSubscription();
       if (existingSubscription) {
-
-        // Check if this subscription exists in database
         const subscriptionData = existingSubscription.toJSON();
-        const { data: existingRecord } = await supabase
-          .from('notification_subscriptions')
-          .select('*')
-          .eq('endpoint', subscriptionData.endpoint!)
-          .eq('user_id', userId)
-          .maybeSingle();
 
-        if (existingRecord) {
-          return existingRecord;
-        }
+        // Save or update subscription via RPC to avoid RLS issues when an endpoint is
+        // already associated with a different user (e.g. switching accounts in the same browser).
+        const { data, error } = await supabase.rpc('upsert_notification_subscription', {
+          p_endpoint: subscriptionData.endpoint!,
+          p_p256dh: subscriptionData.keys!.p256dh,
+          p_auth: subscriptionData.keys!.auth,
+          p_device_type: this.getDeviceType(),
+          p_browser: this.getBrowserInfo()
+        });
 
-        // Subscription exists in browser but not in database - save it
-        const { data, error } = await supabase
-          .from('notification_subscriptions')
-          .upsert({
-            user_id: userId,
-            endpoint: subscriptionData.endpoint!,
-            p256dh: subscriptionData.keys!.p256dh,
-            auth: subscriptionData.keys!.auth,
-            device_type: this.getDeviceType(),
-            browser: this.getBrowserInfo()
-          }, { onConflict: 'endpoint' })
-          .select()
-          .maybeSingle();
-
-        if (error && error.code !== '23505') throw error; // Ignore duplicate key errors
-        return data || existingRecord;
+        if (error) throw error;
+        return data as NotificationSubscription;
       }
 
       // Subscribe to push

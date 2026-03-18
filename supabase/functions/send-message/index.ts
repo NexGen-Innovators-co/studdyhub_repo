@@ -124,11 +124,12 @@ serve(async (req) => {
                   type: 'message',
                   title: `Message from ${senderName}`,
                   message: preview,
-                  data: { 
-                      chat_session_id: chat_session_id,
-                      actor_id: userId,
-                      url: `/social?chat_session_id=${chat_session_id}` // Best effort deep link
-                  }
+                  // Deep link directly into chat session
+                  data: {
+                    chat_session_id: chat_session_id,
+                    actor_id: userId,
+                  },
+                  action_url: `/chat/${chat_session_id}`
               }
            });
         }

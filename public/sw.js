@@ -94,11 +94,14 @@ self.addEventListener('push', (event) => {
 
   try {
     const data = event.data.json();
+    // Debug: log payload to help diagnose icon / routing issues
+    // console.log('[SW push] payload:', data);
+
     const title = data.title || 'StuddyHub';
     const options = {
       body: data.body || data.message || 'You have a new notification',
-      icon: data.icon || (data.data && data.data.avatarUrl) || '/icon-192x192.png',
-      badge: data.badge || '/badge-72x72.png',
+      icon: data.icon || (data.data && data.data.avatarUrl) || '/siteIcon.png',
+      badge: data.badge || '/android-chrome-192x192.png',
       image: data.image || (data.data && (data.data.coverUrl || data.data.imageUrl)),
       data: data.data || {},
       tag: data.tag || 'studdyhub-notification',
@@ -149,12 +152,15 @@ self.addEventListener('notificationclick', (event) => {
         url = notificationData.post_id ? `/social/post/${notificationData.post_id}` : '/social';
         break;
       case 'social_follow':
-        url = notificationData.actor_id ? `/social/profile/${notificationData.actor_id}` : '/social';
       case 'follow':
         url = notificationData.actor_id ? `/social/profile/${notificationData.actor_id}` : '/social';
         break;
       case 'ai_limit_warning':
         url = '/subscription';
+        break;
+      case 'message':
+        // Chat message notification
+        url = notificationData.action_url || (notificationData.chat_session_id ? `/chat/${notificationData.chat_session_id}` : '/chat');
         break;
       default:
         url = notificationData.action_url || '/dashboard';

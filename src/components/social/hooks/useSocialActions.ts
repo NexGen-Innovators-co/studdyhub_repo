@@ -543,7 +543,7 @@ export const useSocialActions = (
             type: 'social_like',
             title: 'New like on your post',
             message: `${actorName} liked your post`,
-            data: { post_id: postId, actor_id: userId },
+            data: { post_id: postId, actor_id: userId, fromUserName: actorName },
             icon: currentUser?.avatar_url,
             image: post?.media?.[0]?.url,
             saveToDb: false
@@ -706,7 +706,7 @@ export const useSocialActions = (
           type: 'social_follow',
           title: 'New follower',
           message: `${actorName} started following you`,
-          data: { actor_id: user.id },
+          data: { actor_id: user.id, fromUserName: actorName },
           icon: currentUser?.avatar_url,
           saveToDb: false
         });

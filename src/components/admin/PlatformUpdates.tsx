@@ -235,13 +235,33 @@ const PlatformUpdates: React.FC = () => {
   // ─── Quick Publish ────────────────────────────────────────
   const handlePublish = async (id: string) => {
     try {
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from('platform_updates')
         .update({ status: 'published', published_at: new Date().toISOString(), updated_by: user?.id })
-        .eq('id', id);
+        .eq('id', id)
+        .select('*')
+        .single();
       if (error) throw error;
+
       toast.success('Update published!');
       logAdminActivity({ action: 'publish_platform_update', target_type: 'platform_updates', target_id: id });
+
+      // Send broadcast push notifications to all users (in batches)
+      try {
+        const notificationPayload: any = {
+          all_users: true,
+          type: 'platform_update',
+          title: updated.title,
+          message: updated.summary,
+          data: { update_id: id },
+          save_to_db: true,
+        };
+
+        await supabase.functions.invoke('send-notification', notificationPayload);
+      } catch (notifErr) {
+        console.error('Failed to broadcast update notification:', notifErr);
+      }
+
       fetchUpdates();
     } catch (err: any) {
       toast.error('Failed to publish');

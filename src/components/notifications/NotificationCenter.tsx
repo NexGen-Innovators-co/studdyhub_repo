@@ -28,6 +28,7 @@ const notificationIcons: Record<string, string> = {
   social_comment: '💬',
   social_follow: '👤',
   social_mention: '📢',
+  message: '💬',
   ai_limit_warning: '⚠️',
   subscription_renewal: '💳',
   general: '🔔'
@@ -50,11 +51,36 @@ export function NotificationCenter() {
     typeof Notification !== 'undefined' ? Notification.permission : 'default'
   );
 
+  const deriveNotificationUrl = (notification: Notification): string | undefined => {
+    if (notification.action_url) return notification.action_url;
+
+    switch (notification.type) {
+      case 'schedule_reminder':
+        return '/schedule';
+      case 'quiz_due':
+        return '/quizzes';
+      case 'assignment_due':
+        return '/schedule';
+      case 'social_like':
+      case 'social_comment':
+      case 'social_mention':
+      case 'social_share':
+        return notification.data?.post_id ? `/social/post/${notification.data.post_id}` : '/social';
+      case 'social_follow':
+        return notification.data?.actor_id ? `/social/profile/${notification.data.actor_id}` : '/social';
+      case 'message':
+        return notification.data?.chat_session_id ? `/chat/${notification.data.chat_session_id}` : '/chat';
+      default:
+        return undefined;
+    }
+  };
+
   const handleNotificationClick = (notification: Notification) => {
     markAsRead(notification.id);
-    
-    if (notification.action_url) {
-      navigate(notification.action_url);
+
+    const url = deriveNotificationUrl(notification);
+    if (url) {
+      navigate(url);
       setIsOpen(false);
     }
   };

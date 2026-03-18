@@ -124,6 +124,24 @@ serve(async (req: Request) => {
       return createSubErrorResponse("Failed to create comment", 500);
     }
 
+    // Increment comments_count on the post (keeps UI in sync for other users)
+    try {
+      const { data: postData, error: postDataError } = await supabase
+        .from('social_posts')
+        .select('comments_count')
+        .eq('id', postId)
+        .single();
+
+      if (!postDataError && postData) {
+        await supabase
+          .from('social_posts')
+          .update({ comments_count: (postData.comments_count || 0) + 1 })
+          .eq('id', postId);
+      }
+    } catch (_) {
+      // Ignore comment count update failures; comment itself already created
+    }
+
     // Fetch post author and commenter name for notification (server-side)
     let actorName = 'Someone';
     try {

@@ -125,6 +125,13 @@ function buildStudyPlanningNotification(user: UserContext): NotificationPayload 
     `Good morning, ${user.fullName}! What are your top study goals for today? Your AI assistant is ready to help plan. ✨`,
     `Start your day strong! Your AI has personalized study tips based on your recent learning. Let's plan today's session.`,
     `Ready to conquer your studies? Your AI assistant is ready to help you design the perfect learning session. 🎯`,
+    `New day, new study wins! Tell your AI what you want to accomplish and let it create a path. 🛤️`,
+    `Let's make today count! Your AI study coach is queued and ready—what's first on your list? 📚`,
+    `Planning wins: set one clear study goal and the AI will keep you on track all day. Ready? ✅`,
+    `Kick off the day with a short study plan. Your AI can take it from here—just say the topic. 🧠`,
+    `Think of one thing you want to learn today. We'll help turn it into a quick, focused session. 🔥`,
+    `The fastest way to progress? A simple plan. Ask your AI to build one in seconds. 🚀`,
+    `Today is a great day to learn something new. Tell your AI what you want to master first. 🎓`,
   ];
   
   const msg = messages[Math.floor(Math.random() * messages.length)];
@@ -156,6 +163,13 @@ function buildQuizChallengeNotification(user: UserContext): NotificationPayload 
     `🧠 Quick brain exercise! Take a 2-minute quiz based on your recent notes. Can you get a perfect score? ${genreStreak}`,
     `Test your knowledge! You studied recently—let's see what stuck. Quiz time? 📝`,
     `Your brain could use a challenge! Take a quick quiz on what you've been learning. 🔥`,
+    `Want to keep your study streak alive? Try a quiz now and watch your progress grow! 📈`,
+    `A quick quiz is the best way to lock in what you learned today. Ready when you are. 💡`,
+    `See how much you remember from your latest notes. Quick quiz—just a few minutes! ⏱️`,
+    `Let's turn your notes into a mini-quiz. It's fast, fun, and boosts retention. 🎯`,
+    `Curious what you retained? Take a short quiz and find out—no pressure, all progress. ✅`,
+    `Your brain is ready. Take a quiz now and celebrate the learning you already did. 🧠`,
+    `Small quizzes are huge wins. Try one now and keep the streak going! 🕹️`,
   ];
   
   const msg = messages[Math.floor(Math.random() * messages.length)];
@@ -186,6 +200,13 @@ function buildGroupNudgeNotification(user: UserContext, recentGroupActivity: boo
     `💬 New activity in your study group! Someone asked a question. Help them out and strengthen your own knowledge!`,
     `Your study group is discussing something interesting. Join the conversation and share your thoughts! 🤝`,
     `Question of the Day in your group! Only a few people answered—what's your take? 💡`,
+    `Someone just posted in your group — your perspective could spark the best answer. Jump in! 🚀`,
+    `A peer just tagged you in a discussion. Add your insight and keep the momentum going. 💬`,
+    `Your group is buzzing—share your view and help others learn too. Collaboration wins! 🤓`,
+    `A group member asked for help. Your next message could be the one that clicks. ✨`,
+    `Get involved in your study group today. A quick reply can make a big difference. 💡`,
+    `Group work pays off. See what your teammates are sharing and join the conversation. 👥`,
+    `Your study group is active right now—hop in and contribute while it's hot! 🔥`,
   ];
   
   const msg = messages[Math.floor(Math.random() * messages.length)];
@@ -207,6 +228,13 @@ function buildPodcastDiscoveryNotification(user: UserContext): NotificationPaylo
     `🎧 Your daily bite of knowledge! We curated an AI podcast on a topic you've been learning about. 10-min listen?`,
     `Discover something new! A short AI podcast on your recent interests. Perfect for a study break. 🎙️`,
     `New audio content ready! Listen to an AI podcast while you take a break from notes. 🎵`,
+    `Need a mental reset? Try a quick podcast episode tailored to what you're studying. 🧠`,
+    `A new podcast episode is waiting for you—perfect for a walk or a short break. 🎧`,
+    `Listen while you commute: a curated podcast to help reinforce what you've learned. 🚗`,
+    `Boost retention with a quick audio summary. Tap to play and keep learning on the go. 📱`,
+    `Turn a coffee break into a study boost—this podcast is only a few minutes long. ☕`,
+    `Fresh podcast drop! It’s tuned to your learning goals. Give it a listen today. 🔊`,
+    `A short, focused podcast can make a big difference. Press play and keep the momentum. 🎶`,
   ];
   
   const msg = messages[Math.floor(Math.random() * messages.length)];
@@ -231,6 +259,11 @@ function buildProgressTrackingNotification(user: UserContext): NotificationPaylo
       `🔥 Amazing work this week! You're building great learning habits. Keep the momentum going! 💪`,
       `Your dedication is paying off! You're making real progress in your studies. Stay awesome! ✨`,
       `${user.quiz_streak > 0 ? `🔥 You're on a ${user.quiz_streak}-day quiz streak! Don't break it today!` : 'Keep up the great work!'}`,
+      `You're consistently showing up — that's the hardest part. Keep it going! 🌟`,
+      `Your focus is paying off. Today's study session will be another step forward. 📈`,
+      `Small wins add up. Keep stacking them and you're building something great. 🧩`,
+      `Your learning momentum is strong. Keep riding it and you'll be amazed at what you accomplish. 🚀`,
+      `You're in a great groove. A little study session today keeps the streak alive. 🔥`,
     ];
     
     const msg = messages[Math.floor(Math.random() * messages.length)];
@@ -250,6 +283,9 @@ function buildProgressTrackingNotification(user: UserContext): NotificationPaylo
       `We missed you! Your AI assistant has fresh study tips waiting. Come back and see what you've missed. 👋`,
       `You've built some great notes here. Let's quiz what you remember and refresh your learning! 📚`,
       `Your learning journey is waiting for you. Come back and see your progress! 🎯`,
+      `A few minutes of review can make today feel like progress. Check out what you've already built. 🗂️`,
+      `Your last session had momentum. Come back and pick up right where you left off. ✨`,
+      `A quick study session today keeps your skills sharp. Ready when you are. 🧠`,
     ];
     
     const msg = messages[Math.floor(Math.random() * messages.length)];
@@ -269,6 +305,9 @@ function buildProgressTrackingNotification(user: UserContext): NotificationPaylo
       `It's been a while! Your learning tools are waiting to help you get back on track. Ready to resume? 🚀`,
       `You had some great momentum before. Let's pick up where you left off and build new habits! 💪`,
       `We have personalized study recommendations just for you. Come see what's new! ✨`,
+      `Take one small step today and you'll be amazed at how quickly it builds. Let's start. 📌`,
+      `Even a short refresh session can make a big difference. Want to give it a try? 🧠`,
+      `Your next study session is just one click away. Let's make it count. 🎯`,
     ];
     
     const msg = messages[Math.floor(Math.random() * messages.length)];
