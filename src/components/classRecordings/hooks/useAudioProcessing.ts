@@ -6,6 +6,7 @@ import { ClassRecording } from '../../../types/Class';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 
 import { Note } from '../../../types/Note';
+import { useUserActivityLogger } from '@/hooks/useUserActivityLogger';
 
 interface UseAudioProcessingProps {
   onAddRecording: (recording: ClassRecording) => void;
@@ -22,6 +23,7 @@ interface AudioDetails {
 }
 
 export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCreated, onRefreshNotes }: UseAudioProcessingProps) => {
+  const { logUserActivity } = useUserActivityLogger();
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
   const [uploadedAudioDetails, setUploadedAudioDetails] = useState<AudioDetails | null>(null);
   const [isAudioOptionsVisible, setIsAudioOptionsVisible] = useState(false);
@@ -448,6 +450,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
       setIsAudioOptionsVisible(true);
       toast.success('Audio file uploaded. Initiating AI processing...', { id: toastId });
       onAddRecording(newRecording);
+      void logUserActivity(user.id, 'recording', 25);
 
       await triggerAudioProcessing(urlData.publicUrl, newDocumentId, 'en');
 
@@ -653,6 +656,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
       if (insertError) throw new Error(`Failed to save recording to database: ${insertError.message}`);
 
       onAddRecording(newRecording);
+      void logUserActivity(user.id, 'recording', 25);
       toast.success('Recording saved, initiating AI processing...', { id: toastId });
 
       // For large audio (>15MB), use chunked processing to avoid edge function timeouts

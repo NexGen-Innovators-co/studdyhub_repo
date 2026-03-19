@@ -7,7 +7,13 @@ export const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 // Wrap fetch to ensure Accept header for REST calls and optionally log failures.
 // We enable the wrapper in all environments so PostgREST doesn't return 406
 // due to strict Accept negotiation. Detailed logging remains gated to DEV.
-let clientOptions: any = {};
+let clientOptions: any = {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  }
+};
 
 // Simple cooldown to prevent tight refresh_token retry storms when the
 // token endpoint returns 429. This prevents many repeated refresh attempts
@@ -73,7 +79,10 @@ if (typeof window !== 'undefined' && window.fetch) {
 		return originalFetch(input, init);
 	};
 
-	clientOptions = { global: { fetch: wrappedFetch } };
+	clientOptions = {
+		...clientOptions,
+		global: { fetch: wrappedFetch },
+	};
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, clientOptions)

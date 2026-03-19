@@ -34,6 +34,7 @@ import { JoinInstitutionFlow } from '@/components/educator/onboarding/JoinInstit
 import { IndependentTutorSetup } from '@/components/educator/onboarding/IndependentTutorSetup';
 import type { UserRole } from '@/types/Education';
 import OnboardingSuccessScreen from './OnboardingSuccessScreen';
+import { useUserActivityLogger } from '@/hooks/useUserActivityLogger';
 
 // ─── Types ────────────────────────────────────────────────────
 interface OnboardingWizardProps {
@@ -180,6 +181,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     onComplete();
   };
 
+  const { logUserActivity } = useUserActivityLogger();
+
   const markComplete = async () => {
     try {
       localStorage.setItem(ONBOARDING_KEY, '1');
@@ -189,6 +192,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     // Also persist to DB via SECURITY DEFINER RPC (avoids RLS recursion)
     try {
       await supabase.rpc('complete_onboarding', {});
+      // Log onboarding completion as activity for streaks + UX
+      void logUserActivity(userId, 'onboarding', 0);
     } catch {
       // Non-blocking — localStorage is primary fallback
     }

@@ -4,6 +4,7 @@ import { supabase } from '../../../integrations/supabase/client';
 import { Document } from '../../../types/Document'; // Update path if needed
 import { User } from '@supabase/supabase-js';
 import { overrideTsMimeType } from '../documentUtils.tsx';
+import { useUserActivityLogger } from '@/hooks/useUserActivityLogger';
 
 interface AppOperations {
   addDocumentToFolder: (docId: string, folderId: string) => Promise<void | boolean>;
@@ -32,6 +33,7 @@ export const useDocumentUpload = ({
   uploadTargetFolderId,
   setUploadTargetFolderId
 }: UseDocumentUploadProps) => {
+  const { logUserActivity } = useUserActivityLogger();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -138,7 +140,9 @@ export const useDocumentUpload = ({
     setIsUploading(true);
     setUploadProgress(0);
 
-    const progressInterval = setInterval(() => {
+    // Keep a reference so we can clear it in finally
+    let progressInterval: number | null = null;
+    progressInterval = window.setInterval(() => {
       setUploadProgress(prev => {
         if (prev >= 90) return prev;
         return prev + Math.random() * 10;
@@ -212,15 +216,12 @@ export const useDocumentUpload = ({
           await forceRefreshDocuments();
         }
 
-        // ── Handle background/resumable processing ──────────────────────────
+        if (user?.id) {
+          void logUserActivity(user.id, 'document', 20);
+        }
 
-        if (uploadedDoc.processing_status === 'partial') {
-          // Large file (>40MB): server extracted first chunk, client resumes the rest
-          toast.info(`"${selectedFile.name}" is large — continuing extraction in background…`);
-          resumeDocumentProcessing(uploadedDoc.id, selectedFile.name, user.id);
-
-        } else if (uploadedDoc.processing_status === 'processing') {
-          // Legacy background processing path
+        // If the document is still processing, poll until completion.
+        if (uploadedDoc.processing_status === 'processing' || uploadedDoc.processing_status === 'partial') {
           toast.info("Large file detected, processing in background. We'll notify when complete.");
           const pollInterval = 5000;
           const maxAttempts = 60;
@@ -234,7 +235,8 @@ export const useDocumentUpload = ({
                 .eq('id', uploadedDoc.id)
                 .single();
               if (pollErr) throw pollErr;
-              if (docs && docs.processing_status !== 'processing') {
+
+              if (docs && docs.processing_status !== 'processing' && docs.processing_status !== 'partial') {
                 clearInterval(poller);
                 if (docs.processing_status === 'completed') {
                   toast.success(`"${selectedFile.name}" finished processing!`);
@@ -250,7 +252,6 @@ export const useDocumentUpload = ({
               clearInterval(poller);
             }
           }, pollInterval);
-
         } else {
           toast.success(
             uploadTargetFolderId
@@ -292,7 +293,9 @@ export const useDocumentUpload = ({
         console.error('[document upload] force refresh after error failed', e);
       }
     } finally {
-      clearInterval(progressInterval);
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
       setIsUploading(false);
       setUploadProgress(0);
     }

@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
-type ActivityType = 'chat' | 'quiz' | 'note' | 'post' | 'group_interaction';
+type ActivityType = 'chat' | 'quiz' | 'note' | 'recording' | 'document' | 'post' | 'group_interaction' | 'onboarding';
 
 export function useUserActivityLogger() {
   const logUserActivity = useCallback(

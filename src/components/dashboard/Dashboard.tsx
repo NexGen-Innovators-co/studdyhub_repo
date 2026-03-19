@@ -28,6 +28,7 @@ import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 import { RecentPodcasts } from './RecentPodcasts';
 import { RecentActivityFeed } from './RecentActivityFeed';
 import { AIInsights } from './AIInsights';
+import { DailyProgressWidget } from './DailyProgressWidget';
 // import { EducationWidgets } from './widgets/EducationWidgets';
 import { useEducationContext } from '@/hooks/useEducationContext';
 
@@ -112,6 +113,47 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
             );
         });
     };
+
+    // For brand-new users, show a guided “first steps” flow rather than empty stats cards.
+    const newUserTasks = [
+        {
+            key: 'note',
+            label: 'Create your first note',
+            done: (stats?.totalNotes ?? 0) > 0,
+            action: () => onCreateNew('note'),
+            icon: BookOpen,
+            description: 'Capture ideas, summaries, and course notes in one place.',
+        },
+        {
+            key: 'recording',
+            label: 'Record a quick audio note',
+            done: (stats?.totalRecordings ?? 0) > 0,
+            action: () => onCreateNew('recording'),
+            icon: Play,
+            description: 'Save verbal explanations, lectures, or brainstorms.',
+        },
+        {
+            key: 'document',
+            label: 'Upload a document',
+            done: (stats?.totalDocuments ?? 0) > 0,
+            action: () => onCreateNew('document'),
+            icon: FileText,
+            description: 'Upload PDFs, slides, or articles for quick reference.',
+        },
+        {
+            key: 'quiz',
+            label: 'Take a quick quiz',
+            done: (stats?.totalQuizzesTaken ?? 0) > 0,
+            action: () => onNavigateToTab('quizzes'),
+            icon: BrainIcon,
+            description: 'Test your knowledge and earn points.',
+        },
+    ];
+
+    const checklistCompleted = newUserTasks.every((t) => t.done);
+    const showFullDashboard = checklistCompleted;
+
+    const nextTask = newUserTasks.find((t) => !t.done) ?? newUserTasks[0];
 
     if (error) {
         return (
@@ -204,7 +246,10 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                         Welcome back, {userProfile?.full_name?.split(' ')[0] || 'Learner'}!
                     </h1>
                     <p className="text-gray-500 dark:text-gray-400 text-lg font-medium">
-                        Here's what's happening with your learning today.
+                        {showFullDashboard
+                            ? "Here's what's happening with your learning today."
+                            : 'Let’s get started — complete a few quick actions to unlock your learning streak.'
+                        }
                     </p>
                 </div>
                 <div className="mt-4 sm:mt-0">
@@ -248,7 +293,8 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
             )} */}
 
             {/* Quick Stats Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8 mt-4">
+            {showFullDashboard && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8 mt-4">
                 {[
                     { title: "Notes", value: stats.totalNotes || 0, icon: BookOpen, color: "from-blue-500 to-cyan-500", bg: "bg-blue-100 dark:bg-blue-900", type: 'note' as const },
                     { title: "Recordings", value: formatTime(stats.totalStudyTime || 0), icon: Play, color: "from-green-500 to-emerald-500", bg: "bg-green-100 dark:bg-green-900", type: 'recording' as const },
@@ -305,57 +351,61 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                         </CardContent>
                     </Card>
                 ))}
-            </div>
+              </div>
+            )}
 
-            {!hasData ? (
-                <div className="mb-8">
-                    <Card className="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-gray-800 dark:to-gray-900 border-0 shadow-xl">
+            {!showFullDashboard ? (
+                <div className="mb-8 space-y-6">
+                    <Card className="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-gray-900 dark:to-gray-950 border-0 shadow-xl">
                         <CardContent className="p-6 sm:p-8">
-                            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                                <div className="flex-1 text-center md:text-left">
-                                    <h2 className="text-2xl font-bold mb-2">Your mind palace is empty</h2>
+                            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+                                <div className="flex-1">
+                                    <h2 className="text-2xl sm:text-3xl font-bold mb-2">Welcome to StuddyHub!</h2>
                                     <p className="text-gray-600 dark:text-gray-400 mb-4">
-                                        Start building your knowledge base by creating notes, recordings, or uploading documents.
+                                        Get started with a few small actions. Each step helps build your learning streak.
                                     </p>
-                                    <div className="flex flex-wrap gap-2 justify-center md:justify-start">
-                                        <SubscriptionGuard
-                                            feature="Notes"
-                                            limitFeature="maxNotes"
-                                            currentCount={stats.totalNotes || 0}
-                                        >
-                                            <Button onClick={() => onCreateNew('note')} className="bg-blue-600 hover:bg-blue-700">
-                                                <BookOpen className="h-4 w-4 mr-2" />
-                                                Create Note
-                                            </Button>
-                                        </SubscriptionGuard>
 
-                                        <SubscriptionGuard
-                                            feature="Recordings"
-                                            limitFeature="maxRecordings"
-                                            currentCount={stats.totalRecordings || 0}
-                                        >
-                                            <Button onClick={() => onCreateNew('recording')} variant="outline">
-                                                <Play className="h-4 w-4 mr-2" />
-                                                Start Recording
-                                            </Button>
-                                        </SubscriptionGuard>
+                                    <div className="space-y-4">
+                                        {newUserTasks.map((task) => (
+                                            <div key={task.key} className="flex items-start gap-3">
+                                                <div className="mt-1">
+                                                    {task.done ? (
+                                                        <CheckCircle className="h-5 w-5 text-green-500" />
+                                                    ) : (
+                                                        <span className="h-5 w-5 rounded-full bg-gray-200 dark:bg-gray-700" />
+                                                    )}
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="font-medium text-gray-900 dark:text-white">{task.label}</p>
+                                                    <p className="text-sm text-gray-500 dark:text-gray-400">{task.description}</p>
+                                                </div>
+                                                <Button
+                                                    size="sm"
+                                                    variant={task.done ? 'outline' : 'secondary'}
+                                                    onClick={task.action}
+                                                    disabled={task.done}
+                                                >
+                                                    {task.done ? 'Done' : 'Go'}
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
 
-                                        <SubscriptionGuard
-                                            feature="Documents"
-                                            limitFeature="maxDocuments"
-                                            currentCount={stats.totalDocuments || 0}
+                                    <div className="mt-6">
+                                        <Button
+                                            onClick={nextTask.action}
+                                            className="w-full sm:w-auto"
                                         >
-                                            <Button onClick={() => onCreateNew('document')} variant="outline">
-                                                <FileText className="h-4 w-4 mr-2" />
-                                                Upload Document
-                                            </Button>
-                                        </SubscriptionGuard>
+                                            {nextTask.done ? 'Explore more features' : `Start: ${nextTask.label}`}
+                                        </Button>
                                     </div>
                                 </div>
-                                <div className="w-48 h-48">
-                                    <div className="w-full h-full bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 rounded-full flex items-center justify-center">
-                                        <Brain className="h-24 w-24 text-blue-400 dark:text-blue-300 opacity-50" />
-                                    </div>
+
+                                <div className="w-full lg:w-96">
+                                    <DailyProgressWidget
+                                        userId={userProfile?.id}
+                                        onAction={() => nextTask.action()}
+                                    />
                                 </div>
                             </div>
                         </CardContent>
@@ -435,21 +485,18 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                     {activeTab === 'activity' && (
                         <div className="space-y-6">
                             {/* Streak Banner */}
-                            {stats.currentStreak > 0 ? (
-                                <Card className="bg-gradient-to-r from-blue-600 to-blue-600 text-white border-0 shadow-2xl">
-                                    <CardContent className="p-6 sm:p-8 text-center">
-                                        <h2 className="text-2xl sm:text-4xl font-bold mb-4">You're in the top 5% of learners!</h2>
-                                        <p className="text-base sm:text-xl opacity-90">With {stats.currentStreak} day streak and {Math.round(stats.avgDailyStudyTime / 60)} mins/day</p>
-                                    </CardContent>
-                                </Card>
-                            ) : (
-                                <Card className="bg-gradient-to-r from-gray-600 to-gray-700 text-white border-0 shadow-2xl">
-                                    <CardContent className="p-6 sm:p-8 text-center">
-                                        <h2 className="text-2xl sm:text-4xl font-bold mb-4">Ready to build your streak?</h2>
-                                        <p className="text-base sm:text-xl opacity-90">Create your first note or recording to start your learning journey</p>
-                                    </CardContent>
-                                </Card>
-                            )}
+                            <Card className="bg-gradient-to-r from-blue-600 to-blue-600 text-white border-0 shadow-2xl">
+                                <CardContent className="p-6 sm:p-8 text-center">
+                                    <h2 className="text-2xl sm:text-4xl font-bold mb-4">Keep your learning streak alive!</h2>
+                                    <p className="text-base sm:text-xl opacity-90">Build momentum by completing small actions each day.</p>
+                                </CardContent>
+                            </Card>
+                            <div className="mt-6">
+                                <DailyProgressWidget
+                                    userId={userProfile?.id}
+                                    onAction={() => onCreateNew('note')}
+                                />
+                            </div>
 
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                                 {/* Left Column: Activity Feed */}

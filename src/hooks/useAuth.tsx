@@ -84,6 +84,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
         // Handle subsequent auth changes after the initial resolve.
         if (resolved) {
+          // Only log in DEV to avoid noise in production.
+          if (import.meta.env.DEV) {
+            console.debug('[useAuth] auth event', { event, session });
+          }
+
           if (event === 'SIGNED_OUT') {
             // ── User-initiated sign-out: apply immediately ──────────
             if (isIntentionalSignOutRef.current) {
@@ -173,8 +178,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (import.meta.env.DEV) {
+        console.debug('[useAuth] initial session fetched', { session });
+      }
       resolveAuth(session);
-    }).catch(() => {
+    }).catch((err) => {
+      if (import.meta.env.DEV) {
+        console.warn('[useAuth] getSession failed', err);
+      }
       // If getSession throws (network error, etc.), resolve with no session
       resolveAuth(null);
     });

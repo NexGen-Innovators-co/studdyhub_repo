@@ -557,14 +557,26 @@ const Auth = () => {
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
+    if (import.meta.env.DEV) {
+      console.info('[Auth] Starting Google OAuth sign-in');
+    }
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: `${window.location.origin}/dashboard`, queryParams: { access_type: 'offline', prompt: 'consent' } }
       });
+      if (import.meta.env.DEV) {
+        console.info('[Auth] signInWithOAuth response', { error });
+      }
       if (error) throw error;
-    } catch (err: any) { toast.error(err.message || 'Failed to sign in with Google'); }
-    finally { setIsLoading(false); }
+    } catch (err: any) {
+      if (import.meta.env.DEV) {
+        console.error('[Auth] Google sign-in failed', err);
+      }
+      toast.error(err.message || 'Failed to sign in with Google');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (isRedirecting) return <BrandedLoader />;
