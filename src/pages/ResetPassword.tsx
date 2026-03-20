@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../modules/ui/components/button';
+import { Input } from '../modules/ui/components/input';
+import { Label } from '../modules/ui/components/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../modules/ui/components/card';
 import { Lock, Eye, EyeOff, Loader2, CheckCircle2, XCircle, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { supabase } from '../integrations/supabase/client';
 import { toast } from 'sonner';

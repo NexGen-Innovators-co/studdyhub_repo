@@ -2,13 +2,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Button } from '../components/ui/button';
+import { Button } from '../modules/ui/components/button';
 import { Sparkles, ArrowRight, Play, Shield, Globe, Award, Users, FileText, TrendingUp, Star, Zap, ChevronLeft, ChevronRight, Loader2, Mic, MessageSquare, Brain, LayoutDashboard, ArrowUp } from 'lucide-react';
 import { supabase } from '../integrations/supabase/client';
-import { AppLayout, ContentContainer } from '../components/layout/LayoutComponents';
-import { RateAppDialog } from '../components/ratings/RateAppDialog';
+import { AppLayout, ContentContainer } from '../modules/layout/components/LayoutComponents';
+import { RateAppDialog } from '../modules/ratings/components/RateAppDialog';
 // Update src/pages/LandingPage.tsx - Add this after features section
-import { ScreenshotGallery } from '../components/layout/ScreenshotGallery';
+import { ScreenshotGallery } from '../modules/layout/components/ScreenshotGallery';
 const appScreenshots = [
   {
     id: 1,

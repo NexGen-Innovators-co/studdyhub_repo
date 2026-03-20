@@ -2,7 +2,7 @@
  * useOfflineSync.ts - Hook to manage offline data synchronization
  */
 import { useEffect, useCallback } from 'react';
-import { offlineStorage, STORES } from '../utils/offlineStorage';
+import { offlineStorage } from '../utils/offlineStorage';
 import { supabase } from '../integrations/supabase/client';
 import { toast } from 'sonner';
 

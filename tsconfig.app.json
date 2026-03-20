@@ -31,6 +31,6 @@
   },
   "include": [
     "src",
-    "src/components/notes/config"
+    "src/modules", "scripts/fix-unused-imports.cjs",
   ]
 }

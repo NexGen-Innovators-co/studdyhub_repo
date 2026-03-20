@@ -1,7 +1,7 @@
 // src/pages/NotFound.tsx
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { AppLayout } from '../components/layout/LayoutComponents';
+import { AppLayout } from '../modules/layout/components/LayoutComponents';
 import { Home, Search, HelpCircle } from 'lucide-react';
 
 const NotFound: React.FC = () => {

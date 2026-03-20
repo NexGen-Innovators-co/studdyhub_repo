@@ -1,28 +1,90 @@
 {
   "files": [],
   "references": [
-    {
-      "path": "./tsconfig.app.json"
-    },
-    {
-      "path": "./tsconfig.node.json"
-    }
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
   ],
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./src/*"
-      ]
+
+      "@/*": ["./src/*"],
+
+      "@/modules/ui":            ["./src/modules/ui/index.ts"],
+      "@/modules/ui/*":          ["./src/modules/ui/components/*"],
+
+      "@/modules/aiChat":        ["./src/modules/aiChat/index.ts"],
+      "@/modules/aiChat/*":      ["./src/modules/aiChat/components/*"],
+
+      "@/modules/notes":         ["./src/modules/notes/index.ts"],
+      "@/modules/notes/*":       ["./src/modules/notes/components/*"],
+
+      "@/modules/social":        ["./src/modules/social/index.ts"],
+      "@/modules/social/*":      ["./src/modules/social/components/*"],
+
+      "@/modules/podcasts":      ["./src/modules/podcasts/index.ts"],
+      "@/modules/podcasts/*":    ["./src/modules/podcasts/components/*"],
+
+      "@/modules/quizzes":       ["./src/modules/quizzes/index.ts"],
+      "@/modules/quizzes/*":     ["./src/modules/quizzes/components/*"],
+
+      "@/modules/dashboard":     ["./src/modules/dashboard/index.ts"],
+      "@/modules/dashboard/*":   ["./src/modules/dashboard/components/*"],
+
+      "@/modules/layout":        ["./src/modules/layout/index.ts"],
+      "@/modules/layout/*":      ["./src/modules/layout/components/*"],
+
+      "@/modules/subscription":  ["./src/modules/subscription/index.ts"],
+      "@/modules/subscription/*":["./src/modules/subscription/components/*"],
+
+      "@/modules/educator":      ["./src/modules/educator/index.ts"],
+      "@/modules/educator/*":    ["./src/modules/educator/components/*"],
+
+      "@/modules/admin":         ["./src/modules/admin/index.ts"],
+      "@/modules/admin/*":       ["./src/modules/admin/components/*"],
+
+      "@/modules/documents":     ["./src/modules/documents/index.ts"],
+      "@/modules/documents/*":   ["./src/modules/documents/components/*"],
+
+      "@/modules/classRecordings":   ["./src/modules/classRecordings/index.ts"],
+      "@/modules/classRecordings/*": ["./src/modules/classRecordings/components/*"],
+
+      "@/modules/notifications":     ["./src/modules/notifications/index.ts"],
+      "@/modules/notifications/*":   ["./src/modules/notifications/components/*"],
+
+      "@/modules/onboarding":    ["./src/modules/onboarding/index.ts"],
+      "@/modules/onboarding/*":  ["./src/modules/onboarding/components/*"],
+
+      "@/modules/schedules":     ["./src/modules/schedules/index.ts"],
+      "@/modules/schedules/*":   ["./src/modules/schedules/components/*"],
+
+      "@/modules/courseLibrary":     ["./src/modules/courseLibrary/index.ts"],
+      "@/modules/courseLibrary/*":   ["./src/modules/courseLibrary/components/*"],
+
+      "@/modules/settings":      ["./src/modules/settings/index.ts"],
+      "@/modules/settings/*":    ["./src/modules/settings/components/*"],
+
+      "@/modules/userSettings":  ["./src/modules/userSettings/index.ts"],
+      "@/modules/userSettings/*":["./src/modules/userSettings/components/*"],
+
+      "@/modules/ratings":       ["./src/modules/ratings/index.ts"],
+      "@/modules/ratings/*":     ["./src/modules/ratings/components/*"],
+
+      "@/modules/seo":           ["./src/modules/seo/index.ts"],
+      "@/modules/seo/*":         ["./src/modules/seo/components/*"],
+
+      "@/modules/updates":       ["./src/modules/updates/index.ts"],
+      "@/modules/updates/*":     ["./src/modules/updates/components/*"],
+
+      "@/modules/common":        ["./src/modules/common/index.ts"],
+      "@/modules/common/*":      ["./src/modules/common/components/*"]
     },
+
     "noImplicitAny": false,
     "noUnusedParameters": false,
     "skipLibCheck": true,
     "allowJs": true,
     "noUnusedLocals": false,
-    "strictNullChecks": false,
-    "types": [
-      "Deno"
-    ]
+    "strictNullChecks": false
   }
 }

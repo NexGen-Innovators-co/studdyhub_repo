@@ -1,7 +1,7 @@
 // src/pages/ContactUs.tsx
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AppLayout, ContentContainer, Card, ThemedImg } from '../components/layout/LayoutComponents';
+import { AppLayout, ContentContainer, Card, ThemedImg } from '../modules/layout/components/LayoutComponents';
 import { Mail, Phone, MapPin, Send, CheckCircle, Clock } from 'lucide-react';
 
 const quickLinks = [

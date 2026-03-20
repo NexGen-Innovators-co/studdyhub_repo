@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { getUserVerificationMetrics, subscribeToUserStatus } from '@/utils/authSessionTracker';
+import { subscribeToUserStatus } from '@/utils/authSessionTracker';
 
 export interface UserVerificationStatus {
   is_verified: boolean | null;

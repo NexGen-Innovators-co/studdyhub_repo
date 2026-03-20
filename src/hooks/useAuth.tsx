@@ -3,8 +3,7 @@ import { useState, useEffect, useRef, createContext, useContext, ReactNode } fro
 import { useQueryClient } from '@tanstack/react-query';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../integrations/supabase/client';
-import { clearCache } from '../utils/socialCache'; // Import the utility
-import { offlineStorage, STORES } from '../utils/offlineStorage';
+
 import { pushNotificationService } from '@/services/pushNotificationService';
 import { resetPushInitialization } from '@/services/notificationInitService';
 import { trackUserLogin, trackUserLogout } from '../utils/authSessionTracker';

@@ -1,6 +1,6 @@
 // src/pages/Testimonials.tsx
 import React from 'react';
-import { AppLayout, ContentContainer, PageHeader, Card } from '../components/layout/LayoutComponents';
+import { AppLayout, ContentContainer, PageHeader, Card } from '../modules/layout/components/LayoutComponents';
 
 const testimonials = [
   {

@@ -1,6 +1,6 @@
 // src/pages/Careers.tsx
 import React from 'react';
-import { AppLayout, ContentContainer, SectionHeading, Card, ThemedImg } from '../components/layout/LayoutComponents';
+import { AppLayout, ContentContainer, SectionHeading, Card, ThemedImg } from '../modules/layout/components/LayoutComponents';
 import { Briefcase, MapPin, Clock, ChevronRight } from 'lucide-react';
 
 const Careers: React.FC = () => {

@@ -2,9 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../integrations/supabase/client';
 import { SocialPostWithDetails, SocialUserWithDetails, SocialGroupWithDetails } from '../integrations/supabase/socialTypes';
 import { toast } from 'sonner';
-import { SortBy, FilterBy } from '../components/social/types/social';
-import { DEFAULT_LIMITS } from '../components/social/utils/socialConstants';
-import type { FeedMode } from '../components/social/components/feed/FeedModeSelector';
+import { SortBy, FilterBy } from '../modules/social/types/social';
+import { DEFAULT_LIMITS } from '../modules/social/utils/socialConstants';
+import type { FeedMode } from '../modules/social/components/feed/FeedModeSelector';
 
 import {
   CACHE_KEYS,

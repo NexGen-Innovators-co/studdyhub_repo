@@ -1,7 +1,7 @@
 // src/pages/Integrations.tsx
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { AppLayout, ContentContainer, Card, ThemedImg } from '../components/layout/LayoutComponents';
+import { AppLayout, ContentContainer, Card, ThemedImg } from '../modules/layout/components/LayoutComponents';
 import { CheckCircle } from 'lucide-react';
 
 const Integrations: React.FC = () => {

@@ -1,7 +1,7 @@
 // src/pages/DocumentationPage.tsx
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { AppLayout, ContentContainer, SectionHeading, Card, ThemedImg } from '../components/layout/LayoutComponents';
+import { AppLayout, ContentContainer, SectionHeading, Card, ThemedImg } from '../modules/layout/components/LayoutComponents';
 
 const DocumentationPage: React.FC = () => {
     const documentationSections = [

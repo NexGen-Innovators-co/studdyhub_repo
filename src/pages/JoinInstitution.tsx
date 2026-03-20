@@ -6,8 +6,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/modules/ui/components/button';
+import { Card, CardContent } from '@/modules/ui/components/card';
 import { Loader2, Building2, CheckCircle, AlertTriangle, LogIn } from 'lucide-react';
 import { toast } from 'sonner';
 

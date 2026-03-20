@@ -1,0 +1,93 @@
+// src/components/MoveFolderDialog.tsx
+import React, { useState, useCallback } from 'react';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from "@/modules/ui/components/dialog"
+import { Button } from "@/modules/ui/components/button"
+
+import { Label } from "@/modules/ui/components/label"
+import { FolderTree } from './FolderTree';
+import { DocumentFolder } from '../../../types/Folder';
+
+
+interface MoveFolderDialogProps {
+    // Existing props
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    folder: DocumentFolder | null;
+    onMoveFolder: (folderId: string, targetParentId: string | null) => void;
+    folderTree: any;
+    onCreateFolder: (parentId: string | null) => void;
+    onRenameFolder: (folde: DocumentFolder) => void;
+    onDeleteFolder: (folderId: string) => void;
+    expandedFolders: Set<string>;
+    onToggleExpand: (folderId: string) => void;
+}
+
+export const MoveFolderDialog: React.FC<MoveFolderDialogProps> = ({
+    open,
+    onOpenChange,
+    folder,
+    onMoveFolder,
+    folderTree,
+    onCreateFolder,
+    onRenameFolder,
+    onDeleteFolder,
+    expandedFolders,
+    onToggleExpand,
+}) => {
+    const [targetFolderId, setTargetFolderId] = useState<string | null>(null);
+
+    const handleMove = useCallback(() => {
+        if (!folder) return;
+        onMoveFolder(folder.id, targetFolderId);
+        onOpenChange(false);
+    }, [folder, targetFolderId, onMoveFolder, onOpenChange]);
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-lg md:max-w-xl max-h-[90vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>Move Folder</DialogTitle>
+                    <DialogDescription>
+                        Select the new parent folder for <strong>{folder?.name}</strong>.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="flex-1 overflow-hidden py-2">
+                    <div className="flex flex-col gap-3 h-full">
+                        <Label htmlFor="newParentFolder" className="text-left font-medium">
+                            Choose Destination:
+                        </Label>
+                        <div className="border rounded-md p-3 bg-muted/10 overflow-y-auto min-h-[200px] max-h-[50vh]">
+                            {/* Render folder tree here */}
+                            {folderTree && folder && (
+                                <FolderTree
+                                    folderTree={folderTree}
+                                    selectedFolderId={targetFolderId}
+                                    onFolderSelect={setTargetFolderId}
+                                    onCreateFolder={onCreateFolder}
+                                    onRenameFolder={onRenameFolder}
+                                    onMoveFolder={() => { }} // Placeholder, as moving is handled by this dialog
+                                    onDeleteFolder={onDeleteFolder}
+                                    expandedFolders={expandedFolders}
+                                    onToggleExpand={onToggleExpand}
+                                />
+                            )}
+                        </div>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+                        Cancel
+                    </Button>
+                    <Button type="submit" onClick={handleMove}>Move</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};

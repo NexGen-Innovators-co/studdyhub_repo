@@ -1,32 +1,32 @@
 import React, { useEffect, useMemo, useState, useTransition } from 'react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
-import { Sidebar } from '../components/layout/Sidebar';
-import LivePodcastViewer from '@/components/podcasts/LivePodcastViewer';
-import LivePodcastHost from '@/components/podcasts/LivePodcastHost';
-import { fetchFullPodcastData, fetchLightPodcastData } from '@/hooks/usePodcasts';
+import { Sidebar } from '../modules/layout/components/Sidebar';
+import LivePodcastViewer from '@/modules/podcasts/components/LivePodcastViewer';
+import LivePodcastHost from '@/modules/podcasts/components/LivePodcastHost';
+import { fetchFullPodcastData, fetchLightPodcastData } from '@/modules/podcasts/hooks/usePodcasts';
 // Lazy-load PodcastPanel so the shell can show a podcast-shaped skeleton while it loads
-const PodcastPanel = React.lazy(() => import('@/components/podcasts/PodcastPanel').then(m => ({ default: m.PodcastPanel })));
-import { Header } from '../components/layout/Header';
-import { TabContent } from '../components/layout/TabContent';
-import { CreateNoteFlowDialog } from '../components/notes/components/CreateNoteFlowDialog';
+const PodcastPanel = React.lazy(() => import('@/modules/podcasts/components/PodcastPanel').then(m => ({ default: m.PodcastPanel })));
+import { Header } from '../modules/layout/components/Header';
+import { TabContent } from '../modules/layout/components/TabContent';
+import { CreateNoteFlowDialog } from '../modules/notes/components/CreateNoteFlowDialog';
 import { useRef } from 'react';
-import { SocialFeedHandle } from '../components/social/SocialFeed';
+import { SocialFeedHandle } from '../modules/social/components/SocialFeed';
 import { useAppContext } from '../hooks/useAppContext';
-import { useMessageHandlers } from '../hooks/useMessageHandlers';
-import BookPagesAnimation from '@/components/ui/bookloader';
-import { QuickTips } from '@/components/notes/components/QuickTip';
-import { AlertTriangle, Bot, FileText, Home, Mic, RefreshCw, Users2, X, Grid } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { motion, AnimatePresence } from 'framer-motion';
-import AIBot from '@/components/ui/aibot';
+import { useMessageHandlers } from '../modules/aiChat/hooks/useMessageHandlers';
+
+import { QuickTips } from '@/modules/notes/components/QuickTip';
+import { AlertTriangle, FileText, Home, RefreshCw, Users2, Grid } from 'lucide-react';
+import { Button } from '@/modules/ui/components/button';
+import { motion } from 'framer-motion';
+import AIBot from '@/modules/ui/components/aibot';
 import { Helmet } from 'react-helmet-async';
-import { SubscriptionStatusBar } from '@/components/subscription/SubscriptionStatusBar';
-import { PlatformUpdateBanner } from '@/components/updates/PlatformUpdateBanner';
+import { SubscriptionStatusBar } from '@/modules/subscription/components/SubscriptionStatusBar';
+import { PlatformUpdateBanner } from '@/modules/updates/components/PlatformUpdateBanner';
 import { initializePushNotifications } from '@/services/notificationInitService';
 import { Document } from '@/types/Document';
 import { supabase } from '@/integrations/supabase/client';
-import { MobileMenu } from '@/components/layout/MobileMenu';
+import { MobileMenu } from '@/modules/layout/components/MobileMenu';
 
 const Index = () => {
   const isOnline = useOnlineStatus();

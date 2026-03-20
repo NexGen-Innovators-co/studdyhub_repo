@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { Note, NoteCategory } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message, Quiz } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
-import { generateId } from '../components/classRecordings/utils/helpers';
+import { generateId } from '../modules/classRecordings/utils/helpers';
 import { toast } from 'sonner';
 import { supabase } from '../integrations/supabase/client';
 import { CreateFolderInput, DocumentFolder, UpdateFolderInput } from '@/types/Folder';

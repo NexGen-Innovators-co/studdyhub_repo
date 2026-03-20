@@ -1,7 +1,7 @@
 // App.tsx - Updated with simpler SEO approach
-import { Toaster } from "./components/ui/toaster";
-import { Toaster as Sonner } from "./components/ui/sonner";
-import { TooltipProvider } from "./components/ui/tooltip";
+import { Toaster } from "./modules/ui/components/toaster";
+import { Toaster as Sonner } from "./modules/ui/components/sonner";
+import { TooltipProvider } from "./modules/ui/components/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider } from "./hooks/useAuth";
@@ -9,32 +9,15 @@ import { AdminAuthProvider } from "./hooks/useAdminAuth";
 import React, { Suspense, lazy } from "react";
 import { Analytics } from "@vercel/analytics/react";
 import { AppProvider } from "./contexts/AppContext";
-import { AdminLayout } from "./components/admin/AdminLayout";
+import { AdminLayout } from "./modules/admin/components/AdminLayout";
 import { HelmetProvider } from "react-helmet-async";
-import DynamicHead from "./components/seo/DynamicHead";
-import { OfflineIndicator } from "./components/layout/OfflineIndicator";
-import ErrorBoundary from "./components/layout/ErrorBoundary";
-import { OnboardingGuard } from "./components/onboarding/OnboardingGuard";
+import DynamicHead from "./modules/seo/components/DynamicHead";
+import { OfflineIndicator } from "./modules/layout/components/OfflineIndicator";
+import ErrorBoundary from "./modules/layout/components/ErrorBoundary";
+import { OnboardingGuard } from "./modules/onboarding/components/OnboardingGuard";
+import { BrandedLoader } from "./modules/ui/components/brandedLoader";
 // SpeedInsights (Next.js) removed — not compatible with Vite/react-router app
 // LinkedIn-style branded loader for protected / heavy routes
-export const BrandedLoader = () => (
-  <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-gray-950">
-    <span className="text-xl font-semibold text-gray-800 dark:text-gray-100 tracking-tight mb-6">
-      StuddyHub <span className="text-blue-600 dark:text-blue-400">AI</span>
-    </span>
-    {/* Thin animated progress bar */}
-    <div className="w-48 h-1 rounded-full bg-gray-200 dark:bg-gray-800 overflow-hidden">
-      <div className="h-full rounded-full bg-blue-600 dark:bg-blue-400 animate-[shimmer_1.4s_ease-in-out_infinite]" />
-    </div>
-    <style>{`
-      @keyframes shimmer {
-        0%   { width: 0%; margin-left: 0; }
-        50%  { width: 70%; margin-left: 15%; }
-        100% { width: 0%; margin-left: 100%; }
-      }
-    `}</style>
-  </div>
-);
 
 // Lightweight empty placeholder for public static pages (no visible loader)
 const EmptyFallback = () => <div className="min-h-screen" />;
@@ -55,37 +38,37 @@ const Careers = lazy(() => import("./pages/Careers"));
 const APIPage = lazy(() => import("./pages/APIs"));
 const DocumentationPage = lazy(() => import("./pages/DocumentationPage"));
 const UserGuidePage = lazy(() => import("./pages/UserGuide"));
-const SubscriptionPage = lazy(() => import("./components/subscription").then(m => ({ default: m.SubscriptionPage })));
+const SubscriptionPage = lazy(() => import("./modules/subscription/components").then(m => ({ default: m.SubscriptionPage })));
 const CalendarCallback = lazy(() => import("./pages/CalendarCallback"));
 
 // Lazy load admin components
-const AdminDashboard = lazy(() => import("./components/admin/adminDashboard"));
-const UserManagement = lazy(() => import("./components/admin/UserManagement"));
-const AdminManagement = lazy(() => import("./components/admin/AdminManagement"));
-const ContentModeration = lazy(() => import("./components/admin/ContentModeration"));
-const SystemSettings = lazy(() => import("./components/admin/SystemSettings"));
-const ActivityLogs = lazy(() => import("./components/admin/ActivityLogs"));
-const SystemErrorLogs = lazy(() => import("./components/admin/SystemErrorLogs"));
-const AIAdminInsights = lazy(() => import("./components/admin/AIAdminInsights"));
-const PlatformUpdates = lazy(() => import("./components/admin/PlatformUpdates"));
-const CourseManagement = lazy(() => import("./components/admin/CourseManagement"));
-const RoleVerificationAdmin = lazy(() => import("./components/admin/RoleVerificationAdmin"));
-const AdminInstitutions = lazy(() => import("./components/admin/AdminInstitutions"));
+const AdminDashboard = lazy(() => import("./modules/admin/components/adminDashboard"));
+const UserManagement = lazy(() => import("./modules/admin/components/UserManagement"));
+const AdminManagement = lazy(() => import("./modules/admin/components/AdminManagement"));
+const ContentModeration = lazy(() => import("./modules/admin/components/ContentModeration"));
+const SystemSettings = lazy(() => import("./modules/admin/components/SystemSettings"));
+const ActivityLogs = lazy(() => import("./modules/admin/components/ActivityLogs"));
+const SystemErrorLogs = lazy(() => import("./modules/admin/components/SystemErrorLogs"));
+const AIAdminInsights = lazy(() => import("./modules/admin/components/AIAdminInsights"));
+const PlatformUpdates = lazy(() => import("./modules/admin/components/PlatformUpdates"));
+const CourseManagement = lazy(() => import("./modules/admin/components/CourseManagement"));
+const RoleVerificationAdmin = lazy(() => import("./modules/admin/components/RoleVerificationAdmin"));
+const AdminInstitutions = lazy(() => import("./modules/admin/components/AdminInstitutions"));
 const CourseDashboard = lazy(() => import("./pages/CourseDashboard"));
-const NotificationAnalytics = lazy(() => import("./components/admin/NotificationAnalytics"));
+const NotificationAnalytics = lazy(() => import("./modules/admin/components/NotificationAnalytics"));
 // Lazy load educator components
-const EducatorLayout = lazy(() => import("./components/educator/EducatorLayout"));
-const EducatorDashboard = lazy(() => import("./components/educator/EducatorDashboard"));
-const EducatorCourses = lazy(() => import("./components/educator/courses/EducatorCourses"));
-const InstitutionAdminDashboard = lazy(() => import("./components/educator/institution/InstitutionAdminDashboard"));
-const CourseStudents = lazy(() => import("./components/educator/courses/CourseStudents"));
-const CourseAnalyticsView = lazy(() => import("./components/educator/courses/CourseAnalyticsView"));
-const InstitutionStudentsPage = lazy(() => import("./components/educator/InstitutionStudentsPage"));
-const InstitutionAnalyticsPage = lazy(() => import("./components/educator/InstitutionAnalyticsPage"));
-const InstitutionSettings = lazy(() => import("./components/educator/institution/InstitutionSettingsPage"));
+const EducatorLayout = lazy(() => import("./modules/educator/components/EducatorLayout"));
+const EducatorDashboard = lazy(() => import("./modules/educator/components/EducatorDashboard"));
+const EducatorCourses = lazy(() => import("./modules/educator/courses/EducatorCourses"));
+const InstitutionAdminDashboard = lazy(() => import("./modules/educator/institution/InstitutionAdminDashboard"));
+const CourseStudents = lazy(() => import("./modules/educator/courses/CourseStudents"));
+const CourseAnalyticsView = lazy(() => import("./modules/educator/courses/CourseAnalyticsView"));
+const InstitutionStudentsPage = lazy(() => import("./modules/educator/components/InstitutionStudentsPage"));
+const InstitutionAnalyticsPage = lazy(() => import("./modules/educator/components/InstitutionAnalyticsPage"));
+const InstitutionSettings = lazy(() => import("./modules/educator/institution/InstitutionSettingsPage"));
 const JoinInstitution = lazy(() => import("./pages/JoinInstitution"));
-const TestimonialModeration = lazy(() => import("./components/admin/TestimonialModeration"));
-const RoleUpgradePanel = lazy(() => import("./components/educator/RoleUpgradePanel"));
+const TestimonialModeration = lazy(() => import("./modules/admin/components/TestimonialModeration"));
+const RoleUpgradePanel = lazy(() => import("./modules/educator/components/RoleUpgradePanel"));
 
 const queryClient = new QueryClient({
   defaultOptions: {

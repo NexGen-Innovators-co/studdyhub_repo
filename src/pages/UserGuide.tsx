@@ -1,11 +1,10 @@
 // src/pages/UserGuide.tsx
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { AppLayout, ContentContainer, PageHeader, Card } from '../components/layout/LayoutComponents';
+import { AppLayout, ContentContainer, PageHeader, Card } from '../modules/layout/components/LayoutComponents';
 import { 
-    Book, Lightbulb, Zap, FileText, Mic, LayoutDashboard, Calendar, 
-    Code, Users, TrendingUp, ChevronRight, ScrollText, Settings, 
-    HelpCircle, MessageSquare, Plug, Radio, Library, BrainCircuit,
+    Book, Zap, FileText, Mic, Calendar, Users, ScrollText, Settings, 
+    HelpCircle, MessageSquare, Radio, Library, BrainCircuit,
     CreditCard, Share2
 } from 'lucide-react';
 

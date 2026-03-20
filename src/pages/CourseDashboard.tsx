@@ -1,31 +1,29 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useCourseEnrollment } from '@/hooks/useCourseEnrollment';
-import { useCourseResources, ResourceType } from '@/hooks/useCourseResources';
-import { useCourseProgress } from '@/hooks/useCourseProgress';
-import { Course } from '@/hooks/useCourseLibrary';
+import { useCourseEnrollment } from '@/modules/courseLibrary/hooks/useCourseEnrollment';
+import { useCourseResources, ResourceType } from '@/modules/courseLibrary/hooks/useCourseResources';
+import { useCourseProgress } from '@/modules/courseLibrary/hooks/useCourseProgress';
+import { Course } from '@/modules/courseLibrary/hooks/useCourseLibrary';
 import { useFeatureAccess } from '@/hooks/useFeatureAccess';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import ModernPremiumLoader from '@/components/ui/ModernPremiumLoader';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/modules/ui/components/tabs';
+import { Button } from '@/modules/ui/components/button';
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/modules/ui/components/card';
+import { Badge } from '@/modules/ui/components/badge';
+import { Progress } from '@/modules/ui/components/progress';
+import ModernPremiumLoader from '@/modules/ui/components/ModernPremiumLoader';
 import {
   ArrowLeft,
   BookOpen,
   BrainCircuit,
   FileText,
   Headphones,
-  Loader2,
   MessageSquare,
   NotebookPen,
-  Calendar,
   Users,
   CheckCircle2,
   Circle,
@@ -34,10 +32,9 @@ import {
   Play,
   ExternalLink,
   Sparkles,
-  Info,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { GenerateCourseResourcesDialog } from '@/components/courseLibrary/GenerateCourseResourcesDialog';
+  Info } from 'lucide-react';
+
+import { GenerateCourseResourcesDialog } from '@/modules/courseLibrary/components/GenerateCourseResourcesDialog';
 
 // ── Progress Ring Component ─────────────────────────────────
 const ProgressRing: React.FC<{ percent: number; size?: number }> = ({ percent, size = 80 }) => {

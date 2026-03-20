@@ -1,7 +1,7 @@
 // src/pages/Blogs.tsx
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { AppLayout, ContentContainer, Card, ThemedImg } from '../components/layout/LayoutComponents';
+import { AppLayout, ContentContainer, Card, ThemedImg } from '../modules/layout/components/LayoutComponents';
 import { Calendar, User, ArrowRight, Clock, Tag } from 'lucide-react';
 
 const Blog: React.FC = () => {

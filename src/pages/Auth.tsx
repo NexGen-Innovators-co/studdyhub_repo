@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
+import { Button } from '../modules/ui/components/button';
+import { Input } from '../modules/ui/components/input';
 import { Mail, Lock, User, Eye, EyeOff, Loader2, CheckCircle2, XCircle, RefreshCw, Clock, Ticket, BookOpen, FileText, Play, TrendingUp, Check, Sparkles } from 'lucide-react';
 import { supabase } from '../integrations/supabase/client';
 import { toast } from 'sonner';
-import { BrandedLoader } from '../App';
+import { BrandedLoader } from '../modules/ui/components/brandedLoader';
 
 const DISPOSABLE_EMAIL_DOMAINS = ['mailinator.com','tempmail.com','10minutemail.com','guerrillamail.com','sharklasers.com'];
 

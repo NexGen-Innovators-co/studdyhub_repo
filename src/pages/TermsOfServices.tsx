@@ -1,6 +1,6 @@
 // src/pages/TermsOfService.tsx
 import React from 'react';
-import { AppLayout, ContentContainer, Card, ThemedImg } from '../components/layout/LayoutComponents';
+import { AppLayout, ContentContainer, Card, ThemedImg } from '../modules/layout/components/LayoutComponents';
 
 const TermsOfService: React.FC = () => {
     const sections = [

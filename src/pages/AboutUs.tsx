@@ -1,12 +1,8 @@
 // src/pages/AboutUs.tsx
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { AppLayout, ContentContainer, PageHero, SectionHeading, Card, ThemedImg } from '../components/layout/LayoutComponents';
-import {
-  Sparkles, Users, Lightbulb, Target, Globe, Heart,
-  Brain, FileText, Mic, MessageSquare, Calendar, BarChart,
-  Shield, Podcast, BookOpen, GraduationCap, Rocket, Award,
-  Github, Linkedin, Twitter, Play, Facebook, Instagram
+import { AppLayout, ContentContainer, SectionHeading, Card, ThemedImg } from '../modules/layout/components/LayoutComponents';
+import { Globe, Award, Twitter, Play, Facebook, Instagram
 } from 'lucide-react';
 
 const platformFeatures = [

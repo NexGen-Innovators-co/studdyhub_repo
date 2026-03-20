@@ -1,7 +1,6 @@
 // contexts/AppContext.tsx - Complete implementation with proper types and timeouts
 import React, {
   createContext,
-  useContext,
   useReducer,
   useCallback,
   useEffect,
@@ -16,8 +15,8 @@ import { supabase } from '../integrations/supabase/client';
 import { useAuth } from '../hooks/useAuth';
 import { useAppData } from '../hooks/useAppData';
 import { useAppOperations } from '../hooks/useAppOperations';
-import { useAudioProcessing } from '../components/classRecordings/hooks/useAudioProcessing';
-import { Message, ChatSession, FileData, MessagePart, ClassRecording, ScheduleItem, Quiz } from '../types/Class';
+import { useAudioProcessing } from '../modules/classRecordings/hooks/useAudioProcessing';
+import { Message, ChatSession, FileData, ClassRecording, ScheduleItem, Quiz } from '../types/Class';
 import { Document as AppDocument, UserProfile } from '../types/Document';
 import { Note } from '../types/Note';
 import { appReducer, initialAppState, AppState, AppAction } from './appReducer';
@@ -28,8 +27,8 @@ import { clearCache } from '../utils/socialCache'
 import { PlanType, SubscriptionLimits, Subscription, useSubscription, } from '@/hooks/useSubscription';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { offlineStorage, STORES } from '@/utils/offlineStorage';
-import { useEducationContext } from '../hooks/useEducationContext';
-import { useEducatorPermissions } from '../hooks/useEducatorPermissions';
+import { useEducationContext } from '../modules/onboarding/hooks/useEducationContext';
+import { useEducatorPermissions } from '../modules/educator/hooks/useEducatorPermissions';
 import type { UserEducationContext, EducatorPermissions } from '../types/Education';
 
 // Context interface
