@@ -208,6 +208,55 @@ function getSEOData(pathname: string) {
                 description: 'Learn about StuddyHub - the AI-powered social learning platform designed for students.',
                 type: 'article' as const,
                 robots: 'index, follow',
+                structuredData: {
+                    "@context": "https://schema.org",
+                    "@type": "Organization",
+                    "name": "StuddyHub",
+                    "url": "https://studdyhub.vercel.app",
+                    "logo": "https://studdyhub.vercel.app/logo.png",
+                    "sameAs": [
+                        "https://twitter.com/studdyhub",
+                        "https://www.linkedin.com/company/studdyhub"
+                    ],
+                    "founder": {
+                        "@type": "Person",
+                        "name": "Thomas Appiah",
+                        "jobTitle": "Founder & Lead Engineer",
+                        "worksFor": "StuddyHub"
+                    },
+                    "address": {
+                        "@type": "PostalAddress",
+                        "streetAddress": "Agri-IoT Laboratory",
+                        "addressLocality": "Tarkwa",
+                        "addressRegion": "Western Region",
+                        "addressCountry": "GH"
+                    }
+                }
+            };
+
+        case '/contact':
+            return {
+                ...defaultData,
+                title: 'Contact Us | StuddyHub',
+                description: 'Contact StuddyHub for questions, support, and partnership opportunities.',
+                type: 'website' as const,
+                robots: 'index, follow',
+                structuredData: {
+                    "@context": "https://schema.org",
+                    "@type": "LocalBusiness",
+                    "name": "StuddyHub",
+                    "image": "https://studdyhub.vercel.app/og-default.png",
+                    "telephone": "+233271692568",
+                    "email": "studdyhubai@gmail.com",
+                    "address": {
+                        "@type": "PostalAddress",
+                        "streetAddress": "Agri-IoT Laboratory",
+                        "addressLocality": "Tarkwa",
+                        "addressRegion": "Western Region",
+                        "addressCountry": "GH"
+                    },
+                    "url": "https://studdyhub.vercel.app/contact"
+                }
             };
 
         case '/blogs':

@@ -53,7 +53,7 @@ export const useSocialData = (
   initialSortBy: SortBy = 'newest',
   initialFilterBy: FilterBy = 'all',
   onNotificationReceived?: (notification: any) => void,
-  initialFeedMode: FeedMode = 'all'
+  initialFeedMode: FeedMode = 'for-you'
 ) => {
   // Controllable filter/sort/feed state (initialized from params, settable from consumers)
   const [sortBy, setSortBy] = useState<SortBy>(initialSortBy);

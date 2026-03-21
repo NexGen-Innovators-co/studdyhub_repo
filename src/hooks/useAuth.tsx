@@ -7,6 +7,8 @@ import { supabase } from '../integrations/supabase/client';
 import { pushNotificationService } from '@/services/pushNotificationService';
 import { resetPushInitialization } from '@/services/notificationInitService';
 import { trackUserLogin, trackUserLogout } from '../utils/authSessionTracker';
+import { clearCache } from '../utils/socialCache';
+import { offlineStorage } from '../utils/offlineStorage';
 
 interface AuthContextType {
   user: User | null;

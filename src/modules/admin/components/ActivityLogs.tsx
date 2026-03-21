@@ -19,6 +19,7 @@ const ActivityLogs = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterAction, setFilterAction] = useState<'all' | string>('all');
   const [selectedLog, setSelectedLog] = useState<AdminActivityLog | null>(null);
+  const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [adminLookup, setAdminLookup] = useState<Record<string, string>>({});
   const pageSize = 50;
@@ -76,6 +77,21 @@ const ActivityLogs = () => {
   });
 
   const uniqueActions = [...new Set(logs.map(log => log.action))];
+  const allSelected = filteredLogs.length > 0 && selectedLogIds.length === filteredLogs.length;
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedLogIds([]);
+    } else {
+      setSelectedLogIds(filteredLogs.map(log => log.id));
+    }
+  };
+
+  const toggleSelectLog = (id: string) => {
+    setSelectedLogIds(prev =>
+      prev.includes(id) ? prev.filter(pid => pid !== id) : [...prev, id]
+    );
+  };
 
   // Stats
   const totalActions = logs.length;
@@ -116,10 +132,15 @@ const ActivityLogs = () => {
     return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800';
   };
 
-  const exportLogs = () => {
+  const exportCsv = (items: AdminActivityLog[]) => {
+    if (items.length === 0) {
+      toast.error('No logs selected for export');
+      return;
+    }
+
     const csv = [
       ['Timestamp', 'Admin', 'Action', 'Target Type', 'Target ID', 'IP Address'],
-      ...filteredLogs.map(log => [
+      ...items.map(log => [
         new Date(log.created_at).toLocaleString(),
         getAdminDisplayName(log.admin_id),
         log.action,
@@ -138,6 +159,10 @@ const ActivityLogs = () => {
     toast.success('Logs exported successfully');
   };
 
+  const exportAll = () => exportCsv(filteredLogs);
+  const exportSelected = () => exportCsv(filteredLogs.filter(log => selectedLogIds.includes(log.id)));
+  const exportSingle = (id: string) => exportCsv(filteredLogs.filter(log => log.id === id));
+
   if (loading && logs.length === 0) {
     return <Skeleton className="h-[500px] w-full bg-gray-200 dark:bg-gray-800" />;
   }
@@ -151,12 +176,21 @@ const ActivityLogs = () => {
         </div>
         <div className="flex gap-2">
           <Button
-            onClick={exportLogs}
+            onClick={exportAll}
             variant="outline"
             className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300"
           >
             <Download className="h-4 w-4 mr-2" />
-            Export
+            Export All
+          </Button>
+          <Button
+            onClick={exportSelected}
+            variant="outline"
+            className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300"
+            disabled={selectedLogIds.length === 0}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export Selected
           </Button>
           <Button
             onClick={fetchLogs}
@@ -312,9 +346,21 @@ const ActivityLogs = () => {
         </CardHeader>
         <CardContent>
           <div className="rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div className="px-4 py-2 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/50">
+            Data source: supabase table `admin_activity_logs`, sorted by `created_at DESC`. Filter action: {filterAction}. Search term: "{searchTerm}". Page: {page}, page size: {pageSize}.
+          </div>
             <Table>
               <TableHeader>
                 <TableRow className="bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800">
+                  <TableHead className="text-gray-700 dark:text-gray-300 w-[40px]">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4"
+                      aria-label="Select all logs"
+                    />
+                  </TableHead>
                   <TableHead className="text-gray-700 dark:text-gray-300">Timestamp</TableHead>
                   <TableHead className="text-gray-700 dark:text-gray-300">Admin</TableHead>
                   <TableHead className="text-gray-700 dark:text-gray-300">Action</TableHead>
@@ -329,6 +375,15 @@ const ActivityLogs = () => {
                     key={log.id}
                     className="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                   >
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        checked={selectedLogIds.includes(log.id)}
+                        onChange={() => toggleSelectLog(log.id)}
+                        className="h-4 w-4"
+                        aria-label="Select log"
+                      />
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-gray-500 dark:text-gray-400" />
@@ -368,15 +423,26 @@ const ActivityLogs = () => {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSelectedLog(log)}
-                        className="text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                      >
-                        <FileText className="h-4 w-4 mr-1" />
-                        View
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedLog(log)}
+                          className="text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                        >
+                          <FileText className="h-4 w-4 mr-1" />
+                          View
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => exportSingle(log.id)}
+                          className="text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20"
+                        >
+                          <Download className="h-4 w-4 mr-1" />
+                          Export
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

@@ -54,10 +54,21 @@ export const useSpeechRecognition = ({
     const preExistingTextRef = useRef<string>('');
     // Finals from previous (auto-restarted) recognition sessions
     const previousSessionsTextRef = useRef<string>('');
-    // Finals from the current active recognition session (rebuilt from event.results each onresult)
+    // Finals from the current active recognition session
     const currentSessionFinalsRef = useRef<string>('');
     // What onresult last wrote to the textarea, so we can detect manual user edits
     const lastSetValueRef = useRef<string>('');
+    const finalResultsByIndexRef = useRef<Map<number, string>>(new Map());
+    // FIX: The Web Speech API sends CUMULATIVE results — every onresult event
+    // replays ALL results from index 0 of the current session. When the user
+    // manually edits and we clear finalResultsByIndexRef, the very next onresult
+    // re-adds all the old finals back from the browser's cumulative payload,
+    // causing old speech to reappear and double up with typed text.
+    //
+    // Solution: track a "floor" index. After a manual edit we record the highest
+    // result index seen so far. Any result at or below that floor is from before
+    // the edit and must be ignored in all future onresult events this session.
+    const resultIndexFloorRef = useRef<number>(-1);
 
     useEffect(() => {
         checkMicrophonePermission().then(status => {
@@ -85,38 +96,55 @@ export const useSpeechRecognition = ({
         (recognition as any).maxAlternatives = 1;
 
         recognition.onresult = (event: SpeechRecognitionResultEvent) => {
-            // Detect if the user manually edited the textarea (e.g. select-all + delete)
-            // by comparing the current value with what we last set.
+            // Detect manual user edits and restart tracking from current text.
             const currentInput = inputMessageRef.current;
             if (currentInput !== lastSetValueRef.current) {
-                // User changed the text — re-sync: treat current input as new base
                 preExistingTextRef.current = currentInput.trimEnd();
                 previousSessionsTextRef.current = '';
                 currentSessionFinalsRef.current = '';
+                // Record the highest result index seen so far as the new floor.
+                // The browser will keep replaying results from index 0, so we
+                // must ignore everything at or below this point going forward.
+                const currentMaxIndex = finalResultsByIndexRef.current.size > 0
+                    ? Math.max(...finalResultsByIndexRef.current.keys())
+                    : event.results.length - 1;
+                resultIndexFloorRef.current = currentMaxIndex;
+                finalResultsByIndexRef.current.clear();
             }
 
-            // Rebuild *this session's* finals from all results (idempotent)
-            // to avoid double-counting when the browser re-reports indices.
-            let sessionFinals = '';
             let interimTranscript = '';
 
             for (let i = 0; i < event.results.length; i++) {
-                const transcript = event.results[i][0].transcript;
+                // Skip any result that was finalised before the last manual edit
+                if (i <= resultIndexFloorRef.current) continue;
+
+                const transcript = event.results[i][0].transcript.trim();
                 if (event.results[i].isFinal) {
-                    sessionFinals += transcript + ' ';
-                } else {
+                    if (transcript) {
+                        finalResultsByIndexRef.current.set(i, transcript);
+                    }
+                } else if (transcript) {
                     interimTranscript = transcript;
                 }
             }
 
-            // Overwrite (not append) so repeated events can't duplicate text
+            // Build all current final text in order, robust to browsers sending deltas or cumulative sets.
+            const sessionFinals = Array.from(finalResultsByIndexRef.current.entries())
+                .sort((a, b) => a[0] - b[0])
+                .map(([, text]) => text)
+                .join(' ')
+                .trim();
+
             currentSessionFinalsRef.current = sessionFinals;
 
-            // Reconstruct the full message from known components
+            const combinedFinals = [previousSessionsTextRef.current, currentSessionFinalsRef.current]
+                .filter(Boolean)
+                .join(' ')
+                .trim();
+
             const base = preExistingTextRef.current;
-            const allFinals = (previousSessionsTextRef.current + currentSessionFinalsRef.current).trimEnd();
-            const parts = [base, allFinals, interimTranscript].filter(Boolean);
-            const newMessage = parts.join(' ');
+            const parts = [base, combinedFinals, interimTranscript].filter(Boolean);
+            const newMessage = parts.join(' ').replace(/\s+/g, ' ').trim();
 
             lastSetValueRef.current = newMessage;
             setInputMessage(newMessage);
@@ -127,8 +155,7 @@ export const useSpeechRecognition = ({
             if (event.error === 'no-speech') {
                 return;
             }
-            
-            // console.error('Speech recognition error:', event.error);
+
             // Only stop and show error for non-aborted errors
             if (event.error !== 'aborted') {
                 setIsRecognizing(false);
@@ -138,15 +165,52 @@ export const useSpeechRecognition = ({
         };
 
         recognition.onend = () => {
-            // Auto-restart if we're supposed to be recognizing
-            if (isRecognizingRef.current) {
-                // Carry over this session's finals before restarting
-                previousSessionsTextRef.current += currentSessionFinalsRef.current;
+            // onresult's edit detection only fires while speech is actively coming in.
+            // Any manual edit made during a silence gap (before onend fires) is invisible
+            // to onresult. Repeating the same check here ensures edits made during a
+            // pause always win over stale finals.
+            const currentInput = inputMessageRef.current;
+            if (currentInput !== lastSetValueRef.current) {
+                // User edited manually — trust their version, discard stale finals entirely
+                const currentMaxIndex = finalResultsByIndexRef.current.size > 0
+                    ? Math.max(...finalResultsByIndexRef.current.keys())
+                    : -1;
+                resultIndexFloorRef.current = currentMaxIndex;
+                preExistingTextRef.current = currentInput.trimEnd();
+                previousSessionsTextRef.current = '';
                 currentSessionFinalsRef.current = '';
+                finalResultsByIndexRef.current.clear();
+                lastSetValueRef.current = currentInput;
+            } else {
+                const existingFinal = [previousSessionsTextRef.current, currentSessionFinalsRef.current]
+                    .filter(Boolean)
+                    .join(' ')
+                    .trim();
+
+                if (existingFinal) {
+                    const finalMessage = [preExistingTextRef.current, existingFinal]
+                        .filter(Boolean)
+                        .join(' ')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                    setInputMessage(finalMessage);
+                    // Bake everything into preExistingTextRef and reset
+                    // previousSessionsTextRef to '' (not finalMessage) so the next
+                    // auto-restarted session doesn't re-include already-committed
+                    // text and cause the looping/duplication bug.
+                    preExistingTextRef.current = finalMessage;
+                    previousSessionsTextRef.current = '';
+                    currentSessionFinalsRef.current = '';
+                    finalResultsByIndexRef.current.clear();
+                    // Reset the floor too — new session starts from scratch
+                    resultIndexFloorRef.current = -1;
+                }
+            }
+
+            if (isRecognizingRef.current) {
                 try {
                     recognition.start();
                 } catch (err) {
-                    // console.error('Failed to restart speech recognition:', err);
                     setIsRecognizing(false);
                     isRecognizingRef.current = false;
                 }
@@ -188,12 +252,12 @@ export const useSpeechRecognition = ({
             preExistingTextRef.current = inputMessageRef.current.trimEnd();
             previousSessionsTextRef.current = '';
             currentSessionFinalsRef.current = '';
+            resultIndexFloorRef.current = -1;
             isRecognizingRef.current = true;
             recognitionRef.current.start();
             setIsRecognizing(true);
             toast.info('Listening... Click the mic button again to stop.');
         } catch (error: any) {
-            // console.error('Start recognition error:', error);
             toast.error(`Failed to start speech recognition: ${error.message || 'Unknown error'}`);
             setIsRecognizing(false);
             isRecognizingRef.current = false;
@@ -206,12 +270,11 @@ export const useSpeechRecognition = ({
             isRecognizingRef.current = false;
             recognitionRef.current.stop();
             setIsRecognizing(false);
-            preExistingTextRef.current = '';
-            previousSessionsTextRef.current = '';
-            currentSessionFinalsRef.current = '';
+            // Keep recognized text in place so users don't lose it
+            preExistingTextRef.current = inputMessageRef.current.trimEnd();
             toast.success('Speech recognition stopped.');
         }
-    }, []);
+    }, [inputMessageRef]);
 
     return { isRecognizing, startRecognition, stopRecognition, micPermissionStatus };
 };

@@ -41,6 +41,14 @@ export async function generateSpeech(options: CloudTtsOptions): Promise<CloudTts
     // Supabase sets response.error for non-2xx but response.data may still have the body
     const data = response.data;
 
+    // Server signals a native fallback mode for permissions errors.
+    if (data?.fallback === 'native') {
+      try {
+        window.dispatchEvent(new CustomEvent('cloud-tts:fallback-native', { detail: { source: 'cloud-tts' } }));
+      } catch (e) {}
+      throw new Error(data?.error || 'TTS API forbidden, fallback to native');
+    }
+
     if (response.error) {
       // Check if the response body has a specific error message from our edge function
       const serverMsg = data?.error;

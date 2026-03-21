@@ -350,16 +350,16 @@ MediaDisplay.displayName = 'MediaDisplay';
 // Action Button
 const ActionButton = ({ icon: Icon, label, count, active, activeColor, onClick, isLoading, isLikeButton }: any) => {
   const [animate, setAnimate] = React.useState(false);
-  const { canPostSocials } = useFeatureAccess();
-  const canInteract = canPostSocials();
+  const { canInteractSocial } = useFeatureAccess();
+  const canInteract = canInteractSocial();
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isLoading || !canInteract) {
       if (!canInteract) {
-        toast.error('Social actions are available for Scholar and Genius plans', {
+        toast.error('Social interactions are available for all users. Create posts require an upgraded plan.', {
           action: {
-            label: 'Upgrade',
+            label: 'Learn More',
             onClick: () => window.location.assign('/subscription'),
           },
           duration: 5000,
@@ -400,8 +400,8 @@ const ActionButton = ({ icon: Icon, label, count, active, activeColor, onClick, 
 // --- MAIN POSTCARD COMPONENT ---
 export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
   (props) => {
-    const { canPostSocials, isFree } = useFeatureAccess();
-    const canInteract = canPostSocials();
+    const { canInteractSocial, isFree } = useFeatureAccess();
+    const canInteract = canInteractSocial();
     const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
     const {
       post,
@@ -476,6 +476,15 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
     const shareUrl = `${window.location.origin}/social/post/${post.id}`;
     const shareText = (post.content || '').slice(0, 300);
     const navigate = useNavigate();
+
+    const handleHashtagClick = (hashtag: string) => {
+      if (!hashtag) return;
+      const normalized = hashtag.replace(/^#/, '').trim();
+      if (!normalized) return;
+      const query = `#${normalized}`;
+      navigate(`/social?search=${encodeURIComponent(query)}`);
+    };
+
     const shareNative = async () => {
       setIsShareModalOpen(false);
       if ((navigator as any).share) {
@@ -913,7 +922,13 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                 {post.hashtags && post.hashtags.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2 px-4">
                     {post.hashtags.map((tag: any, i: number) => (
-                      <span key={i} className="text-blue-600 dark:text-blue-400 text-sm hover:underline cursor-pointer">#{tag.name}</span>
+                      <span
+                        key={i}
+                        className="text-blue-600 dark:text-blue-400 text-sm hover:underline cursor-pointer"
+                        onClick={(e) => { e.stopPropagation(); handleHashtagClick(tag.name); }}
+                      >
+                        #{tag.name}
+                      </span>
                     ))}
                   </div>
                 )}
@@ -1066,7 +1081,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
 
                   {/* Post Content */}
                   <div className="text-[15px] leading-relaxed text-slate-800 dark:text-slate-200 mb-4">
-                    {renderContentWithClickableLinks(cleanedContent)}
+                    {renderContentWithClickableLinks(cleanedContent, handleHashtagClick)}
                   </div>
 
                   {/* Podcast Preview in Fullscreen */}
@@ -1076,7 +1091,13 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                   {post.hashtags && post.hashtags.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-4">
                       {post.hashtags.map((tag: any, i: number) => (
-                        <span key={i} className="text-blue-600 dark:text-blue-400 text-sm hover:underline cursor-pointer">#{tag.name}</span>
+                        <span
+                          key={i}
+                          className="text-blue-600 dark:text-blue-400 text-sm hover:underline cursor-pointer"
+                          onClick={(e) => { e.stopPropagation(); handleHashtagClick(tag.name); }}
+                        >
+                          #{tag.name}
+                        </span>
                       ))}
                     </div>
                   )}

@@ -30,49 +30,83 @@ export const formatPostContent = (content: string): string => {
   return content.trim();
 };
 
-export const renderContentWithClickableLinks = (content: string): React.ReactNode => {
-  const urlRegex = /((?:https?:\/\/|www\.)[^\s]+)/g;
-  const parts = content.split(urlRegex);
-  
-  return parts.map((part, index) => {
-    if (part.match(urlRegex)) {
-      let href = part;
-      let display = part;
-      let suffix = '';
+export const renderContentWithClickableLinks = (
+  content: string,
+  onHashtagClick?: (hashtag: string) => void,
+): React.ReactNode => {
+  const combinedRegex = /(#\w+)|((?:https?:\/\/|www\.)[^\s]+)/g;
+  const elements: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
 
-      // Handle common trailing punctuation
+  while ((match = combinedRegex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      elements.push(
+        React.createElement('span', { key: `text-${lastIndex}` }, content.substring(lastIndex, match.index)),
+      );
+    }
+
+    if (match[2]) {
+      let href = match[2];
+      let display = href;
+      let suffix = '';
       const trailingPunctuation = /[.,!?;:]+$/;
-      const match = part.match(trailingPunctuation);
-      if (match) {
-        suffix = match[0];
-        display = part.substring(0, part.length - suffix.length);
+      const trailingMatch = href.match(trailingPunctuation);
+      if (trailingMatch) {
+        suffix = trailingMatch[0];
+        display = href.substring(0, href.length - suffix.length);
         href = display;
       }
 
       if (!href.startsWith('http') && href.startsWith('www.')) {
         href = 'https://' + href;
       }
-      
+
       const link = React.createElement(
         'a',
         {
-          key: `link-${index}`,
-          href: href,
+          key: `link-${match.index}`,
+          href,
           target: '_blank',
           rel: 'noopener noreferrer',
           className: 'text-blue-600 dark:text-blue-400 hover:underline',
-          onClick: (e: React.MouseEvent) => e.stopPropagation()
+          onClick: (e: React.MouseEvent) => e.stopPropagation(),
         },
-        display
+        display,
       );
 
       if (suffix) {
-        return React.createElement(React.Fragment, { key: index }, link, suffix);
+        elements.push(React.createElement(React.Fragment, { key: `fragment-${match.index}` }, link, suffix));
+      } else {
+        elements.push(link);
       }
-      return link;
+    } else if (match[1]) {
+      const hashtag = match[1];
+      const normalized = hashtag.replace(/^#/, '');
+      elements.push(
+        React.createElement(
+          'span',
+          {
+            key: `hashtag-${match.index}`,
+            className: 'text-blue-600 dark:text-blue-400 hover:underline cursor-pointer',
+            onClick: (e: React.MouseEvent) => {
+              e.stopPropagation();
+              if (onHashtagClick) onHashtagClick(normalized);
+            },
+          },
+          hashtag,
+        ),
+      );
     }
-    return React.createElement('span', { key: index }, part);
-  });
+
+    lastIndex = combinedRegex.lastIndex;
+  }
+
+  if (lastIndex < content.length) {
+    elements.push(React.createElement('span', { key: `text-${lastIndex}` }, content.substring(lastIndex)));
+  }
+
+  return elements;
 };
 
 export const convertNakedUrlsToMarkdown = (content: string): string => {

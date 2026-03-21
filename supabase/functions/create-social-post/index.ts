@@ -501,7 +501,7 @@ Respond with ONLY valid JSON (no markdown, no code blocks):
         
         
         const authorName = author?.display_name || 'Someone';
-        let recipientIds: string[] = [];
+        const recipientIdsSet = new Set<string>();
         let title = 'New Post';
         let message = '';
         let type = 'social_post';
@@ -515,44 +515,94 @@ Respond with ONLY valid JSON (no markdown, no code blocks):
             .neq('user_id', userId); // Exclude self
           
           if (members && members.length > 0) {
-             recipientIds = members.map(m => m.user_id);
-             type = 'group_post';
-             
-             // Fetch group name
-             const { data: group } = await supabase.from('social_groups').select('name').eq('id', group_id).single();
-             const groupName = group?.name || 'Group';
-             
-             title = `New post in ${groupName}`;
-             message = `${authorName} posted in ${groupName}`;
+            members.forEach(m => recipientIdsSet.add(m.user_id));
+            type = 'group_post';
+            
+            // Fetch group name
+            const { data: group } = await supabase.from('social_groups').select('name').eq('id', group_id).single();
+            const groupName = group?.name || 'Group';
+            
+            title = `New post in ${groupName}`;
+            message = `${authorName} posted in ${groupName}`;
           }
         } else if (privacy !== 'private') {
-           // Follower Notification
-           const { data: followers } = await supabase
-             .from('social_follows')
-             .select('follower_id')
-             .eq('following_id', userId);
-             
-           if (followers && followers.length > 0) {
-             recipientIds = followers.map(f => f.follower_id);
-             type = 'social_post';
-             title = `New post from ${authorName}`;
-             message = `${authorName} shared a new post`;
-           }
+          // Followers + mutual followers (friends) + shared interest
+          // 1) Direct followers
+          const { data: followers } = await supabase
+            .from('social_follows')
+            .select('follower_id')
+            .eq('following_id', userId);
+
+          const followersIds = (followers || []).map(f => f.follower_id);
+          followersIds.forEach(id => recipientIdsSet.add(id));
+
+          // 2) Mutual followers = friends
+          if (followersIds.length > 0) {
+            const { data: mutuals } = await supabase
+              .from('social_follows')
+              .select('following_id')
+              .in('following_id', followersIds)
+              .eq('follower_id', userId);
+
+            (mutuals || []).forEach(m => recipientIdsSet.add(m.following_id));
+          }
+
+          // 3) Same-interests by education subjects
+          const { data: userEdu } = await supabase
+            .from('user_education_profiles')
+            .select('id')
+            .eq('user_id', userId)
+            .single();
+
+          if (userEdu?.id) {
+            const { data: userSubjects } = await supabase
+              .from('user_subjects')
+              .select('subject_id')
+              .eq('user_education_profile_id', userEdu.id);
+
+            const subjectIds = Array.from(new Set((userSubjects || []).map(s => s.subject_id)));
+
+            if (subjectIds.length > 0) {
+              const { data: sharedProfiles } = await supabase
+                .from('user_subjects')
+                .select('user_education_profile_id')
+                .in('subject_id', subjectIds)
+                .neq('user_education_profile_id', userEdu.id);
+
+              const profileIds = Array.from(new Set((sharedProfiles || []).map(p => p.user_education_profile_id)));
+
+              if (profileIds.length > 0) {
+                const { data: sharedUsers } = await supabase
+                  .from('user_education_profiles')
+                  .select('user_id')
+                  .in('id', profileIds)
+                  .neq('user_id', userId);
+
+                (sharedUsers || []).forEach(u => recipientIdsSet.add(u.user_id));
+              }
+            }
+          }
+
+          if (recipientIdsSet.size > 0) {
+            type = 'social_post';
+            title = `New post from ${authorName}`;
+            message = `${authorName} shared a new post`;
+          }
         }
 
+        const recipientIds = Array.from(recipientIdsSet);
+
         if (recipientIds.length > 0) {
-          // Batch user_ids to avoid massive requests (optional, but good practice)
-          // For now, send all at once as send-notification handles looping
           await supabase.functions.invoke('send-notification', {
             body: {
               user_ids: recipientIds,
-              type: type,
-              title: title,
-              message: message,
+              type,
+              title,
+              message,
               data: {
                 post_id: post.id,
                 actor_id: userId,
-                group_id: group_id,
+                group_id,
                 url: group_id ? `/social/groups/${group_id}` : `/social/post/${post.id}` 
               }
             }

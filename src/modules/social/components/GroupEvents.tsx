@@ -82,7 +82,7 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
         .from('social_events')
         .select(`
           *,
-          organizer:social_users!social_events_organizer_id_fkey(*)
+          organizer:profiles!social_events_organizer_id_fkey(*)
         `)
         .eq('group_id', groupId)
         .order('start_date', { ascending: true });

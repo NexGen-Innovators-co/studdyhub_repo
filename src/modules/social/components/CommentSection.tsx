@@ -18,13 +18,13 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
   currentUser,
   isAddingComment,
 }) => {
-  const { canPostSocials } = useFeatureAccess();
-  const canInteract = canPostSocials();
+  const { canInteractSocial } = useFeatureAccess();
+  const canInteract = canInteractSocial();
   const handleSubmit = () => {
     if (!canInteract) {
-      toast.error('Commenting is available for Scholar and Genius plans', {
+      toast.error('Social interactions are available for all users. Create posts require an upgraded plan.', {
         action: {
-          label: 'Upgrade',
+          label: 'Learn More',
           onClick: () => window.location.assign('/subscription'),
         },
         duration: 5000,

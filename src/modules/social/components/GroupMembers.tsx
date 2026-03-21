@@ -68,7 +68,7 @@ export const GroupMembers: React.FC<GroupMembersProps> = ({ groupId, currentUser
               <Avatar className="h-10 w-10 sm:h-12 sm:w-12">
                 <AvatarImage src={member.avatar_url} />
                 <AvatarFallback className="text-sm sm:text-base">
-                  {member.display_name.charAt(0)}
+                  {((member.display_name || member.username || 'U').charAt(0) || 'U').toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">

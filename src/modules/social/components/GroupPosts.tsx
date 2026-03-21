@@ -20,7 +20,7 @@ interface GroupPostsProps {
 }
 
 export const GroupPosts: React.FC<GroupPostsProps> = ({ groupId, currentUser }) => {
-  const { canPostSocial, canAccessSocial } = useFeatureAccess();
+  const { canPostSocial } = useFeatureAccess();
   const [posts, setPosts] = useState<SocialPostWithDetails[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);

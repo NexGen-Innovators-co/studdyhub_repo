@@ -252,13 +252,18 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     // ─── Filtering ────────────────────────────────────────
     const filterPosts = useCallback((postList: any[]) => {
       if (!effectiveSearch.trim()) return postList;
-      const s = effectiveSearch.toLowerCase();
-      return postList.filter(p =>
-        p.content?.toLowerCase().includes(s) ||
-        p.author?.display_name?.toLowerCase().includes(s) ||
-        p.author?.username?.toLowerCase().includes(s),
-      );
-    }, [effectiveSearch]);
+      const s = effectiveSearch.toLowerCase().trim();
+    const normalizedSearch = s.startsWith('#') ? s.slice(1).trim() : s;
+    return postList.filter(p => {
+      if (!normalizedSearch) return true;
+      const inContent = p.content?.toLowerCase().includes(normalizedSearch);
+      const inAuthorName = p.author?.display_name?.toLowerCase().includes(normalizedSearch);
+      const inAuthorUsername = p.author?.username?.toLowerCase().includes(normalizedSearch);
+      const inHashtags = (p.hashtags || []).some((h: any) => h.name?.toLowerCase().includes(normalizedSearch));
+      const inTags = (p.tags || []).some((t: any) => t.name?.toLowerCase().includes(normalizedSearch));
+      return !!(inContent || inAuthorName || inAuthorUsername || inHashtags || inTags);
+    });
+  }, [effectiveSearch]);
 
     const filteredGroups = useMemo(() => {
       if (!effectiveSearch.trim()) return groups;

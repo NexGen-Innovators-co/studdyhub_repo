@@ -11,26 +11,22 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: corsHeaders
-    });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { 
-      user_topics = ['General Knowledge'], 
-      focus_areas = [], 
+    const {
+      user_topics = ['General Knowledge'],
+      focus_areas = [],
       num_questions = 8,
       difficulty = 'auto',
       recent_performance = [],
       learning_style = 'adaptive'
     } = await req.json();
 
-    // Clamp question count to safe range
     const questionCount = Math.max(1, Math.min(20, Number(num_questions) || 8));
-    
+
     console.log('Generating AI Smart Quiz');
     console.log('User topics:', user_topics);
     console.log('Focus areas:', focus_areas);
@@ -39,7 +35,6 @@ serve(async (req) => {
     console.log('Recent performance samples:', recent_performance.length);
     console.log('Learning style:', learning_style);
 
-    // Fetch education context for curriculum-aligned questions
     let educationBlock = '';
     try {
       const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -58,83 +53,128 @@ serve(async (req) => {
       // Non-critical — continue without education context
     }
 
-    // Analyze performance to personalize the quiz
     const performanceAnalysis = analyzePerformance(recent_performance);
-
-    // Override difficulty if user selected a specific one
     if (difficulty !== 'auto') {
       performanceAnalysis.recommendedDifficulty = difficulty;
     }
-    
-    // Determine question types based on learning style
+
     const questionTypes = getQuestionTypesForStyle(learning_style);
-    
-    // Build personalized prompt
-    const prompt = buildAIPrompt(user_topics, focus_areas, performanceAnalysis, questionTypes, educationBlock, questionCount);
+    const randomSeed = Math.random().toString(36).substring(2, 10);
+    const timestamp = new Date().toISOString();
+
+    const { callGeminiJSON } = await import('../utils/gemini.ts');
 
     console.log('Calling Gemini API for AI Smart Quiz...');
 
-    // call shared helper which handles model chain and OpenRouter fallback
-    const { callGeminiJSON } = await import('../utils/gemini.ts');
-    const aiResult = await callGeminiJSON<any>(prompt, { maxOutputTokens: 4096 });
+    // FIX: The previous maxOutputTokens of 4096 was too small. The quiz JSON
+    // for 8–20 questions with explanations easily exceeds 4096 tokens, causing
+    // Gemini to truncate mid-string → JSON_PARSE_ERROR → silent fallback to
+    // the broken static quiz. 16384 gives ample room for any question count
+    // within the allowed range (1–20).
+    //
+    // Strategy: try once at full question count. If the result comes back
+    // truncated/invalid, retry once with a reduced count as a safety net.
+    let quizData: any = null;
+    let lastError = '';
 
-    let quizData: any;
-    if (aiResult.success && aiResult.data) {
-      quizData = aiResult.data;
-      console.log('Generated AI quiz content received');
-    } else {
-      console.error('Gemini API error or no data:', aiResult.error);
-    }
+    for (const attemptCount of [questionCount, Math.max(3, Math.floor(questionCount / 2))]) {
+      const prompt = buildAIPrompt(
+        user_topics,
+        focus_areas,
+        performanceAnalysis,
+        questionTypes,
+        educationBlock,
+        attemptCount,
+        randomSeed,
+        timestamp
+      );
 
-    // validate result
-    if (!quizData || !quizData.title || !Array.isArray(quizData.questions) || quizData.questions.length === 0) {
-      // fallback quiz using adaptive template
-      quizData = createAdaptiveFallbackQuiz(user_topics, focus_areas, performanceAnalysis, questionCount);
-      console.warn('Falling back to adaptive quiz due to invalid AI output.');
-    }
+      const aiResult = await callGeminiJSON<any>(prompt, {
+        maxOutputTokens: 16384,
+        temperature: 0.9,
+      });
 
-    // Validate each question's structure and filter out bad ones
-    quizData.questions = quizData.questions.filter((q: any, index: number) => {
-      if (!q.question || !Array.isArray(q.options) || q.options.length !== 4 ||
-          typeof q.correctAnswer !== 'number' || q.correctAnswer < 0 || q.correctAnswer > 3) {
-        console.warn(`Dropping invalid AI question at index ${index}`);
-        return false;
+      if (aiResult.success && aiResult.data) {
+        quizData = aiResult.data;
+        console.log(`Generated AI quiz content received (attempt count: ${attemptCount})`);
+        break;
       }
-      return true;
+
+      lastError = aiResult.error ?? 'Unknown error';
+      console.error(`Gemini attempt failed (count=${attemptCount}):`, lastError);
+
+      // If it's a truncation/parse error, retry with fewer questions.
+      // For other errors (auth, quota, network), retrying won't help.
+      const isTruncation = lastError.includes('JSON_PARSE_ERROR') ||
+                           lastError.includes('Unterminated') ||
+                           lastError.includes('Unexpected end');
+      if (!isTruncation) break;
+    }
+
+    if (!quizData) {
+      throw new Error(
+        lastError.includes('JSON_PARSE_ERROR') || lastError.includes('Unterminated')
+          ? 'The AI response was cut off unexpectedly. Please try again with fewer questions.'
+          : `AI generation failed: ${lastError || 'No data received from the model.'}`
+      );
+    }
+
+    // Gemini sometimes wraps its response in markdown code fences even when
+    // told not to. Strip them before further validation.
+    if (typeof quizData === 'string') {
+      const cleaned = (quizData as string)
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```\s*$/, '')
+        .trim();
+      try {
+        quizData = JSON.parse(cleaned);
+      } catch (_parseErr) {
+        throw new Error('AI returned malformed JSON. Please try again.');
+      }
+    }
+
+    if (!quizData?.title || !Array.isArray(quizData.questions) || quizData.questions.length === 0) {
+      throw new Error('AI returned an empty or invalid quiz structure. Please try again.');
+    }
+
+    // Filter out structurally invalid questions
+    quizData.questions = quizData.questions.filter((q: any, index: number) => {
+      const valid =
+        q.question &&
+        Array.isArray(q.options) &&
+        q.options.length === 4 &&
+        typeof q.correctAnswer === 'number' &&
+        q.correctAnswer >= 0 &&
+        q.correctAnswer <= 3;
+      if (!valid) console.warn(`Dropping invalid AI question at index ${index}`);
+      return valid;
     });
 
-    // If all questions filtered out, use fallback
     if (quizData.questions.length === 0) {
-      quizData = createAdaptiveFallbackQuiz(user_topics, focus_areas, performanceAnalysis, questionCount);
+      throw new Error('All AI-generated questions were invalid. Please try again.');
     }
 
     console.log('AI Smart Quiz generated successfully:', quizData.title);
     console.log('Number of questions:', quizData.questions.length);
 
     return new Response(JSON.stringify(quizData), {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json'
-      }
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
   } catch (error) {
     console.error('Error in generate-ai-quiz function:', error);
-    
     return new Response(JSON.stringify({
       error: error.message,
       details: 'Failed to generate AI Smart Quiz. Please check your configuration and try again.'
     }), {
       status: 500,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json'
-      }
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });
 
-// Helper function to analyze user performance
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function analyzePerformance(recentPerformance: any[]) {
   if (!recentPerformance || recentPerformance.length === 0) {
     return {
@@ -148,7 +188,7 @@ function analyzePerformance(recentPerformance: any[]) {
 
   const scores = recentPerformance.map(p => p.score || p.percentage || 50);
   const averageScore = scores.reduce((sum, score) => sum + score, 0) / scores.length;
-  
+
   let recommendedDifficulty = 'intermediate';
   if (averageScore >= 85) recommendedDifficulty = 'hard';
   if (averageScore <= 60) recommendedDifficulty = 'easy';
@@ -157,12 +197,13 @@ function analyzePerformance(recentPerformance: any[]) {
     averageScore,
     recommendedDifficulty,
     needsReview: averageScore < 70,
-    strengthAreas: ['General Knowledge'], // This would be enhanced with topic analysis
-    weakAreas: recentPerformance.filter(p => (p.score || p.percentage) < 70).length > 2 ? ['Application Questions'] : []
+    strengthAreas: ['General Knowledge'],
+    weakAreas: recentPerformance.filter(p => (p.score || p.percentage) < 70).length > 2
+      ? ['Application Questions']
+      : []
   };
 }
 
-// Helper function to determine question types based on learning style
 function getQuestionTypesForStyle(learningStyle: string) {
   const styles: any = {
     visual: ['diagram_interpretation', 'pattern_recognition', 'spatial_reasoning'],
@@ -171,12 +212,19 @@ function getQuestionTypesForStyle(learningStyle: string) {
     reading: ['text_analysis', 'vocabulary', 'comprehension_questions'],
     adaptive: ['mixed_formats', 'critical_thinking', 'problem_solving']
   };
-  
   return styles[learningStyle] || styles.adaptive;
 }
 
-// Helper function to build the AI prompt
-function buildAIPrompt(topics: string[], focusAreas: string[], performance: any, questionTypes: string[], educationBlock: string = '', questionCount: number = 8) {
+function buildAIPrompt(
+  topics: string[],
+  focusAreas: string[],
+  performance: any,
+  questionTypes: string[],
+  educationBlock: string = '',
+  questionCount: number = 8,
+  randomSeed: string = '',
+  timestamp: string = ''
+) {
   const difficultyInstruction = performance.recommendedDifficulty === 'easy'
     ? 'All questions should be at an easy/introductory level.'
     : performance.recommendedDifficulty === 'hard'
@@ -184,6 +232,11 @@ function buildAIPrompt(topics: string[], focusAreas: string[], performance: any,
     : 'Questions should gradually increase in complexity from easy to hard.';
 
   return `Create an adaptive, personalized quiz with exactly ${questionCount} multiple-choice questions on the following topics.
+
+GENERATION ID: ${randomSeed} (${timestamp})
+IMPORTANT: This is a unique quiz generation request. You MUST produce a completely different set of
+questions from any previous generation — different question angles, different facts tested, different
+wording, different correct answer positions. Do NOT repeat questions you may have generated before.
 
 LEARNING CONTEXT:
 - Topics to cover: ${topics.join(', ')}
@@ -199,6 +252,9 @@ QUIZ REQUIREMENTS:
 4. Questions should test both recall and application of knowledge
 5. Make all 4 options plausible — avoid obviously wrong distractors
 6. Each question must have exactly 4 options and one correct answer
+7. Vary the position of the correct answer across questions (do not always make it option 0)
+8. Cover a broad range of subtopics within the chosen topics — avoid clustering around one subtopic
+9. Keep explanations concise (1–2 sentences max) to avoid bloating the response
 
 You MUST respond with ONLY a valid JSON object (no markdown, no extra text) in this exact format:
 {
@@ -208,7 +264,7 @@ You MUST respond with ONLY a valid JSON object (no markdown, no extra text) in t
       "question": "A specific, factual question about the topic?",
       "options": ["Option A", "Option B", "Option C", "Option D"],
       "correctAnswer": 0,
-      "explanation": "Clear explanation of why this is correct.",
+      "explanation": "Concise explanation (1-2 sentences only).",
       "difficulty": "easy",
       "topic": "Topic name"
     }
@@ -217,38 +273,4 @@ You MUST respond with ONLY a valid JSON object (no markdown, no extra text) in t
 }
 
 IMPORTANT: correctAnswer must be 0, 1, 2, or 3. Each question must have exactly 4 options. Return ONLY valid JSON.`;
-}
-
-// Fallback function for adaptive quiz generation
-function createAdaptiveFallbackQuiz(topics: string[], focusAreas: string[], performance: any, count = 8) {
-  const mainTopic = topics[0] || 'General Knowledge';
-  const questions: any[] = [];
-  for (let i = 0; i < count; i++) {
-    const difficulty = i < 2 ? 'easy' : i < 5 ? 'medium' : 'hard';
-    questions.push({
-      question: i === 0
-        ? `What is a fundamental concept in ${mainTopic}?`
-        : i === 1
-        ? `How would you apply ${mainTopic} knowledge to solve a real-world problem?`
-        : i === 2
-        ? `What distinguishes expert understanding from basic knowledge in ${mainTopic}?`
-        : `Practice question ${i + 1} related to ${mainTopic}`,
-      options: [
-        "Understanding basic principles and foundations",
-        "Memorizing advanced technical details",
-        "Focusing only on practical applications",
-        "Ignoring theoretical background"
-      ],
-      correctAnswer: 0,
-      explanation: `This question is designed to reinforce key ideas in ${mainTopic}.`,
-      difficulty,
-      topic: mainTopic
-    });
-  }
-
-  return {
-    title: `Adaptive Quiz: ${mainTopic}`,
-    questions,
-    personalization_notes: `This adaptive quiz focuses on ${mainTopic} with questions tailored to promote learning growth.`
-  };
 }

@@ -131,7 +131,7 @@ const TermsOfService: React.FC = () => {
 
                                 <div>
                                     <h4 className="font-semibold text-gray-900 dark:text-white mb-1">Phone</h4>
-                                    <p className="text-gray-600 dark:text-gray-400">+233 24 169 2568</p>
+                                    <p className="text-gray-600 dark:text-gray-400">+233 27  169 2568</p>
                                 </div>
                             </div>
 

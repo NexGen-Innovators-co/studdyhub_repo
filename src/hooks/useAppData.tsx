@@ -958,7 +958,7 @@ export const useAppData = (authUser?: any) => {
           .from('schedule_items')
           .select('id,title,subject,start_time,end_time,type,description,location,color,user_id,created_at,calendar_event_id,is_recurring,recurrence_pattern,recurrence_interval,recurrence_days,recurrence_end_date', { count: 'exact' })
           .eq('user_id', userId)
-          .gte('end_time', now) // Only future/ongoing events
+          .or(`and(is_recurring.eq.true,or(recurrence_end_date.is.null,recurrence_end_date.gte.${now})),end_time.gte.${now}`)
           .order('start_time', { ascending: true })
           .range(offset, offset + limit - 1),
         API_TIMEOUT,

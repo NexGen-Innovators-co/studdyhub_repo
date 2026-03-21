@@ -8,10 +8,12 @@ import { PricingCards } from '@/modules/subscription/components/PricingCards';
 import { ReferralModal } from '@/modules/subscription/components/ReferralModal';
 import { PodcastCreditStore } from '@/modules/subscription/components/PodcastCreditStore';
 import { useAppContext } from '@/hooks/useAppContext';
+import { useSubscription } from '@/hooks/useSubscription';
 import { useNavigate } from 'react-router-dom';
 
 export function SubscriptionPage() {
   const navigate = useNavigate();
+  const { subscription } = useSubscription();
   const { subscriptionTier: tier, daysRemaining, subscriptionLimits: limits, bonusAiCredits } = useAppContext();
   const [showReferralModal, setShowReferralModal] = useState(false);
 
@@ -72,9 +74,17 @@ export function SubscriptionPage() {
     }
   ];
 
+  const subscriptionStatus = subscription?.status ?? 'active';
+  const isExpiredOrPastDue = subscriptionStatus === 'expired' || subscriptionStatus === 'past_due';
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50/30 to-white dark:from-gray-900 dark:to-gray-950">
       {/* Header */}
+      {isExpiredOrPastDue && (
+        <div className="border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-200 px-4 py-2 text-center">
+          Your subscription is {subscriptionStatus.replace('_', ' ')}. Please renew or upgrade to maintain access.
+        </div>
+      )}
       <div className="border-b border-blue-100 dark:border-blue-900/30 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="container max-w-6xl mx-auto px-4 py-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">

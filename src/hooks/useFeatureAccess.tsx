@@ -74,8 +74,11 @@ export const useFeatureAccess = () => {
         canUploadDocuments: () => isAdmin || checkAccess('maxDocUploads'),
         canPostSocials: () => isAdmin || subscriptionTier !== 'free', // Scholar+ only
         canPostSocial: () => isAdmin || subscriptionTier !== 'free', // Scholar+ only
+        canCreateSocialPosts: () => isAdmin || subscriptionTier !== 'free', // Scholar+ only
+        canInteractSocial: () => true, // all users
         canAccessSocial: () => isAdmin || subscriptionTier !== 'free', // Scholar+ only
         canCreateGroups: () => isAdmin || subscriptionTier !== 'free', // Scholar+ only
+        canJoinGroups: () => isAdmin || subscriptionTier !== 'free', // Scholar+ only
         canChat: () => isAdmin || subscriptionTier !== 'free', // Scholar+ only
         hasExamMode: () => isAdmin || checkAccess('hasExamMode'),
         hasVerifiedBadge: () => isAdmin || checkAccess('hasVerifiedBadge'),

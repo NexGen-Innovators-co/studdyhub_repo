@@ -60,11 +60,40 @@ serve(async (req) => {
         return createErrorResponse('Social profile not found. Please refresh the page.', 400);
       }
 
+      // Idempotent like: if already exists, return success instead of throwing unique constraint error
+      const { data: existingLike, error: existingLikeError } = await supabase
+        .from('social_likes')
+        .select('id')
+        .eq('post_id', post_id)
+        .eq('user_id', userId)
+        .single();
+
+      if (existingLikeError && existingLikeError.code !== 'PGRST116') {
+        // PGRST116 = No rows found, continue insert, otherwise bubble real errors
+        throw existingLikeError;
+      }
+
+      if (existingLike) {
+        return new Response(
+          JSON.stringify({ success: true, is_liked: true, idempotent: true }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       const { error: insertError } = await supabase
         .from('social_likes')
         .insert({ post_id, user_id: userId });
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        // Handle race-condition duplicate key gracefully
+        if (insertError.code === '23505' || insertError.message?.includes('social_likes_user_id_post_id_key')) {
+          return new Response(
+            JSON.stringify({ success: true, is_liked: true, idempotent: true }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        throw insertError;
+      }
 
       // Get post author for notification (only if not self-like)
       const { data: post } = await supabase

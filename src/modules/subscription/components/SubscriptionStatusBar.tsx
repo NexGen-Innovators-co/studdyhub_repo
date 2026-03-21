@@ -23,6 +23,7 @@ import { useNavigate } from 'react-router-dom';
  */
 export const SubscriptionStatusBar: React.FC = () => {
   const { 
+    subscription, 
     subscriptionTier, 
     subscriptionLimits, 
     notes, 
@@ -32,7 +33,7 @@ export const SubscriptionStatusBar: React.FC = () => {
   } = useAppContext();
   const { isFree } = useFeatureAccess();
   const { messagesToday } = useAiMessageTracker();
-  const { quizzesTakenToday } = useDailyQuizTracker();
+  // const { quizzesTakenToday } = useDailyQuizTracker();
   const navigate = useNavigate();
   const [isVisible, setIsVisible] = useState(true);
 
@@ -59,6 +60,9 @@ export const SubscriptionStatusBar: React.FC = () => {
   // Only show for free users
   if (!isFree) return null;
 
+  // Show the bar for all users, with special handling for non-active subscriptions.
+  const status = subscription?.status ?? 'active';
+  const isInactive = status !== 'active';
   // If hidden, show minimal toggle button in corner
   if (!isVisible) {
     return (
@@ -117,9 +121,9 @@ export const SubscriptionStatusBar: React.FC = () => {
         {/* Header with close button */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-            <span className="font-semibold text-amber-900 dark:text-amber-200">
-              Free Plan Active
+            <AlertCircle className={`w-5 h-5 ${isInactive ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`} />
+            <span className={`font-semibold ${isInactive ? 'text-red-700 dark:text-red-300' : 'text-amber-900 dark:text-amber-200'}`}>
+              {isInactive ? `Subscription ${status.replace('_', ' ').toUpperCase()}` : `${subscriptionTier.toUpperCase()} Plan Active`}
             </span>
           </div>
           <div className="flex items-center gap-2">

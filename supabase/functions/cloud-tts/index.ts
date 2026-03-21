@@ -108,7 +108,22 @@ serve(async (req) => {
         },
       });
 
-      throw new Error(`TTS API failed (${ttsResponse.status}): ${errorText}`);
+      const isAuthError = ttsResponse.status === 403 || ttsResponse.status === 401;
+      const fallbackMode = isAuthError ? 'native' : undefined;
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `TTS API failed (${ttsResponse.status})`,
+          code: errorCode,
+          fallback: fallbackMode,
+          details: errorText.substring(0, 1000),
+        }),
+        {
+          status: ttsResponse.status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     const ttsData = await ttsResponse.json();

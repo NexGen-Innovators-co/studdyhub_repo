@@ -13,6 +13,7 @@ export const useChatData = (currentUserId: string | null) => {
 
     const sessionsChannelRef = useRef<any>(null);
     const messagesChannelRef = useRef<any>(null);
+    const allMessagesChannelRef = useRef<any>(null);
     const pendingMessageIds = useRef<Set<string>>(new Set());
     const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -361,6 +362,48 @@ export const useChatData = (currentUserId: string | null) => {
     }, [currentUserId, fetchChatSessions]);
 
     useEffect(() => {
+        if (!currentUserId) return;
+
+        // Track message writes for all sessions to keep the chat list + unread status current.
+        // This supports toast/notification-driven updates in the UI without manual refresh.
+        if (allMessagesChannelRef.current) {
+            supabase.removeChannel(allMessagesChannelRef.current);
+            allMessagesChannelRef.current = null;
+        }
+
+        const activeSessionFilter = chatSessions.map(s => s.id).filter(Boolean).join(',');
+        if (!activeSessionFilter) return;
+
+        allMessagesChannelRef.current = supabase
+            .channel(`user_chat_messages_all_${currentUserId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'social_chat_messages',
+                    filter: `session_id=in.(${activeSessionFilter})`,
+                },
+                (payload) => {
+                    // if we are currently viewing the active session, rely on active session listener to process content
+                    if (payload.new.session_id !== activeSessionId) {
+                        fetchChatSessions().catch(() => { });
+                    } else {
+                        fetchChatSessions().catch(() => { });
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            if (allMessagesChannelRef.current) {
+                supabase.removeChannel(allMessagesChannelRef.current);
+                allMessagesChannelRef.current = null;
+            }
+        };
+    }, [currentUserId, chatSessions, activeSessionId, fetchChatSessions]);
+
+    useEffect(() => {
         if (!activeSessionId || !currentUserId) {
             if (messagesChannelRef.current) {
                 supabase.removeChannel(messagesChannelRef.current);
@@ -378,6 +421,11 @@ export const useChatData = (currentUserId: string | null) => {
                     pendingMessageIds.current.add(payload.new.id);
                     if (processingTimeoutRef.current) clearTimeout(processingTimeoutRef.current);
                     processingTimeoutRef.current = setTimeout(processPendingMessages, 300);
+
+                    // Keep the session list in sync while the user is in your app
+                    fetchChatSessions().catch(() => {
+                        // swallow any edge fetch error to avoid silent effect breakage
+                    });
                 }
             )
             .on(
@@ -409,6 +457,65 @@ export const useChatData = (currentUserId: string | null) => {
             }
         };
     }, [activeSessionId, currentUserId, fetchChatMessages]);
+
+    useEffect(() => {
+        if (!currentUserId) return;
+
+        const peerIds = new Set<string>();
+        chatSessions.forEach(session => {
+            if (session.chat_type !== 'p2p') return;
+            const other = session.user_id1 === currentUserId ? session.user2 : session.user1;
+            if (other?.id) peerIds.add(other.id);
+        });
+
+        if (peerIds.size === 0) return;
+
+        const peerIdsList = Array.from(peerIds).join(',');
+        const presenceChannel = supabase
+            .channel(`user_presence_${currentUserId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'social_users',
+                    filter: `id=in.(${peerIdsList})`,
+                },
+                (payload) => {
+                    const userUpdate = payload.new;
+
+                    setChatSessions(prev =>
+                        prev.map(session => {
+                            if (session.chat_type !== 'p2p') return session;
+                            const isFirst = session.user_id1 === currentUserId;
+                            const targetUser = isFirst ? session.user2 : session.user1;
+                            if (!targetUser || targetUser.id !== userUpdate.id) return session;
+
+                            const updatedSession = {
+                                ...session,
+                                ...(isFirst ? { user2: { ...targetUser, ...userUpdate } } : { user1: { ...targetUser, ...userUpdate } })
+                            };
+                            return updatedSession;
+                        })
+                    );
+
+                    setActiveSessionMessages(prev =>
+                        prev.map(msg =>
+                            msg.sender?.id === userUpdate.id
+                                ? { ...msg, sender: { ...msg.sender, ...userUpdate } }
+                                : msg
+                        )
+                    );
+                }
+            )
+            .subscribe();
+
+        return () => {
+            if (presenceChannel) {
+                supabase.removeChannel(presenceChannel);
+            }
+        };
+    }, [currentUserId, chatSessions]);
 
     const fetchFullMessage = async (messageId: string): Promise<ChatMessageWithDetails | null> => {
         try {

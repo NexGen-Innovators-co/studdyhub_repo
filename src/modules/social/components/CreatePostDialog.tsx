@@ -144,7 +144,11 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
           <div className="relative">
             <Textarea
               value={localContent}
-              onChange={(e) => setLocalContent(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                setLocalContent(value);
+                onContentChange(value);
+              }}
               placeholder="What's on your mind?"
               disabled={!canPostSocials || isUploading || isRewriting}
               className="bg-white dark:bg-gray-700 text-slate-800 dark:text-gray-200 border-slate-200 dark:border-gray-600 disabled:opacity-50 pr-10 min-h-[150px]"
@@ -226,7 +230,7 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={!canPostSocials || isUploading || !content.trim()}
+              disabled={!canPostSocials || isUploading || !localContent.trim()}
               className="bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-800"
             >
               {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Post'}

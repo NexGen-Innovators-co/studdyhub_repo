@@ -32,6 +32,7 @@ interface UserProfile {
   created_at: string;
   last_active: string | null;
   status: 'active' | 'suspended' | 'banned' | 'deactivated';
+  is_online?: boolean | null;
   is_verified?: boolean | null; // deprecated - will be removed
   posts_count: number | null;
   followers_count: number | null;
@@ -98,7 +99,8 @@ const UserManagement = () => {
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'suspended'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'suspended' | 'active_now'>('all');
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [isSuspendOpen, setIsSuspendOpen] = useState(false);
   const [suspendReason, setSuspendReason] = useState('');
@@ -153,7 +155,11 @@ const UserManagement = () => {
         .select('id', { count: 'exact', head: true });
 
       if (filterStatus !== 'all') {
-        countQuery = countQuery.eq('status', filterStatus);
+        if (filterStatus === 'active_now') {
+          countQuery = countQuery.eq('is_online', true);
+        } else {
+          countQuery = countQuery.eq('status', filterStatus);
+        }
       }
 
       if (trimmedSearch) {
@@ -178,11 +184,16 @@ const UserManagement = () => {
           status,
           posts_count,
           followers_count,
+          is_online,
           is_verified
         `);
 
       if (filterStatus !== 'all') {
-        usersQuery = usersQuery.eq('status', filterStatus);
+        if (filterStatus === 'active_now') {
+          usersQuery = usersQuery.eq('is_online', true);
+        } else {
+          usersQuery = usersQuery.eq('status', filterStatus);
+        }
       }
 
       if (trimmedSearch) {
@@ -233,6 +244,35 @@ const UserManagement = () => {
 
   const applySearch = () => {
     setSearchTerm(searchInput.trim());
+  };
+
+  const exportUserCsv = (selectedUsers: UserProfile[]) => {
+    if (!selectedUsers.length) {
+      toast({ title: 'No users selected', description: 'Please select users to export.', variant: 'destructive' });
+      return;
+    }
+
+    const rows = [
+      ['Username', 'Email', 'Status', 'Last Active', 'Online', 'Posts', 'Followers'],
+      ...selectedUsers.map(u => [
+        u.username,
+        u.email || 'N/A',
+        u.status,
+        u.last_active ? new Date(u.last_active).toLocaleString() : 'N/A',
+        (u as any).is_online ? 'TRUE' : 'FALSE',
+        u.posts_count?.toString() || '0',
+        u.followers_count?.toString() || '0'
+      ])
+    ];
+
+    const csv = rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `user_export_${new Date().toISOString()}.csv`;
+    a.click();
+    toast({ title: 'User export started', description: `${selectedUsers.length} user records exported.` });
   };
 
   const toggleActive = async (userId: string, makeActive: boolean) => {
@@ -410,32 +450,75 @@ const UserManagement = () => {
         />
         <Button variant="outline" onClick={applySearch}>Search</Button>
         <Select value={filterStatus} onValueChange={(v: typeof filterStatus) => setFilterStatus(v)}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[200px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All</SelectItem>
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="suspended">Suspended</SelectItem>
+            <SelectItem value="active_now">Active Now</SelectItem>
           </SelectContent>
         </Select>
+        <Button
+          variant="outline"
+          onClick={() => exportUserCsv(users.filter(u => selectedUserIds.includes(u.id)))}
+          disabled={selectedUserIds.length === 0}
+        >
+          Export Selected
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => exportUserCsv(users)}
+        >
+          Export All
+        </Button>
       </div>
 
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead>
+              <input
+                type="checkbox"
+                checked={users.length > 0 && selectedUserIds.length === users.length}
+                onChange={() => {
+                  if (selectedUserIds.length === users.length) {
+                    setSelectedUserIds([]);
+                  } else {
+                    setSelectedUserIds(users.map(u => u.id));
+                  }
+                }}
+                className="h-4 w-4"
+              />
+            </TableHead>
             <TableHead>Avatar</TableHead>
             <TableHead>Username</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Joined</TableHead>
             <TableHead>Posts</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Online</TableHead>
             <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {users.map(u => (
             <TableRow key={u.id}>
+              <TableCell>
+                <input
+                  type="checkbox"
+                  checked={selectedUserIds.includes(u.id)}
+                  onChange={() => {
+                    if (selectedUserIds.includes(u.id)) {
+                      setSelectedUserIds(selectedUserIds.filter(id => id !== u.id));
+                    } else {
+                      setSelectedUserIds([...selectedUserIds, u.id]);
+                    }
+                  }}
+                  className="h-4 w-4"
+                />
+              </TableCell>
               <TableCell>
                 <Avatar className="h-10 w-10">
                   <AvatarImage src={u.avatar_url || undefined} alt={u.username} />
@@ -451,6 +534,11 @@ const UserManagement = () => {
               <TableCell>
                 <Badge variant={u.status === 'active' ? 'default' : u.status === 'banned' ? 'secondary' : 'destructive'}>
                   {u.status.charAt(0).toUpperCase() + u.status.slice(1)}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <Badge variant={u.last_active && (u as any).is_online ? 'success' : 'secondary'}>
+                  {(u as any).is_online ? 'Online' : 'Offline'}
                 </Badge>
               </TableCell>
               <TableCell>

@@ -66,6 +66,7 @@ const SystemErrorLogs: React.FC = () => {
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [selectedLog, setSelectedLog] = useState<SystemErrorLog | null>(null);
+  const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
   const [resolveNotes, setResolveNotes] = useState('');
   const [resolveAction, setResolveAction] = useState<'resolved' | 'ignored'>('resolved');
@@ -192,6 +193,71 @@ const SystemErrorLogs: React.FC = () => {
     } catch (err: any) {
       toast.error(`Bulk update failed: ${err.message}`);
     }
+  };
+
+  const bulkUpdateSelectedStatus = async (status: 'resolved' | 'ignored' | 'acknowledged') => {
+    if (!selectedLogIds.length) {
+      toast.error('No logs selected');
+      return;
+    }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const updates: any = { status };
+      if (status === 'resolved' || status === 'ignored') {
+        updates.resolved_by = user?.id;
+        updates.resolved_at = new Date().toISOString();
+      } else {
+        updates.resolved_by = null;
+        updates.resolved_at = null;
+      }
+      const { error } = await (supabase as any)
+        .from('system_error_logs')
+        .update(updates)
+        .in('id', selectedLogIds);
+
+      if (error) throw error;
+
+      toast.success(`Selected logs marked ${status}`);
+      logAdminActivity({ action: 'bulk_selected_error_log_update', target_type: 'system_error_logs', details: { status, selected: selectedLogIds.length } });
+      setSelectedLogIds([]);
+      fetchLogs();
+      fetchSummary();
+    } catch (err: any) {
+      toast.error(`Bulk selected update failed: ${err.message}`);
+    }
+  };
+
+  const exportErrorCsv = (selectedLogs: SystemErrorLog[]) => {
+    if (!selectedLogs.length) {
+      toast.error('No logs selected for export');
+      return;
+    }
+
+    const rows = [
+      ['Severity', 'Status', 'Source', 'Component', 'Error Code', 'Message', 'User ID', 'Request ID', 'Created At', 'Updated At'],
+      ...selectedLogs.map(log => [
+        log.severity,
+        log.status,
+        log.source,
+        log.component || 'N/A',
+        log.error_code || 'N/A',
+        log.message.replace(/"/g, '""'),
+        log.user_id || 'N/A',
+        log.request_id || 'N/A',
+        new Date(log.created_at).toISOString(),
+        new Date(log.updated_at).toISOString(),
+      ])
+    ];
+
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `system_error_logs_export_${new Date().toISOString()}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    toast.success(`${selectedLogs.length} error logs exported`);
   };
 
   const handleResolve = async () => {
@@ -351,6 +417,45 @@ const SystemErrorLogs: React.FC = () => {
                 Acknowledge All
               </Button>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => bulkUpdateSelectedStatus('acknowledged')}
+              disabled={selectedLogIds.length === 0}
+            >
+              Acknowledge Selected
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => bulkUpdateSelectedStatus('resolved')}
+              disabled={selectedLogIds.length === 0}
+            >
+              Resolve Selected
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => bulkUpdateSelectedStatus('ignored')}
+              disabled={selectedLogIds.length === 0}
+            >
+              Ignore Selected
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportErrorCsv(logs.filter(l => selectedLogIds.includes(l.id)))}
+              disabled={selectedLogIds.length === 0}
+            >
+              Export Selected
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportErrorCsv(filteredLogs)}
+            >
+              Export All Visible
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -377,6 +482,20 @@ const SystemErrorLogs: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[40px]">
+                      <input
+                        type="checkbox"
+                        checked={filteredLogs.length > 0 && selectedLogIds.length === filteredLogs.length}
+                        onChange={() => {
+                          if (selectedLogIds.length === filteredLogs.length) {
+                            setSelectedLogIds([]);
+                          } else {
+                            setSelectedLogIds(filteredLogs.map(l => l.id));
+                          }
+                        }}
+                        className="h-4 w-4"
+                      />
+                    </TableHead>
                     <TableHead className="w-[100px]">Severity</TableHead>
                     <TableHead className="w-[100px]">Status</TableHead>
                     <TableHead>Source</TableHead>
@@ -392,6 +511,20 @@ const SystemErrorLogs: React.FC = () => {
                     const SevIcon = sevConfig.icon;
                     return (
                       <TableRow key={log.id} className={log.severity === 'critical' && log.status === 'open' ? 'bg-red-50/50 dark:bg-red-950/20' : ''}>
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            checked={selectedLogIds.includes(log.id)}
+                            onChange={() => {
+                              if (selectedLogIds.includes(log.id)) {
+                                setSelectedLogIds(selectedLogIds.filter(id => id !== log.id));
+                              } else {
+                                setSelectedLogIds([...selectedLogIds, log.id]);
+                              }
+                            }}
+                            className="h-4 w-4"
+                          />
+                        </TableCell>
                         <TableCell>
                           <Badge className={`${sevConfig.color} gap-1`}>
                             <SevIcon className="h-3 w-3" />

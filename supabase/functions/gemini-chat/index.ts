@@ -1230,14 +1230,18 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string, conf
   userMessage?: string;
   modelUsed?: string;
 }> {
-  // 1. Define the Fallback Chain (Priority Order) — use tier-based chain if provided
-  const MODEL_CHAIN = tierModelChain || [
-    'gemini-2.5-flash',
+  // 1. Define the Fallback Chain (Priority Order) — use tier-based chain if provided. Fallback to env var, then defaults.
+  const envChain = Deno.env.get('GEMINI_MODEL_CHAIN')?.split(',').map(s => s.trim()).filter(Boolean);
+  const DEFAULT_GEMINI_CHAIN = [
+    'gemini-3.5-pro',
     'gemini-3-pro-preview',
+    'gemini-2.5-pro',
+    'gemini-2.5-flash',
     'gemini-2.0-flash',
     'gemini-2.0-flash-lite',
-    'gemini-2.5-pro',
   ];
+
+  const MODEL_CHAIN = tierModelChain || envChain || DEFAULT_GEMINI_CHAIN;
 
   // Extract systemInstruction from configOverrides
   const { systemInstruction, ...generationConfig } = configOverrides;
@@ -1460,11 +1464,16 @@ async function callEnhancedGeminiAPIStream(contents: any[], geminiApiKey: string
   error?: string;
   modelUsed?: string;
 }> {
-  const MODEL_CHAIN = tierModelChain || [
-    'gemini-2.5-flash',
+  const envChain = Deno.env.get('GEMINI_MODEL_CHAIN')?.split(',').map(s => s.trim()).filter(Boolean);
+  const DEFAULT_GEMINI_CHAIN = [
+    'gemini-3.5-pro',
     'gemini-3-pro-preview',
-    'gemini-2.0-flash'
+    'gemini-2.5-pro',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
   ];
+  const MODEL_CHAIN = tierModelChain || envChain || DEFAULT_GEMINI_CHAIN;
 
   const { systemInstruction, ...generationConfig } = configOverrides;
 
@@ -1496,14 +1505,24 @@ async function callEnhancedGeminiAPIStream(contents: any[], geminiApiKey: string
       if (!resp.ok) {
         const txt = await resp.text();
         console.error('[GeminiAPI-Stream] HTTP error:', resp.status, txt.substring(0, 300));
+
+        // 404 usually indicates that model is not available; treat as warning and continue to next model
+        const severity = resp.status === 404 ? 'warning' : 'error';
+
         logSystemError(supabase, {
-          severity: 'error',
+          severity,
           source: 'gemini-chat',
           component: 'gemini-stream',
           error_code: `GEMINI_STREAM_HTTP_${resp.status}`,
           message: `Gemini streaming ${currentModel} HTTP ${resp.status}`,
           details: { model: currentModel, status: resp.status, errorSnippet: txt.substring(0, 500) },
         });
+
+        // 503 often transient; continue and retry others
+        if (resp.status === 503) {
+          await new Promise(res => setTimeout(res, 800));
+        }
+
         continue;
       }
 

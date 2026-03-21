@@ -19,11 +19,24 @@ export const TrendingSidebar: React.FC<EnhancedTrendingSidebarProps> = ({
   hashtags,
   suggestedUsers,
   onFollowUser,
+  onHashtagClick,
   isLoadingSuggestedUsers = false,
   hasMoreSuggestedUsers = false,
   onLoadMoreSuggestedUsers,
   onRefreshSuggestedUsers,
 }) => {
+  const navigate = useNavigate();
+
+  const handleClick = (hashtag: string) => {
+    if (onHashtagClick) {
+      onHashtagClick(hashtag);
+      return;
+    }
+    const clean = hashtag.replace(/^#/, '').trim();
+    if (!clean) return;
+    navigate(`/social?search=${encodeURIComponent(`#${clean}`)}`);
+  };
+
   return (
     <div className="space-y-6">
       {/* Trending Hashtags */}
@@ -40,7 +53,7 @@ export const TrendingSidebar: React.FC<EnhancedTrendingSidebarProps> = ({
               <div
                 key={hashtag.id}
                 className="flex items-center justify-between hover:bg-muted/50 rounded-lg p-2 cursor-pointer transition-colors"
-                onClick={() => toast.info(`Filtering by hashtag #${hashtag.name}`)}
+                onClick={() => handleClick(hashtag.name)}
               >
                 <div className="flex items-center gap-2">
                   <Hash className="h-4 w-4 text-muted-foreground" />

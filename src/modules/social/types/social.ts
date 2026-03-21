@@ -56,6 +56,7 @@ export interface TrendingSidebarProps {
   hashtags: any[];
   suggestedUsers: SuggestedUserWithScore[];
   onFollowUser: (userId: string) => void;
+  onHashtagClick?: (hashtag: string) => void;
 }
 
 // Enhanced interface for suggested users component
