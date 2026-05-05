@@ -1,16 +1,28 @@
+# public/robots.txt
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /settings/
+Disallow: /api/private/
+
+Sitemap: https://studdyhub.vercel.app/sitemap.xml
+
+# SEO Crawl Delays
+Crawl-delay: 2
+
+# Special Bots
 User-agent: Googlebot
 Allow: /
+Crawl-delay: 1
 
 User-agent: Bingbot
 Allow: /
+Crawl-delay: 2
 
 User-agent: Twitterbot
 Allow: /
+Disallow: /api/
 
-User-agent: facebookexternalhit
+User-agent: FacebookExternalHit
 Allow: /
-
-User-agent: *
-Allow: /
-
-Sitemap: https://studdyhub.vercel.app/sitemap.xml
+Disallow: /api/

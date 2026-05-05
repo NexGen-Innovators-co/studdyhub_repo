@@ -1,63 +1,389 @@
-// useAppData.tsx - Optimized version with smooth loading and progressive data loading
-import { useState, useEffect, useCallback, useRef } from 'react';
+// useAppData.tsx - Highly Optimized version with enhanced performance, timeouts, and connection management
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message, Quiz, QuizQuestion } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
+import { DocumentFolder, FolderTreeNode } from '../types/Folder';
 import { supabase } from '../integrations/supabase/client';
 import { toast } from 'sonner';
+import { clearCache } from '@/utils/socialCache';
+import { offlineStorage, STORES } from '@/utils/offlineStorage';
 
-// Enhanced pagination constants for smoother loading
+// Enhanced pagination with memory optimization
 const INITIAL_LOAD_LIMITS = {
-  notes: 15, // Increased for better initial experience
-  recordings: 8,
-  scheduleItems: 25,
-  documents: 12,
+  notes: 12, // Reduced for faster initial load
+  recordings: 6,
+  scheduleItems: 50, // FIXED: Reduced from 1000 to ~1 month of events. Lazy-load on scroll
+  documents: 10,
   chatMessages: 0,
-  quizzes: 8
+  quizzes: 6,
+  folders: 50 // Added for folders
 };
 
 const LOAD_MORE_LIMITS = {
-  notes: 25,
-  recordings: 15,
-  scheduleItems: 50,
-  documents: 20,
+  notes: 20,
+  recordings: 12,
+  scheduleItems: 50, // FIXED: Reduced from 1000 to paginate on demand
+  documents: 15,
   chatMessages: 50,
-  quizzes: 15
+  quizzes: 12,
+  folders: 100
 };
 
-// Progressive loading priorities
-const LOADING_PRIORITIES = {
-  profile: 1,      // Highest - needed for all features
-  notes: 2,        // High - main content area
-  documents: 3,    // Medium-High - needed for chat
-  recordings: 4,   // Medium - tab-specific
-  scheduleItems: 5, // Medium - tab-specific  
-  quizzes: 6       // Lower - settings specific
-};
-
-interface DataLoadingState {
+// Type definitions
+export interface DataLoadingState {
   notes: boolean;
   recordings: boolean;
   scheduleItems: boolean;
   documents: boolean;
   quizzes: boolean;
   profile: boolean;
+  folders: boolean;
 }
 
-interface DataPaginationState {
-  notes: { hasMore: boolean; offset: number; total: number };
-  recordings: { hasMore: boolean; offset: number; total: number };
-  scheduleItems: { hasMore: boolean; offset: number; total: number };
-  documents: { hasMore: boolean; offset: number; total: number };
-  quizzes: { hasMore: boolean; offset: number; total: number };
+// Enhanced timeout constants with retry logic
+const API_TIMEOUT = 15000; // Reduce from 60s to 15s for better UX
+const LOADING_TIMEOUT = 30000; // Reduce from 60s to 30s
+const MAX_RETRIES = 2; // Maximum retry attempts
+const RETRY_DELAY = 2000; // Delay between retries in ms
+
+// Connection quality detection
+const CONNECTION_THRESHOLDS = {
+  SLOW: 5000, // Response time threshold for slow connection (ms)
+  TIMEOUT: 10000, // Response time threshold for timeout (ms)
+};
+
+// Priority-based loading with dependencies
+const LOADING_PRIORITIES = {
+  profile: 1,
+  notes: 2,
+  documents: 3,
+  folders: 4, // Added folders priority
+  recordings: 5,
+  scheduleItems: 6,
+  quizzes: 7
+};
+
+// Cache configuration
+const CACHE_CONFIG = {
+  enabled: true,
+  maxAge: 5 * 60 * 1000, // 5 minutes
+  maxSize: 100 // Max items per cache
+};
+
+// Toast deduplication - prevent showing same error multiple times
+const recentToastsRef: { current: Map<string, number> } = { current: new Map() };
+const TOAST_COOLDOWN = 10000; // Don't show same toast within 10 seconds (increased from 3s)
+
+// Request deduplication - prevent simultaneous fetches
+const activeRequestsRef: { current: Map<string, Promise<any>> } = { current: new Map() };
+
+// Group similar errors to show one generic message
+const errorGroupsRef: { current: Map<string, number> } = { current: new Map() };
+const ERROR_GROUP_COOLDOWN = 15000; // 15 seconds between grouped error messages
+
+const getRequestKey = (type: string, userId: string, isInitial: boolean) => {
+  return `${type}_${userId}_${isInitial ? 'initial' : 'more'}`;
+};
+
+// Get error group key (e.g., "fetch_error", "network_error")
+const getErrorGroup = (message: string): string => {
+  if (message.includes('fetch') || message.includes('network') || message.includes('connection')) {
+    return 'network_error';
+  }
+  if (message.includes('timeout')) {
+    return 'timeout_error';
+  }
+  if (message.includes('CORS') || message.includes('QUIC')) {
+    return 'cors_error';
+  }
+  return 'general_error';
+};
+
+const showToastOnce = (message: string, type: 'error' | 'success' | 'info' = 'error') => {
+  const now = Date.now();
+  const lastShown = recentToastsRef.current.get(message);
+
+  // For errors, also check error group to prevent similar errors
+  if (type === 'error') {
+    const errorGroup = getErrorGroup(message);
+    const lastGroupError = errorGroupsRef.current.get(errorGroup);
+
+    // If this error group was shown recently, skip
+    if (lastGroupError && now - lastGroupError < ERROR_GROUP_COOLDOWN) {
+      return;
+    }
+
+    errorGroupsRef.current.set(errorGroup, now);
+  }
+
+  if (!lastShown || now - lastShown > TOAST_COOLDOWN) {
+    recentToastsRef.current.set(message, now);
+    toast[type](message);
+
+    // Cleanup old entries
+    if (recentToastsRef.current.size > 20) {
+      const oldestKey = Array.from(recentToastsRef.current.entries())
+        .sort((a, b) => a[1] - b[1])[0][0];
+      recentToastsRef.current.delete(oldestKey);
+    }
+
+    // Cleanup old error groups
+    if (errorGroupsRef.current.size > 10) {
+      const oldestGroupKey = Array.from(errorGroupsRef.current.entries())
+        .sort((a, b) => a[1] - b[1])[0][0];
+      errorGroupsRef.current.delete(oldestGroupKey);
+    }
+  }
+};
+
+// Type definitions for Supabase responses
+interface SupabaseScheduleItem {
+  id: string;
+  title: string | null;
+  subject: string | null;
+  start_time: string;
+  end_time: string;
+  type: string;
+  description: string | null;
+  location: string | null;
+  color: string | null;
+  user_id: string;
+  created_at: string;
+  calendar_event_id: string | null;
+  is_recurring: boolean;
+  recurrence_pattern: string | null;
+  recurrence_interval: number | null;
+  recurrence_days: number[] | null;
+  recurrence_end_date: string | null;
 }
 
-interface LoadingPhase {
-  phase: 'initial' | 'core' | 'secondary' | 'complete';
-  progress: number;
-}
 
-export const useAppData = () => {
+// Enhanced withTimeout helper with retry logic
+const withRetry = async <T,>(
+  supabaseQuery: () => Promise<{ data: T | null; error: any }>,
+  errorMessage: string,
+  dataType: string,
+  retries = MAX_RETRIES
+): Promise<{ data: T | null; error: any; retriesUsed: number }> => {
+  let lastError: any = null;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const timeoutMs = API_TIMEOUT + (attempt * 2000); // Progressive timeout
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`${errorMessage} (timeout after ${timeoutMs}ms)`)), timeoutMs)
+      );
+
+      const result = await Promise.race([supabaseQuery(), timeoutPromise]);
+      return { ...result, retriesUsed: attempt };
+    } catch (error) {
+      lastError = error;
+
+      // Don't retry if it's not a timeout or network error
+      if (!error.message?.includes('timeout') && !error.message?.includes('network')) {
+        break;
+      }
+
+      // Exponential backoff for retries
+      if (attempt < retries) {
+        const delay = RETRY_DELAY * Math.pow(2, attempt);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  return { data: null, error: lastError, retriesUsed: retries };
+};
+
+// Original withTimeout helper (kept for compatibility)
+// Helper function for timeout handling - FIXED VERSION
+const withTimeout = async <T,>(
+  supabaseQuery: any,
+  timeoutMs: number,
+  errorMessage: string
+): Promise<{ data: T | null; error: any }> => {
+  try {
+    // Create a timeout promise
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${errorMessage} (timeout after ${timeoutMs}ms)`)), timeoutMs)
+    );
+
+    // Execute the Supabase query and race it against the timeout
+    const result = await Promise.race([supabaseQuery, timeoutPromise]) as any;
+
+    // Check if result has the Supabase response structure
+    if (result && typeof result === 'object') {
+      // Supabase typically returns { data, error } structure
+      return {
+        data: result.data || null,
+        error: result.error || null
+      };
+    }
+
+    // If result doesn't match expected structure, return as data
+    return {
+      data: result as T,
+      error: null
+    };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error : new Error(String(error))
+    };
+  }
+};
+
+// Custom hook for managing loading states with timeouts
+const useLoadingState = (initialState: DataLoadingState) => {
+  const [loading, setLoading] = useState<DataLoadingState>(initialState);
+  const timeoutRefs = useRef<Map<keyof DataLoadingState, NodeJS.Timeout>>(new Map());
+
+  const setLoadingWithTimeout = useCallback((key: keyof DataLoadingState, value: boolean, isCritical = false) => {
+    setLoading(prev => ({ ...prev, [key]: value }));
+
+    // Clear existing timeout for this key
+    const existingTimeout = timeoutRefs.current.get(key);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+
+    // Only set timeout for critical operations or if it's taking too long
+    if (value) {
+      const timeout = setTimeout(() => {
+        // Only log warning for critical operations or if it's really stuck
+        if (isCritical) {
+          //console.warn(`Loading state timeout for ${key} - resetting loading state`);
+        }
+        setLoading(prev => ({ ...prev, [key]: false }));
+        timeoutRefs.current.delete(key);
+      }, isCritical ? LOADING_TIMEOUT : LOADING_TIMEOUT * 2); // Longer timeout for non-critical
+
+      timeoutRefs.current.set(key, timeout);
+    } else {
+      timeoutRefs.current.delete(key);
+    }
+  }, []);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      timeoutRefs.current.forEach(timeout => clearTimeout(timeout));
+      timeoutRefs.current.clear();
+    };
+  }, []);
+
+  return [loading, setLoadingWithTimeout] as const;
+};
+
+// Connection quality monitor hook
+const useConnectionMonitor = () => {
+  const connectionRef = useRef<'good' | 'slow' | 'poor'>('good');
+  const recentResponseTimesRef = useRef<number[]>([]);
+
+  const recordResponseTime = useCallback((responseTime: number) => {
+    recentResponseTimesRef.current.push(responseTime);
+    if (recentResponseTimesRef.current.length > 10) {
+      recentResponseTimesRef.current.shift();
+    }
+
+    const avgTime = recentResponseTimesRef.current.reduce((a, b) => a + b, 0) / recentResponseTimesRef.current.length;
+
+    if (avgTime > CONNECTION_THRESHOLDS.TIMEOUT) {
+      connectionRef.current = 'poor';
+    } else if (avgTime > CONNECTION_THRESHOLDS.SLOW) {
+      connectionRef.current = 'slow';
+    } else {
+      connectionRef.current = 'good';
+    }
+
+    return connectionRef.current;
+  }, []);
+
+  const getConnectionQuality = useCallback(() => connectionRef.current, []);
+
+  return { recordResponseTime, getConnectionQuality };
+};
+
+// Enhanced loading queue system - using Promise.allSettled
+const useLoadingQueue = () => {
+  const queueRef = useRef<Array<{
+    id: string;
+    priority: number;
+    execute: () => Promise<void>;
+    dataType: string;
+  }>>([]);
+
+  const isProcessingRef = useRef(false);
+  const concurrentLimitRef = useRef(2); // Start with 2 concurrent requests
+
+  const processQueue = useCallback(async () => {
+    if (isProcessingRef.current || queueRef.current.length === 0) return;
+
+    isProcessingRef.current = true;
+
+    try {
+      // Sort by priority
+      queueRef.current.sort((a, b) => a.priority - b.priority);
+
+      // Take items based on concurrent limit
+      const itemsToProcess = queueRef.current.splice(0, concurrentLimitRef.current);
+
+      // Execute in parallel but with controlled concurrency
+      const promises = itemsToProcess.map(async (item) => {
+        try {
+          await item.execute();
+        } catch (error) {
+          throw error; // Re-throw so Promise.allSettled can catch it
+        }
+      });
+
+      // Use Promise.allSettled to get results with status
+      const results = await Promise.allSettled(promises);
+
+      // Calculate success rate from settled results
+      const successful = results.filter(result => result.status === 'fulfilled').length;
+      const successRate = successful / itemsToProcess.length;
+
+      if (successRate > 0.8 && concurrentLimitRef.current < 4) {
+        concurrentLimitRef.current += 1; // Increase concurrency
+      } else if (successRate < 0.3 && concurrentLimitRef.current > 1) {
+        concurrentLimitRef.current -= 1; // Decrease concurrency
+      }
+
+    } finally {
+      isProcessingRef.current = false;
+
+      // Process next batch if any
+      if (queueRef.current.length > 0) {
+        setTimeout(() => processQueue(), 100);
+      }
+    }
+  }, []);
+
+  const addToQueue = useCallback((item: {
+    id: string;
+    priority: number;
+    execute: () => Promise<void>;
+    dataType: string;
+  }) => {
+    // Avoid duplicates
+    const exists = queueRef.current.some(existing => existing.id === item.id);
+    if (exists) return;
+
+    queueRef.current.push(item);
+
+    // Trigger processing if not already processing
+    if (!isProcessingRef.current) {
+      setTimeout(() => processQueue(), 50);
+    }
+  }, [processQueue]);
+
+  return { addToQueue };
+};
+
+export const useAppData = (authUser?: any) => {
+  // State management with lazy initialization
   const [notes, setNotes] = useState<Note[]>([]);
   const [recordings, setRecordings] = useState<ClassRecording[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
@@ -68,38 +394,14 @@ export const useAppData = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings'>('notes');
+  const [activeTab, setActiveTab] = useState<'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings' | 'quizzes' | 'dashboard' | 'podcasts' | 'library'>('notes');
   const [isAILoading, setIsAILoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [lastUserId, setLastUserId] = useState<string | null>(null);
-
-  // Enhanced loading state tracking
-  const [dataLoaded, setDataLoaded] = useState<Set<keyof DataLoadingState>>(new Set());
-  const [dataLoading, setDataLoading] = useState<DataLoadingState>({
-    notes: false,
-    recordings: false,
-    scheduleItems: false,
-    documents: false,
-    quizzes: false,
-    profile: false
-  });
-
-  // Progressive loading state
-  const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>({
-    phase: 'initial',
-    progress: 0
-  });
-
-  // Pagination state
-  const [dataPagination, setDataPagination] = useState<DataPaginationState>({
-    notes: { hasMore: true, offset: 0, total: 0 },
-    recordings: { hasMore: true, offset: 0, total: 0 },
-    scheduleItems: { hasMore: true, offset: 0, total: 0 },
-    documents: { hasMore: true, offset: 0, total: 0 },
-    quizzes: { hasMore: true, offset: 0, total: 0 }
-  });
+  const [folders, setFolders] = useState<DocumentFolder[]>([]);
+  const [folderTree, setFolderTree] = useState<FolderTreeNode[]>([]);
 
   // Real-time subscription refs
   const documentChannelRef = useRef<any>(null);
@@ -109,41 +411,140 @@ export const useAppData = () => {
   const scheduleChannelRef = useRef<any>(null);
   const profileChannelRef = useRef<any>(null);
   const quizzesChannelRef = useRef<any>(null);
+  const foldersChannelRef = useRef<any>(null);
+  const folderItemsChannelRef = useRef<any>(null);
 
-  // Loading queue and batch processing
+  // Enhanced loading state with batched updates
+  const [dataLoaded, setDataLoaded] = useState<Set<keyof DataLoadingState>>(new Set());
+  const [dataLoading, setDataLoading] = useLoadingState({
+    notes: false,
+    recordings: false,
+    scheduleItems: false,
+    documents: false,
+    quizzes: false,
+    profile: false,
+    folders: false
+  });
+
+  // Progressive loading with better progress tracking
+  const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>({
+    phase: 'initial',
+    progress: 0
+  });
+  const [dataErrors, setDataErrors] = useState<Record<string, string>>({});
+
+  // Optimized pagination state
+  const [dataPagination, setDataPagination] = useState<DataPaginationState>({
+    notes: { hasMore: true, offset: 0, total: 0 },
+    recordings: { hasMore: true, offset: 0, total: 0 },
+    scheduleItems: { hasMore: true, offset: 0, total: 0 },
+    documents: { hasMore: true, offset: 0, total: 0 },
+    quizzes: { hasMore: true, offset: 0, total: 0 },
+    folders: { hasMore: false, offset: 0, total: 0 }
+  });
+
+  // Enhanced real-time subscription refs with connection management
+  const channelRefs = useRef<Record<string, any>>({});
+
+  // Performance optimization refs
   const loadingQueueRef = useRef<Set<keyof DataLoadingState>>(new Set());
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const dataCacheRef = useRef<Map<string, { data: any; timestamp: number }>>(new Map());
+  const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
 
-  // Auth listener to set currentUser
-  useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setCurrentUser(session?.user || null);
+  // Ref-based loading locks — synchronous guards that never go stale.
+  // Unlike dataLoading (React state), these update immediately even inside
+  // the same event-loop tick, preventing duplicate loads after clearAllData().
+  const loadingLocksRef = useRef<Set<string>>(new Set());
+
+  // Add ref to track loaded IDs for duplicate prevention
+  const loadedIdsRef = useRef<Record<string, Set<string>>>({
+    notes: new Set(),
+    recordings: new Set(),
+    scheduleItems: new Set(),
+    documents: new Set(),
+    quizzes: new Set(),
+    folders: new Set(),
+  });
+
+  // Add connection monitoring and loading queue
+  const { recordResponseTime, getConnectionQuality } = useConnectionMonitor();
+  const { addToQueue } = useLoadingQueue();
+
+  // Memoized selectors for better performance
+  const filteredNotes = useMemo(() => {
+    if (!searchQuery && selectedCategory === 'all') return notes;
+
+    const searchLower = searchQuery.toLowerCase();
+    return notes.filter(note => {
+      const matchesSearch = note.title.toLowerCase().includes(searchLower) ||
+        note.content.toLowerCase().includes(searchLower);
+      const matchesCategory = selectedCategory === 'all' || note.category === selectedCategory;
+      return matchesSearch && matchesCategory;
     });
+  }, [notes, searchQuery, selectedCategory]);
 
-    // Initial check
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setCurrentUser(user || null);
+  // Helper function to clear loaded IDs
+  const clearLoadedIds = useCallback(() => {
+    Object.keys(loadedIdsRef.current).forEach(key => {
+      loadedIdsRef.current[key as keyof typeof loadedIdsRef.current].clear();
     });
-
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
   }, []);
 
-  // Progressive data loading when user changes
+  // Sync currentUser from the auth provider (eliminates redundant auth listener)
+  useEffect(() => {
+    if (authUser?.id && authUser.id !== currentUser?.id) {
+      setCurrentUser(authUser);
+    } else if (!authUser && currentUser) {
+      setCurrentUser(null);
+    }
+  }, [authUser?.id]);
+
+  // Optimized user change detection with debouncing
   useEffect(() => {
     if (currentUser?.id && currentUser.id !== lastUserId) {
-      // console.log('User changed, starting progressive data loading...');
       setLastUserId(currentUser.id);
+
+      // Clear cache and data
+      clearCache();
+      dataCacheRef.current.clear();
+      clearAllData();
+
+      // Start progressive loading
       startProgressiveDataLoading(currentUser);
     } else if (!currentUser && lastUserId !== null) {
-      // console.log('User logged out, clearing data...');
       setLastUserId(null);
       clearAllData();
+      clearCache();
+      dataCacheRef.current.clear();
     }
   }, [currentUser, lastUserId]);
 
-  const clearAllData = () => {
+  // Cleanup function for abort controllers and timeouts
+  const cleanup = useCallback(() => {
+    // Clear all abort controllers
+    abortControllersRef.current.forEach(controller => controller.abort());
+    abortControllersRef.current.clear();
+
+    // Clear timeouts
+    if (loadingTimeoutRef.current) {
+      clearTimeout(loadingTimeoutRef.current);
+      loadingTimeoutRef.current = null;
+    }
+
+    // Clear loading queue
+    loadingQueueRef.current.clear();
+
+    // Remove all real-time channels
+    Object.values(channelRefs.current).forEach(channel => {
+      if (channel) supabase.removeChannel(channel);
+    });
+    channelRefs.current = {};
+  }, []);
+
+  const clearAllData = useCallback(() => {
+    cleanup(); // Cleanup before clearing data
+
     setNotes([]);
     setRecordings([]);
     setScheduleItems([]);
@@ -152,340 +553,334 @@ export const useAppData = () => {
     setUserProfile(null);
     setQuizzes([]);
     setActiveNote(null);
+    setFolders([]);
+    setFolderTree([]);
+
     setDataLoaded(new Set());
-    setDataLoading({
-      notes: false,
-      recordings: false,
-      scheduleItems: false,
-      documents: false,
-      quizzes: false,
-      profile: false
-    });
+    setDataLoading('notes', false);
+    setDataLoading('recordings', false);
+    setDataLoading('scheduleItems', false);
+    setDataLoading('documents', false);
+    setDataLoading('quizzes', false);
+    setDataLoading('profile', false);
+    setDataLoading('folders', false);
+
     setDataPagination({
       notes: { hasMore: true, offset: 0, total: 0 },
       recordings: { hasMore: true, offset: 0, total: 0 },
       scheduleItems: { hasMore: true, offset: 0, total: 0 },
       documents: { hasMore: true, offset: 0, total: 0 },
-      quizzes: { hasMore: true, offset: 0, total: 0 }
+      quizzes: { hasMore: true, offset: 0, total: 0 },
+      folders: { hasMore: false, offset: 0, total: 0 }
     });
+
     setLoadingPhase({ phase: 'initial', progress: 0 });
     setLoading(false);
-  };
 
-  // Progressive loading strategy
-  const startProgressiveDataLoading = useCallback(async (user: any) => {
-    if (!user?.id) return;
+    // Synchronously clear loading locks so the very next load call
+    // (e.g. startProgressiveDataLoading) passes the ref-based guard
+    // even before React flushes the queued setDataLoading(false) updates.
+    loadingLocksRef.current.clear();
 
-    setLoading(true);
-    setLoadingPhase({ phase: 'initial', progress: 10 });
+    // Clear loaded IDs
+    clearLoadedIds();
+  }, [cleanup, setDataLoading, clearLoadedIds]);
 
-    try {
-      // Phase 1: Critical data (profile + basic UI needs)
-      await Promise.all([
-        loadUserProfile(user),
-        setupRealTimeListeners(user)
-      ]);
-
-      setLoadingPhase({ phase: 'core', progress: 30 });
-
-      // Phase 2: Core content (notes + documents - needed for most interactions)
-      await Promise.all([
-        loadNotesPage(user.id, true),
-        loadDocumentsPage(user.id, true)
-      ]);
-
-      setLoadingPhase({ phase: 'secondary', progress: 60 });
-
-      // Phase 3: Secondary data (loaded in background, non-blocking)
-      // Use setTimeout to make this truly non-blocking
-      setTimeout(async () => {
-        try {
-          await Promise.all([
-            loadRecordingsPage(user.id, true),
-            loadSchedulePage(user.id, true),
-            loadQuizzesPage(user.id, true)
-          ]);
-
-          setLoadingPhase({ phase: 'complete', progress: 100 });
-        } catch (error) {
-          console.error('Error loading secondary data:', error);
-          // Don't show error toast for secondary data - it will load when needed
-          setLoadingPhase({ phase: 'complete', progress: 100 });
-        }
-      }, 100); // Small delay to ensure UI is responsive
-
-      // UI is ready after core data
-      setLoading(false);
-
-      // console.log('Core user data loaded successfully, UI ready');
-    } catch (error) {
-      console.error('Error loading core user data:', error);
-      toast.error('Failed to load some data. Please refresh to try again.');
-      setLoading(false);
-      setLoadingPhase({ phase: 'complete', progress: 100 });
+  // Cache management utilities
+  const getCachedData = useCallback((key: string) => {
+    const cached = dataCacheRef.current.get(key);
+    if (cached && Date.now() - cached.timestamp < CACHE_CONFIG.maxAge) {
+      return cached.data;
     }
+    dataCacheRef.current.delete(key); // Remove expired cache
+    return null;
   }, []);
 
-  // Optimized user profile loading with better error handling
-  const loadUserProfile = useCallback(async (user: any) => {
-    if (dataLoaded.has('profile')) return;
-
-    setDataLoading(prev => ({ ...prev, profile: true }));
-
-    try {
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (profileError && profileError.code !== 'PGRST116') { // Ignore "not found" errors
-        console.error('Error loading user profile:', profileError);
-        // Don't throw - continue with default profile
-      }
-
-      if (profileData) {
-        setUserProfile({
-          id: profileData.id,
-          email: profileData.email || user.email || '',
-          full_name: profileData.full_name || '',
-          avatar_url: profileData.avatar_url || '',
-          learning_style: (profileData.learning_style || 'visual') as 'visual' | 'auditory' | 'kinesthetic' | 'reading',
-          learning_preferences: (profileData.learning_preferences as any) || {
-            explanation_style: 'detailed',
-            examples: true,
-            difficulty: 'intermediate'
-          },
-          created_at: new Date(profileData.created_at || Date.now()),
-          updated_at: new Date(profileData.updated_at || Date.now())
-        });
-      } else {
-        // Create default profile silently
-        const defaultProfile = {
-          id: user.id,
-          email: user.email || '',
-          full_name: '',
-          avatar_url: '',
-          learning_style: 'visual' as const,
-          learning_preferences: {
-            explanation_style: 'detailed' as const,
-            examples: true,
-            difficulty: 'intermediate' as const
-          }
-        };
-
-        // Set profile immediately for UI responsiveness
-        setUserProfile({
-          ...defaultProfile,
-          created_at: new Date(),
-          updated_at: new Date()
-        });
-
-        // Create in background
-        setTimeout(async () => {
-          try {
-            await supabase.from('profiles').insert(defaultProfile);
-          } catch (error) {
-            console.error('Error creating default profile (non-critical):', error);
-          }
-        }, 500);
-      }
-
-      setDataLoaded(prev => new Set([...prev, 'profile']));
-    } catch (error) {
-      console.error('Error in loadUserProfile:', error);
-      // Create minimal profile to prevent UI blocking
-      setUserProfile({
-        id: user.id,
-        email: user.email || '',
-        full_name: '',
-        avatar_url: '',
-        learning_style: 'visual',
-        learning_preferences: {
-          explanation_style: 'detailed',
-          examples: true,
-          difficulty: 'intermediate'
-        },
-        created_at: new Date(),
-        updated_at: new Date()
-      });
-      setDataLoaded(prev => new Set([...prev, 'profile']));
-    } finally {
-      setDataLoading(prev => ({ ...prev, profile: false }));
+  const setCachedData = useCallback((key: string, data: any) => {
+    // Manage cache size
+    if (dataCacheRef.current.size >= CACHE_CONFIG.maxSize) {
+      const firstKey = dataCacheRef.current.keys().next().value;
+      dataCacheRef.current.delete(firstKey);
     }
-  }, [dataLoaded]);
 
-  // Optimized notes loading with better performance
-  const loadNotesPage = useCallback(async (userId: string, isInitial = false) => {
-    if (dataLoading.notes) return;
-    if (!isInitial && !dataPagination.notes.hasMore) return;
+    dataCacheRef.current.set(key, {
+      data,
+      timestamp: Date.now()
+    });
+  }, []);
 
-    setDataLoading(prev => ({ ...prev, notes: true }));
-
-    try {
-      const limit = isInitial ? INITIAL_LOAD_LIMITS.notes : LOAD_MORE_LIMITS.notes;
-      const offset = isInitial ? 0 : dataPagination.notes.offset;
-
-      // Use more efficient query for better performance
-      const query = supabase
-        .from('notes')
-        .select('id, title, content, document_id, user_id, category, tags, created_at, updated_at, ai_summary', { count: 'exact' })
-        .eq('user_id', userId)
-        .order('updated_at', { ascending: false });
-
-      if (!isInitial) {
-        query.range(offset, offset + limit - 1);
-      } else {
-        query.limit(limit);
-      }
-
-      const { data, error, count } = await query;
-
-      if (error) throw error;
-
-      if (data) {
-        const formattedNotes = data.map(note => ({
-          id: note.id,
-          title: note.title || 'Untitled Note',
-          content: note.content || '',
-          document_id: note.document_id || null,
-          user_id: note.user_id || userId,
-          category: note.category || 'general',
-          tags: note.tags || [],
-          createdAt: new Date(note.created_at || Date.now()),
-          updatedAt: new Date(note.updated_at || Date.now()),
-          aiSummary: note.ai_summary || ''
-        }));
-
-        if (isInitial) {
-          setNotes(formattedNotes);
-          // Set active note more intelligently
-          if (formattedNotes.length > 0 && !activeNote) {
-            // Prefer the most recently updated note
-            const mostRecent = formattedNotes.sort((a, b) =>
-              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-            )[0];
-            setActiveNote(mostRecent);
-          }
-        } else {
-          setNotes(prev => [...prev, ...formattedNotes]);
-        }
-
-        const newOffset = isInitial ? formattedNotes.length : offset + formattedNotes.length;
-        const hasMore = count ? newOffset < count : formattedNotes.length === limit;
-
-        setDataPagination(prev => ({
-          ...prev,
-          notes: { hasMore, offset: newOffset, total: count || 0 }
-        }));
-      }
-
-      setDataLoaded(prev => new Set([...prev, 'notes']));
-    } catch (error) {
-      console.error('Error loading notes:', error);
-      if (isInitial) {
-        toast.error('Failed to load notes');
-      }
-    } finally {
-      setDataLoading(prev => ({ ...prev, notes: false }));
-    }
-  }, [dataLoading.notes, dataPagination.notes, activeNote]);
-
-  // Enhanced documents loading for chat dependency
-  const loadDocumentsPage = useCallback(async (userId: string, isInitial = false) => {
-    if (dataLoading.documents) return;
+  // Enhanced documents loading with retry logic
+  const loadDocumentsPage = useCallback(async (userId: string, isInitial = false, force = false) => {
+    // console.log(`[useAppData] loadDocumentsPage called (initial=${isInitial}, force=${force})`);
+    if (loadingLocksRef.current.has('documents')) return;
     if (!isInitial && !dataPagination.documents.hasMore) return;
 
-    setDataLoading(prev => ({ ...prev, documents: true }));
+    // stop trying to fetch additional pages while offline
+    if (!navigator.onLine && !isInitial) {
+      // console.log('[useAppData] offline and not initial; skipping documents fetch');
+      return;
+    }
+
+    loadingLocksRef.current.add('documents');
+    setDataLoading('documents', true);
+
+    // Flag to prevent fire-and-forget offline preload from overwriting fresh data
+    let freshDataApplied = false;
 
     try {
-      const limit = isInitial ? INITIAL_LOAD_LIMITS.documents : LOAD_MORE_LIMITS.documents;
+      // If forced, clear loaded IDs to allow full refresh of first page
+      if (force) {
+        // console.log('[useAppData] force flag set - clearing document IDs');
+        loadedIdsRef.current.documents.clear();
+      }
+
+      // Optimistically load from offline storage for initial load
+      if (isInitial && !force) {
+        if (!navigator.onLine) {
+          try {
+            const offlineDocs = await offlineStorage.getAll<Document>(STORES.DOCUMENTS);
+            if (offlineDocs && offlineDocs.length > 0) {
+              setDocuments(offlineDocs);
+              offlineDocs.forEach(doc => loadedIdsRef.current.documents.add(doc.id));
+              setDataLoaded(prev => new Set([...prev, 'documents']));
+              return; // finally block will clean up
+            }
+
+            // nothing cached – keep whatever is already in state and stop
+            if (documents.length > 0) {
+              // console.log('[useAppData] offline & no cached docs; keeping existing documents');
+              return;
+            }
+          } catch (err) {
+            //console.warn('Failed to load offline documents:', err);
+          }
+        } else {
+          offlineStorage.getAll<Document>(STORES.DOCUMENTS).then(offlineDocs => {
+            if (!freshDataApplied && offlineDocs && offlineDocs.length > 0) {
+              setDocuments(offlineDocs);
+            }
+          }).catch(() => {});
+        }
+      }
+
       const offset = isInitial ? 0 : dataPagination.documents.offset;
+      const limit = isInitial ? INITIAL_LOAD_LIMITS.documents : LOAD_MORE_LIMITS.documents;
 
-      const { data, error, count } = await supabase
-        .from('documents')
-        .select('*', { count: 'exact' })
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
+      const startTime = Date.now();
 
-      if (error) throw error;
+      const { data, error } = await withRetry<any[]>(
+        () => withTimeout<any[]>(
+          supabase
+            .from('documents')
+            .select(`*, folder_items:document_folder_items!document_folder_items_document_id_fkey (folder_id)`, { count: 'exact' })
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .range(offset, offset + limit - 1),
+          API_TIMEOUT,
+          'Failed to load documents'
+        ),
+        'Failed to load documents',
+        'documents',
+        isInitial ? MAX_RETRIES : 1 // Only retry initial loads
+      );
+
+      const responseTime = Date.now() - startTime;
+      recordResponseTime(responseTime);
+
+      if (error) {
+        // Check if it's a network error or QUIC protocol error
+        if (!navigator.onLine ||
+          error.message?.includes('network') ||
+          error.message?.includes('QUIC') ||
+          error.message?.includes('ERR_QUIC_PROTOCOL_ERROR') ||
+          error.message?.includes('timeout')) {
+          // Try to load from IndexedDB
+          const offlineDocs = await offlineStorage.getAll<Document>(STORES.DOCUMENTS);
+          if (offlineDocs && offlineDocs.length > 0) {
+            setDocuments(offlineDocs);
+            setDataLoaded(prev => new Set([...prev, 'documents']));
+          }
+          return;
+        }
+        throw error;
+      }
 
       if (data) {
-        const formattedDocuments = data.map(doc => ({
+        // console.log(`[useAppData] loadDocumentsPage fetched ${data.length} docs`);
+        freshDataApplied = true;
+
+        // Filter out duplicates only if not forced (force clears IDs so filter passes all)
+        const newDocsData = data.filter(doc =>
+          !loadedIdsRef.current.documents.has(doc.id)
+        );
+
+        const formattedDocuments: Document[] = newDocsData.map(doc => ({
           id: doc.id,
           title: doc.title || 'Untitled Document',
-          user_id: doc.user_id,
-          file_name: doc.file_name || '',
-          file_type: doc.file_type || '',
-          file_url: doc.file_url || '',
+          file_name: doc.file_name,
+          file_type: doc.file_type,
           file_size: doc.file_size || 0,
-          content_extracted: doc.content_extracted || null,
+          file_url: doc.file_url,
+          content_extracted: doc.content_extracted || '',
+          user_id: doc.user_id,
           type: doc.type as Document['type'],
-          processing_status: String(doc.processing_status) || null,
-          processing_error: String(doc.processing_error) || null,
-          created_at: new Date(doc.created_at).toISOString(),
-          updated_at: new Date(doc.updated_at).toISOString()
+          processing_status: doc.processing_status || 'pending',
+          processing_error: doc.processing_error || null,
+          created_at: doc.created_at,
+          updated_at: doc.updated_at,
+          folder_ids: doc?.folder_items?.map((item: any) => item.folder_id) || [],
+          processing_started_at: doc.processing_started_at || null,
+          processing_completed_at: doc.processing_completed_at || null,
+          processing_metadata: doc.processing_metadata || null,
+          extraction_model_used: doc.extraction_model_used || null,
+          total_processing_time_ms: doc.total_processing_time_ms || null,
         }));
 
+        // Add new IDs to loaded set
+        formattedDocuments.forEach(doc => loadedIdsRef.current.documents.add(doc.id));
+
+        // Save to IndexedDB for offline access
+        offlineStorage.save(STORES.DOCUMENTS, formattedDocuments);
+
         if (isInitial) {
-          setDocuments(formattedDocuments);
+          // If forced refresh of first page OR we actually received new docs, replace state
+          if (force || formattedDocuments.length > 0) {
+            setDocuments(formattedDocuments);
+          } else {
+            // console.log('[useAppData] initial documents load returned no new items, keeping existing state');
+          }
         } else {
           setDocuments(prev => [...prev, ...formattedDocuments]);
         }
 
-        const newOffset = offset + formattedDocuments.length;
-        const hasMore = count ? newOffset < count : formattedDocuments.length === limit;
+        const newOffset = offset + data.length; // Use original data length for offset
+        const hasMore = data.length === limit; // Use original data length for hasMore
 
         setDataPagination(prev => ({
           ...prev,
-          documents: { hasMore, offset: newOffset, total: count || 0 }
+          documents: {
+            hasMore,
+            offset: newOffset,
+            total: prev.documents.total + formattedDocuments.length
+          }
         }));
+
+        if (isInitial || !dataLoaded.has('documents')) {
+          setDataLoaded(prev => new Set([...prev, 'documents']));
+        }
       }
-
-      setDataLoaded(prev => new Set([...prev, 'documents']));
-    } catch (error) {
+    } catch (error: any) {
       //console.error('Error loading documents:', error);
-      toast.error('Failed to load documents');
+      if (isInitial && !error.message?.includes('network') && !error.message?.includes('QUIC') && !error.message?.includes('timeout')) {
+        setDataErrors(prev => ({ ...prev, documents: 'Failed to load documents' }));
+      }
     } finally {
-      setDataLoading(prev => ({ ...prev, documents: false }));
+      loadingLocksRef.current.delete('documents');
+      setDataLoading('documents', false);
     }
-  }, [dataLoading.documents, dataPagination.documents]);
+  }, [dataLoaded, dataPagination, setDataLoading, recordResponseTime, documents]);
 
-  // Optimized recordings loading
+  // Optimized recordings loading with retry logic
   const loadRecordingsPage = useCallback(async (userId: string, isInitial = false) => {
-    if (dataLoading.recordings) return;
+    if (loadingLocksRef.current.has('recordings')) return;
     if (!isInitial && !dataPagination.recordings.hasMore) return;
 
-    setDataLoading(prev => ({ ...prev, recordings: true }));
+    loadingLocksRef.current.add('recordings');
+    setDataLoading('recordings', true);
+
+    // Flag to prevent fire-and-forget offline preload from overwriting fresh data
+    let freshDataApplied = false;
 
     try {
+      // Optimistically load from offline storage for initial load
+      if (isInitial) {
+        if (!navigator.onLine) {
+          try {
+            const offlineRecs = await offlineStorage.getAll<ClassRecording>(STORES.RECORDINGS);
+            if (offlineRecs && offlineRecs.length > 0) {
+              setRecordings(offlineRecs);
+              offlineRecs.forEach(rec => loadedIdsRef.current.recordings.add(rec.id));
+              setDataLoaded(prev => new Set([...prev, 'recordings']));
+              return; // finally block will clean up
+            }
+          } catch (err) {
+            // console.warn('Failed to load offline recordings:', err);
+          }
+        } else {
+          offlineStorage.getAll<ClassRecording>(STORES.RECORDINGS).then(offlineRecs => {
+            if (!freshDataApplied && offlineRecs && offlineRecs.length > 0) {
+              setRecordings(offlineRecs);
+            }
+          }).catch(() => {});
+        }
+      }
+
       const limit = isInitial ? INITIAL_LOAD_LIMITS.recordings : LOAD_MORE_LIMITS.recordings;
       const offset = isInitial ? 0 : dataPagination.recordings.offset;
 
-      const { data, error, count } = await supabase
-        .from('class_recordings')
-        .select('*', { count: 'exact' })
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
+      const startTime = Date.now();
 
-      if (error) throw error;
+      const { data, error } = await withRetry<ClassRecording[]>(
+        () => withTimeout<ClassRecording[]>(
+          supabase
+            .from('class_recordings')
+            .select('*', { count: 'exact' })
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .range(offset, offset + limit - 1),
+          API_TIMEOUT,
+          'Failed to load recordings'
+        ),
+        'Failed to load recordings',
+        'recordings',
+        isInitial ? MAX_RETRIES : 1
+      );
+
+      const responseTime = Date.now() - startTime;
+      recordResponseTime(responseTime);
+
+      if (error) {
+        if (!navigator.onLine || error.message?.includes('network') || error.message?.includes('QUIC') || error.message?.includes('timeout')) {
+          // Try to load from IndexedDB
+          const offlineRecordings = await offlineStorage.getAll<ClassRecording>(STORES.RECORDINGS);
+          if (offlineRecordings && offlineRecordings.length > 0) {
+            setRecordings(offlineRecordings);
+            setDataLoaded(prev => new Set([...prev, 'recordings']));
+          }
+          return;
+        }
+        throw error;
+      }
 
       if (data) {
-        const formattedRecordings = data.map(recording => ({
+        freshDataApplied = true;
+
+        // Filter out duplicates before formatting
+        const newRecordingsData = data.filter(recording =>
+          !loadedIdsRef.current.recordings.has(recording.id)
+        );
+
+        const formattedRecordings: ClassRecording[] = newRecordingsData.map(recording => ({
           id: recording.id,
           title: recording.title || 'Untitled Recording',
           subject: recording.subject || '',
-          date: recording.date || new Date().toISOString(),
+          date: recording.date,
           duration: recording.duration || 0,
           audioUrl: recording.audio_url || '',
+          audio_url: recording.audio_url || '',
           transcript: recording.transcript || '',
           summary: recording.summary || '',
-          createdAt: recording.created_at || new Date().toISOString(),
+          created_at: recording.created_at,
           userId: recording.user_id,
+          user_id: recording.user_id,
           document_id: recording.document_id
         }));
+
+        // Add new IDs to loaded set
+        formattedRecordings.forEach(recording => loadedIdsRef.current.recordings.add(recording.id));
+
+        // Save to IndexedDB for offline access
+        offlineStorage.save(STORES.RECORDINGS, formattedRecordings);
 
         if (isInitial) {
           setRecordings(formattedRecordings);
@@ -493,46 +888,109 @@ export const useAppData = () => {
           setRecordings(prev => [...prev, ...formattedRecordings]);
         }
 
-        const newOffset = offset + formattedRecordings.length;
-        const hasMore = count ? newOffset < count : formattedRecordings.length === limit;
+        const newOffset = offset + data.length;
+        const hasMore = data.length === limit;
 
         setDataPagination(prev => ({
           ...prev,
-          recordings: { hasMore, offset: newOffset, total: count || 0 }
+          recordings: {
+            hasMore,
+            offset: newOffset,
+            total: prev.recordings.total + formattedRecordings.length
+          }
         }));
       }
 
       setDataLoaded(prev => new Set([...prev, 'recordings']));
-    } catch (error) {
-      console.error('Error loading recordings:', error);
-      // Don't show error for background loading
+    } catch (error: any) {
+      //console.error('Error loading recordings:', error);
+      if (isInitial && !error.message?.includes('network')) {
+        setDataErrors(prev => ({ ...prev, recordings: 'Failed to load recordings' }));
+      }
     } finally {
-      setDataLoading(prev => ({ ...prev, recordings: false }));
+      loadingLocksRef.current.delete('recordings');
+      setDataLoading('recordings', false);
     }
-  }, [dataLoading.recordings, dataPagination.recordings]);
+  }, [dataPagination.recordings, setDataLoading, recordResponseTime]);
 
-  // Optimized schedule loading
+  // Optimized schedule loading with better error handling
   const loadSchedulePage = useCallback(async (userId: string, isInitial = false) => {
-    if (dataLoading.scheduleItems) return;
+    if (loadingLocksRef.current.has('scheduleItems')) return;
     if (!isInitial && !dataPagination.scheduleItems.hasMore) return;
 
-    setDataLoading(prev => ({ ...prev, scheduleItems: true }));
+    loadingLocksRef.current.add('scheduleItems');
+    setDataLoading('scheduleItems', true);
+
+    let freshDataApplied = false;
 
     try {
+      // Optimistically load from offline storage for initial load
+      if (isInitial) {
+        if (!navigator.onLine) {
+          try {
+            const offlineItems = await offlineStorage.getAll<ScheduleItem>(STORES.SCHEDULE);
+            if (offlineItems && offlineItems.length > 0) {
+              setScheduleItems(offlineItems);
+              offlineItems.forEach(item => loadedIdsRef.current.scheduleItems.add(item.id));
+              setDataLoaded(prev => new Set([...prev, 'scheduleItems']));
+              return; // finally block will clean up
+            }
+          } catch (err) {
+            // console.warn('Failed to load offline schedule:', err);
+          }
+        } else {
+          offlineStorage.getAll<ScheduleItem>(STORES.SCHEDULE).then(offlineItems => {
+            if (!freshDataApplied && offlineItems && offlineItems.length > 0) {
+              setScheduleItems(offlineItems);
+            }
+          }).catch(() => {});
+        }
+      }
+
       const limit = isInitial ? INITIAL_LOAD_LIMITS.scheduleItems : LOAD_MORE_LIMITS.scheduleItems;
       const offset = isInitial ? 0 : dataPagination.scheduleItems.offset;
+      
+      // OPTIMIZATION: Only fetch future events and minimal columns
+      const now = new Date().toISOString();
 
-      const { data, error, count } = await supabase
-        .from('schedule_items')
-        .select('*', { count: 'exact' })
-        .eq('user_id', userId)
-        .order('start_time', { ascending: true })
-        .range(offset, offset + limit - 1);
+      const { data, error } = await withTimeout<SupabaseScheduleItem[]>(
+        supabase
+          .from('schedule_items')
+          .select('id,title,subject,start_time,end_time,type,description,location,color,user_id,created_at,calendar_event_id,is_recurring,recurrence_pattern,recurrence_interval,recurrence_days,recurrence_end_date', { count: 'exact' })
+          .eq('user_id', userId)
+          .or(`and(is_recurring.eq.true,or(recurrence_end_date.is.null,recurrence_end_date.gte.${now})),end_time.gte.${now}`)
+          .order('start_time', { ascending: true })
+          .range(offset, offset + limit - 1),
+        API_TIMEOUT,
+        'Failed to load schedule items'
+      );
 
-      if (error) throw error;
+      if (error) {
+        // Handle CORS/network errors gracefully
+        if (!navigator.onLine || error.message?.includes('Failed to fetch') || error.message?.includes('CORS') || error.message?.includes('timeout')) {
+          // Try to load from IndexedDB
+          const offlineSchedule = await offlineStorage.getAll<ScheduleItem>(STORES.SCHEDULE);
+          if (offlineSchedule && offlineSchedule.length > 0) {
+            setScheduleItems(offlineSchedule);
+            setDataLoaded(prev => new Set([...prev, 'scheduleItems']));
+          } else {
+            setScheduleItems(prev => isInitial ? [] : prev);
+            setDataLoaded(prev => new Set([...prev, 'scheduleItems']));
+          }
+          return;
+        }
+        throw error;
+      }
 
       if (data) {
-        const formattedItems = data.map(item => ({
+        freshDataApplied = true;
+
+        // Filter out duplicates before formatting
+        const newScheduleData = data.filter(item =>
+          !loadedIdsRef.current.scheduleItems.has(item.id)
+        );
+
+        const formattedItems: ScheduleItem[] = newScheduleData.map(item => ({
           id: item.id,
           title: item.title || 'Untitled Event',
           subject: item.subject || '',
@@ -543,8 +1001,20 @@ export const useAppData = () => {
           location: item.location || '',
           color: item.color || '#3B82F6',
           userId: item.user_id,
-          createdAt: item.created_at || new Date().toISOString()
+          created_at: item.created_at,
+          calendarEventIds: item.calendar_event_id ? JSON.parse(item.calendar_event_id) : undefined,
+          isRecurring: item.is_recurring,
+          recurrencePattern: item.recurrence_pattern as any,
+          recurrenceInterval: item.recurrence_interval,
+          recurrenceDays: item.recurrence_days,
+          recurrenceEndDate: item.recurrence_end_date
         }));
+
+        // Add new IDs to loaded set
+        formattedItems.forEach(item => loadedIdsRef.current.scheduleItems.add(item.id));
+
+        // Save to IndexedDB for offline access
+        offlineStorage.save(STORES.SCHEDULE, formattedItems);
 
         if (isInitial) {
           setScheduleItems(formattedItems);
@@ -552,59 +1022,149 @@ export const useAppData = () => {
           setScheduleItems(prev => [...prev, ...formattedItems]);
         }
 
-        const newOffset = offset + formattedItems.length;
-        const hasMore = count ? newOffset < count : formattedItems.length === limit;
+        const newOffset = offset + data.length;
+        const hasMore = data.length === limit;
 
         setDataPagination(prev => ({
           ...prev,
-          scheduleItems: { hasMore, offset: newOffset, total: count || 0 }
+          scheduleItems: {
+            hasMore,
+            offset: newOffset,
+            total: prev.scheduleItems.total + formattedItems.length
+          }
         }));
       }
 
       setDataLoaded(prev => new Set([...prev, 'scheduleItems']));
-    } catch (error) {
-      console.error('Error loading schedule items:', error);
-      // Don't show error for background loading
+    } catch (error: any) {
+      //console.error('Error loading schedule items:', error);
+      // Don't show error for network/CORS issues
+      if (!error.message?.includes('Failed to fetch') && !error.message?.includes('CORS')) {
+        setDataErrors(prev => ({ ...prev, scheduleItems: 'Failed to load schedule items' }));
+      }
     } finally {
-      setDataLoading(prev => ({ ...prev, scheduleItems: false }));
+      loadingLocksRef.current.delete('scheduleItems');
+      setDataLoading('scheduleItems', false);
     }
-  }, [dataLoading.scheduleItems, dataPagination.scheduleItems]);
-
-  // Optimized quizzes loading
+  }, [dataPagination.scheduleItems, setDataLoading]);
+  // Optimized quizzes loading with retry logic
   const loadQuizzesPage = useCallback(async (userId: string, isInitial = false) => {
-    if (dataLoading.quizzes) return;
+    if (loadingLocksRef.current.has('quizzes')) return;
     if (!isInitial && !dataPagination.quizzes.hasMore) return;
 
-    setDataLoading(prev => ({ ...prev, quizzes: true }));
+    loadingLocksRef.current.add('quizzes');
+    setDataLoading('quizzes', true);
+
+    let freshDataApplied = false;
 
     try {
+    // Optimistically load from offline storage for initial load
+    if (isInitial) {
+      if (!navigator.onLine) {
+        try {
+          const offlineQuizzes = await offlineStorage.getAll<Quiz>(STORES.QUIZZES);
+          if (offlineQuizzes && offlineQuizzes.length > 0) {
+            setQuizzes(offlineQuizzes);
+            offlineQuizzes.forEach(quiz => loadedIdsRef.current.quizzes.add(quiz.id));
+            setDataLoaded(prev => new Set([...prev, 'quizzes']));
+            return; // finally block will clean up
+          }
+        } catch (err) {
+          //console.warn('Failed to load offline quizzes:', err);
+        }
+      } else {
+        offlineStorage.getAll<Quiz>(STORES.QUIZZES).then(offlineQuizzes => {
+          if (!freshDataApplied && offlineQuizzes && offlineQuizzes.length > 0) {
+            setQuizzes(offlineQuizzes);
+          }
+        }).catch(() => {});
+      }
+    }
+  }, [currentUser, lastUserId]);
+
       const limit = isInitial ? INITIAL_LOAD_LIMITS.quizzes : LOAD_MORE_LIMITS.quizzes;
       const offset = isInitial ? 0 : dataPagination.quizzes.offset;
 
-      const { data, error, count } = await supabase
-        .from('quizzes')
-        .select('*', { count: 'exact' })
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
+      const startTime = Date.now();
 
-      if (error) throw error;
+      const { data, error } = await withRetry<Quiz[]>(
+        () => withTimeout<Quiz[]>(
+          supabase
+            .from('quizzes')
+            .select('*', { count: 'exact' })
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .range(offset, offset + limit - 1),
+          API_TIMEOUT,
+          'Failed to load quizzes'
+        ),
+        'Failed to load quizzes',
+        'quizzes',
+        isInitial ? MAX_RETRIES : 1
+      );
+
+      const responseTime = Date.now() - startTime;
+      recordResponseTime(responseTime);
+
+      if (error) {
+        if (!navigator.onLine || error.message?.includes('network') || error.message?.includes('QUIC') || error.message?.includes('timeout')) {
+          // Try to load from IndexedDB
+          const offlineQuizzes = await offlineStorage.getAll<Quiz>(STORES.QUIZZES);
+          if (offlineQuizzes && offlineQuizzes.length > 0) {
+            setQuizzes(offlineQuizzes);
+            setDataLoaded(prev => new Set([...prev, 'quizzes']));
+          }
+          return;
+        }
+        throw error;
+      }
 
       if (data) {
-        const formattedQuizzes = data.map(quiz => ({
-          id: quiz.id,
-          title: quiz.title || 'Untitled Quiz',
-          questions: (Array.isArray(quiz.questions) ? quiz.questions.map((q: any) => ({
-            id: q.id,
-            question: q.question || '',
-            options: q.options || [],
-            correctAnswer: q.correctAnswer || 0,
-            explanation: q.explanation || ''
-          })) : []) as QuizQuestion[],
-          classId: quiz.class_id,
-          userId: quiz.user_id,
-          createdAt: quiz.created_at
-        }));
+        freshDataApplied = true;
+
+        // Filter out duplicates before formatting
+        const newQuizzesData = data.filter(quiz =>
+          !loadedIdsRef.current.quizzes.has(quiz.id)
+        );
+
+        const formattedQuizzes: Quiz[] = newQuizzesData.map(quiz => {
+          // Robust parsing for questions which might be a string or an array
+          let parsedQuestions: any[] = [];
+          try {
+            if (Array.isArray(quiz.questions)) {
+              parsedQuestions = quiz.questions;
+            } else if (typeof quiz.questions === 'string') {
+              parsedQuestions = JSON.parse(quiz.questions);
+            }
+          } catch (e) {
+            // console.error('Error parsing quiz questions:', e);
+            parsedQuestions = [];
+          }
+
+          return {
+            id: quiz.id,
+            title: quiz.title || 'Untitled Quiz',
+            questions: (Array.isArray(parsedQuestions) ? parsedQuestions.map((q: any) => ({
+              id: q.id || Math.random().toString(36).substr(2, 9),
+              question: q.question || '',
+              options: q.options || [],
+              correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 0,
+              explanation: q.explanation || ''
+            })) : []) as QuizQuestion[],
+            classId: quiz.class_id,
+            class_id: quiz.class_id,
+            userId: quiz.user_id,
+            user_id: quiz.user_id,
+            created_at: quiz.created_at,
+            source_type: (quiz.source_type || (quiz.title?.toLowerCase().includes('ai smart') ? 'ai' : (quiz.title?.toLowerCase().includes('notes') ? 'notes' : 'recording'))) as any
+          };
+        });
+
+        // Add new IDs to loaded set
+        formattedQuizzes.forEach(quiz => loadedIdsRef.current.quizzes.add(quiz.id));
+
+        // Save to IndexedDB for offline access
+        offlineStorage.save(STORES.QUIZZES, formattedQuizzes);
 
         if (isInitial) {
           setQuizzes(formattedQuizzes);
@@ -612,559 +1172,693 @@ export const useAppData = () => {
           setQuizzes(prev => [...prev, ...formattedQuizzes]);
         }
 
-        const newOffset = offset + formattedQuizzes.length;
-        const hasMore = count ? newOffset < count : formattedQuizzes.length === limit;
+        const newOffset = offset + data.length;
+        const hasMore = data.length === limit;
 
         setDataPagination(prev => ({
           ...prev,
-          quizzes: { hasMore, offset: newOffset, total: count || 0 }
+          quizzes: {
+            hasMore,
+            offset: newOffset,
+            total: prev.quizzes.total + formattedQuizzes.length
+          }
         }));
       }
 
       setDataLoaded(prev => new Set([...prev, 'quizzes']));
-    } catch (error) {
-      console.error('Error loading quizzes:', error);
-      // Don't show error for background loading
+    } catch (error: any) {
+      //console.error('Error loading quizzes:', error);
+      if (isInitial && !error.message?.includes('network')) {
+        setDataErrors(prev => ({ ...prev, quizzes: 'Failed to load quizzes' }));
+      }
     } finally {
-      setDataLoading(prev => ({ ...prev, quizzes: false }));
+      loadingLocksRef.current.delete('quizzes');
+      setDataLoading('quizzes', false);
     }
-  }, [dataLoading.quizzes, dataPagination.quizzes]);
+  }, [dataPagination.quizzes, setDataLoading, recordResponseTime]);
 
-  // Batch loading for better performance
-  const queueDataLoad = useCallback((dataType: keyof DataLoadingState) => {
-    loadingQueueRef.current.add(dataType);
+  // Optimized folder loading with retry logic
+  const loadFolders = useCallback(async (userId: string, isInitial = false, force = false) => {
+    if (loadingLocksRef.current.has('folders') && !force) return;
 
-    // Clear existing timeout
-    if (loadingTimeoutRef.current) {
-      clearTimeout(loadingTimeoutRef.current);
-    }
+    loadingLocksRef.current.add('folders');
+    setDataLoading('folders', true);
 
-    // Batch process after short delay
-    loadingTimeoutRef.current = setTimeout(() => {
-      const toLoad = Array.from(loadingQueueRef.current);
-      loadingQueueRef.current.clear();
+    let freshDataApplied = false;
 
-      // Process in priority order
-      const sorted = toLoad.sort((a, b) =>
-        LOADING_PRIORITIES[a] - LOADING_PRIORITIES[b]
-      );
-
-      sorted.forEach((dataType, index) => {
-        // Stagger loads to prevent overwhelming
-        setTimeout(() => {
-          loadDataIfNeeded(dataType);
-        }, index * 50);
-      });
-    }, 100);
-  }, []);
-
-  // Enhanced lazy loading
-  const loadDataIfNeeded = useCallback((dataType: keyof DataLoadingState) => {
-    if (!currentUser?.id || dataLoaded.has(dataType) || dataLoading[dataType]) return;
-
-    switch (dataType) {
-      case 'recordings':
-        loadRecordingsPage(currentUser.id, true);
-        break;
-      case 'scheduleItems':
-        loadSchedulePage(currentUser.id, true);
-        break;
-      case 'documents':
-        loadDocumentsPage(currentUser.id, true);
-        break;
-      case 'quizzes':
-        loadQuizzesPage(currentUser.id, true);
-        break;
-      case 'notes':
-        loadNotesPage(currentUser.id, true);
-        break;
-      case 'profile':
-        if (!dataLoading.profile) {
-          loadUserProfile(currentUser);
-        }
-        break;
-    }
-  }, [currentUser, dataLoaded, dataLoading, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadNotesPage, loadUserProfile]);
-
-  // Load more functions for pagination
-  const loadMoreNotes = useCallback(() => {
-    if (currentUser?.id) {
-      loadNotesPage(currentUser.id, false);
-    }
-  }, [currentUser, loadNotesPage]);
-
-  const loadMoreRecordings = useCallback(() => {
-    if (currentUser?.id) {
-      loadRecordingsPage(currentUser.id, false);
-    }
-  }, [currentUser, loadRecordingsPage]);
-
-  const loadMoreDocuments = useCallback(() => {
-    if (currentUser?.id) {
-      loadDocumentsPage(currentUser.id, false);
-    }
-  }, [currentUser, loadDocumentsPage]);
-
-  const loadMoreSchedule = useCallback(() => {
-    if (currentUser?.id) {
-      loadSchedulePage(currentUser.id, false);
-    }
-  }, [currentUser, loadSchedulePage]);
-
-  const loadMoreQuizzes = useCallback(() => {
-    if (currentUser?.id) {
-      loadQuizzesPage(currentUser.id, false);
-    }
-  }, [currentUser, loadQuizzesPage]);
-
-  // Smart tab-based loading with batching
-  useEffect(() => {
-    if (loadingPhase.phase === 'complete') return;
-
-    switch (activeTab) {
-      case 'recordings':
-        queueDataLoad('recordings');
-        queueDataLoad('quizzes');
-        break;
-      case 'schedule':
-        queueDataLoad('scheduleItems');
-        break;
-      case 'documents':
-        queueDataLoad('documents');
-        break;
-      case 'settings':
-        queueDataLoad('quizzes');
-        break;
-      case 'chat':
-        // Chat needs documents for context
-        queueDataLoad('documents');
-        break;
-      default:
-        // Notes tab - data already loaded in core phase
-        break;
-    }
-  }, [activeTab, loadingPhase.phase, queueDataLoad]);
-
-  // Enhanced real-time listeners setup
-  const setupRealTimeListeners = useCallback(async (user: any) => {
-    // Clean up existing listeners
-    [documentChannelRef, chatMessageChannelRef, notesChannelRef,
-      recordingsChannelRef, scheduleChannelRef, profileChannelRef,
-      quizzesChannelRef].forEach(channelRef => {
-        if (channelRef.current) {
-          supabase.removeChannel(channelRef.current);
-          channelRef.current = null;
-        }
-      });
-
-    if (!user?.id) return;
-
-    // Set up all listeners in parallel for better performance
-    await Promise.all([
-      setupDocumentListener(user),
-      setupChatMessageListener(user),
-      setupNotesListener(user),
-      setupRecordingsListener(user),
-      setupScheduleListener(user),
-      setupProfileListener(user),
-      setupQuizzesListener(user)
-    ]);
-  }, []);
-
-  // Optimized real-time listeners with better error handling
-  const setupDocumentListener = useCallback(async (user: any) => {
     try {
-      const channel = supabase
-        .channel(`documents_${user.id}`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'documents', filter: `user_id=eq.${user.id}` },
-          (payload) => {
-            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-              const newDoc = payload.new as any;
-              const formattedDoc: Document = {
-                id: newDoc.id,
-                title: newDoc.title,
-                user_id: newDoc.user_id,
-                file_name: newDoc.file_name,
-                file_type: newDoc.file_type,
-                file_url: newDoc.file_url,
-                content_extracted: newDoc.content_extracted || null,
-                file_size: newDoc.file_size || 0,
-                type: newDoc.type as Document['type'],
-                processing_status: String(newDoc.processing_status) || null,
-                processing_error: String(newDoc.processing_error) || null,
-                created_at: new Date(newDoc.created_at).toISOString(),
-                updated_at: new Date(newDoc.updated_at).toISOString(),
-              };
+      const cacheKey = `folders_${userId}`;
+      const cached = getCachedData(cacheKey);
+      // Skip cache if forced
+      if (!force && cached && isInitial) {
+        // Filter out duplicates
+        const uniqueFolders = cached.folders.filter((folder: DocumentFolder) =>
+          !loadedIdsRef.current.folders.has(folder.id)
+        );
+        setFolders(uniqueFolders);
 
-              setDocuments(prevDocs => {
-                const existingIndex = prevDocs.findIndex(doc => doc.id === formattedDoc.id);
-                if (existingIndex > -1) {
-                  const updatedDocs = [...prevDocs];
-                  updatedDocs[existingIndex] = formattedDoc;
-                  return updatedDocs;
-                } else {
-                  return [formattedDoc, ...prevDocs];
-                }
-              });
+        // Add to loaded IDs
+        uniqueFolders.forEach((folder: DocumentFolder) => loadedIdsRef.current.folders.add(folder.id));
 
-              if (formattedDoc.processing_status === 'completed') {
-                toast.success(`Document "${formattedDoc.title}" processed successfully!`);
-              } else if (formattedDoc.processing_status === 'failed') {
-                toast.error(`Document "${formattedDoc.title}" processing failed: ${formattedDoc.processing_error}`);
-              }
-            } else if (payload.eventType === 'DELETE') {
-              const deletedId = payload.old.id;
-              setDocuments(prevDocs => prevDocs.filter(doc => doc.id !== deletedId));
-            }
-          }
-        )
-        .subscribe();
-
-      documentChannelRef.current = channel;
-    } catch (error) {
-      console.error('Error setting up document listener:', error);
-    }
-  }, []);
-
-  const setupChatMessageListener = async (user: any) => {
-    try {
-      const channel = supabase
-        .channel(`chat_messages_${user.id}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'chat_messages',
-            filter: `user_id=eq.${user.id}`
-          },
-          (payload) => {
-            const formatMessage = (msg: any): Partial<Message> => ({
-              id: msg.id,
-              content: msg.content,
-              role: msg.role as 'user' | 'assistant',
-              timestamp: msg.timestamp,
-              isError: msg.is_error,
-              attachedDocumentIds: msg.attached_document_ids,
-              attachedNoteIds: msg.attached_note_ids,
-              image_url: msg.image_url,
-              image_mime_type: msg.image_mime_type,
-              session_id: msg.session_id,
-              has_been_displayed: msg.has_been_displayed
-            });
-
-            if (payload.eventType === 'INSERT') {
-              const newMessage = formatMessage(payload.new) as Message;
-              console.log('[useAppData] New message received via realtime:', newMessage);
-
-              setChatMessages(prevMessages => {
-                const exists = prevMessages.some(msg => msg.id === newMessage.id);
-                if (exists) {
-                  console.log('[useAppData] Message already exists, updating if needed');
-                  return prevMessages.map(msg =>
-                    msg.id === newMessage.id
-                      ? { ...msg, ...newMessage }
-                      : msg
-                  );
-                }
-
-                console.log('[useAppData] Adding new message to state');
-                const updatedMessages = [...prevMessages, newMessage];
-                updatedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-                return updatedMessages;
-              });
-
-              // Note: replaceOptimisticMessage should be passed from parent component if needed
-            } else if (payload.eventType === 'UPDATE') {
-              const updated = payload.new as any;
-              setChatMessages(prev => {
-                return prev.map(m => {
-                  if (m.id !== updated.id) return m;
-                  console.log('[useAppData] Message updated via realtime:', updated);
-                  // Preserve existing content if incoming payload has null/undefined content
-                  const preservedContent = (updated.content === null || typeof updated.content === 'undefined') ? m.content : updated.content;
-                  return {
-                    ...m,
-                    ...updated,
-                    content: preservedContent,
-                  };
-                });
-              });
-            } else if (payload.eventType === 'DELETE') {
-              setChatMessages(prevMessages =>
-                prevMessages.filter(msg => msg.id !== payload.old.id)
-              );
-            }
-          }
-        )
-        .subscribe();
-
-      chatMessageChannelRef.current = channel;
-    } catch (error) {
-      console.error('Error setting up chat message listener:', error);
-    }
-  }
-
-
-  const setupNotesListener = useCallback(async (user: any) => {
-    try {
-      const channel = supabase
-        .channel(`notes_${user.id}`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'notes', filter: `user_id=eq.${user.id}` },
-          (payload) => {
-            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-              const newNote = payload.new as any;
-              const formattedNote: Note = {
-                id: newNote.id,
-                title: newNote.title,
-                content: newNote.content || '',
-                document_id: newNote.document_id || null,
-                user_id: newNote.user_id,
-                category: newNote.category || 'general',
-                tags: newNote.tags || [],
-                createdAt: new Date(newNote.created_at || Date.now()),
-                updatedAt: new Date(newNote.updated_at || Date.now()),
-                aiSummary: newNote.ai_summary || ''
-              };
-
-              setNotes(prevNotes => {
-                const existingIndex = prevNotes.findIndex(note => note.id === formattedNote.id);
-                if (existingIndex > -1) {
-                  const updatedNotes = [...prevNotes];
-                  updatedNotes[existingIndex] = formattedNote;
-                  return updatedNotes;
-                } else {
-                  return [formattedNote, ...prevNotes];
-                }
-              });
-            } else if (payload.eventType === 'DELETE') {
-              const deletedId = payload.old.id;
-              setNotes(prevNotes => prevNotes.filter(note => note.id !== deletedId));
-            }
-          }
-        )
-        .subscribe();
-
-      notesChannelRef.current = channel;
-    } catch (error) {
-      console.error('Error setting up notes listener:', error);
-    }
-  }, []);
-
-  const setupRecordingsListener = useCallback(async (user: any) => {
-    try {
-      const channel = supabase
-        .channel(`recordings_${user.id}`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'class_recordings', filter: `user_id=eq.${user.id}` },
-          (payload) => {
-            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-              const newRecording = payload.new as any;
-              const formattedRecording: ClassRecording = {
-                id: newRecording.id,
-                title: newRecording.title,
-                subject: newRecording.subject,
-                date: newRecording.date || new Date().toISOString(),
-                duration: newRecording.duration || 0,
-                audioUrl: newRecording.audio_url || '',
-                transcript: newRecording.transcript || '',
-                summary: newRecording.summary || '',
-                createdAt: newRecording.created_at || new Date().toISOString(),
-                userId: newRecording.user_id,
-                document_id: newRecording.document_id
-              };
-
-              setRecordings(prevRecordings => {
-                const existingIndex = prevRecordings.findIndex(rec => rec.id === formattedRecording.id);
-                if (existingIndex > -1) {
-                  const updatedRecordings = [...prevRecordings];
-                  updatedRecordings[existingIndex] = formattedRecording;
-                  return updatedRecordings;
-                } else {
-                  return [formattedRecording, ...prevRecordings];
-                }
-              });
-            } else if (payload.eventType === 'DELETE') {
-              const deletedId = payload.old.id;
-              setRecordings(prevRecordings => prevRecordings.filter(rec => rec.id !== deletedId));
-            }
-          }
-        )
-        .subscribe();
-
-      recordingsChannelRef.current = channel;
-    } catch (error) {
-      console.error('Error setting up recordings listener:', error);
-    }
-  }, []);
-
-  const setupScheduleListener = useCallback(async (user: any) => {
-    try {
-      const channel = supabase
-        .channel(`schedule_${user.id}`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'schedule_items', filter: `user_id=eq.${user.id}` },
-          (payload) => {
-            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-              const newItem = payload.new as any;
-              const formattedItem: ScheduleItem = {
-                id: newItem.id,
-                title: newItem.title,
-                subject: newItem.subject,
-                startTime: newItem.start_time,
-                endTime: newItem.end_time,
-                type: newItem.type as 'class' | 'study' | 'assignment' | 'exam' | 'other',
-                description: newItem.description || '',
-                location: newItem.location || '',
-                color: newItem.color || '#3B82F6',
-                userId: newItem.user_id,
-                createdAt: newItem.created_at || new Date().toISOString()
-              };
-
-              setScheduleItems(prevItems => {
-                const existingIndex = prevItems.findIndex(item => item.id === formattedItem.id);
-                if (existingIndex > -1) {
-                  const updatedItems = [...prevItems];
-                  updatedItems[existingIndex] = formattedItem;
-                  return updatedItems;
-                } else {
-                  return [formattedItem, ...prevItems];
-                }
-              });
-            } else if (payload.eventType === 'DELETE') {
-              const deletedId = payload.old.id;
-              setScheduleItems(prevItems => prevItems.filter(item => item.id !== deletedId));
-            }
-          }
-        )
-        .subscribe();
-
-      scheduleChannelRef.current = channel;
-    } catch (error) {
-      console.error('Error setting up schedule listener:', error);
-    }
-  }, []);
-
-  const setupProfileListener = useCallback(async (user: any) => {
-    try {
-      const channel = supabase
-        .channel(`profile_${user.id}`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
-          (payload) => {
-            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-              const newProfile = payload.new as any;
-              setUserProfile({
-                id: newProfile.id,
-                email: newProfile.email || user.email || '',
-                full_name: newProfile.full_name || '',
-                avatar_url: newProfile.avatar_url || '',
-                learning_style: (newProfile.learning_style || 'visual') as 'visual' | 'auditory' | 'kinesthetic' | 'reading',
-                learning_preferences: (newProfile.learning_preferences as any) || {
-                  explanation_style: 'detailed',
-                  examples: true,
-                  difficulty: 'intermediate'
-                },
-                created_at: new Date(newProfile.created_at || Date.now()),
-                updated_at: new Date(newProfile.updated_at || Date.now())
-              });
-            }
-          }
-        )
-        .subscribe();
-
-      profileChannelRef.current = channel;
-    } catch (error) {
-      console.error('Error setting up profile listener:', error);
-    }
-  }, []);
-
-  const setupQuizzesListener = useCallback(async (user: any) => {
-    try {
-      const channel = supabase
-        .channel(`quizzes_${user.id}`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'quizzes', filter: `user_id=eq.${user.id}` },
-          (payload) => {
-            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-              const newQuiz = payload.new as any;
-              const formattedQuiz: Quiz = {
-                id: newQuiz.id,
-                title: newQuiz.title,
-                questions: (Array.isArray(newQuiz.questions) ? newQuiz.questions.map((q: any) => ({
-                  id: q.id,
-                  question: q.question,
-                  options: q.options,
-                  correctAnswer: q.correctAnswer,
-                  explanation: q.explanation
-                })) : []) as QuizQuestion[],
-                classId: newQuiz.class_id,
-                userId: newQuiz.user_id,
-                createdAt: newQuiz.created_at
-              };
-
-              setQuizzes(prevQuizzes => {
-                const existingIndex = prevQuizzes.findIndex(quiz => quiz.id === formattedQuiz.id);
-                if (existingIndex > -1) {
-                  const updatedQuizzes = [...prevQuizzes];
-                  updatedQuizzes[existingIndex] = formattedQuiz;
-                  return updatedQuizzes;
-                } else {
-                  return [formattedQuiz, ...prevQuizzes];
-                }
-              });
-            } else if (payload.eventType === 'DELETE') {
-              const deletedId = payload.old.id;
-              setQuizzes(prevQuizzes => prevQuizzes.filter(quiz => quiz.id !== deletedId));
-            }
-          }
-        )
-        .subscribe();
-
-      quizzesChannelRef.current = channel;
-    } catch (error) {
-      console.error('Error setting up quizzes listener:', error);
-    }
-  }, []);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      // Clear timeouts
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current);
+        setFolderTree(cached.tree);
+        setDataLoaded(prev => new Set([...prev, 'folders']));
+        return; // finally block will clean up
       }
 
-      // Clear channels
-      [documentChannelRef, chatMessageChannelRef, notesChannelRef,
-        recordingsChannelRef, scheduleChannelRef, profileChannelRef,
-        quizzesChannelRef].forEach(channelRef => {
-          if (channelRef.current) {
-            supabase.removeChannel(channelRef.current);
-            channelRef.current = null;
+      // If forced, clear loaded IDs to allow full refresh
+      if (force) {
+        loadedIdsRef.current.folders.clear();
+      }
+
+      // Optimistically load from offline storage for initial load
+      if (isInitial && !cached && !force) {
+        if (!navigator.onLine) {
+          try {
+            const offlineFolders = await offlineStorage.getAll<DocumentFolder>(STORES.FOLDERS);
+            if (offlineFolders && offlineFolders.length > 0) {
+              setFolders(offlineFolders);
+              offlineFolders.forEach(folder => loadedIdsRef.current.folders.add(folder.id));
+
+              // Try to build tree if function is available
+              try {
+                if (typeof buildFolderTree === 'function') {
+                  setFolderTree(buildFolderTree(offlineFolders));
+                }
+              } catch (e) {
+                // console.warn('Could not build folder tree offline:', e);
+              }
+
+              setDataLoaded(prev => new Set([...prev, 'folders']));
+              return; // finally block will clean up
+            }
+          } catch (err) {
+            // console.warn('Failed to load offline folders:', err);
           }
-        });
-    };
-  }, []);
+        } else {
+          offlineStorage.getAll<DocumentFolder>(STORES.FOLDERS).then(offlineFolders => {
+            if (!freshDataApplied && offlineFolders && offlineFolders.length > 0) {
+              setFolders(offlineFolders);
+            }
+          }).catch(() => {});
+        }
+      }
 
-  // Computed values
-  const filteredNotes = notes.filter(note => {
-    const matchesSearch = note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      note.content.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || note.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+      const startTime = Date.now();
 
-  // Enhanced loading state - show progress and what's loading
-  const enhancedLoading = loading || loadingPhase.phase !== 'complete';
+      const { data, error } = await withRetry<DocumentFolder[]>(
+        () => withTimeout<DocumentFolder[]>(
+          supabase
+            .from('document_folders')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false }),
+          API_TIMEOUT,
+          'Failed to load folders'
+        ),
+        'Failed to load folders',
+        'folders',
+        isInitial ? MAX_RETRIES : 1
+      );
+
+      const responseTime = Date.now() - startTime;
+      recordResponseTime(responseTime);
+
+      if (error) {
+        if (!navigator.onLine || error.message?.includes('network') || error.message?.includes('QUIC') || error.message?.includes('timeout')) {
+          // Try to load from IndexedDB
+          const offlineFolders = await offlineStorage.getAll<DocumentFolder>(STORES.FOLDERS);
+          if (offlineFolders && offlineFolders.length > 0) {
+            setFolders(offlineFolders);
+            setFolderTree(buildFolderTree(offlineFolders));
+            setDataLoaded(prev => new Set([...prev, 'folders']));
+          }
+          return;
+        }
+        throw error;
+      }
+
+      if (data) {
+        freshDataApplied = true;
+
+        // Filter out duplicates ONLY if not forced (or clear loadedIds above effectively disables filter)
+        const newFoldersData = data.filter(folder =>
+          !loadedIdsRef.current.folders.has(folder.id)
+        );
+
+        const formattedFolders: DocumentFolder[] = newFoldersData.map(folder => ({
+          id: folder.id,
+          user_id: folder.user_id,
+          name: folder.name,
+          parent_folder_id: folder.parent_folder_id,
+          color: folder.color || '#3B82F6',
+          description: folder.description,
+          created_at: folder.created_at,
+          updated_at: folder.updated_at,
+          isExpanded: false,
+        }));
+
+        // Add new IDs to loaded set
+        formattedFolders.forEach(folder => loadedIdsRef.current.folders.add(folder.id));
+
+        // Save to IndexedDB for offline access
+        offlineStorage.save(STORES.FOLDERS, formattedFolders);
+
+        const tree = buildFolderTree(formattedFolders);
+
+        setFolders(formattedFolders);
+        setFolderTree(tree);
+
+        // Cache the result
+        const cacheKeyForSave = `folders_${userId}`;
+        setCachedData(cacheKeyForSave, { folders: formattedFolders, tree });
+      }
+
+      setDataLoaded(prev => new Set([...prev, 'folders']));
+    } catch (error: any) {
+      //console.error('Error loading folders:', error);
+      if (isInitial && !error.message?.includes('network')) {
+        setDataErrors(prev => ({ ...prev, folders: 'Failed to load folders' }));
+      }
+    } finally {
+      loadingLocksRef.current.delete('folders');
+      setDataLoading('folders', false);
+    }
+  }, [getCachedData, setCachedData, setDataLoading, recordResponseTime]);
+
+  // Enhanced user profile loading with retry logic
+  const loadUserProfile = useCallback(async (user: any) => {
+    //console.log('🔄 loadUserProfile called for user:', user?.id);
+
+    if (dataLoaded.has('profile')) {
+      return;
+    }
+
+    loadingLocksRef.current.add('profile');
+
+    try {
+    const cacheKey = `profile_${user.id}`;
+    const cached = getCachedData(cacheKey);
+    if (cached) {
+      setUserProfile(cached);
+      setDataLoaded(prev => new Set([...prev, 'profile']));
+      return; // finally block will clean up
+    }
+
+    // Offline check for profile
+    if (!navigator.onLine) {
+      try {
+        const offlineProfiles = await offlineStorage.getAll<UserProfile>(STORES.PROFILE);
+        if (offlineProfiles && offlineProfiles.length > 0) {
+          const myProfile = offlineProfiles.find(p => p.id === user.id) || offlineProfiles[0];
+          if (myProfile) {
+            setUserProfile(myProfile);
+            setDataLoaded(prev => new Set([...prev, 'profile']));
+            return; // finally block will clean up
+          }
+        }
+      } catch (e) {
+        //console.warn('Failed to load offline profile:', e);
+      }
+    }
+
+    setDataLoading('profile', true);
+
+    try {
+      const startTime = Date.now();
+
+      const { data: profileData, error: profileError, retriesUsed } = await withRetry<any>(
+        () => withTimeout<UserProfile>(
+          supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .maybeSingle(),
+          API_TIMEOUT,
+          'Failed to load user profile'
+        ),
+        'Failed to load user profile',
+        'profile',
+        1 // Only 1 retry for profile
+      );
+
+      const responseTime = Date.now() - startTime;
+      recordResponseTime(responseTime);
+
+      if (profileError && profileError.code !== 'PGRST116') {
+        if (!navigator.onLine || profileError.message?.includes('network') || profileError.message?.includes('timeout')) {
+          // Try to load from IndexedDB
+          const offlineProfiles = await offlineStorage.getAll<UserProfile>(STORES.PROFILE);
+          const myProfile = offlineProfiles.find(p => p.id === user.id);
+          if (myProfile) {
+            setUserProfile(myProfile);
+            setDataLoaded(prev => new Set([...prev, 'profile']));
+            return;
+          }
+        }
+        //console.error('Error loading user profile:', profileError);
+      }
+
+      let finalProfile: UserProfile;
+
+      if (profileData) {
+        finalProfile = {
+          id: profileData.id,
+          email: profileData.email || user.email || '',
+          full_name: profileData.full_name || '',
+          avatar_url: profileData.avatar_url || '',
+          learning_style: (profileData.learning_style || 'visual') as 'visual' | 'auditory' | 'kinesthetic' | 'reading',
+          learning_preferences: (profileData.learning_preferences as any) || {
+            explanation_style: 'detailed',
+            examples: true,
+            difficulty: 'intermediate'
+          },
+          bonus_ai_credits: profileData.bonus_ai_credits,
+          is_public: profileData.is_public,
+          points_balance: profileData.points_balance,
+          quiz_preferences: profileData.quiz_preferences,
+          referral_code: profileData.referral_code,
+          referral_count: profileData.referral_count,
+          school: profileData.school,
+          username: profileData.username,
+          personal_context: profileData.personal_context || '',
+          institution_id: profileData.institution_id || null,
+          onboarding_completed: profileData.onboarding_completed ?? false,
+          user_role: profileData.user_role ?? null,
+          role_verified_at: profileData.role_verified_at ?? null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+      } else {
+        // Create default profile
+        finalProfile = {
+          id: user.id,
+          email: user.email || '',
+          full_name: '',
+          avatar_url: '',
+          learning_style: 'visual' as const,
+          learning_preferences: {
+            explanation_style: 'detailed' as const,
+            examples: true,
+            difficulty: 'intermediate' as const
+          },
+          bonus_ai_credits: 0,
+          is_public: false,
+          points_balance: 0,
+          quiz_preferences: null,
+          referral_code: null,
+          referral_count: 0,
+          school: null,
+          username: null,
+          personal_context: null,
+          institution_id: null,
+          onboarding_completed: false,
+          user_role: 'student',
+          role_verified_at: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        // Create in background without blocking
+        setTimeout(async () => {
+          try {
+            const profileInsertPayload = {
+              id: user.id,
+              email: user.email || '',
+              full_name: '',
+              avatar_url: '',
+              learning_style: 'visual',
+              learning_preferences: {
+                explanation_style: 'detailed',
+                examples: true,
+                difficulty: 'intermediate'
+              },
+              bonus_ai_credits: 0,
+              is_public: false,
+              points_balance: 0,
+              onboarding_completed: false,
+              user_role: 'student'
+            };
+
+            await withTimeout(
+              supabase.from('profiles').upsert(profileInsertPayload, { onConflict: 'id' }),
+              API_TIMEOUT,
+              'Failed to create profile'
+            );
+
+            // Create default notification preferences for new user
+            const { createDefaultNotificationPreferences } = await import('@/services/notificationPreferencesService');
+            await createDefaultNotificationPreferences(user.id);
+          } catch (error) {
+            //console.error('Error creating default profile:', error);
+          }
+        }, 0);
+      }
+
+      setUserProfile(finalProfile);
+      setCachedData(cacheKey, finalProfile);
+
+      // Save to IndexedDB for offline access
+      offlineStorage.save(STORES.PROFILE, finalProfile);
+
+      // Ensure notification preferences exist for user (handles all signup methods)
+      // Non-blocking: runs in background without delaying app load
+      setTimeout(async () => {
+        try {
+          const { createDefaultNotificationPreferences } = await import('@/services/notificationPreferencesService');
+          await createDefaultNotificationPreferences(user.id);
+        } catch (error) {
+          console.warn('[Profile] Failed to ensure notification preferences:', error);
+          // Don't block profile loading if preferences creation fails
+        }
+      }, 100);
+
+      setDataLoaded(prev => new Set([...prev, 'profile']));
+
+    } catch (error) {
+      //console.error('❌ Error in loadUserProfile:', error);
+      // Fallback profile
+      const fallbackProfile: UserProfile = {
+        id: user.id,
+        email: user.email || '',
+        full_name: '',
+        avatar_url: '',
+        learning_style: 'visual',
+        learning_preferences: {
+          explanation_style: 'detailed',
+          examples: true,
+          difficulty: 'intermediate'
+        },
+        bonus_ai_credits: 0,
+        is_public: false,
+        points_balance: 0,
+        quiz_preferences: null,
+        referral_code: null,
+        referral_count: 0,
+        school: null,
+        username: null,
+        personal_context: null,
+        institution_id: null,
+        onboarding_completed: false,
+        user_role: 'student',
+        role_verified_at: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      setUserProfile(fallbackProfile);
+      setDataLoaded(prev => new Set([...prev, 'profile']));
+    } finally {
+      setDataLoading('profile', false);
+    }
+    } finally {
+      loadingLocksRef.current.delete('profile');
+      setDataLoading('profile', false);
+    }
+  }, [dataLoaded, getCachedData, setCachedData, setDataLoading]);
+
+  // Optimized notes loading with retry logic
+  // Uses ref-based lock (loadingLocksRef) instead of dataLoading state for the
+  // guard to avoid stale-closure issues when called right after clearAllData().
+  const loadNotesPage = useCallback(async (userId: string, isInitial = false) => {
+    if (loadingLocksRef.current.has('notes')) return;
+    if (!isInitial && !dataPagination.notes.hasMore) return;
+
+    loadingLocksRef.current.add('notes');
+    setDataLoading('notes', true);
+    setDataErrors(prev => ({ ...prev, notes: '' }));
+
+    // Flag to prevent fire-and-forget offline preload from overwriting fresh data
+    let freshDataApplied = false;
+
+    try {
+      const cacheKey = `notes_${userId}_${isInitial ? 'initial' : dataPagination.notes.offset}`;
+      const cached = getCachedData(cacheKey);
+      if (cached && isInitial) {
+        // Filter out any duplicates from cache
+        const uniqueCachedNotes = cached.notes.filter((note: Note) =>
+          !loadedIdsRef.current.notes.has(note.id)
+        );
+        setNotes(isInitial ? uniqueCachedNotes : [...uniqueCachedNotes]);
+
+        // Add to loaded IDs
+        uniqueCachedNotes.forEach((note: Note) => loadedIdsRef.current.notes.add(note.id));
+
+        if (cached.activeNote && !activeNote) setActiveNote(cached.activeNote);
+        setDataPagination(prev => ({ ...prev, notes: cached.pagination }));
+        setDataLoaded(prev => new Set([...prev, 'notes']));
+        return; // finally block will clean up lock + loading state
+      }
+
+      // Optimistically load from offline storage for initial load
+      if (isInitial && !cached) {
+        // If offline, prioritize offline data and skip fetch
+        if (!navigator.onLine) {
+          try {
+            const offlineNotes = await offlineStorage.getAll<Note>(STORES.NOTES);
+            if (offlineNotes && offlineNotes.length > 0) {
+              const formattedNotes = offlineNotes.map(n => ({
+                ...n,
+                created_at: n.created_at || new Date().toISOString(),
+                updated_at: n.updated_at || new Date().toISOString()
+              }));
+              setNotes(formattedNotes);
+              formattedNotes.forEach(note => loadedIdsRef.current.notes.add(note.id));
+
+              // Set active note if needed
+              if (!activeNote && formattedNotes.length > 0) {
+                setActiveNote(formattedNotes.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0]);
+              }
+
+              setDataLoaded(prev => new Set([...prev, 'notes']));
+              return; // finally block will clean up
+            }
+          } catch (err) {
+            // console.warn('Failed to load offline notes:', err);
+          }
+        } else {
+          // Fire-and-forget offline preload — guarded by freshDataApplied flag
+          // so it cannot overwrite Supabase data if IndexedDB resolves late.
+          offlineStorage.getAll<Note>(STORES.NOTES).then(offlineNotes => {
+            if (!freshDataApplied && offlineNotes && offlineNotes.length > 0) {
+              setNotes(offlineNotes);
+            }
+          }).catch(() => {});
+        }
+      }
+
+      const controller = new AbortController();
+      abortControllersRef.current.set(`notes_${userId}`, controller);
+
+      const limit = isInitial ? INITIAL_LOAD_LIMITS.notes : LOAD_MORE_LIMITS.notes;
+      const offset = isInitial ? 0 : dataPagination.notes.offset;
+
+      const startTime = Date.now();
+
+      const { data, error } = await withRetry<any[]>(
+        () => withTimeout<any[]>(
+          supabase
+            .from('notes')
+            .select('*', { count: 'exact' })
+            .eq('user_id', userId)
+            .order('updated_at', { ascending: false })
+            .range(offset, offset + limit - 1),
+          API_TIMEOUT,
+          'Failed to load notes'
+        ),
+        'Failed to load notes',
+        'notes',
+        isInitial ? MAX_RETRIES : 1
+      );
+
+      const responseTime = Date.now() - startTime;
+      recordResponseTime(responseTime);
+
+      if (error) {
+        if (!navigator.onLine || error.message?.includes('network') || error.message?.includes('QUIC') || error.message?.includes('timeout')) {
+          // Try to load from IndexedDB
+          const offlineNotes = await offlineStorage.getAll<Note>(STORES.NOTES);
+          if (offlineNotes && offlineNotes.length > 0) {
+            setNotes(offlineNotes);
+            setDataLoaded(prev => new Set([...prev, 'notes']));
+          }
+          return;
+        }
+        throw error;
+      }
+
+      if (data) {
+        // Mark fresh data as applied BEFORE setNotes so the offline
+        // preload .then() (if it hasn't resolved yet) will bail out.
+        freshDataApplied = true;
+
+        // Filter out duplicates before formatting
+        const newNotesData = data.filter(note =>
+          !loadedIdsRef.current.notes.has(note.id)
+        );
+
+        const formattedNotes: Note[] = newNotesData.map(note => ({
+          id: note.id,
+          title: note.title || 'Untitled Note',
+          content: note.content || '',
+          document_id: note.document_id || null,
+          user_id: note.user_id,
+          category: note.category || 'general',
+          tags: note.tags || [],
+          created_at: note.created_at,
+          updated_at: note.updated_at,
+          ai_summary: note.ai_summary || '',
+        }));
+
+        // Add new IDs to loaded set
+        formattedNotes.forEach(note => loadedIdsRef.current.notes.add(note.id));
+
+        // Save to IndexedDB for offline access
+        offlineStorage.save(STORES.NOTES, formattedNotes);
+
+        let newActiveNote = activeNote;
+        if (isInitial && formattedNotes.length > 0 && !activeNote) {
+          newActiveNote = formattedNotes.sort((a, b) =>
+            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+          )[0];
+        }
+
+        if (isInitial) {
+          setNotes(formattedNotes);
+          if (newActiveNote) setActiveNote(newActiveNote);
+        } else {
+          setNotes(prev => [...prev, ...formattedNotes]);
+        }
+
+        const newOffset = isInitial ? formattedNotes.length : offset + formattedNotes.length;
+        const hasMore = data.length === limit;
+
+        const newPagination = {
+          hasMore,
+          offset: newOffset,
+          total: dataPagination.notes.total + formattedNotes.length
+        };
+        setDataPagination(prev => ({ ...prev, notes: newPagination }));
+
+        if (isInitial) {
+          setCachedData(cacheKey, {
+            notes: formattedNotes,
+            activeNote: newActiveNote,
+            pagination: newPagination
+          });
+        }
+      }
+
+      setDataLoaded(prev => new Set([...prev, 'notes']));
+    } catch (error: any) {
+      //console.error('Error loading notes:', error);
+      setDataErrors(prev => ({ ...prev, notes: 'Failed to load notes' }));
+
+      if (isInitial && !error.message?.includes('network')) {
+        showToastOnce('Failed to load notes. Please check your connection.', 'error');
+      }
+    } finally {
+      loadingLocksRef.current.delete('notes');
+      abortControllersRef.current.delete(`notes_${userId}`);
+      setDataLoading('notes', false);
+    }
+  }, [dataPagination, activeNote, getCachedData, setCachedData, setDataLoading, recordResponseTime]);
+
+  // Enhanced progressive loading with connection awareness - UPDATED
+  const startProgressiveDataLoading = useCallback(async (user: any) => {
+    if (!user?.id) return;
+
+    // Verify we have a valid session before firing a burst of parallel queries.
+    // Without this guard, expired-token requests cascade into 401s that trigger
+    // Supabase's internal SIGNED_OUT event, logging the user out unexpectedly.
+    try {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (!currentSession?.access_token) {
+        return;
+      }
+    } catch {
+      return;
+    }
+
+    // Check if we already have active requests to prevent duplicate loading
+    const activeCount = activeRequestsRef.current.size;
+    if (activeCount > 3) {
+      //console.log('Too many active requests, deferring progressive load...');
+      return;
+    }
+
+    setLoading(true);
+    setLoadingPhase({ phase: 'initial', progress: 10 });
+
+    try {
+      // Phase 1: Load profile + core content IN PARALLEL (not sequentially)
+      const profilePromise = loadUserProfile(user);
+      const notesPromise = loadNotesPage(user.id, true);
+      const foldersPromise = loadFolders(user.id, true);
+
+      // Wait for profile + notes + folders all at once
+      await Promise.race([
+        Promise.all([profilePromise, notesPromise, foldersPromise]),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Core data loading timeout')), API_TIMEOUT * 2)
+        )
+      ]);
+
+      setLoadingPhase({ phase: 'secondary', progress: 60 });
+
+      // Phase 3: Load documents (important but not blocking)
+      const documentsPromise = loadDocumentsPage(user.id, true).catch(error => {
+        // Continue even if documents fail
+      });
+
+      // Phase 4: Load non-critical data in background
+      const backgroundPromises = [
+        loadRecordingsPage(user.id, true),
+        // Schedule items might fail due to CORS, so handle separately
+        loadSchedulePage(user.id, true).catch(error => {
+          return null; // Don't throw, just continue
+        }),
+        loadQuizzesPage(user.id, true)
+      ];
+
+      // Don't wait for background promises to complete
+      Promise.allSettled(backgroundPromises).then(() => {
+      }).catch(() => {
+        // Ignore errors in background loading
+      });
+
+      await Promise.race([
+        documentsPromise,
+        new Promise(resolve => setTimeout(resolve, 1000)) // Max 1s wait for documents (reduced from 3s)
+      ]);
+
+      setLoading(false);
+
+      // Set complete phase immediately (removed 1s delay)
+      setLoadingPhase({ phase: 'complete', progress: 100 });
+
+    } catch (error) {
+      //console.error('❌ Error loading core user data:', error);
+
+      // Even if there's an error, try to show the UI with available data
+      const connectionQuality = getConnectionQuality();
+
+      // Only show one toast for initial load failures
+      if (connectionQuality === 'poor') {
+        showToastOnce('Network connection is poor. Some data may not load.', 'info');
+      } else if (!error.message?.includes('timeout') && !error.message?.includes('network')) {
+        showToastOnce('Some data failed to load. You can still use the app.', 'info');
+      }
+
+      setLoading(false);
+      setLoadingPhase({ phase: 'complete', progress: 100 });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser]);// Enhanced loading state computation, only run on user change (others are stable)
+
+  // Only report loading=true when startProgressiveDataLoading has actually begun.
+  // Previously `loadingPhase.phase !== 'complete'` caused loading to be true on
+  // initial mount (phase starts as 'initial') which blocked tab-level data loading
+  // and caused a long perceived delay navigating to the dashboard after auth.
+  const enhancedLoading = loading;
   const loadingProgress = loadingPhase.progress;
   const loadingMessage = {
     'initial': 'Connecting to your account...',
@@ -1173,6 +1867,342 @@ export const useAppData = () => {
     'complete': 'Ready!'
   }[loadingPhase.phase];
 
+  // Utility functions for merging data with duplicate prevention
+  const mergeDocuments = useCallback((prev: Document[], newDocs: Document[]): Document[] => {
+    const uniqueMap = new Map<string, Document>();
+
+    // Add all previous documents
+    prev.forEach(doc => uniqueMap.set(doc.id, doc));
+
+    // Add/overwrite with new documents, but skip if already in loaded IDs
+    newDocs.forEach(doc => {
+      if (!loadedIdsRef.current.documents.has(doc.id)) {
+        uniqueMap.set(doc.id, doc);
+        loadedIdsRef.current.documents.add(doc.id);
+      }
+    });
+
+    return Array.from(uniqueMap.values());
+  }, []);
+
+  const mergeNotes = useCallback((prev: Note[], newNotes: Note[]): Note[] => {
+    const uniqueMap = new Map<string, Note>();
+
+    // Add all previous notes
+    prev.forEach(note => uniqueMap.set(note.id, note));
+
+    // Add/overwrite with new notes, but skip if already in loaded IDs
+    newNotes.forEach(note => {
+      if (!loadedIdsRef.current.notes.has(note.id)) {
+        uniqueMap.set(note.id, note);
+        loadedIdsRef.current.notes.add(note.id);
+      }
+    });
+
+    return Array.from(uniqueMap.values());
+  }, []);
+
+  // Optimized buildFolderTree with memoization
+  const buildFolderTree = useCallback((folders: DocumentFolder[]): FolderTreeNode[] => {
+    const folderMap = new Map<string, FolderTreeNode>();
+    const rootFolders: FolderTreeNode[] = [];
+
+    // First pass: create all nodes
+    folders.forEach(folder => {
+      folderMap.set(folder.id, {
+        ...folder,
+        children: [],
+        documents: [],
+        path: [],
+        level: 0,
+      });
+    });
+
+    // Second pass: build hierarchy
+    folders.forEach(folder => {
+      const node = folderMap.get(folder.id)!;
+
+      if (folder.parent_folder_id) {
+        const parent = folderMap.get(folder.parent_folder_id);
+        if (parent) {
+          parent.children.push(node);
+          node.path = [...parent.path, parent.id];
+          node.level = parent.level + 1;
+        }
+      } else {
+        rootFolders.push(node);
+      }
+    });
+
+    return rootFolders;
+  }, []);
+
+  // Fix specific documents loading with duplicate prevention
+
+  // Add batched loading for specific documents/notes
+  const loadSpecificDocuments = useCallback(async (userId: string, ids: string[]) => {
+    if (!ids.length) return;
+
+    // Check cache first
+    const cacheKey = `specific_docs_${userId}_${ids.sort().join('_')}`;
+    const cached = getCachedData(cacheKey);
+    if (cached) {
+      setDocuments(prev => mergeDocuments(prev, cached));
+      return;
+    }
+
+    // Don't show loading spinner for background loads
+    try {
+      // OPTIMIZATION: Batch load with minimal fields
+      const { data, error } = await withTimeout<any[]>(
+        supabase
+          .from('documents')
+          .select('id, title, file_name, content_extracted, type, processing_status')
+          .eq('user_id', userId)
+          .in('id', ids),
+        5000, // Shorter timeout for background loads
+        'Failed to load specific documents'
+      );
+
+      if (error) throw error;
+
+      const newDocs: Document[] = (data || []).map(doc => ({
+        id: doc.id,
+        title: doc.title,
+        file_name: doc.file_name,
+        file_type: doc.file_type || '',
+        file_size: doc.file_size || 0,
+        file_url: doc.file_url || '',
+        content_extracted: doc.content_extracted || '',
+        user_id: userId,
+        type: doc.type,
+        processing_status: doc.processing_status || 'pending',
+        processing_error: null,
+        created_at: doc.created_at || new Date().toISOString(),
+        updated_at: doc.updated_at || new Date().toISOString(),
+        folder_ids: [],
+        processing_started_at: null,
+        processing_completed_at: null,
+        processing_metadata: null,
+        extraction_model_used: null,
+        total_processing_time_ms: null,
+      }));
+
+      setDocuments(prev => {
+        const merged = mergeDocuments(prev, newDocs);
+        setCachedData(cacheKey, newDocs);
+        return merged;
+      });
+    } catch (error) {
+      //console.warn('Background document load failed:', error);
+      // Silently fail - documents will load eventually
+    }
+  }, [getCachedData, setCachedData, mergeDocuments]);
+
+  // Fix specific notes loading with duplicate prevention
+  const loadSpecificNotes = useCallback(async (userId: string, ids: string[]) => {
+    if (!ids.length) return;
+
+    const cacheKey = `specific_notes_${userId}_${ids.sort().join('_')}`;
+    const cached = getCachedData(cacheKey);
+    if (cached) {
+      setNotes(prev => mergeNotes(prev, cached));
+      return;
+    }
+
+    setDataLoading('notes', true);
+
+    try {
+      const { data, error } = await withTimeout<any[]>(
+        supabase
+          .from('notes')
+          .select('*')
+          .eq('user_id', userId)
+          .in('id', ids)
+          .order('updated_at', { ascending: false }),
+        API_TIMEOUT,
+        'Failed to load specific notes'
+      );
+
+      if (error) throw error;
+
+      const transformedNotes: Note[] = (data || []).map(item => ({
+        id: item.id,
+        document_id: item.document_id,
+        title: item.title,
+        content: item.content,
+        category: item.category,
+        ai_summary: item.ai_summary,
+        tags: item.tags,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+        user_id: item.user_id,
+      }));
+
+      setNotes(prev => {
+        const merged = mergeNotes(prev, transformedNotes);
+        setCachedData(cacheKey, transformedNotes);
+        return merged;
+      });
+    } catch (error) {
+      //console.error('Error loading specific notes:', error);
+    } finally {
+      setDataLoading('notes', false);
+    }
+  }, [getCachedData, setCachedData, setDataLoading, mergeNotes]);
+
+  // Add this function inside useAppData hook
+  const refreshNotes = useCallback(async () => {
+    if (!currentUser?.id) return;
+
+    //console.log('🔄 Manually refreshing notes...');
+
+    // Clear notes and loaded IDs
+    setNotes([]);
+    loadedIdsRef.current.notes.clear();
+
+    // Reset pagination
+    setDataPagination(prev => ({
+      ...prev,
+      notes: { hasMore: true, offset: 0, total: 0 }
+    }));
+
+    // Clear any errors
+    setDataErrors(prev => ({ ...prev, notes: '' }));
+
+    // Reload notes
+    await loadNotesPage(currentUser.id, true);
+
+    toast.success('Notes refreshed!');
+  }, [currentUser, loadNotesPage, setNotes, setDataPagination, setDataErrors]);
+
+  // Add automatic retry for failed loads
+  useEffect(() => {
+    const failedLoads = Object.entries(dataErrors).filter(([_, error]) => error);
+
+    if (failedLoads.length > 0 && currentUser?.id) {
+
+      failedLoads.forEach(([dataType]) => {
+        // Clear the error first
+        setDataErrors(prev => ({ ...prev, [dataType]: '' }));
+
+        // Add to queue for retry
+        const retryMap: Record<string, () => Promise<void>> = {
+          notes: () => loadNotesPage(currentUser.id, true),
+          recordings: () => loadRecordingsPage(currentUser.id, true),
+          scheduleItems: () => loadSchedulePage(currentUser.id, true),
+          documents: () => loadDocumentsPage(currentUser.id, true),
+          quizzes: () => loadQuizzesPage(currentUser.id, true),
+          folders: () => loadFolders(currentUser.id, true),
+        };
+
+        if (retryMap[dataType]) {
+          addToQueue({
+            id: `retry_${dataType}_${currentUser.id}`,
+            priority: 5, // Low priority for retries
+            dataType,
+            execute: retryMap[dataType]
+          });
+        }
+      });
+    }
+  }, [dataErrors, currentUser, loadNotesPage, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadFolders, addToQueue]);
+
+  // Add a connection health check
+  const checkConnectionHealth = useCallback(async () => {
+    try {
+      const startTime = Date.now();
+      const { error } = await withTimeout(
+        supabase.from('profiles').select('id').limit(1),
+        5000,
+        'Connection health check timeout'
+      );
+      const responseTime = Date.now() - startTime;
+
+      recordResponseTime(responseTime);
+
+      if (error) {
+        //console.warn('Connection health check failed:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      //console.warn('Connection health check error:', error);
+      return false;
+    }
+  }, [recordResponseTime]);
+
+  // Enhanced loading state computation
+  const retryAllFailed = useCallback(() => {
+    if (!currentUser?.id) return;
+
+    Object.keys(dataErrors).forEach(dataType => {
+      if (dataErrors[dataType]) {
+        setDataErrors(prev => ({ ...prev, [dataType]: '' }));
+      }
+    });
+
+    // Trigger reload of all data types
+    const reloaders = [
+      { type: 'notes', loader: () => loadNotesPage(currentUser.id, true) },
+      { type: 'documents', loader: () => loadDocumentsPage(currentUser.id, true) },
+      { type: 'recordings', loader: () => loadRecordingsPage(currentUser.id, true) },
+      { type: 'scheduleItems', loader: () => loadSchedulePage(currentUser.id, true) },
+      { type: 'quizzes', loader: () => loadQuizzesPage(currentUser.id, true) },
+      { type: 'folders', loader: () => loadFolders(currentUser.id, true) },
+    ];
+
+    reloaders.forEach(({ type, loader }) => {
+      addToQueue({
+        id: `manual_retry_${type}_${currentUser.id}`,
+        priority: 1, // High priority for manual retry
+        dataType: type,
+        execute: loader
+      });
+    });
+
+    toast.success('Retrying all failed loads...');
+  }, [currentUser, dataErrors, loadNotesPage, loadDocumentsPage, loadRecordingsPage, loadSchedulePage, loadQuizzesPage, loadFolders, addToQueue]);
+
+  // Search notes from database
+  const searchNotesFromDB = useCallback(async (searchQuery: string): Promise<Note[]> => {
+    if (!currentUser?.id || !searchQuery.trim()) return [];
+
+    try {
+      const searchLower = searchQuery.toLowerCase();
+
+      // Query notes table with search on title and content
+      const { data, error } = await supabase
+        .from('notes')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .or(`title.ilike.%${searchLower}%,content.ilike.%${searchLower}%`)
+        .order('updated_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        // console.error('Note search error:', error);
+        return [];
+      }
+
+      // Also filter by tags if needed (since ilike doesn't work on arrays)
+      const results = (data || []).filter((note: any) => {
+        const matchesSearch =
+          note.title?.toLowerCase().includes(searchLower) ||
+          note.content?.toLowerCase().includes(searchLower) ||
+          note.tags?.some((tag: string) => tag.toLowerCase().includes(searchLower));
+        return matchesSearch;
+      });
+
+      return results as Note[];
+    } catch (error) {
+      // console.error('Note search error:', error);
+      return [];
+    }
+  }, [currentUser?.id]);
+
+  // Return optimized hook API
   return {
     // State
     notes,
@@ -1191,6 +2221,8 @@ export const useAppData = () => {
     loading: enhancedLoading,
     quizzes,
     currentUser,
+    folders,
+    folderTree,
 
     // Enhanced loading states
     dataLoading,
@@ -1213,15 +2245,142 @@ export const useAppData = () => {
     setActiveTab,
     setIsAILoading,
     setQuizzes,
+    setFolders,
+    clearAllData,
+    dataErrors,
+    refreshNotes,
+    clearError: useCallback((dataType: string) => {
+      setDataErrors(prev => ({ ...prev, [dataType]: '' }));
+    }, []),
 
-    // Lazy loading functions
-    loadDataIfNeeded,
+    retryLoading: useCallback((dataType: keyof DataLoadingState) => {
+      if (!currentUser?.id) return;
+
+      setDataErrors(prev => ({ ...prev, [dataType]: '' }));
+
+      // Clear loaded IDs for this data type
+      loadedIdsRef.current[dataType].clear();
+
+      // Reset pagination for this data type
+      setDataPagination(prev => ({
+        ...prev,
+        [dataType]: { hasMore: true, offset: 0, total: 0 }
+      }));
+
+      const loaders = {
+        notes: () => {
+          // Clear notes state first
+          setNotes([]);
+          loadNotesPage(currentUser.id, true);
+        },
+        recordings: () => {
+          setRecordings([]);
+          loadRecordingsPage(currentUser.id, true);
+        },
+        scheduleItems: () => {
+          setScheduleItems([]);
+          loadSchedulePage(currentUser.id, true);
+        },
+        documents: () => {
+          setDocuments([]);
+          loadDocumentsPage(currentUser.id, true);
+        },
+        quizzes: () => {
+          setQuizzes([]);
+          loadQuizzesPage(currentUser.id, true);
+        },
+        folders: () => {
+          setFolders([]);
+          loadFolders(currentUser.id, true);
+        },
+      };
+
+      if (loaders[dataType]) {
+        loaders[dataType]();
+      }
+    }, [currentUser, loadNotesPage, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadFolders, setNotes, setRecordings, setScheduleItems, setDocuments, setQuizzes, setFolders]),
+
+
+    // Lazy loading functions — uses ref-based lock for the "currently loading"
+    // check so the guard is never stale regardless of React batching.
+    loadDataIfNeeded: useCallback((dataType: keyof DataLoadingState, force = false) => {
+      if (!currentUser?.id) return Promise.resolve();
+      // If forced, bypass the loaded check. Also bypass loading check if forced? 
+      // Ideally yes, but we should be careful with race conditions.
+      // However loadFolders/loadDocumentsPage handle concurrency internally now if force is passed.
+      if (!force && (dataLoaded.has(dataType) || loadingLocksRef.current.has(dataType))) return Promise.resolve();
+
+      const loaders: Record<string, () => Promise<any> | void> = {
+        recordings: () => loadRecordingsPage(currentUser.id, true),
+        scheduleItems: () => loadSchedulePage(currentUser.id, true),
+        documents: () => loadDocumentsPage(currentUser.id, true, force),
+        quizzes: () => loadQuizzesPage(currentUser.id, true),
+        notes: () => loadNotesPage(currentUser.id, true),
+        profile: () => !loadingLocksRef.current.has('profile') && loadUserProfile(currentUser),
+        folders: () => loadFolders(currentUser.id, true, force),
+      };
+
+      if (loaders[dataType]) {
+        return loaders[dataType]() as Promise<any>;
+      }
+      return Promise.resolve();
+    }, [currentUser, dataLoaded, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadNotesPage, loadUserProfile, loadFolders]),
+
+    // Force refresh function (always fetches, even if already loaded)
+    forceRefreshDocuments: useCallback(async () => {
+      if (!currentUser?.id) return;
+      // console.log('[useAppData] forceRefreshDocuments invoked');
+
+      if (!navigator.onLine) {
+        // while offline just populate from IndexedDB if possible, but do not clear UI
+        try {
+          const offlineDocs = await offlineStorage.getAll<Document>(STORES.DOCUMENTS);
+          if (offlineDocs && offlineDocs.length > 0) {
+            setDocuments(offlineDocs);
+            offlineDocs.forEach(doc => loadedIdsRef.current.documents.add(doc.id));
+            setDataLoaded(prev => new Set([...prev, 'documents']));
+          }
+        } catch (err) {
+          // console.error('[useAppData] failed to load offline docs during forceRefresh', err);
+        }
+        return;
+      }
+
+      setDocuments([]);
+      await loadDocumentsPage(currentUser.id, true, true);
+    }, [currentUser, loadDocumentsPage, setDocuments]),
 
     // Load more functions
-    loadMoreNotes,
-    loadMoreRecordings,
-    loadMoreDocuments,
-    loadMoreSchedule,
-    loadMoreQuizzes,
+    loadMoreNotes: useCallback(() => currentUser?.id && loadNotesPage(currentUser.id, false), [currentUser, loadNotesPage]),
+    loadMoreRecordings: useCallback(() => currentUser?.id && loadRecordingsPage(currentUser.id, false), [currentUser, loadRecordingsPage]),
+    loadMoreDocuments: useCallback(() => currentUser?.id && loadDocumentsPage(currentUser.id, false), [currentUser, loadDocumentsPage]),
+    loadMoreSchedule: useCallback(() => currentUser?.id && loadSchedulePage(currentUser.id, false), [currentUser, loadSchedulePage]),
+    loadMoreQuizzes: useCallback(() => currentUser?.id && loadQuizzesPage(currentUser.id, false), [currentUser, loadQuizzesPage]),
+
+    // Utility functions
+    loadFolders,
+    loadSpecificDocuments,
+    loadSpecificNotes,
+    clearLoadedIds,
+    searchNotesFromDB,
+
+    // Enhanced functions
+    checkConnectionHealth,
+    getConnectionQuality: () => getConnectionQuality(),
+    retryAllFailed,
   };
 };
+
+interface DataPaginationState {
+  notes: { hasMore: boolean; offset: number; total: number };
+  recordings: { hasMore: boolean; offset: number; total: number };
+  scheduleItems: { hasMore: boolean; offset: number; total: number };
+  documents: { hasMore: boolean; offset: number; total: number };
+  quizzes: { hasMore: boolean; offset: number; total: number };
+  folders: { hasMore: boolean; offset: number; total: number };
+}
+
+interface LoadingPhase {
+  phase: 'initial' | 'core' | 'secondary' | 'complete';
+  progress: number;
+}

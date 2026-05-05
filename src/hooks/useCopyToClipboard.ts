@@ -36,7 +36,7 @@ export const useCopyToClipboard = () => {
         setTimeout(() => setCopied(false), 2000);
         toast.success('Code copied to clipboard (fallback)!');
       } catch (execErr) {
-        console.error('Failed to copy code using fallback:', execErr);
+        //console.error('Failed to copy code using fallback:', execErr);
         toast.error('Failed to copy code');
       } finally {
         document.body.removeChild(textarea);

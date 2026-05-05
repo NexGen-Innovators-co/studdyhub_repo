@@ -1,0 +1,727 @@
+[
+  {
+    "tablename": "achievements",
+    "policyname": "Users can insert own achievements",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "achievements",
+    "policyname": "achievements_select_own",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "admin_activity_logs",
+    "policyname": "super_admin_delete_admin_activity_logs",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "admin_activity_logs",
+    "policyname": "super_admin_insert_admin_activity_logs",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "admin_activity_logs",
+    "policyname": "admin_activity_logs_select_admin",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "admin_activity_logs",
+    "policyname": "super_admin_select_admin_activity_logs",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "admin_activity_logs",
+    "policyname": "super_admin_update_admin_activity_logs",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "admin_system_settings",
+    "policyname": "Admins can manage system settings",
+    "cmd": "ALL"
+  },
+  {
+    "tablename": "admin_system_settings",
+    "policyname": "super_admin_delete_admin_system_settings",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "admin_system_settings",
+    "policyname": "super_admin_insert_admin_system_settings",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "admin_system_settings",
+    "policyname": "super_admin_select_admin_system_settings",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "admin_system_settings",
+    "policyname": "Public settings are readable by all",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "admin_system_settings",
+    "policyname": "super_admin_update_admin_system_settings",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "admin_users",
+    "policyname": "Super admins can manage admin users",
+    "cmd": "ALL"
+  },
+  {
+    "tablename": "admin_users",
+    "policyname": "admin_users_select_admin",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "ai_podcasts",
+    "policyname": "Admins can manage all podcasts",
+    "cmd": "ALL"
+  },
+  {
+    "tablename": "ai_podcasts",
+    "policyname": "ai_podcasts_delete_own",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "ai_podcasts",
+    "policyname": "super_admin_delete_ai_podcasts",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "ai_podcasts",
+    "policyname": "ai_podcasts_insert_own",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "ai_podcasts",
+    "policyname": "Anyone can view public podcasts",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "ai_podcasts",
+    "policyname": "super_admin_select_ai_podcasts",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "ai_podcasts",
+    "policyname": "ai_podcasts_select_own_or_public",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "ai_podcasts",
+    "policyname": "ai_podcasts_update_own",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "ai_user_memory",
+    "policyname": "ai_user_memory_delete_own",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "ai_user_memory",
+    "policyname": "ai_user_memory_insert_own",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "ai_user_memory",
+    "policyname": "ai_user_memory_select_own",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "ai_user_memory",
+    "policyname": "ai_user_memory_update_own",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "app_stats",
+    "policyname": "super_admin_delete_app_stats",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "app_stats",
+    "policyname": "super_admin_insert_app_stats",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "app_stats",
+    "policyname": "Allow public insert of default stats row",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "app_stats",
+    "policyname": "super_admin_select_app_stats",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "app_stats",
+    "policyname": "Allow public read access to app_stats",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "app_stats",
+    "policyname": "super_admin_update_app_stats",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "app_stats",
+    "policyname": "Allow authenticated update of stats row",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "audio_processing_results",
+    "policyname": "Users can delete their own audio processing results",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "audio_processing_results",
+    "policyname": "super_admin_delete_audio_processing_results",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "audio_processing_results",
+    "policyname": "super_admin_insert_audio_processing_results",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "audio_processing_results",
+    "policyname": "Allow authenticated users to insert their own audio processing ",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "audio_processing_results",
+    "policyname": "super_admin_select_audio_processing_results",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "audio_processing_results",
+    "policyname": "Allow authenticated users to read their own audio processing re",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "audio_processing_results",
+    "policyname": "super_admin_update_audio_processing_results",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "audio_processing_results",
+    "policyname": "Allow authenticated users to update their own audio processing ",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "audio_segments",
+    "policyname": "Insert/Update for podcast hosts on audio_segments",
+    "cmd": "ALL"
+  },
+  {
+    "tablename": "audio_segments",
+    "policyname": "Read access for audio segments",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "badges",
+    "policyname": "Anyone can view badges",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "calendar_integrations",
+    "policyname": "Users can delete own integrations",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "calendar_integrations",
+    "policyname": "Users can insert own integrations",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "calendar_integrations",
+    "policyname": "Users can view own integrations",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "calendar_integrations",
+    "policyname": "Users can update own integrations",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "chat_messages",
+    "policyname": "chat_messages_delete_own",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "chat_messages",
+    "policyname": "super_admin_delete_chat_messages",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "chat_messages",
+    "policyname": "super_admin_insert_chat_messages",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "chat_messages",
+    "policyname": "chat_messages_insert_own",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "chat_messages",
+    "policyname": "super_admin_select_chat_messages",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "chat_messages",
+    "policyname": "chat_messages_select_own",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "chat_messages",
+    "policyname": "super_admin_update_chat_messages",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "chat_messages",
+    "policyname": "Enable update for users",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "chat_sessions",
+    "policyname": "chat_sessions_delete_own",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "chat_sessions",
+    "policyname": "super_admin_delete_chat_sessions",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "chat_sessions",
+    "policyname": "chat_sessions_insert_own",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "chat_sessions",
+    "policyname": "super_admin_insert_chat_sessions",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "chat_sessions",
+    "policyname": "super_admin_select_chat_sessions",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "chat_sessions",
+    "policyname": "chat_sessions_select_own",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "chat_sessions",
+    "policyname": "super_admin_update_chat_sessions",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "chat_sessions",
+    "policyname": "chat_sessions_update_own",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "class_recordings",
+    "policyname": "class_recordings_delete_own",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "class_recordings",
+    "policyname": "super_admin_delete_class_recordings",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "class_recordings",
+    "policyname": "super_admin_insert_class_recordings",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "class_recordings",
+    "policyname": "class_recordings_insert_own",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "class_recordings",
+    "policyname": "Allow read for owners and shared recordings via chat",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "class_recordings",
+    "policyname": "super_admin_select_class_recordings",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "class_recordings",
+    "policyname": "class_recordings_select_own",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "class_recordings",
+    "policyname": "class_recordings_update_own",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "class_recordings",
+    "policyname": "super_admin_update_class_recordings",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "content_moderation_log",
+    "policyname": "Block client inserts on moderation logs",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "content_moderation_log",
+    "policyname": "Admins can view all moderation logs",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "content_moderation_log",
+    "policyname": "Users can view their own moderation logs",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "content_moderation_queue",
+    "policyname": "Admins can manage moderation queue",
+    "cmd": "ALL"
+  },
+  {
+    "tablename": "content_moderation_queue",
+    "policyname": "super_admin_delete_content_moderation_queue",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "content_moderation_queue",
+    "policyname": "super_admin_insert_content_moderation_queue",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "content_moderation_queue",
+    "policyname": "super_admin_select_content_moderation_queue",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "content_moderation_queue",
+    "policyname": "super_admin_update_content_moderation_queue",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "course_enrollments",
+    "policyname": "Users can delete own enrollment",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "course_enrollments",
+    "policyname": "Users can enroll themselves",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "course_enrollments",
+    "policyname": "Anyone can view enrollments",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "course_enrollments",
+    "policyname": "Users can update own enrollment",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "course_materials",
+    "policyname": "Admins can delete course_materials",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "course_materials",
+    "policyname": "Admins can insert course_materials",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "course_materials",
+    "policyname": "Everyone can view course_materials",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "course_materials",
+    "policyname": "Public read access",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "course_materials",
+    "policyname": "Admins can update course_materials",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "course_progress",
+    "policyname": "Users can insert own progress",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "course_progress",
+    "policyname": "Users can view own progress",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "course_progress",
+    "policyname": "Users can update own progress",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "course_resources",
+    "policyname": "Admins can delete course resources",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "course_resources",
+    "policyname": "Admins can insert course resources",
+    "cmd": "INSERT"
+  },
+  {
+    "tablename": "course_resources",
+    "policyname": "Anyone can view course resources",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "course_resources",
+    "policyname": "Admins can update course resources",
+    "cmd": "UPDATE"
+  },
+  {
+    "tablename": "courses",
+    "policyname": "Admins can delete courses",
+    "cmd": "DELETE"
+  },
+  {
+    "tablename": "courses",
+    "policyname": "Admins can insert courses",
+    "cmd": "INSERT"
+  }
+,
+  {
+    "policyname": "Allow authenticated uploads to podcasts",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "operation": "INSERT",
+    "using_expression": null,
+    "with_check": "((bucket_id = 'podcasts'::text) AND (auth.role() = 'authenticated'::text))"
+  },
+  {
+    "policyname": "Allow delete on podcasts for owners",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "operation": "DELETE",
+    "using_expression": "((bucket_id = 'podcasts'::text) AND (owner = auth.uid()))",
+    "with_check": null
+  },
+  {
+    "policyname": "Allow read on shared document files",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "operation": "SELECT",
+    "using_expression": "((bucket_id = 'documents'::text) AND ((auth.uid() = owner) OR (EXISTS ( SELECT 1\n   FROM (((documents d\n     JOIN social_chat_message_resources r ON (((r.resource_id = d.id) AND ((r.resource_type)::text = 'document'::text))))\n     JOIN social_chat_messages m ON ((m.id = r.message_id)))\n     JOIN social_chat_sessions s ON ((s.id = m.session_id)))\n  WHERE ((objects.name ~~ (d.id || '%'::text)) OR ((objects.name ~~ (('%'::text || d.id) || '%'::text)) AND ((((s.chat_type)::text = 'p2p'::text) AND ((s.user_id1 = auth.uid()) OR (s.user_id2 = auth.uid()))) OR (((s.chat_type)::text = 'group'::text) AND (EXISTS ( SELECT 1\n           FROM social_group_members gm\n          WHERE ((gm.group_id = s.group_id) AND (gm.user_id = auth.uid()) AND (gm.status = 'active'::text))))))))))))",
+    "with_check": null
+  },
+  {
+    "policyname": "Allow select on podcasts for owners and public",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "operation": "SELECT",
+    "using_expression": "((bucket_id = 'podcasts'::text) AND ((owner = auth.uid()) OR ((metadata ->> 'public'::text) = 'true'::text)))",
+    "with_check": null
+  },
+  {
+    "policyname": "Allow update on podcasts for owners",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "operation": "UPDATE",
+    "using_expression": "((bucket_id = 'podcasts'::text) AND (owner = auth.uid()))",
+    "with_check": "((bucket_id = 'podcasts'::text) AND (owner = auth.uid()))"
+  },
+  {
+    "policyname": "Anyone authenticated can view social media files",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "operation": "SELECT",
+    "using_expression": "((bucket_id = 'social-media'::text) AND (auth.role() = 'authenticated'::text))",
+    "with_check": null
+  },
+  {
+    "policyname": "Authenticated users can upload chat documents",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "operation": "INSERT",
+    "using_expression": null,
+    "with_check": "((bucket_id = 'chat-documents'::text) AND ((storage.foldername(name))[1] = (( SELECT auth.uid() AS uid))::text))"
+  },
+  {
+    "policyname": "Users can delete own social media",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "operation": "DELETE",
+    "using_expression": "((bucket_id = 'social-media'::text) AND (auth.uid() = owner))",
+    "with_check": null
+  },
+  {
+    "policyname": "Users can delete their own avatars",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "operation": "DELETE",
+    "using_expression": "((bucket_id = 'avatars'::text) AND ((storage.foldername(name))[2] = (auth.uid())::text))",
+    "with_check": null
+  },
+  {
+    "policyname": "Users can delete their own chat documents",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "operation": "DELETE",
+    "using_expression": "((bucket_id = 'chat-documents'::text) AND ((storage.foldername(name))[1] = (( SELECT auth.uid() AS uid))::text))",
+    "with_check": null
+  },
+  {
+    "policyname": "Users can delete their own documents",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "operation": "DELETE",
+    "using_expression": "((bucket_id = 'documents'::text) AND ((auth.uid())::text = (storage.foldername(name))[1]))",
+    "with_check": null
+  },
+  {
+    "policyname": "Users can delete their own generated images",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "operation": "DELETE",
+    "using_expression": "((bucket_id = 'generatedimages'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text))",
+    "with_check": null
+  },
+  {
+    "policyname": "Users can delete their own recordings",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "operation": "DELETE",
+    "using_expression": "((bucket_id = 'recordings'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text))",
+    "with_check": null
+  },
+  {
+    "policyname": "Users can update their own avatars",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "operation": "UPDATE",
+    "using_expression": "((bucket_id = 'avatars'::text) AND ((storage.foldername(name))[2] = (auth.uid())::text))",
+    "with_check": "((bucket_id = 'avatars'::text) AND ((storage.foldername(name))[2] = (auth.uid())::text))"
+  },
+  {
+    "policyname": "Users can update their own chat documents",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "operation": "UPDATE",
+    "using_expression": "((bucket_id = 'chat-documents'::text) AND ((storage.foldername(name))[1] = (( SELECT auth.uid() AS uid))::text))",
+    "with_check": null
+  },
+  {
+    "policyname": "Users can update their own documents",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "operation": "UPDATE",
+    "using_expression": "((bucket_id = 'documents'::text) AND ((auth.uid())::text = (storage.foldername(name))[1]))",
+    "with_check": null
+  },
+  {
+    "policyname": "Users can update their own generated images",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "operation": "UPDATE",
+    "using_expression": "((bucket_id = 'generatedimages'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text))",
+    "with_check": "((bucket_id = 'generatedimages'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text))"
+  },
+  {
+    "policyname": "Users can update their own recordings",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "operation": "UPDATE",
+    "using_expression": "((bucket_id = 'recordings'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text))",
+    "with_check": "((bucket_id = 'recordings'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text))"
+  },
+  {
+    "policyname": "Users can upload their own documents",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "operation": "INSERT",
+    "using_expression": null,
+    "with_check": "((bucket_id = 'documents'::text) AND ((auth.uid())::text = (storage.foldername(name))[1]))"
+  },
+  {
+    "policyname": "Users can upload their own generated images",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "operation": "INSERT",
+    "using_expression": null,
+    "with_check": "((bucket_id = 'generatedimages'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text))"
+  },
+  {
+    "policyname": "Users can upload their own podcast audio",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "operation": "INSERT",
+    "using_expression": null,
+    "with_check": "((bucket_id = 'podcasts'::text) AND ((storage.foldername(name))[1] = 'live-podcasts'::text))"
+  },
+  {
+    "policyname": "Users can upload their own recordings",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "operation": "INSERT",
+    "using_expression": null,
+    "with_check": "((bucket_id = 'recordings'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text))"
+  },
+  {
+    "policyname": "Users can upload to social-media",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "operation": "INSERT",
+    "using_expression": null,
+    "with_check": "((bucket_id = 'social-media'::text) AND (auth.uid() = owner))"
+  },
+  {
+    "policyname": "Users can view their own chat documents",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "operation": "SELECT",
+    "using_expression": "((bucket_id = 'chat-documents'::text) AND ((storage.foldername(name))[1] = (( SELECT auth.uid() AS uid))::text))",
+    "with_check": null
+  },
+  {
+    "policyname": "Users can view their own generated images",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "operation": "SELECT",
+    "using_expression": "((bucket_id = 'generatedimages'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text))",
+    "with_check": null
+  },
+  {
+    "policyname": "Users can view their own recordings",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "operation": "SELECT",
+    "using_expression": "((bucket_id = 'recordings'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text))",
+    "with_check": null
+  },
+  {
+    "policyname": "access to user avatar 1oj01fe_0",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "operation": "SELECT",
+    "using_expression": "(bucket_id = 'avatars'::text)",
+    "with_check": null
+  },
+  {
+    "policyname": "access to user avatar 1oj01fe_1",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "operation": "INSERT",
+    "using_expression": null,
+    "with_check": "(bucket_id = 'avatars'::text)"
+  }
+]

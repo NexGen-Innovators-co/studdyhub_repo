@@ -1,5 +1,7 @@
 // Core types for Class recordings and related functionality
 export interface ClassRecording {
+  audio_url: string;
+  user_id: any;
   id: string;
   title: string;
   subject: string;
@@ -8,20 +10,22 @@ export interface ClassRecording {
   summary: string;
   duration: number;
   date: string;
-  createdAt: string;
+  created_at: string;
   userId: string;
   document_id?: string | null;
+  processing_status?: 'pending' | 'processing' | 'completed' | 'failed' | null;
 }
 
+// src/types/Class.ts - Update the Quiz interface
 export interface Quiz {
-  id: string;
-  title: string;
-  questions: QuizQuestion[];
-  classId?: string; // Optional: Link to the class recording it was generated from
-  userId: string;
-  createdAt: string;
+  class_id?: string | null
+  created_at: string | null
+  id?: string
+  questions: any | null
+  source_type: string | null
+  title: string
+  user_id: string
 }
-
 export interface QuizQuestion {
   id?: string; // Optional, can be generated client-side or by AI
   question: string;
@@ -34,14 +38,20 @@ export interface ScheduleItem {
   id: string;
   title: string;
   subject: string;
-  startTime: string;
-  endTime: string;
   location?: string;
   description?: string;
   color?: string;
   type: 'class' | 'study' | 'assignment' | 'exam' | 'other';
   userId: string;
-  createdAt: string;
+  created_at: string;
+  calendarEventIds?: Record<string, string>;
+  isRecurring?: boolean | null
+  recurrenceDays?: number[] | null
+  recurrenceEndDate?: string | null
+  recurrenceInterval?: number | null
+  recurrencePattern?: string | null
+  startTime: string
+  endTime: string
 }
 // In types/Class.ts
 export interface Message {
@@ -55,44 +65,51 @@ export interface Message {
   isUpdating?: boolean;
   attachedDocumentIds?: string[];
   attachedNoteIds?: string[];
+  thinking_steps?: ThinkingStep[];  // Agentic reasoning steps
+  isStreaming?: boolean;  // Whether response is currently streaming
+  isLoading?: boolean;
+  model?: string; // AI model used for this response (e.g. "gemini-2.5-pro")
+  modelLabel?: string; // User-facing model label (e.g. "Gemini Pro")
   image_url?: string; // Legacy image URL
   image_mime_type?: string; // Legacy image MIME type
+  images?: string[];
+  executedActions?: any[];
   files_metadata?: string | Array<{ // Use string | array to handle both JSON string and array
-  id: string;
-  name: string;
-  mimeType: string;
-  url: string;
-  type: 'image' | 'document' | 'other';
-  size?: number;
-  content?: string | null;
-  processing_status?: string;
-  processing_error?: string | null;
-  status?: string;
-  error?: string;
+    id: string;
+    name: string;
+    mimeType: string;
+    url: string;
+    type: 'image' | 'document' | 'other';
+    size?: number;
+    content?: string | null;
+    processing_status?: string;
+    processing_error?: string | null;
+    status?: string;
+    error?: string;
   }> | {
-  id: string;
-  name: string;
-  mimeType: string;
-  url: string;
-  type: 'image' | 'document' | 'other';
-  size?: number;
-  content?: string | null;
-  processing_status?: string;
-  processing_error?: string | null;
-  status?: string;
-  error?: string;
+    id: string;
+    name: string;
+    mimeType: string;
+    url: string;
+    type: 'image' | 'document' | 'other';
+    size?: number;
+    content?: string | null;
+    processing_status?: string;
+    processing_error?: string | null;
+    status?: string;
+    error?: string;
   };
   attachedFiles?: Array<{ // Legacy attached files
-  name: string;
-  mimeType: string;
-  type: 'image' | 'document' | 'other';
-  size: number;
-  content?: string | null;
-  processing_status?: string;
-  processing_error?: string | null;
+    name: string;
+    mimeType: string;
+    type: 'image' | 'document' | 'other';
+    size: number;
+    content?: string | null;
+    processing_status?: string;
+    processing_error?: string | null;
   }>;
   conversation_context?: string;
-  }
+}
 export interface ChatSession {
   id: string;
   title: string;
@@ -102,7 +119,18 @@ export interface ChatSession {
   document_ids: string[];
   message_count?: number;
   user_id: string;
+  default_folder_id?: string | null;
 }
+export interface ThinkingStep {
+  id: string;
+  type: 'understanding' | 'retrieval' | 'reasoning' | 'memory' | 'verification' | 'action';
+  title: string;
+  detail: string;
+  status: 'pending' | 'in-progress' | 'completed' | 'failed';
+  timestamp: string;
+  metadata?: any;
+}
+
 export interface MessagePart {
   text?: string;
   inlineData?: {
@@ -120,4 +148,64 @@ export interface FileData {
   content: string | null;
   processing_status: string;
   processing_error: string | null;
+}
+// New interfaces for gamification
+export interface QuizAttempt {
+  id: string;
+  quiz_id: string;
+  user_id: string;
+  score: number;
+  total_questions: number;
+  percentage: number;
+  time_taken_seconds: number;
+  answers: {
+    question_index: number;
+    selected_answer: number;
+    correct_answer: number;
+    is_correct: boolean;
+  }[];
+  xp_earned: number;
+  created_at: string;
+}
+
+export interface UserStats {
+  user_id: string;
+  total_xp: number;
+  level: number;
+  current_streak: number;
+  longest_streak: number;
+  total_quizzes_attempted: number;
+  total_quizzes_completed: number;
+  average_score: number;
+  total_study_time_seconds: number;
+  badges_earned: string[];
+  last_activity_date: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Badge {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  requirement_type: 'quiz_count' | 'streak' | 'score' | 'xp' | 'perfect_score';
+  requirement_value: number;
+  xp_reward: number;
+}
+
+export interface Achievement {
+  id: string;
+  user_id: string;
+  badge_id: string;
+  earned_at: string;
+  badge?: Badge;
+}
+
+// Pagination metadata
+export interface PaginationMeta {
+  currentPage: number;
+  pageSize: number;
+  totalCount: number;
+  hasMore: boolean;
 }

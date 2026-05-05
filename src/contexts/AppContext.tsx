@@ -1,12 +1,13 @@
-// contexts/AppContext.tsx - Complete implementation
+// contexts/AppContext.tsx - Complete implementation with proper types and timeouts
 import React, {
   createContext,
-  useContext,
   useReducer,
   useCallback,
   useEffect,
   useMemo,
-  ReactNode
+  ReactNode,
+  useState,
+  useRef
 } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -14,23 +15,33 @@ import { supabase } from '../integrations/supabase/client';
 import { useAuth } from '../hooks/useAuth';
 import { useAppData } from '../hooks/useAppData';
 import { useAppOperations } from '../hooks/useAppOperations';
-import { useAudioProcessing } from '../components/classRecordings/hooks/useAudioProcessing';
-import { Message, ChatSession, FileData, MessagePart } from '../types/Class';
+import { useAudioProcessing } from '../modules/classRecordings/hooks/useAudioProcessing';
+import { Message, ChatSession, FileData, ClassRecording, ScheduleItem, Quiz } from '../types/Class';
 import { Document as AppDocument, UserProfile } from '../types/Document';
 import { Note } from '../types/Note';
 import { appReducer, initialAppState, AppState, AppAction } from './appReducer';
+import { DocumentFolder, FolderTreeNode } from '@/types/Folder';
+import { DataLoadingState } from '../hooks/useAppData';
+import { useSocialData } from '../hooks/useSocialData';
+import { clearCache } from '../utils/socialCache'
+import { PlanType, SubscriptionLimits, Subscription, useSubscription, } from '@/hooks/useSubscription';
+import { useOfflineSync } from '@/hooks/useOfflineSync';
+import { offlineStorage, STORES } from '@/utils/offlineStorage';
+import { useEducationContext } from '../modules/onboarding/hooks/useEducationContext';
+import { useEducatorPermissions } from '../modules/educator/hooks/useEducatorPermissions';
+import type { UserEducationContext, EducatorPermissions } from '../types/Education';
 
 // Context interface
 interface AppContextType extends AppState {
+    setPendingAttachment: (ids: string[] | null) => void;
   // Auth & data hooks
   user: any;
   authLoading: boolean;
-  dataLoading: boolean;
 
   // Data from useAppData
   notes: Note[];
-  recordings: any[];
-  scheduleItems: any[];
+  recordings: ClassRecording[];
+  scheduleItems: ScheduleItem[];
   allChatMessages: Message[];
   documents: AppDocument[];
   userProfile: UserProfile | null;
@@ -40,13 +51,14 @@ interface AppContextType extends AppState {
   isSidebarOpen: boolean;
   isAILoading: boolean;
   filteredNotes: Note[];
-  quizzes: any[];
+  quizzes: Quiz[];
   dataPagination: any;
 
   // Computed values
   currentActiveTab: string;
   filteredChatMessages: Message[];
   sessionIdFromUrl: string | null;
+  currentCourse: { id: string; code?: string; title?: string } | null;
 
   // Actions
   dispatch: React.Dispatch<AppAction>;
@@ -76,9 +88,13 @@ interface AppContextType extends AppState {
   // Audio processing
   audioProcessing: ReturnType<typeof useAudioProcessing>;
 
+
   // Navigation
   handleNavigateToTab: (tab: string) => void;
   handleCreateNew: (type: 'note' | 'recording' | 'schedule' | 'document') => void;
+  handleCreateNoteWithData: (title: string, content: string, category: any) => void;
+  isCreateNoteDialogOpen: boolean;
+  setIsCreateNoteDialogOpen: (open: boolean) => void;
 
   // Data setters from useAppData
   setNotes: (notes: Note[] | ((prev: Note[]) => Note[])) => void;
@@ -93,34 +109,216 @@ interface AppContextType extends AppState {
   setIsSidebarOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   setActiveTab: (tab: any) => void;
   setIsAILoading: (loading: boolean) => void;
-  loadDataIfNeeded: (dataType: string) => void;
+  loadDataIfNeeded: (dataType: string, force?: boolean) => void;
   loadMoreNotes: () => void;
   loadMoreRecordings: () => void;
   loadMoreDocuments: () => void;
   loadMoreSchedule: () => void;
   loadMoreQuizzes: () => void;
   addDocument: (document: AppDocument) => void; // Add this function
-  updateDocument: (document: AppDocument) => void; // Add this function
+  forceRefreshDocuments: () => Promise<void>; // Added for context consumers
+  folders: DocumentFolder[];
+  folderTree: FolderTreeNode[];
+  setFolders: (folders: DocumentFolder[] | ((prev: DocumentFolder[]) => DocumentFolder[])) => void;
+  loadFolders: (userId: string, isInitial?: boolean) => Promise<void>;
+  updateDocument: (document: AppDocument) => void;
+  detailedDataLoading: DataLoadingState;
+
+  inputMessage: string;
+  setInputMessage: (message: string) => void;
+  attachedFiles: FileData[];
+  setAttachedFiles: (files: FileData[] | ((prev: FileData[]) => FileData[])) => void;
+  expandedMessages: Set<string>;
+  setExpandedMessages: (messages: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
+  isCurrentlySending: boolean;
+  setIsCurrentlySending: (sending: boolean) => void;
+  isAiTyping: boolean;
+  setIsAiTyping: (typing: boolean) => void;
+  isLoadingSession: boolean;
+  setIsLoadingSession: (loading: boolean) => void;
+  dataErrors: Record<string, string>;
+  clearError: (dataType: string) => void;
+  retryLoading: (dataType: string) => void;
+  // ← Added socialData to the interface
+  socialData: ReturnType<typeof useSocialData>;
+  refreshNotes: () => Promise<void>; // Add this
+  refreshData: (dataType: keyof DataLoadingState) => void; // Added generic refresh
+  dataLoading: DataLoadingState;
+  navigateToNote: (noteId: string | null) => void; // Fix the syntax error
+  subscription: Subscription | null;
+  subscriptionLoading: boolean;
+  subscriptionTier: PlanType;
+  subscriptionLimits: SubscriptionLimits;
+  checkSubscriptionAccess: (feature: keyof SubscriptionLimits) => boolean;
+  refreshSubscription: () => Promise<void>;
+  daysRemaining: number;
+  bonusAiCredits: number;
+  isAdmin: boolean;
+  isAdminLoading: boolean;
+  educationContext: UserEducationContext | null;
+  educationLoading: boolean;
+  refetchEducation: () => Promise<void>;
+  educatorPermissions: EducatorPermissions | null;
+  educatorLoading: boolean;
+  refetchEducatorPermissions: () => Promise<void>;
 }
 
 // Create context
-const AppContext = createContext<AppContextType | undefined>(undefined);
+export const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // Constants
 const MAX_HISTORY_MESSAGES = 1000;
 const CHAT_SESSIONS_PER_PAGE = 15;
 const CHAT_MESSAGES_PER_PAGE = 25;
 
+// Timeout constants
+const API_TIMEOUT = 30000; // 30 seconds
+const LOADING_TIMEOUT = 10000; // 10 seconds for loading states
+
+// Type definitions for Supabase responses
+interface SupabaseChatSession {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  last_message_at: string | null;
+  document_ids: string[];
+  user_id: string;
+  message_count: number;
+}
+
+interface SupabaseChatMessage {
+  id: string;
+  content: string;
+  role: 'user' | 'assistant';
+  timestamp: string;
+  is_error: boolean;
+  attached_document_ids: string[];
+  attached_note_ids: string[];
+  image_url: string | null;
+  image_mime_type: string | null;
+  session_id: string;
+  has_been_displayed: boolean;
+  files_metadata: any;
+}
+
+// Helper function for timeout handling
+const withTimeout = async <T,>(
+  supabaseQuery: any,
+  timeoutMs: number,
+  errorMessage: string
+): Promise<{ data: T | null; error: any }> => {
+  try {
+    // Create a timeout promise
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${errorMessage} (timeout after ${timeoutMs}ms)`)), timeoutMs)
+    );
+
+    // Execute the Supabase query and race it against the timeout
+    const result = await Promise.race([supabaseQuery, timeoutPromise]);
+    return result;
+  } catch (error) {
+    return { data: null, error };
+  }
+};
+
+// Helper function to handle loading state with timeout
+const useLoadingWithTimeout = (initialState = false) => {
+  const [isLoading, setIsLoading] = useState(initialState);
+  const timeoutRef = useRef<NodeJS.Timeout>();
+
+  const setLoadingWithTimeout = useCallback((loading: boolean) => {
+    setIsLoading(loading);
+
+    // Clear existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    // Set timeout to automatically reset loading state
+    if (loading) {
+      timeoutRef.current = setTimeout(() => {
+        setIsLoading(false);
+        ////console.warn('Loading state timeout - resetting loading state');
+      }, LOADING_TIMEOUT);
+    }
+  }, []);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  return [isLoading, setLoadingWithTimeout] as const;
+};
+
 // Provider component
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialAppState);
+    // Setter for pendingAttachment
+    const setPendingAttachment = useCallback((ids: string[] | null) => {
+      dispatch({ type: 'SET_PENDING_ATTACHMENT', payload: ids });
+    }, []);
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Get all data from useAppData hook
-  const appData = useAppData();
+  // Use loading states with timeouts
+  const [isLoadingSessionMessages, setIsLoadingSessionMessages] = useLoadingWithTimeout(false);
+  const [isLoadingChatSessions, setIsLoadingChatSessions] = useLoadingWithTimeout(false);
+  const [isCreateNoteDialogOpen, setIsCreateNoteDialogOpen] = useState(false);
   const {
+    subscription,
+    tier: subscriptionTier,
+    limits: subscriptionLimits,
+    daysRemaining,
+    isLoading: subscriptionLoading,
+    bonusAiCredits,
+    checkAccess,
+    checkAccess: checkSubscriptionAccess,
+    refreshSubscription,
+  } = useSubscription();
+
+  // Centralized admin check — one query shared by all consumers
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdminLoading, setIsAdminLoading] = useState(true);
+
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (!user) {
+        setIsAdmin(false);
+        setIsAdminLoading(false);
+        return;
+      }
+      if (!navigator.onLine) {
+        setIsAdminLoading(false);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from('admin_users')
+          .select('id, is_active')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .maybeSingle();
+        setIsAdmin(!error && !!data);
+      } catch {
+        setIsAdmin(false);
+      } finally {
+        setIsAdminLoading(false);
+      }
+    };
+    checkAdminStatus();
+  }, [user]);
+  // Get all data from useAppData hook
+  const appData = useAppData(user);
+  const {
+    dataErrors,
+    clearError,
     notes,
     recordings,
     scheduleItems,
@@ -133,7 +331,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isSidebarOpen,
     isAILoading,
     filteredNotes,
-    loading: dataLoading,
+    loading: overallLoading,
     quizzes,
     dataPagination,
     setNotes,
@@ -149,15 +347,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveTab,
     setIsAILoading,
     loadDataIfNeeded,
+    forceRefreshDocuments,
     loadMoreNotes,
     loadMoreRecordings,
     loadMoreDocuments,
     loadMoreSchedule,
     loadMoreQuizzes,
+    setQuizzes,
+    folders,
+    folderTree,
+    setFolders,
+    loadFolders,
+    loadSpecificDocuments,
+    loadSpecificNotes,
+    refreshNotes,
+    retryLoading,
   } = appData;
+
+  const refreshData = useCallback((dataType: keyof DataLoadingState) => {
+      retryLoading(dataType);
+  }, [retryLoading]);
+
+  // Ref to hold social refresh (set after socialData hook is created)
+  const socialRefreshRef = useRef<(() => void) | null>(null);
+
+  const retryAllData = useCallback(() => {
+    if (user?.id) {
+      retryLoading('profile');
+      retryLoading('notes');
+      retryLoading('folders');
+      retryLoading('documents');
+      retryLoading('recordings');
+      retryLoading('scheduleItems');
+      retryLoading('quizzes');
+      // Also refresh social feed on reconnect (throttled — max once per 30s)
+      socialRefreshRef.current?.();
+    }
+  }, [user?.id, retryLoading]);
+
+  const { syncPendingChanges } = useOfflineSync(retryAllData);
+
   const addDocument = useCallback((document: AppDocument) => {
     setDocuments(prev => [document, ...prev]);
   }, [setDocuments]);
+
 
   // Update document function
   const updateDocument = useCallback((document: AppDocument) => {
@@ -167,9 +400,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Audio processing
   const audioProcessing = useAudioProcessing({
     onAddRecording: (rec) => setRecordings(prev => [...prev, rec]),
-    onUpdateRecording: (rec) => setRecordings(prev => prev.map(r => r.id === rec.id ? rec : r))
+    onUpdateRecording: (rec) => setRecordings(prev => prev.map(r => r.id === rec.id ? rec : r)),
+    onNoteCreated: (note) => setNotes(prev => [note, ...prev]),
+    onRefreshNotes: refreshNotes
   });
-
+  const enhancedDataLoading = useMemo(() => ({
+    ...appData.dataLoading,
+    errors: dataErrors
+  }), [appData.dataLoading, dataErrors]);
   // App operations
   const appOperations = useAppOperations({
     notes,
@@ -184,31 +422,76 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setScheduleItems,
     setChatMessages,
     setDocuments,
+    setQuizzes,
     setUserProfile,
     setActiveNote,
     setActiveTab,
     setIsAILoading,
+    folders,
+    setFolders,
+    subscriptionTier,
+    subscriptionLimits,
+    checkSubscriptionAccess,
+    refreshSubscription,
+    refreshData: retryAllData,
+    isAdmin,
   });
+  const socialData = useSocialData(userProfile);
 
+  // Education context — loaded once per auth session, skipped during onboarding
+  const {
+    educationContext,
+    isLoading: educationLoading,
+    refetch: refetchEducation,
+  } = useEducationContext(userProfile?.onboarding_completed);
+
+  // Educator permissions — loaded once per auth session
+  const {
+    permissions: educatorPermissions,
+    isLoading: educatorLoading,
+    refetch: refetchEducatorPermissions,
+  } = useEducatorPermissions();
+
+  // Wire social refresh into the ref so retryAllData can trigger it
+  useEffect(() => {
+    socialRefreshRef.current = socialData.throttledRefresh;
+  }, [socialData.throttledRefresh]);
+  const navigateToNote = useCallback((noteId: string | null) => {
+    if (noteId) {
+      navigate(`/notes/${noteId}`, { replace: true });
+    } else {
+      navigate('/notes', { replace: true });
+    }
+  }, [navigate]);
   // Theme management
   useEffect(() => {
     if (typeof document !== 'undefined') {
       const html = document.documentElement;
-      if (state.currentTheme === 'dark') {
+      let theme = state.currentTheme;
+      // If no theme is set, use system preference
+      if (!theme) {
+        theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      if (theme === 'dark') {
         html.classList.add('dark');
       } else {
         html.classList.remove('dark');
       }
-      localStorage.setItem('theme', state.currentTheme);
+      localStorage.setItem('theme', theme);
     }
   }, [state.currentTheme]);
-
+  useEffect(() => {
+    if (!user) {
+      // User logged out, clear cache
+      clearCache();
+    }
+  }, [user]);
   const handleThemeChange = useCallback((theme: 'light' | 'dark') => {
     dispatch({ type: 'SET_THEME', payload: theme });
   }, []);
 
   // Computed values
-  const currentActiveTab = useMemo(() => {
+  const currentActiveTab = useMemo((): 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings' | 'quizzes' | 'dashboard' | 'podcasts' | 'library' => {
     const path = location.pathname.split('/')[1];
     switch (path) {
       case 'notes': return 'notes';
@@ -218,6 +501,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       case 'documents': return 'documents';
       case 'social': return 'social';
       case 'settings': return 'settings';
+      case 'quizzes': return 'quizzes';
+      case 'podcasts': return 'podcasts';
+      case 'library': return 'library';
       default: return 'dashboard';
     }
   }, [location.pathname]);
@@ -277,7 +563,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
 
         const noteBlock = noteInfo + (noteContent ? `Content: ${noteContent}\n` : '') +
-          (note.aiSummary ? `Summary: ${note.aiSummary}\n` : '') +
+          (note.ai_summary ? `Summary: ${note.ai_summary}\n` : '') +
           (note.tags?.length ? `Tags: ${note.tags.join(', ')}\n` : '') + '\n';
 
         context += noteBlock;
@@ -287,21 +573,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return context;
   }, []);
 
-  // Chat session management
   const loadChatSessions = useCallback(async () => {
     try {
       if (!user) return;
 
-      const { data, error } = await supabase
-        .from('chat_sessions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('last_message_at', { ascending: false })
-        .range(0, state.chatSessionsLoadedCount - 1);
+      setIsLoadingChatSessions(true);
 
-      if (error) throw error;
+      const { data, error } = await withTimeout<SupabaseChatSession[]>(
+        supabase
+          .from('chat_sessions')
+          .select('*')
+          .eq('user_id', user.id)
+          // sort by most recently active, then most recently modified
+          .order('last_message_at', { ascending: false })
+          .order('updated_at', { ascending: false })
+          .range(0, state.chatSessionsLoadedCount - 1),
+        API_TIMEOUT,
+        'Failed to load chat sessions'
+      );
 
-      const formattedSessions: ChatSession[] = data.map(session => ({
+      if (error) {
+        if (!navigator.onLine) {
+          const offlineSessions = await offlineStorage.getAll<ChatSession>(STORES.CHAT_SESSIONS);
+          const userSessions = offlineSessions
+            .filter(s => s.user_id === user.id)
+            .sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
+          
+          dispatch({ type: 'SET_CHAT_SESSIONS', payload: userSessions });
+          return;
+        }
+        throw error;
+      }
+
+      const formattedSessions: ChatSession[] = (data || []).map((session: SupabaseChatSession) => ({
         id: session.id,
         title: session.title,
         created_at: session.created_at,
@@ -312,16 +616,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
         message_count: session.message_count || 0,
       }));
 
+      // Save to offline storage
+      await offlineStorage.saveAll(STORES.CHAT_SESSIONS, formattedSessions);
+
       dispatch({ type: 'SET_CHAT_SESSIONS', payload: formattedSessions });
       dispatch({
         type: 'SET_HAS_MORE_CHAT_SESSIONS',
         payload: formattedSessions.length === state.chatSessionsLoadedCount
       });
     } catch (error) {
-      console.error('Error loading chat sessions:', error);
-      toast.error('Failed to load chat sessions.');
+      ////console.error('Error loading chat sessions:', error);
+      // toast.error('Failed to load chat sessions.');
+    } finally {
+      setIsLoadingChatSessions(false);
     }
-  }, [user, state.chatSessionsLoadedCount]);
+  }, [user, state.chatSessionsLoadedCount, setIsLoadingChatSessions]);
 
   const handleLoadMoreChatSessions = useCallback(() => {
     dispatch({
@@ -337,29 +646,68 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return null;
       }
 
-      const { data, error } = await supabase
-        .from('chat_sessions')
-        .insert({
+      // if offline, fall back to local behaviour (same as before)
+      if (!navigator.onLine) {
+        const offlineId = `offline-${Date.now()}`;
+        const newSession: ChatSession = {
+          id: offlineId,
+          title: 'New Chat (Offline)',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          last_message_at: new Date().toISOString(),
+          document_ids: state.selectedDocumentIds,
+          message_count: 0,
+          user_id: user.id,
+        };
+
+        await offlineStorage.save(STORES.CHAT_SESSIONS, newSession);
+        await offlineStorage.addPendingSync('create', STORES.CHAT_SESSIONS, {
           user_id: user.id,
           title: 'New Chat',
           document_ids: state.selectedDocumentIds,
           message_count: 0,
-        })
-        .select()
-        .single();
+        });
 
-      if (error) throw error;
-      if (!data) throw new Error('No data returned from session creation');
+        dispatch({ type: 'ADD_CHAT_SESSION', payload: newSession });
+        dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: offlineId });
+        return offlineId;
+      }
+
+      // online: delegate to edge function which performs subscription/limit checks
+      const { data: result, error: fnError } = await supabase.functions.invoke('create-ai-chat-session', {
+        body: { document_ids: state.selectedDocumentIds },
+      });
+
+      if (fnError) throw fnError;
+      if (!result || !('id' in result)) {
+        throw new Error('Unexpected response from create-ai-chat-session');
+      }
+
+      const sessionId = (result as any).id as string;
+      const existing = (result as any).existing;
+      if (existing && sessionId) {
+        // reuse existing empty session
+        navigate(`/chat/${sessionId}`, { replace: true });
+        return sessionId;
+      }
+
+      // fetch newly created session details so we can update state
+      const { data: sessionData, error: sessionError } = await supabase
+        .from('chat_sessions')
+        .select('*')
+        .eq('id', sessionId)
+        .single();
+      if (sessionError || !sessionData) throw sessionError || new Error('Session not found');
 
       const newSession: ChatSession = {
-        id: data.id,
-        title: data.title,
-        created_at: data.created_at,
-        updated_at: data.updated_at,
-        last_message_at: data.last_message_at || new Date().toISOString(),
-        document_ids: data.document_ids || [],
-        message_count: 0,
-        user_id: data.user_id,
+        id: sessionData.id,
+        title: sessionData.title,
+        created_at: sessionData.created_at,
+        updated_at: sessionData.updated_at,
+        last_message_at: sessionData.last_message_at || new Date().toISOString(),
+        document_ids: sessionData.document_ids || [],
+        message_count: sessionData.message_count || 0,
+        user_id: sessionData.user_id,
       };
 
       dispatch({ type: 'ADD_CHAT_SESSION', payload: newSession });
@@ -372,7 +720,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toast.success('New chat session created!');
       return newSession.id;
     } catch (error: any) {
-      console.error('Error creating new session:', error);
+      ////console.error('Error creating new session:', error);
       toast.error(`Failed to create new chat session: ${error.message || 'Unknown error'}`);
       return null;
     }
@@ -382,11 +730,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       if (!user) return;
 
-      const { error } = await supabase
-        .from('chat_sessions')
-        .delete()
-        .eq('id', sessionId)
-        .eq('user_id', user.id);
+      const { error } = await withTimeout<null>(
+        supabase
+          .from('chat_sessions')
+          .delete()
+          .eq('id', sessionId)
+          .eq('user_id', user.id),
+        API_TIMEOUT,
+        'Failed to delete chat session'
+      );
 
       if (error) throw error;
 
@@ -417,7 +769,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       toast.success('Chat session deleted.');
     } catch (error: any) {
-      console.error('Error deleting session:', error);
+      ////console.error('Error deleting session:', error);
       toast.error(`Failed to delete chat session: ${error.message || 'Unknown error'}`);
     }
   }, [user, state.chatSessions, state.activeChatSessionId, loadChatSessions, navigate]);
@@ -426,11 +778,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       if (!user) return;
 
-      const { error } = await supabase
-        .from('chat_sessions')
-        .update({ title: newTitle })
-        .eq('id', sessionId)
-        .eq('user_id', user.id);
+      const { error } = await withTimeout<null>(
+        supabase
+          .from('chat_sessions')
+          .update({ title: newTitle })
+          .eq('id', sessionId)
+          .eq('user_id', user.id),
+        API_TIMEOUT,
+        'Failed to rename chat session'
+      );
 
       if (error) throw error;
 
@@ -440,7 +796,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       toast.success('Chat session renamed.');
     } catch (error) {
-      console.error('Error renaming session:', error);
+      ////console.error('Error renaming session:', error);
       toast.error('Failed to rename chat session');
     }
   }, [user]);
@@ -448,19 +804,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Message management
   const loadSessionMessages = useCallback(async (sessionId: string) => {
     if (!user) return;
-    dispatch({ type: 'SET_IS_LOADING_SESSION_MESSAGES', payload: true });
+
+    // Prevent multiple simultaneous loads
+    if (isLoadingSessionMessages) return;
+
+    setIsLoadingSessionMessages(true);
 
     try {
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('timestamp', { ascending: false })
-        .limit(CHAT_MESSAGES_PER_PAGE);
+      const startTime = Date.now();
 
-      if (error) throw error;
+      // OPTIMIZATION 1: Use single query with better indexing
+      // Only select necessary fields for initial load
+      const { data, error } = await withTimeout<SupabaseChatMessage[]>(
+        supabase
+          .from('chat_messages')
+          .select('id, content, role, timestamp, is_error, attached_document_ids, attached_note_ids, session_id, has_been_displayed, files_metadata')
+          .eq('session_id', sessionId)
+          .order('timestamp', { ascending: false })
+          .limit(CHAT_MESSAGES_PER_PAGE),
+        API_TIMEOUT,
+        'Failed to load session messages'
+      );
 
-      const fetchedMessages: Message[] = data.reverse().map((msg: any) => ({
+      const loadTime = Date.now() - startTime;
+
+      if (error) {
+        if (!navigator.onLine) {
+          const offlineMsgs = await offlineStorage.getAll<Message>(STORES.CHAT_MESSAGES);
+          const sessionMsgs = offlineMsgs
+            .filter(m => m.session_id === sessionId)
+            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+          
+          setChatMessages(sessionMsgs);
+          return;
+        }
+        throw error;
+      }
+
+      const fetchedMessages: Message[] = (data || []).reverse().map((msg: SupabaseChatMessage) => ({
         id: msg.id,
         content: msg.content,
         role: msg.role as 'user' | 'assistant',
@@ -468,34 +849,60 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isError: msg.is_error || false,
         attachedDocumentIds: msg.attached_document_ids || [],
         attachedNoteIds: msg.attached_note_ids || [],
-        imageUrl: msg.image_url || undefined,
-        imageMimeType: msg.image_mime_type || undefined,
         session_id: msg.session_id,
         has_been_displayed: msg.has_been_displayed || false,
+        files_metadata: msg.files_metadata,
+        isLoading: false
       }));
 
+      // Save to offline storage
+      if (fetchedMessages.length > 0) {
+        await offlineStorage.saveAll(STORES.CHAT_MESSAGES, fetchedMessages);
+      }
+
+      // OPTIMIZATION 2: Lazy load documents/notes only if needed
+      const hasAttachments = fetchedMessages.some(m =>
+        (m.attachedDocumentIds?.length || 0) > 0 ||
+        (m.attachedNoteIds?.length || 0) > 0
+      );
+
+      if (hasAttachments) {
+        // Load in background without blocking UI
+        setTimeout(() => {
+          const allDocIds = [...new Set(fetchedMessages.flatMap(m => m.attachedDocumentIds || []))];
+          const allNoteIds = [...new Set(fetchedMessages.flatMap(m => m.attachedNoteIds || []))];
+
+          if (allDocIds.length > 0) {
+            loadSpecificDocuments(user.id, allDocIds);
+          }
+          if (allNoteIds.length > 0) {
+            loadSpecificNotes(user.id, allNoteIds);
+          }
+        }, 100);
+      }
+
       setChatMessages(prevAllMessages => {
-        const otherSessionMessages = prevAllMessages.filter(m => m.session_id !== sessionId);
+        const otherSessionMessages = prevAllMessages.filter(m =>
+          m.session_id !== sessionId || !m.id.startsWith('optimistic-')
+        );
+
         const newMessagesForSession = fetchedMessages.filter(
           fm => !otherSessionMessages.some(pm => pm.id === fm.id)
         );
-        const combinedMessages = [...otherSessionMessages];
-        newMessagesForSession.forEach(newMessage => {
-          if (!combinedMessages.some(m => m.id === newMessage.id)) {
-            combinedMessages.push(newMessage);
-          }
-        });
-        return combinedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+        return [...otherSessionMessages, ...newMessagesForSession].sort(
+          (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        );
       });
 
-      dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: data.length === CHAT_MESSAGES_PER_PAGE });
+      dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: (data || []).length === CHAT_MESSAGES_PER_PAGE });
     } catch (error) {
-      console.error('Error loading session messages:', error);
-      toast.error('Failed to load chat messages for this session.');
+      //console.error('Error loading session messages:', error);
+      // Don't show error toast - let UI handle it gracefully
     } finally {
-      dispatch({ type: 'SET_IS_LOADING_SESSION_MESSAGES', payload: false });
+      setIsLoadingSessionMessages(false);
     }
-  }, [user, setChatMessages]);
+  }, [user, setChatMessages, isLoadingSessionMessages, setIsLoadingSessionMessages, loadSpecificDocuments, loadSpecificNotes]);
 
   const handleLoadOlderChatMessages = useCallback(async () => {
     if (!state.activeChatSessionId || !user || filteredChatMessages.length === 0) return;
@@ -503,18 +910,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const oldestMessageTimestamp = filteredChatMessages[0].timestamp;
 
     try {
-      dispatch({ type: 'SET_IS_LOADING_SESSION_MESSAGES', payload: true });
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('session_id', state.activeChatSessionId)
-        .lt('timestamp', oldestMessageTimestamp)
-        .order('timestamp', { ascending: false })
-        .limit(CHAT_MESSAGES_PER_PAGE);
+      setIsLoadingSessionMessages(true);
+      const { data, error } = await withTimeout<SupabaseChatMessage[]>(
+        supabase
+          .from('chat_messages')
+          .select('*')
+          .eq('session_id', state.activeChatSessionId)
+          .lt('timestamp', oldestMessageTimestamp)
+          .order('timestamp', { ascending: false })
+          .limit(CHAT_MESSAGES_PER_PAGE),
+        API_TIMEOUT,
+        'Failed to load older messages'
+      );
 
       if (error) throw error;
 
-      const olderMessages: Message[] = data.map((msg: any) => ({
+      const olderMessages: Message[] = (data || []).map((msg: SupabaseChatMessage) => ({
         id: msg.id,
         content: msg.content,
         role: msg.role as 'user' | 'assistant',
@@ -537,14 +948,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         );
       });
 
-      dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: data.length === CHAT_MESSAGES_PER_PAGE });
+      dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: (data || []).length === CHAT_MESSAGES_PER_PAGE });
     } catch (error) {
-      console.error('Error loading older messages:', error);
+      ////console.error('Error loading older messages:', error);
       toast.error('Failed to load older messages.');
     } finally {
-      dispatch({ type: 'SET_IS_LOADING_SESSION_MESSAGES', payload: false });
+      setIsLoadingSessionMessages(false);
     }
-  }, [state.activeChatSessionId, user, filteredChatMessages, setChatMessages]);
+  }, [state.activeChatSessionId, user, filteredChatMessages, setChatMessages, setIsLoadingSessionMessages]);
 
   const handleDeleteMessage = useCallback(async (messageId: string) => {
     try {
@@ -558,22 +969,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       );
       toast.info('Deleting message...');
 
-      const { error } = await supabase
-        .from('chat_messages')
-        .delete()
-        .eq('id', messageId)
-        .eq('session_id', state.activeChatSessionId)
-        .eq('user_id', user.id);
+      const { error } = await withTimeout<null>(
+        supabase
+          .from('chat_messages')
+          .delete()
+          .eq('id', messageId)
+          .eq('session_id', state.activeChatSessionId)
+          .eq('user_id', user.id),
+        API_TIMEOUT,
+        'Failed to delete message'
+      );
 
       if (error) {
-        console.error('Error deleting message from DB:', error);
+        ////console.error('Error deleting message from DB:', error);
         toast.error('Failed to delete message from database.');
         loadSessionMessages(state.activeChatSessionId);
       } else {
         toast.success('Message deleted successfully.');
       }
     } catch (error: any) {
-      console.error('Error in handleDeleteMessage:', error);
+      ////console.error('Error in handleDeleteMessage:', error);
       toast.error(`Error deleting message: ${error.message || 'Unknown error'}`);
       if (state.activeChatSessionId) {
         loadSessionMessages(state.activeChatSessionId);
@@ -615,9 +1030,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       // This would call the message submission handler
       // For now, we'll just show a placeholder implementation
-      console.log('Regenerating response for:', lastUserMessageContent);
     } catch (error) {
-      console.error('Error regenerating response:', error);
       toast.error('Failed to regenerate response');
 
       setChatMessages(prevAllMessages =>
@@ -660,9 +1073,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       // This would call the message submission handler
       // For now, we'll just show a placeholder implementation
-      console.log('Retrying failed message:', originalUserMessageContent);
     } catch (error) {
-      console.error('Error retrying message:', error);
       toast.error('Failed to retry message');
 
       setChatMessages(prevAllMessages =>
@@ -698,7 +1109,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const handleCreateNew = useCallback((type: 'note' | 'recording' | 'schedule' | 'document') => {
     switch (type) {
       case 'note':
-        appOperations.createNewNote();
+        setIsCreateNoteDialogOpen(true);
         break;
       case 'recording':
         handleNavigateToTab('recordings');
@@ -710,21 +1121,77 @@ export function AppProvider({ children }: { children: ReactNode }) {
         handleNavigateToTab('documents');
         break;
     }
-  }, [appOperations.createNewNote, handleNavigateToTab]);
+  }, [handleNavigateToTab]);
+
+  const handleCreateNoteWithData = useCallback(
+    (title: string, content: string, category: any) => {
+      appOperations.createNoteWithData(title, content, category);
+    },
+    [appOperations.createNoteWithData]
+  );
 
   // Load data and effects
   useEffect(() => {
     if (user) {
       loadChatSessions();
     }
-  }, [user, loadChatSessions, state.chatSessionsLoadedCount]);
-
-  // Handle URL session restoration
+  }, [user]);
+  // Add this effect to handle note ID from URL
   useEffect(() => {
+    if (user) {
+      const pathParts = location.pathname.split('/');
+      const isNotesRoute = pathParts[1] === 'notes' || pathParts[1] === 'note';
+      const noteIdFromUrl = isNotesRoute && pathParts[2] ? pathParts[2] : null;
+
+      if (noteIdFromUrl) {
+        // Try local state first (user's own notes)
+        const noteFromUrl = notes.find(note => note.id === noteIdFromUrl);
+        if (noteFromUrl && (!activeNote || activeNote.id !== noteIdFromUrl)) {
+          setActiveNote(noteFromUrl);
+        } else if (!noteFromUrl) {
+          // Note not in local state — could be a course note from another user.
+          // Fetch it directly (RLS allows enrolled users to read course notes).
+          (async () => {
+            try {
+              const { data, error } = await supabase
+                .from('notes')
+                .select('*')
+                .eq('id', noteIdFromUrl)
+                .maybeSingle();
+
+              if (data && !error) {
+                setActiveNote(data as Note);
+              } else {
+                // Truly not accessible — navigate away
+                navigate('/notes', { replace: true });
+              }
+            } catch {
+              navigate('/notes', { replace: true });
+            }
+          })();
+        }
+      }
+    }
+  }, [location.pathname, notes, user, activeNote, setActiveNote, navigate]);
+  // Add these declarations with your other state declarations
+  const [inputMessage, setInputMessage] = useState('');
+  const [attachedFiles, setAttachedFiles] = useState<FileData[]>([]);
+  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
+  const [isCurrentlySending, setIsCurrentlySending] = useLoadingWithTimeout(false);
+  const [isAiTyping, setIsAiTyping] = useLoadingWithTimeout(false);
+  // Add this with your other state declarations
+  const [isLoadingSession, setIsLoadingSession] = useLoadingWithTimeout(false);
+  // Add this ref for tracking previous session ID
+
+  // Enhanced session loading with URL session restoration
+  useEffect(() => {
+    // Handle URL session restoration first
     if (sessionIdFromUrl && sessionIdFromUrl !== state.activeChatSessionId && user) {
       dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: sessionIdFromUrl });
+      loadSessionMessages(sessionIdFromUrl);
+      return;
     }
-  }, [sessionIdFromUrl, state.activeChatSessionId, user, location.pathname]);
+  }, [sessionIdFromUrl, state.activeChatSessionId, user]);
 
   // Load messages for active session
   useEffect(() => {
@@ -740,13 +1207,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loadSessionMessages(state.activeChatSessionId);
       } else {
         dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: messagesForActiveSession.length > 0 });
-        dispatch({ type: 'SET_IS_LOADING_SESSION_MESSAGES', payload: false });
+        setIsLoadingSessionMessages(false);
       }
     } else if (!state.activeChatSessionId) {
       dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: false });
-      dispatch({ type: 'SET_IS_LOADING_SESSION_MESSAGES', payload: false });
+      setIsLoadingSessionMessages(false);
     }
-  }, [state.activeChatSessionId, user, allChatMessages.length, state.chatSessions, loadSessionMessages]);
+  }, [state.activeChatSessionId, user, allChatMessages.length, state.chatSessions, loadSessionMessages, setIsLoadingSessionMessages]);
 
   // Update selected document IDs when active session changes
   useEffect(() => {
@@ -756,18 +1223,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'SET_SELECTED_DOCUMENT_IDS', payload: currentSession.document_ids || [] });
       }
     } else if (!state.activeChatSessionId) {
-      dispatch({ type: 'SET_SELECTED_DOCUMENT_IDS', payload: [] });
+      // Only clear if there is NO documentId in the URL (to support "Ask AI" from library)
+      const searchParams = new URLSearchParams(location.search);
+      if (!searchParams.get('documentId')) {
+        dispatch({ type: 'SET_SELECTED_DOCUMENT_IDS', payload: [] });
+      }
     }
-  }, [state.activeChatSessionId, state.chatSessions]);
+  }, [state.activeChatSessionId, state.chatSessions, location.search]);
 
   // Set active tab based on current route
   useEffect(() => {
-    setActiveTab(currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings');
+    return setActiveTab(currentActiveTab);
   }, [currentActiveTab, setActiveTab]);
 
   // Smart data loading based on tab activation
   useEffect(() => {
-    if (!dataLoading) {
+    if (!overallLoading) {
       switch (currentActiveTab) {
         case 'dashboard':
           loadDataIfNeeded('notes');
@@ -795,17 +1266,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
           break;
       }
     }
-  }, [currentActiveTab, loadDataIfNeeded, dataLoading]);
+  }, [currentActiveTab, loadDataIfNeeded, overallLoading]);
 
   const contextValue: AppContextType = {
     // State
     ...state,
+  setPendingAttachment,
 
     // Auth & data
     user,
     authLoading,
-    dataLoading,
-
+    dataErrors,
+    clearError,
+    retryLoading,
     // Data from useAppData
     notes,
     recordings,
@@ -858,6 +1331,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Navigation
     handleNavigateToTab,
     handleCreateNew,
+    handleCreateNoteWithData,
+    isCreateNoteDialogOpen,
+    setIsCreateNoteDialogOpen,
 
     // Data setters
     setNotes,
@@ -880,7 +1356,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadMoreQuizzes,
     addDocument, // Add to context
     updateDocument, // Add to context
-
+    folders,
+    folderTree,
+    setFolders,
+    loadFolders,
+    detailedDataLoading: appData.dataLoading,  // ← USE THIS
+    inputMessage,
+    setInputMessage,
+    attachedFiles,
+    setAttachedFiles,
+    expandedMessages,
+    setExpandedMessages,
+    isCurrentlySending,
+    setIsCurrentlySending,
+    isAiTyping,
+    setIsAiTyping,
+    isLoadingSession,
+    setIsLoadingSession,
+    socialData,
+    refreshNotes,
+    refreshData: refreshData,
+    dataLoading: appData.dataLoading,
+    navigateToNote,
+    subscription,
+    subscriptionLoading,
+    subscriptionTier,
+    subscriptionLimits,
+    checkSubscriptionAccess: checkAccess,
+    refreshSubscription,
+    daysRemaining,
+    bonusAiCredits,
+    isAdmin,
+    isAdminLoading,
+    forceRefreshDocuments,
+    educationContext,
+    educationLoading,
+    refetchEducation,
+    educatorPermissions,
+    educatorLoading,
+    refetchEducatorPermissions,
   };
 
   return (
@@ -888,13 +1402,4 @@ export function AppProvider({ children }: { children: ReactNode }) {
       {children}
     </AppContext.Provider>
   );
-}
-
-// Custom hook to use the context
-export function useAppContext() {
-  const context = useContext(AppContext);
-  if (context === undefined) {
-    throw new Error('useAppContext must be used within an AppProvider');
-  }
-  return context;
 }

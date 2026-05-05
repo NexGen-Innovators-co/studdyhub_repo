@@ -1,7 +1,10 @@
 // supabase/functions/gemini-document-extractor/index.ts
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
 import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.43.2';
+import { createSubscriptionValidator, createErrorResponse } from '../utils/subscription-validator.ts';
+import { logSystemError } from '../_shared/errorLogger.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -116,34 +119,43 @@ const extractContentWithGemini = async (
         safetySettings: LLM_CONFIG.safetySettings
     };
 
-    const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
+    const MODEL_CHAIN = [
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-lite',
+        'gemini-2.5-pro',
+        'gemini-3-pro-preview'
+    ];
 
-    (`Sending LLM request for ${fileType}. Input Base64 size: ${fileContentBase64.length} bytes.`);
-    (`Payload structure (truncated data for log):`, JSON.stringify({
-        contents: payload.contents.map(c => ({
-            ...c,
-            parts: c.parts.map(p => p.inline_data ? { ...p, inline_data: { mime_type: p.inline_data.mime_type, data: `[${p.inline_data.data.length} bytes]` } } : p)
-        })),
-        generationConfig: payload.generationConfig,
-        safetySettings: payload.safetySettings
-    }, null, 2));
-
-    const response = await fetch(geminiApiUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-    });
-
-    (`LLM API response status: ${response.status} ${response.statusText}`);
-
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`Gemini API error (${response.status}): ${errorData.error?.message || response.statusText}`);
+    async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 3): Promise<any> {
+        for (let attempt = 0; attempt < Math.min(maxAttempts, MODEL_CHAIN.length); attempt++) {
+            const model = MODEL_CHAIN[attempt % MODEL_CHAIN.length];
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            try {
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+                if (resp.ok) return await resp.json();
+                const txt = await resp.text();
+                // console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
+                if (resp.status === 429 || resp.status === 503) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
+            } catch (err) {
+                // console.error(`Error calling Gemini ${model}:`, err);
+                if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
+            }
+        }
+        // OpenRouter fallback
+        const orResult = await callOpenRouterFallback(requestBody.contents, { source: 'gemini-document-extractor' });
+        if (orResult.success && orResult.content) {
+            return { candidates: [{ content: { parts: [{ text: orResult.content }] } }] };
+        }
+        throw new Error('All AI models failed (Gemini + OpenRouter)');
     }
 
-    const result = await response.json();
+    const result = await callGeminiWithModelChain(payload, geminiApiKey);
+    
     const extractedText = result.candidates?.[0]?.content?.parts?.[0]?.text;
     const finishReason = result.candidates?.[0]?.finishReason;
 
@@ -160,7 +172,7 @@ const extractContentWithGemini = async (
     }
 
     if (finishReason === 'MAX_TOKENS') {
-        console.warn('Gemini extraction hit token limit. Content might be truncated. Consider client-side chunking for extremely large documents.');
+        // console.warn('Gemini extraction hit token limit. Content might be truncated. Consider client-side chunking for extremely large documents.');
     }
 
     (`Successfully extracted ${extractedText.length} characters using Gemini for ${fileType}.`);
@@ -210,7 +222,7 @@ const extractTextWithOptimalStrategy = async (
         return await extractContentWithGemini(fileContentBase64, fileType, geminiApiKey);
     } else {
         const errorMessage = `Content extraction not supported for file type: ${fileType}.`;
-        console.warn(`Edge Function: Fallback for unexpected file type ${fileType}.`);
+        // console.warn(`Edge Function: Fallback for unexpected file type ${fileType}.`);
         throw new Error(errorMessage);
     }
 };
@@ -247,6 +259,18 @@ serve(async (req) => {
         const { documentId: reqDocumentId, file_url, file_type, userId: reqUserId, imageMimeType, fileUrl: imageUrl } = payload;
         documentId = reqDocumentId;
         userId = reqUserId; // Ensure userId is captured
+
+        if (!userId) {
+            return createErrorResponse('Unauthorized: user_id is required', 401);
+        }
+
+        // Validate document upload limit before processing
+        const validator = createSubscriptionValidator();
+        const limitCheck = await validator.checkDocumentsLimit(userId);
+        
+        if (!limitCheck.allowed) {
+            return createErrorResponse(limitCheck.message || 'Document limit exceeded', 403);
+        }
 
         const finalFileUrl = file_url || imageUrl;
         const finalFileType = file_type || imageMimeType;
@@ -378,7 +402,7 @@ serve(async (req) => {
         });
 
     } catch (error) {
-        console.error('Document extraction error:', error);
+        // console.error('Document extraction error:', error);
 
         const errorMessage = error?.message || 'Unknown error occurred during text extraction';
 
@@ -392,7 +416,17 @@ serve(async (req) => {
                 }).eq('id', documentId);
             }
         } catch (updateErr) {
-            console.error("Failed to update document status to failed:", updateErr);
+          // ── Log to system_error_logs ──
+          try {
+            const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+            await logSystemError(_logClient, {
+              severity: 'error',
+              source: 'gemini-document-extractor',
+              message: updateErr?.message || String(updateErr),
+              details: { stack: updateErr?.stack },
+            });
+          } catch (_logErr) { console.error('[gemini-document-extractor] Error logging failed:', _logErr); }
+            // console.error("Failed to update document status to failed:", updateErr);
         }
 
         return new Response(JSON.stringify({
@@ -406,3 +440,4 @@ serve(async (req) => {
         });
     }
 });
+

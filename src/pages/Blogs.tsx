@@ -1,187 +1,176 @@
+// src/pages/Blogs.tsx
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Button } from '../components/ui/button';
-import { Sparkles, Sun, Moon, Rss, Calendar, User, Globe } from 'lucide-react';
+import { AppLayout, ContentContainer, Card, ThemedImg } from '../modules/layout/components/LayoutComponents';
+import { Calendar, User, ArrowRight, Clock, Tag } from 'lucide-react';
 
 const Blog: React.FC = () => {
-    const [isDarkMode, setIsDarkMode] = React.useState(() => {
-        if (typeof window !== 'undefined') {
-            const savedTheme = localStorage.getItem('theme');
-            if (savedTheme) {
-                return savedTheme === 'dark';
-            }
-            return window.matchMedia('(prefers-color-scheme: dark)').matches;
-        }
-        return false;
-    });
-
-    React.useEffect(() => {
-        if (isDarkMode) {
-            document.documentElement.classList.add('dark');
-            localStorage.setItem('theme', 'dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-            localStorage.setItem('theme', 'light');
-        }
-    }, [isDarkMode]);
-
-    const toggleDarkMode = () => {
-        setIsDarkMode(prevMode => !prevMode);
-    };
-
     const blogPosts = [
         {
             id: 1,
-            title: "The Future of Learning: How AI is Transforming Education",
-            summary: "Explore how artificial intelligence is set to revolutionize educational methodologies, making learning more personalized and efficient.",
-            author: "studdyhub AI Team",
-            date: "July 25, 2025",
-            imageUrl: "https://placehold.co/600x400/A78BFA/FFFFFF?text=AI+Learning"
+            title: "How AI-Powered Study Podcasts Are Changing the Way Students Learn",
+            summary: "Discover how StuddyHub's podcast feature lets you record study sessions, auto-transcribe them, and share audio notes with classmates for on-the-go revision.",
+            author: "StuddyHub AI Team",
+            date: "February 5, 2026",
+            readTime: "6 min read",
+            category: "Podcasts",
+            img: "/screenshots/social-light.jpg"
         },
         {
             id: 2,
-            title: "Mastering Your Notes with Intelligent Summarization",
-            summary: "Discover techniques and features within studdyhub AI that help you condense vast amounts of information into digestible summaries.",
-            author: "Dr. Anya Sharma",
-            date: "July 18, 2025",
-            imageUrl: "https://placehold.co/600x400/60A5FA/FFFFFF?text=Note+Taking"
+            title: "Live Quizzes: Bringing Kahoot-Style Fun to Your Study Group",
+            summary: "Learn how our live quiz feature turns studying into a social, competitive experience — create quizzes from your notes and challenge your classmates in real time.",
+            author: "Thomas Appiah",
+            date: "January 28, 2026",
+            readTime: "5 min read",
+            category: "Quizzes & Social",
+            img: "/screenshots/quizzes-ight.jpg",
+            imgDark: "/screenshots/quizzes-dark.jpg"
         },
         {
             id: 3,
-            title: "Voice to Text: Unlocking Insights from Your Lectures",
-            summary: "Learn how studdyhub AI's advanced transcription and analysis features can turn your spoken words into actionable insights.",
-            author: "Michael Lee",
-            date: "July 10, 2025",
-            imageUrl: "https://placehold.co/600x400/34D399/FFFFFF?text=Voice+AI"
+            title: "From PDF to Conversation: Chat With Any Document Using AI",
+            summary: "Upload your lecture slides, textbooks, or research papers and ask questions directly — StuddyHub's document analysis turns static files into interactive study partners.",
+            author: "Isabel Anane",
+            date: "January 15, 2026",
+            readTime: "7 min read",
+            category: "Document Analysis",
+            img: "/screenshots/documents-light.jpg"
         },
         {
             id: 4,
-            title: "Personalized Learning Paths: Tailoring AI to Your Style",
-            summary: "Understand how studdyhub AI adapts to visual, auditory, kinesthetic, and reading/writing learning styles for a truly unique experience.",
-            author: "Sarah Chen",
-            date: "July 01, 2025",
-            imageUrl: "https://placehold.co/600x400/FBBF24/FFFFFF?text=Personalized+Learning"
+            title: "Mastering Your Schedule: Smart Timetable Management for Students",
+            summary: "Recurring events, conflict detection, and countdown timers — explore how the schedule module keeps you organised throughout the semester.",
+            author: "Dr. Okai",
+            date: "January 5, 2026",
+            readTime: "4 min read",
+            category: "Productivity",
+            img: "/screenshots/schedules-light.jpg"
+        },
+        {
+            id: 5,
+            title: "Voice-to-Text: Never Miss a Detail in Your Lectures Again",
+            summary: "Record lectures directly in the app and get accurate, searchable transcripts with automatic chapter markers and AI-generated summaries.",
+            author: "StuddyHub AI Team",
+            date: "December 20, 2025",
+            readTime: "5 min read",
+            category: "Recordings",
+            img: "/screenshots/recordings-light.jpg"
+        },
+        {
+            id: 6,
+            title: "Building a Learning Community: Social Features in StuddyHub AI",
+            summary: "From study groups and shared resources to notifications and direct messages, see how social learning accelerates academic performance.",
+            author: "Thomas Appiah",
+            date: "December 10, 2025",
+            readTime: "6 min read",
+            category: "Social Learning",
+            img: "/screenshots/chat-light.jpg"
         }
     ];
 
     return (
-        <div className="min-h-screen bg-gray-100 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased flex flex-col">
-            {/* Header */}
-            <header className="w-full px-6 py-4 flex justify-between items-center z-50 bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md">
-                <Link to="/" className="flex items-center gap-3 group">
-                    <img
-                        src="/siteimage.png"
-                        alt="studdyhub AI Logo"
-                        className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
-                    />
-                    <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">studdyhub AI</span>
-                </Link>
-                <div className="flex items-center gap-4">
-                    <Link to="/auth">
-                        <Button type="button" className="px-5 py-2 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">Sign In</Button>
-                    </Link>
-                    <Button
-                        type="button"
-                        onClick={toggleDarkMode}
-                        className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                        title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-                    >
-                        {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                    </Button>
+        <AppLayout>
+            <ContentContainer>
+                {/* Photo-backed hero */}
+                <div className="relative rounded-2xl overflow-hidden mb-12">
+                    <ThemedImg src="/screenshots/notes-light.jpg" alt="StuddyHub Blog" className="w-full h-72 md:h-80 object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-black/20" />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
+                        <span className="text-orange-300 text-sm font-semibold tracking-widest uppercase mb-3">Latest Insights</span>
+                        <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4">Our Blog</h1>
+                        <p className="text-gray-200 max-w-2xl text-lg">
+                            Tips, tutorials, and product updates on AI-powered studying, productivity, and educational technology.
+                        </p>
+                    </div>
                 </div>
-            </header>
 
-            {/* Main Content */}
-            <main className="flex-1 container mx-auto px-6 py-12 mt-20 md:mt-24">
-                <h1 className="text-4xl md:text-5xl font-extrabold mb-8 text-blue-600 dark:text-blue-400 text-center">Our Blog</h1>
-                <p className="text-lg text-gray-700 dark:text-gray-300 max-w-3xl mx-auto text-center mb-12">
-                    Stay updated with the latest insights, tips, and news from studdyhub AI.
-                </p>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {blogPosts.map(post => (
-                        <div key={post.id} className="bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 overflow-hidden transform hover:scale-105 transition-transform duration-300">
-                            <img src={post.imageUrl} alt={post.title} className="w-full h-48 object-cover" onError={(e) => { e.currentTarget.src = 'https://placehold.co/600x400/e0e0e0/666666?text=Image+Error'; }} />
-                            <div className="p-6">
-                                <h2 className="text-2xl font-bold mb-3 text-gray-900 dark:text-white">{post.title}</h2>
-                                <p className="text-gray-700 dark:text-gray-300 mb-4">{post.summary}</p>
-                                <div className="flex items-center text-gray-500 dark:text-gray-400 text-sm mb-4">
-                                    <User className="h-4 w-4 mr-2" /> {post.author}
-                                    <Calendar className="h-4 w-4 ml-4 mr-2" /> {post.date}
+                {/* Featured post — wide card with photo */}
+                <div className="mb-12">
+                    <Card className="group hover:shadow-xl transition-all overflow-hidden !p-0">
+                        <div className="grid grid-cols-1 lg:grid-cols-2">
+                            <ThemedImg src={blogPosts[0].img} darkSrc={(blogPosts[0] as any).imgDark} alt={blogPosts[0].title} className="w-full h-64 lg:h-full object-cover" />
+                            <div className="p-8 flex flex-col justify-center">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-xs font-medium w-fit mb-4">
+                                    <Tag className="h-3 w-3" />
+                                    {blogPosts[0].category}
+                                </span>
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                    {blogPosts[0].title}
+                                </h2>
+                                <p className="text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">
+                                    {blogPosts[0].summary}
+                                </p>
+                                <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                                    <span className="flex items-center gap-1.5">
+                                        <User className="h-3.5 w-3.5" />
+                                        {blogPosts[0].author}
+                                    </span>
+                                    <span className="flex items-center gap-1.5">
+                                        <Calendar className="h-3.5 w-3.5" />
+                                        {blogPosts[0].date}
+                                    </span>
                                 </div>
-                                <Button asChild className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold">
-                                    <Link to={`/blog/${post.id}`}>Read More</Link>
-                                </Button>
                             </div>
                         </div>
+                    </Card>
+                </div>
+
+                {/* Remaining posts grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+                    {blogPosts.slice(1).map((post) => (
+                        <Card key={post.id} className="group hover:shadow-xl transition-shadow duration-300 hover:-translate-y-1 flex flex-col overflow-hidden !p-0">
+                            <ThemedImg src={post.img} darkSrc={(post as any).imgDark} alt={post.title} className="w-full h-44 object-cover" />
+                            <div className="p-5 flex-1 flex flex-col space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-xs font-medium">
+                                        <Tag className="h-3 w-3" />
+                                        {post.category}
+                                    </span>
+                                </div>
+
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors leading-snug">
+                                    {post.title}
+                                </h3>
+
+                                <p className="text-gray-600 dark:text-gray-400 text-sm line-clamp-3 flex-1">
+                                    {post.summary}
+                                </p>
+
+                                <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+                                    <div className="flex items-center gap-1.5">
+                                        <User className="h-3.5 w-3.5" />
+                                        <span>{post.author}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="flex items-center gap-1">
+                                            <Calendar className="h-3.5 w-3.5" />
+                                            {post.date}
+                                        </span>
+                                        <span className="flex items-center gap-1">
+                                            <Clock className="h-3.5 w-3.5" />
+                                            {post.readTime}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </Card>
                     ))}
                 </div>
 
-                <div className="text-center mt-16">
-                    <Button variant="outline" className="text-blue-600 border-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-400 dark:hover:bg-blue-900">
-                        <Rss className="h-5 w-5 mr-2" /> Subscribe to RSS
-                    </Button>
+                <div className="text-center">
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
+                        More articles coming soon — follow us for updates.
+                    </p>
+                    <Link to="/contact">
+                        <button className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all">
+                            Subscribe for Updates
+                            <ArrowRight className="h-4 w-4" />
+                        </button>
+                    </Link>
                 </div>
-            </main>
-
-            <footer className="py-16 px-6 bg-gray-800 dark:bg-black text-gray-300">
-                <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
-                    <div className="md:col-span-2">
-                        <div className="flex items-center gap-3 mb-6">
-                            <img
-                                src="/siteimage.png"
-                                alt="studdyhub AI Logo"
-                                className="h-12 w-12 object-contain group-hover:scale-110 transition-transform"
-                            />
-                            <span className="text-2xl font-extrabold text-white">studdyhub AI</span>
-                        </div>
-                        <p className="text-gray-400 leading-relaxed mb-6">
-                            Empowering students and professionals to achieve more with intelligent tools for notes, recordings, and schedules.
-                        </p>
-                        <div className="flex gap-4">
-                            <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors">
-                                <Globe className="h-5 w-5" />
-                            </a>
-                            <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors">
-                                <img
-                                    src="/siteimage.png"
-                                    alt="studdyhub AI Logo"
-                                    className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
-                                />
-                            </a>
-                        </div>
-                    </div>
-
-                    <div>
-                        <h3 className="text-white font-semibold mb-4">Product</h3>
-                        <ul className="space-y-3 text-gray-400">
-                            {/* <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
-                            <li><a href="#cta" className="hover:text-white transition-colors">Pricing</a></li> */}
-                            <li><a href="api" className="hover:text-white transition-colors">API</a></li>
-                            <li><a href="integrations" className="hover:text-white transition-colors">Integrations</a></li>
-                        </ul>
-                    </div>
-
-                    <div>
-                        <h3 className="text-white font-semibold mb-4">Company</h3>
-                        <ul className="space-y-3 text-gray-400">
-                            <li><a href="/about-us" className="hover:text-white transition-colors">About Us</a></li>
-                            <li><a href="/blogs" className="hover:text-white transition-colors">Blog</a></li>
-                            <li><a href="careers" className="hover:text-white transition-colors">Careers</a></li>
-                            <li><a href="/contact" className="hover:text-white transition-colors">Contact</a></li>
-                        </ul>
-                    </div>
-                </div>
-
-                <div className="border-t border-gray-700 pt-8 mt-12 text-center text-gray-500 text-sm">
-                    <p>&copy; {new Date().getFullYear()} studdyhub AI. All rights reserved.</p>
-                    <div className="flex justify-center gap-4 mt-2">
-                        <a href="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</a>
-                        <a href="/terms-of-service" className="hover:text-white transition-colors">Terms of Service</a>
-                    </div>
-                </div>
-            </footer>
-        </div>
+            </ContentContainer>
+        </AppLayout>
     );
 };
 

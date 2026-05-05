@@ -1,6 +1,75 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.24.1';
+import { createSubscriptionValidator, createErrorResponse as createSubErrorResponse } from '../utils/subscription-validator.ts';
+import { logSystemError } from '../_shared/errorLogger.ts';
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
+
+// Model fallback chain for quota/rate-limit resilience
+const MODEL_CHAIN = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-pro',
+  'gemini-3-pro-preview',
+];
+
+async function callGeminiWithModelChain(prompt: string, apiKey: string): Promise<string> {
+  const requestBody = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.7, maxOutputTokens: 8192, topK: 40, topP: 0.95 },
+  };
+
+  for (let attempt = 0; attempt < MODEL_CHAIN.length; attempt++) {
+    const model = MODEL_CHAIN[attempt];
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    console.log(`[generate-note-from-document] Attempt ${attempt + 1}/${MODEL_CHAIN.length} using model: ${model}`);
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (response.status === 429 || response.status === 503) {
+        console.warn(`[generate-note-from-document] ${response.status} from ${model}, switching to next model...`);
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
+
+      if (response.status === 400) {
+        const errorText = await response.text();
+        console.error(`[generate-note-from-document] 400 from ${model}: ${errorText.substring(0, 200)}`);
+        continue;
+      }
+
+      if (!response.ok) {
+        console.error(`[generate-note-from-document] ${response.status} from ${model}`);
+        await new Promise(r => setTimeout(r, 1000));
+        continue;
+      }
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) {
+        console.warn(`[generate-note-from-document] No content from ${model}`);
+        continue;
+      }
+
+      return text;
+    } catch (err) {
+      console.error(`[generate-note-from-document] Network error with ${model}:`, err);
+      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+
+  // OpenRouter fallback
+  const orResult = await callOpenRouterFallback(requestBody.contents, { source: 'generate-note-from-document' });
+  if (orResult.success && orResult.content) {
+    return orResult.content;
+  }
+  throw new Error('All AI models failed (Gemini + OpenRouter)');
+}
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -26,6 +95,7 @@ Please extract and synthesize information primarily from this section. If the se
 - Desired Explanation Style: ${userProfile.learning_preferences.explanation_style}
 - Needs Examples: ${userProfile.learning_preferences.examples ? 'Yes' : 'No'}
 - Desired Difficulty: ${userProfile.learning_preferences.difficulty}
+${userProfile.personal_context ? `\n**Personal Context (provided by the student — use to tailor the note):**\n${userProfile.personal_context}` : ''}
 
 **Crucial Instructions for AI Output Tailoring:**
 * **Explanation Style:** Adapt your explanations to be "${userProfile.learning_preferences.explanation_style}". For example:
@@ -103,7 +173,7 @@ When applicable, use the following tools to create visual aids:
     {
       "type": "bar",
       "data": {
-        "labels": ["Red", "Blue", "Yellow", "Green", "Purple", "Orange"],
+        "labels": ["Red", "Blue", "Yellow", "Green", "blue", "Orange"],
         "datasets": [{
           "label": "# of Votes",
           "data": [12, 19, 3, 5, 2, 3],
@@ -177,7 +247,7 @@ const extractSummary = (markdown) => {
         }
         return summary.trim() || 'No summary could be extracted.';
     } catch (e) {
-        console.error('Error extracting summary:', e);
+        //console.error('Error extracting summary:', e);
         return 'No summary could be extracted.';
     }
 };
@@ -203,7 +273,7 @@ const processImagePlaceholders = async (content, userId, supabaseServiceRoleClie
                 }
             });
             if (imageError) {
-                console.error(`Error generating image for "${description}":`, imageError.message);
+                //console.error(`Error generating image for "${description}":`, imageError.message);
                 // If image generation fails, replace with a broken image or a message
                 updatedContent = updatedContent.replace(fullMatch, `![${description} - Image Generation Failed](broken-image.png)`); // Use a generic broken image
             } else if (imageData && imageData.imageUrl) {
@@ -214,7 +284,7 @@ const processImagePlaceholders = async (content, userId, supabaseServiceRoleClie
                 updatedContent = updatedContent.replace(fullMatch, `![${description} - No Image URL Returned](no-image-url.png)`); // Use a generic no-image-url
             }
         } catch (e) {
-            console.error(`Unexpected error during image generation for "${description}":`, e.message);
+            //console.error(`Unexpected error during image generation for "${description}":`, e.message);
             updatedContent = updatedContent.replace(fullMatch, `![${description} - Unexpected Error](unexpected-error.png)`); // Use a generic error image
         }
     }
@@ -256,8 +326,16 @@ serve(async (req) => {
             });
         }
 
-        // 4. Validate request body
-        const { documentId, userProfile, selectedSection } = await req.json(); // Destructure selectedSection
+        // Check AI generation limit
+        const validator = createSubscriptionValidator();
+        const limitCheck = await validator.checkAiMessageLimit(user.id);
+        
+        if (!limitCheck.allowed) {
+            return createSubErrorResponse(limitCheck.message || 'AI generation limit exceeded', 403);
+        }
+
+        // 4. Parse request body
+        const { documentId, userProfile, selectedSection, noteId } = await req.json(); // Destructure selectedSection and noteId
         if (!documentId || !userProfile) {
             return new Response(JSON.stringify({
                 error: 'Missing documentId or userProfile'
@@ -273,7 +351,7 @@ serve(async (req) => {
         // 5. Fetch document content securely
         const { data: document, error: docError } = await supabaseClient.from('documents').select('title, content_extracted').eq('id', documentId).eq('user_id', user.id).single();
         if (docError || !document) {
-            console.error('Document fetch error:', docError?.message);
+            //console.error('Document fetch error:', docError?.message);
             return new Response(JSON.stringify({
                 error: 'Document not found or access denied'
             }), {
@@ -288,28 +366,22 @@ serve(async (req) => {
         // 6. Construct the AI prompt, passing selectedSection
         const prompt = createPrompt(userProfile, document, selectedSection);
 
-        // 7. Call the Gemini API
-        const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+        // 7. Call the Gemini API with model chain fallback
+        const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GEMINI_API_KEY_VERTEX');
         if (!geminiApiKey) {
             throw new Error("GEMINI_API_KEY is not set in Supabase secrets.");
         }
-        const genAI = new GoogleGenerativeAI(geminiApiKey);
-        const model = genAI.getGenerativeModel({
-            model: 'gemini-2.0-flash'
-        });
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        let aiContent = response.text(); // Use 'let' because we will modify it
+        let aiContent = await callGeminiWithModelChain(prompt, geminiApiKey);
 
         // 7.5. Process image placeholders in the AI-generated content
         aiContent = await processImagePlaceholders(aiContent, user.id, supabaseServiceRoleClient);
 
-        // 8. Save the new note to the database
-        const newNotePayload = {
+        // 8. Save the new note to the database (or update existing if noteId provided)
+        const notePayload = {
             user_id: user.id,
             document_id: documentId,
-            title: `AI Notes for: ${document.title}${selectedSection ? ` - ${selectedSection}` : ''}`, // Add section to title
+            title: `${document.title}${selectedSection ? ` - ${selectedSection}` : ''}`, // Add section to title
             content: aiContent,
             category: 'general',
             tags: [
@@ -318,17 +390,43 @@ serve(async (req) => {
                 document.title.toLowerCase().replace(/\s+/g, '-'),
                 ...(selectedSection ? [selectedSection.toLowerCase().replace(/\s+/g, '-')] : []) // Add selected section as tag
             ],
-            ai_summary: extractSummary(aiContent)
+            ai_summary: extractSummary(aiContent),
+            updated_at: new Date().toISOString()
         };
 
-        const { data: newNote, error: insertError } = await supabaseClient.from('notes').insert(newNotePayload).select().single();
-        if (insertError) {
-            console.error('Note insert error:', insertError.message);
-            throw new Error('Failed to save the generated note. Check database constraints.');
+        let resultData;
+        
+        if (noteId) {
+             // Update existing note
+             const { data: updatedNote, error: updateError } = await supabaseClient
+                .from('notes')
+                .update(notePayload)
+                .eq('id', noteId)
+                .eq('user_id', user.id)
+                .select()
+                .single();
+                
+             if (updateError) {
+                 throw new Error('Failed to update the existing note. ' + updateError.message);
+             }
+             resultData = updatedNote;
+        } else {
+             // Insert new note
+             const { data: newNote, error: insertError } = await supabaseClient
+                .from('notes')
+                .insert(notePayload)
+                .select()
+                .single();
+                
+             if (insertError) {
+                //console.error('Note insert error:', insertError.message);
+                throw new Error('Failed to save the generated note. Check database constraints.');
+             }
+             resultData = newNote;
         }
 
-        // 9. Return the new note to the client
-        return new Response(JSON.stringify(newNote), {
+        // 9. Return the note to the client
+        return new Response(JSON.stringify(resultData), {
             status: 200,
             headers: {
                 ...corsHeaders,
@@ -336,7 +434,17 @@ serve(async (req) => {
             }
         });
     } catch (error) {
-        console.error('Edge function error:', error.message);
+      // ── Log to system_error_logs ──
+      try {
+        const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+        await logSystemError(_logClient, {
+          severity: 'error',
+          source: 'generate-note-from-document',
+          message: error?.message || String(error),
+          details: { stack: error?.stack },
+        });
+      } catch (_logErr) { console.error('[generate-note-from-document] Error logging failed:', _logErr); }
+        //console.error('Edge function error:', error.message);
         return new Response(JSON.stringify({
             error: error.message
         }), {

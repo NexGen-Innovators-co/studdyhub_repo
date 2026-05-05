@@ -8,7 +8,9 @@ export const generateInlineContent = async (
   content: string,
   userProfile: UserProfile,
   actionType: string,
-  customInstruction: string
+  customInstruction: string,
+  attachedDocumentContent?: string,
+  selectionRange?: { from: number; to: number }
 ): Promise<string> => {
   if (!userProfile) {
     throw new Error('User profile not found. Cannot generate content.');
@@ -18,35 +20,197 @@ export const generateInlineContent = async (
     throw new Error('Please select some text to use AI actions.');
   }
 
+  // Trim the note content to a reasonable context window
+  const contextWindow = 20000;
+  const half = Math.floor(contextWindow / 2);
+
+  let fullNoteContentTrimmed = content;
+  if (content.length > contextWindow) {
+    const start = Math.max(0, content.indexOf(selectedText) - half);
+    const end = Math.min(content.length, start + contextWindow);
+    fullNoteContentTrimmed = content.slice(start, end);
+  }
+
   try {
     const { data, error } = await supabase.functions.invoke('generate-inline-content', {
       body: {
         selectedText: selectedText,
-        fullNoteContent: content,
+        fullNoteContent: fullNoteContentTrimmed,
         userProfile: userProfile,
         actionType: actionType,
-        customInstruction: customInstruction,
+        customInstruction: customInstruction || '', // Ensure it's always a string
+        attachedDocumentContent: attachedDocumentContent || '',
+        selectionRange: selectionRange || null,
       },
     });
 
     if (error) {
+      //console.error('[aiServices] Edge function error:', error);
       throw new Error(error.message || 'An unknown error occurred during inline AI generation.');
     }
 
-    return data.generatedContent || '';
+    if (!data || !data.generatedContent) {
+      //console.error('[aiServices] No generated content in response:', data);
+      throw new Error('AI did not return any content. Please try again.');
+    }
+
+    // Get the generated content
+    let finalContent = data.generatedContent || '';
+
+    // Clean up the response
+    finalContent = finalContent.trim();
+
+    // Always attempt to remove outer "markdown" code blocks if they exist
+    // This handles cases where the LLM wraps mixed content (text + mermaid) in a specific markdown block
+    if (finalContent.startsWith('```markdown') || finalContent.startsWith('```md')) {
+      // Only strip if it also Ends with a code block, to avoid stripping valid internal start blocks (though unlikely at pos 0)
+      // We use a regex that handles the start, checks content, and the end
+      const match = finalContent.match(/^```(?:markdown|md)\n([\s\S]*?)\n```$/);
+      if (match) {
+        finalContent = match[1].trim();
+      }
+    }
+
+    // Check if this is a diagram - if so, preserve the code blocks
+    const isDiagram = /```(?:mermaid|chartjs|dot)/.test(finalContent);
+
+    if (!isDiagram) {
+      // Remove hallucinated intros/preambles for text-only responses
+      const badStarts = [
+        /^here\s+is\s+(an?\s+)?/i,
+        /^sure,?\s*/i,
+        /^certainly,?\s*/i,
+        /^expanded\s+version\s*:\s*/i,
+        /^summary\s*:\s*/i,
+        /^rephrased\s*:\s*/i,
+        /^here'?s\s+/i,
+        /^okay,?\s*/i,
+        /^alright,?\s*/i,
+      ];
+
+      badStarts.forEach(regex => {
+        finalContent = finalContent.replace(regex, '').trim();
+      });
+    }
+
+    return finalContent;
+
   } catch (error) {
     let errorMessage = 'Failed to generate content with AI.';
+
     if (error instanceof FunctionsHttpError) {
-      errorMessage = `AI generation failed: ${error.context.statusText}`;
+      //console.error('[aiServices] FunctionsHttpError:', error);
+      errorMessage = `AI generation failed: ${error.context?.statusText || 'Unknown error'}`;
+
       if (error.message.includes("The model is overloaded")) {
         errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
       }
     } else if (error instanceof Error) {
+      //console.error('[aiServices] Error:', error.message);
       errorMessage = error.message;
+
       if (error.message.includes("The model is overloaded")) {
         errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
       }
     }
+
     throw new Error(errorMessage);
+  }
+};
+
+export interface AIGeneratedCourse {
+  title: string;
+  code: string;
+  description: string;
+  modules: {
+    title: string;
+    description: string;
+    category: 'Lecture' | 'Notes' | 'Assignment';
+  }[];
+}
+
+export const generateCourseStructure = async (
+  topic: string,
+  level: string,
+  moduleCount: number,
+  userProfile: UserProfile
+): Promise<AIGeneratedCourse> => {
+  if (!userProfile) throw new Error('User profile required');
+
+  const prompt = `
+    Generate a structured course curriculum for: "${topic}".
+    Target Level: ${level}.
+    Number of Modules: Approximately ${moduleCount}.
+    
+    You MUST return strict JSON format ONLY. Do not include any markdown formatting or text outside the JSON.
+    Structure:
+    {
+      "title": "Course Title",
+      "code": "Suggested Course Code (e.g., CS101)",
+      "description": "Brief course description",
+      "modules": [
+        {
+          "title": "Module 1: Title",
+          "description": "What this module covers",
+          "category": "Lecture" 
+        }
+      ]
+    }
+  `;
+
+  try {
+    const { data, error } = await supabase.functions.invoke('generate-inline-content', {
+      body: {
+        selectedText: topic,
+        fullNoteContent: '',
+        userProfile: userProfile,
+        actionType: 'generate_course_structure',
+        customInstruction: prompt,
+        attachedDocumentContent: '',
+      },
+    });
+
+    if (error) throw error;
+
+    let content = data.generatedContent;
+    // Clean markdown if present
+    content = content.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    try {
+      return JSON.parse(content) as AIGeneratedCourse;
+    } catch (e) {
+      //console.error("Failed to parse AI response as JSON", content);
+      throw new Error("AI generated invalid structure. Please try again.");
+    }
+
+  } catch (error: any) {
+    //console.error('AI Course Generation Error:', error);
+    throw new Error(error.message || 'Failed to generate course');
+  }
+};
+
+export interface RawInsight {
+  title: string;
+  message: string;
+  type: string;
+  iconName: string;
+  action?: string;
+}
+
+export const generateDashboardInsights = async (stats: any, userProfile?: any): Promise<RawInsight[]> => {
+  try {
+    const { data, error } = await supabase.functions.invoke('generate-dashboard-insights', {
+      body: { stats, userProfile }
+    });
+
+    if (error) {
+        // console.error("Supabase Function Error:", error);
+        throw error;
+    }
+    
+    return data.insights || [];
+  } catch (error) {
+    // console.error('Error fetching AI insights:', error);
+    return []; 
   }
 };
