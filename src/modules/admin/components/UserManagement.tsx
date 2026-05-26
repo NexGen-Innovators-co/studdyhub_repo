@@ -100,6 +100,9 @@ const UserManagement = () => {
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'suspended' | 'active_now'>('all');
+  const [sortOption, setSortOption] = useState<'created_desc' | 'created_asc' | 'last_active_desc' | 'last_active_asc'>('created_desc');
+  const [activeFrom, setActiveFrom] = useState('');
+  const [activeTo, setActiveTo] = useState('');
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [isSuspendOpen, setIsSuspendOpen] = useState(false);
@@ -166,6 +169,13 @@ const UserManagement = () => {
         countQuery = countQuery.or(`username.ilike.%${trimmedSearch}%,email.ilike.%${trimmedSearch}%,display_name.ilike.%${trimmedSearch}%`);
       }
 
+      if (activeFrom) {
+        countQuery = countQuery.gte('last_active', `${activeFrom}T00:00:00Z`);
+      }
+      if (activeTo) {
+        countQuery = countQuery.lte('last_active', `${activeTo}T23:59:59Z`);
+      }
+
       // Fetch total count
       const { count, error: countError } = await countQuery;
 
@@ -188,6 +198,26 @@ const UserManagement = () => {
           is_verified
         `);
 
+      if (activeFrom) {
+        usersQuery = usersQuery.gte('last_active', `${activeFrom}T00:00:00Z`);
+      }
+      if (activeTo) {
+        usersQuery = usersQuery.lte('last_active', `${activeTo}T23:59:59Z`);
+      }
+
+      let orderColumn: 'created_at' | 'last_active' = 'created_at';
+      let orderAsc = false;
+      if (sortOption === 'created_asc') {
+        orderColumn = 'created_at';
+        orderAsc = true;
+      } else if (sortOption === 'last_active_desc') {
+        orderColumn = 'last_active';
+        orderAsc = false;
+      } else if (sortOption === 'last_active_asc') {
+        orderColumn = 'last_active';
+        orderAsc = true;
+      }
+
       if (filterStatus !== 'all') {
         if (filterStatus === 'active_now') {
           usersQuery = usersQuery.eq('is_online', true);
@@ -200,9 +230,8 @@ const UserManagement = () => {
         usersQuery = usersQuery.or(`username.ilike.%${trimmedSearch}%,email.ilike.%${trimmedSearch}%,display_name.ilike.%${trimmedSearch}%`);
       }
 
-      // Fetch paginated users
       const { data, error } = await usersQuery
-        .order('created_at', { ascending: false })
+        .order(orderColumn, { ascending: orderAsc })
         .range(from, to);
 
       if (error) throw error;
@@ -236,11 +265,11 @@ const UserManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [pageSize, toast, searchTerm, filterStatus]);
+  }, [pageSize, toast, searchTerm, filterStatus, sortOption, activeFrom, activeTo]);
 
   useEffect(() => {
     fetchUsers(1);
-  }, [searchTerm, filterStatus, fetchUsers]);
+  }, [searchTerm, filterStatus, sortOption, activeFrom, activeTo, fetchUsers]);
 
   const applySearch = () => {
     setSearchTerm(searchInput.trim());
@@ -460,6 +489,31 @@ const UserManagement = () => {
             <SelectItem value="active_now">Active Now</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={sortOption} onValueChange={(v: typeof sortOption) => setSortOption(v)}>
+          <SelectTrigger className="w-[220px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="created_desc">Newest Joined</SelectItem>
+            <SelectItem value="created_asc">Oldest Joined</SelectItem>
+            <SelectItem value="last_active_desc">Last Active (Recent)</SelectItem>
+            <SelectItem value="last_active_asc">Last Active (Oldest)</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          type="date"
+          value={activeFrom}
+          onChange={(e) => setActiveFrom(e.target.value)}
+          placeholder="Last active from"
+          className="w-[180px]"
+        />
+        <Input
+          type="date"
+          value={activeTo}
+          onChange={(e) => setActiveTo(e.target.value)}
+          placeholder="Last active to"
+          className="w-[180px]"
+        />
         <Button
           variant="outline"
           onClick={() => exportUserCsv(users.filter(u => selectedUserIds.includes(u.id)))}
@@ -537,7 +591,7 @@ const UserManagement = () => {
                 </Badge>
               </TableCell>
               <TableCell>
-                <Badge variant={u.last_active && (u as any).is_online ? 'success' : 'secondary'}>
+                <Badge variant={(u as any).is_online ? 'secondary' : 'outline'}>
                   {(u as any).is_online ? 'Online' : 'Offline'}
                 </Badge>
               </TableCell>

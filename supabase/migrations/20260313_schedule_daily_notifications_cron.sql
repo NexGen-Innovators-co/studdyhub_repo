@@ -11,18 +11,21 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-BEGIN
-  PERFORM net.http_post(
-    url := 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/daily-notifications-engine',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || current_setting('app.supabase_service_role_key')
-    ),
-    body := jsonb_build_object(
-      'trigger', 'scheduled',
-      'timestamp', now()
-    )::text
+DECLARE
+  target_url text := 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/daily-notifications-engine';
+  payload text := jsonb_build_object('trigger', 'scheduled', 'timestamp', now())::text;
+  headers jsonb := jsonb_build_object(
+    'Content-Type', 'application/json',
+    'Authorization', 'Bearer ' || current_setting('app.supabase_service_role_key')
   );
+BEGIN
+  IF EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON p.pronamespace=n.oid WHERE n.nspname='net' AND p.proname='http_post') THEN
+    PERFORM net.http_post(target_url, headers, payload);
+  ELSIF EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON p.pronamespace=n.oid WHERE p.proname='http_post') THEN
+    PERFORM http_post(target_url, payload, 'application/json');
+  ELSE
+    RAISE NOTICE 'No pg_net/http_post function found - cannot invoke daily-notifications-engine';
+  END IF;
 END;
 $$;
 
@@ -44,18 +47,21 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-BEGIN
-  PERFORM net.http_post(
-    url := 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/scheduled-notifications-dispatcher',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || current_setting('app.supabase_service_role_key')
-    ),
-    body := jsonb_build_object(
-      'trigger', 'scheduled',
-      'timestamp', now()
-    )::text
+DECLARE
+  target_url text := 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/scheduled-notifications-dispatcher';
+  payload text := jsonb_build_object('trigger', 'scheduled', 'timestamp', now())::text;
+  headers jsonb := jsonb_build_object(
+    'Content-Type', 'application/json',
+    'Authorization', 'Bearer ' || current_setting('app.supabase_service_role_key')
   );
+BEGIN
+  IF EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON p.pronamespace=n.oid WHERE n.nspname='net' AND p.proname='http_post') THEN
+    PERFORM net.http_post(target_url, headers, payload);
+  ELSIF EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON p.pronamespace=n.oid WHERE p.proname='http_post') THEN
+    PERFORM http_post(target_url, payload, 'application/json');
+  ELSE
+    RAISE NOTICE 'No pg_net/http_post function found - cannot invoke scheduled-notifications-dispatcher';
+  END IF;
 END;
 $$;
 

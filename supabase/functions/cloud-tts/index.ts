@@ -21,6 +21,14 @@ serve(async (req) => {
   }
 
   try {
+    let body: TtsRequest;
+    try {
+      body = await req.json();
+    } catch (e) {
+      console.error("[CloudTTS] JSON parse error:", e);
+      throw new Error("Invalid request body - expected JSON");
+    }
+
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
     if (!geminiApiKey) {
       console.error("[CloudTTS] GEMINI_API_KEY environment variable is not set");
@@ -33,15 +41,10 @@ serve(async (req) => {
         message: 'GEMINI_API_KEY environment variable is not set — Cloud TTS is non-functional',
         details: { hint: 'Set GEMINI_API_KEY in Supabase Edge Function secrets (must have Cloud TTS API enabled on GCP)' },
       });
-      throw new Error("TTS service is not configured - missing API key");
-    }
 
-    let body: TtsRequest;
-    try {
-      body = await req.json();
-    } catch (e) {
-      console.error("[CloudTTS] JSON parse error:", e);
-      throw new Error("Invalid request body - expected JSON");
+      // No external fallback available here yet; return the configuration error.
+
+      throw new Error("TTS service is not configured - missing API key");
     }
 
     const { text, voice = 'female', rate = 1.0, pitch = 0 } = body as TtsRequest;
@@ -107,6 +110,8 @@ serve(async (req) => {
           response_body: errorText.substring(0, 1000),
         },
       });
+
+      // No external fallback available here yet; return the API error below.
 
       const isAuthError = ttsResponse.status === 403 || ttsResponse.status === 401;
       const fallbackMode = isAuthError ? 'native' : undefined;

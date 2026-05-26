@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'npm:@supabase/supabase-js@2.92.0';
 import { UserContextService } from './context-service.ts';
@@ -6,29 +7,59 @@ import { StuddyHubActionsService } from './actions-service.ts';
 import { AgenticCore, type UserIntent, type EntityMention } from './agentic-core.ts';
 import { createStreamResponse, StreamingHandler } from './streaming-handler.ts';
 import { createSubscriptionValidator, createErrorResponse } from '../utils/subscription-validator.ts';
+import { callHfChat } from '../utils/huggingface.ts';
+import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
 import { executeParsedActions, runAction, AI_ACTION_SCHEMA, getFriendlyActionLabel } from './actions_helper.ts';
 import { DB_SCHEMA_DEFINITION } from './db_schema.ts';
 import { logSystemError } from '../_shared/errorLogger.ts';
 
-// Define CORS headers for cross-origin requests
+// ─────────────────────────────────────────────────────────────────────────────
+// CORS
+// ─────────────────────────────────────────────────────────────────────────────
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
 
-// Enhanced Processing Configuration - Optimized for QUALITY and ACCURACY
+// ─────────────────────────────────────────────────────────────────────────────
+// QUOTA CIRCUIT-BREAKER
+// Models that returned 429 in this instance lifetime are skipped immediately.
+// Resets on cold-start (new Deno isolate). Per-model TTL: 60 seconds.
+// ─────────────────────────────────────────────────────────────────────────────
+const quotaExhaustedModels = new Map<string, number>(); // model → expiry timestamp
+const QUOTA_COOLDOWN_MS = 60_000; // 60 s before retrying a 429'd model
+
+function isQuotaExhausted(model: string): boolean {
+  const expiry = quotaExhaustedModels.get(model);
+  if (expiry === undefined) return false;
+  if (Date.now() > expiry) { quotaExhaustedModels.delete(model); return false; }
+  return true;
+}
+
+function markQuotaExhausted(model: string): void {
+  quotaExhaustedModels.set(model, Date.now() + QUOTA_COOLDOWN_MS);
+  console.warn(`[QuotaCircuitBreaker] Model ${model} marked exhausted for ${QUOTA_COOLDOWN_MS / 1000}s`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
 const ENHANCED_PROCESSING_CONFIG = {
-  MAX_INPUT_TOKENS: 2 * 1024 * 1024,  // Full 2M context window
-  MAX_OUTPUT_TOKENS: 8192,  // Optimal for quality responses
-  MAX_CONVERSATION_HISTORY: 500,  // Full history for better understanding
-  SUMMARY_THRESHOLD: 30,  // Generate summary after this many messages
-  RETRY_ATTEMPTS: 3,  // More retries for reliability
+  MAX_INPUT_TOKENS: 2 * 1024 * 1024,
+  MAX_OUTPUT_TOKENS: 8192,
+  MAX_CONVERSATION_HISTORY: 500,
+  SUMMARY_THRESHOLD: 30,
+  RETRY_ATTEMPTS: 3,
+  // Action planner uses fewer retries — if Gemini is quota-blown, fail fast
+  ACTION_PLANNER_MAX_ATTEMPTS: 1,
   ACTION_FIX_ATTEMPTS: 3,
   ACTION_FIX_BACKOFF_MS: 1000
 };
 
-// Initialize Supabase client
+// ─────────────────────────────────────────────────────────────────────────────
+// SUPABASE + SERVICES
+// ─────────────────────────────────────────────────────────────────────────────
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 if (!supabaseUrl || !supabaseServiceKey) {
@@ -40,15 +71,15 @@ const contextService = new UserContextService(supabaseUrl, supabaseServiceKey);
 const promptEngine = new EnhancedPromptEngine();
 const actionsService = new StuddyHubActionsService(supabaseUrl, supabaseServiceKey);
 
-// Initialize Agentic Core for advanced understanding
 const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-if (!geminiApiKey) {
-  throw new Error('Missing GEMINI_API_KEY environment variable');
-}
+if (!geminiApiKey) throw new Error('Missing GEMINI_API_KEY environment variable');
+
 const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY') || '';
 const agenticCore = new AgenticCore(supabaseUrl, supabaseServiceKey, geminiApiKey);
 
-// LIGHTWEIGHT token estimation - no heavy tokenizer library
+// ─────────────────────────────────────────────────────────────────────────────
+// TOKEN UTILITIES
+// ─────────────────────────────────────────────────────────────────────────────
 function estimateTokenCount(text: string | null | undefined): number {
   if (!text) return 0;
   return Math.ceil(text.length / 4);
@@ -58,33 +89,567 @@ async function calculateTokenCount(text: string): Promise<number> {
   return estimateTokenCount(text);
 }
 
-async function truncateToTokenLimit(text: string, maxTokens: number): Promise<string> {
-  const estimatedTokens = estimateTokenCount(text);
-  if (estimatedTokens <= maxTokens) {
-    return text;
-  }
-  const maxChars = maxTokens * 4;
-  return text.substring(0, maxChars) + " [TRUNCATED]";
-}
-
 function sleep(ms: number): Promise<void> {
-  const jitter = Math.random() * 500;
+  const jitter = Math.random() * 200; // reduced jitter
   return new Promise((resolve) => setTimeout(resolve, ms + jitter));
 }
 
-// Slim down action results for Gemini context injection.
-// Keeps structure but truncates large data arrays and long string values
-// so we don't blow up the context window with raw DB records.
-const ACTION_RESULT_MAX_RECORDS = 20;  // Show at most 20 records in context
-const ACTION_RESULT_MAX_STR = 300;     // Truncate individual strings
+// ─────────────────────────────────────────────────────────────────────────────
+// OPENROUTER HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+const OPENROUTER_MAX_CHARS = 800_000;
+const OPENROUTER_MAX_MSG_CHARS = 30_000;
+
+function convertGeminiToOpenRouterMessages(
+  contents: any[],
+  systemInstruction?: any
+): Array<{ role: string; content: string }> {
+  const messages: Array<{ role: string; content: string }> = [];
+
+  if (systemInstruction) {
+    let sysText = '';
+    if (typeof systemInstruction === 'string') {
+      sysText = systemInstruction;
+    } else if (systemInstruction.parts) {
+      sysText = systemInstruction.parts.map((p: any) => p.text || '').join('\n');
+    }
+    if (sysText) {
+      if (sysText.length > OPENROUTER_MAX_MSG_CHARS * 2) {
+        sysText = sysText.substring(0, OPENROUTER_MAX_MSG_CHARS * 2) + '\n... [system prompt truncated]';
+      }
+      messages.push({ role: 'system', content: sysText });
+    }
+  }
+
+  const allConverted: Array<{ role: string; content: string }> = [];
+  for (const entry of contents) {
+    const role = entry.role === 'model' ? 'assistant' : (entry.role || 'user');
+    const textParts = (entry.parts || []).map((p: any) => p.text || '').filter(Boolean);
+    if (textParts.length > 0) {
+      let content = textParts.join('\n');
+      if (content.length > OPENROUTER_MAX_MSG_CHARS) {
+        content = content.substring(0, OPENROUTER_MAX_MSG_CHARS) + '\n... [truncated]';
+      }
+      allConverted.push({ role, content });
+    }
+  }
+
+  const systemChars = messages.reduce((sum, m) => sum + m.content.length, 0);
+  let remainingBudget = OPENROUTER_MAX_CHARS - systemChars;
+  const selectedFromEnd: Array<{ role: string; content: string }> = [];
+
+  for (let i = allConverted.length - 1; i >= 0; i--) {
+    const msgLen = allConverted[i].content.length;
+    if (remainingBudget - msgLen < 0 && selectedFromEnd.length > 0) break;
+    remainingBudget -= msgLen;
+    selectedFromEnd.unshift(allConverted[i]);
+  }
+
+  const dropped = allConverted.length - selectedFromEnd.length;
+  if (dropped > 0) {
+    console.log(`[OpenRouter] Truncated conversation: dropped ${dropped} older messages`);
+    messages.push({
+      role: 'system',
+      content: `[Note: ${dropped} earlier messages omitted to fit context window.]`
+    });
+  }
+
+  messages.push(...selectedFromEnd);
+  return messages;
+}
+
+function extractSystemInstructionText(systemInstruction: any): string {
+  if (!systemInstruction) return '';
+  if (typeof systemInstruction === 'string') return systemInstruction;
+  if (Array.isArray(systemInstruction.parts)) {
+    return systemInstruction.parts.map((p: any) => p.text || '').filter(Boolean).join('\n');
+  }
+  return '';
+}
+
+function serializeContentsForPlanner(contents: any[]): string {
+  return contents
+    .map((entry: any, index: number) => {
+      const role = entry.role === 'model' ? 'ASSISTANT' : 'USER';
+      const text = (entry.parts || [])
+        .map((part: any) => part.text || '')
+        .filter(Boolean)
+        .join('\n')
+        .trim();
+      if (!text) return '';
+      return `${role} ${index + 1}:\n${text}`;
+    })
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GEMINI API — CORE (with quota circuit-breaker + fast-fail)
+// ─────────────────────────────────────────────────────────────────────────────
+async function callGeminiOnce(
+  model: string,
+  requestBody: any,
+  apiKey: string
+): Promise<{ ok: boolean; content?: string; status?: number; error?: string }> {
+  if (isQuotaExhausted(model)) {
+    return { ok: false, status: 429, error: 'quota_circuit_breaker' };
+  }
+
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      return content ? { ok: true, content } : { ok: false, error: 'no_content' };
+    }
+
+    const status = response.status;
+    const errorText = await response.text();
+    if (status === 429 || status === 503) markQuotaExhausted(model);
+    return { ok: false, status, error: errorText.substring(0, 300) };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}
+
+async function callGeminiModelChainOnly(
+  contents: any[],
+  apiKey: string,
+  configOverrides: any = {},
+  tierModelChain?: string[]
+): Promise<{ success: boolean; content?: string; error?: string; userMessage?: string; modelUsed?: string }> {
+  const envChain = Deno.env.get('GEMINI_MODEL_CHAIN')?.split(',').map(s => s.trim()).filter(Boolean);
+  const DEFAULT_CHAIN = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+  const MODEL_CHAIN = tierModelChain || envChain || DEFAULT_CHAIN;
+
+  const { systemInstruction, ...generationConfig } = configOverrides;
+  const requestBody: any = {
+    contents,
+    generationConfig: { temperature: 0.7, maxOutputTokens: 8192, topK: 40, topP: 0.95, ...generationConfig }
+  };
+  if (systemInstruction) requestBody.systemInstruction = systemInstruction;
+
+  for (const model of MODEL_CHAIN) {
+    console.log(`[GeminiAPI] Trying model: ${model}`);
+    const result = await callGeminiOnce(model, requestBody, apiKey);
+    if (result.ok && result.content) {
+      return { success: true, content: result.content, modelUsed: model };
+    }
+    if (result.status === 400) {
+      return { success: false, error: `BAD_REQUEST`, userMessage: "I couldn't process that request format." };
+    }
+    // On 429/503/network error: no sleep, just continue to next model
+    console.warn(`[GeminiAPI] ${model} failed (${result.status ?? 'err'}): ${result.error?.substring(0, 100)}`);
+    logSystemError(supabase, {
+      severity: result.status === 429 ? 'warning' : 'error',
+      source: 'gemini-chat', component: 'gemini-api',
+      error_code: `GEMINI_HTTP_${result.status ?? 'ERR'}`,
+      message: `Gemini ${model} failed`, details: { model, status: result.status, error: result.error }
+    });
+  }
+
+  return { success: false, error: 'ALL_GEMINI_MODELS_FAILED', userMessage: 'Gemini quota exceeded on all models.' };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTION PLANNER — parallel race between Gemini (best available) + OpenRouter
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Build a SLIM context for the action planner.
+ * We only need: the last 3 user/assistant turns + the current message.
+ * Sending the full conversation wastes tokens and causes the model to
+ * output a giant thought_process instead of clean JSON.
+ */
+function buildSlimActionPlannerContext(
+  fullContents: any[],
+  maxTurns = 6
+): any[] {
+  // Keep only user/model alternating turns (no context-recall injections)
+  const conversational = fullContents.filter(
+    (c: any) => c.role === 'user' || c.role === 'model'
+  );
+  // Take last N turns
+  return conversational.slice(-maxTurns);
+}
+
+async function callOpenRouterForAction(
+  prompt: string,
+  systemPrompt: string,
+  maxTokens = 2048
+): Promise<{ success: boolean; content?: string; error?: string }> {
+  if (!openRouterApiKey) return { success: false, error: 'no_openrouter_key' };
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openRouterApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'openrouter/free',
+        messages: [
+          { role: 'system', content: systemPrompt.substring(0, 8000) },
+          { role: 'user', content: prompt.substring(0, 12000) }
+        ],
+        max_tokens: maxTokens,
+        temperature: 0.2,
+        transforms: ['middle-out']
+      })
+    });
+    if (!resp.ok) {
+      const err = await resp.text();
+      return { success: false, error: err.substring(0, 200) };
+    }
+    const data = await resp.json();
+    const content = data.choices?.[0]?.message?.content;
+    return content ? { success: true, content } : { success: false, error: 'no_content' };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+}
+
+async function callActionPlannerWithFallback(
+  contents: any[],
+  apiKey: string,
+  configOverrides: any = {},
+  tierModelChain?: string[]
+): Promise<{ success: boolean; content?: string; error?: string; userMessage?: string; modelUsed?: string }> {
+  const { systemInstruction } = configOverrides;
+  const systemPromptText = extractSystemInstructionText(systemInstruction);
+
+  // Use slim context for action planning
+  const slimContents = buildSlimActionPlannerContext(contents, 6);
+  const plannerPrompt = serializeContentsForPlanner(slimContents);
+
+  const envChain = Deno.env.get('GEMINI_MODEL_CHAIN')?.split(',').map((s: string) => s.trim()).filter(Boolean);
+  const DEFAULT_CHAIN = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+  const MODEL_CHAIN = (tierModelChain || envChain || DEFAULT_CHAIN).filter((m: string) => !isQuotaExhausted(m));
+
+  const requestBody: any = {
+    contents: slimContents,
+    generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: 4096,
+      topK: 40,
+      topP: 0.95,
+      responseMimeType: 'application/json'
+    }
+  };
+  if (systemInstruction) requestBody.systemInstruction = systemInstruction;
+
+  // ── PRIORITIZE OPENROUTER + HF (since Gemini is quota unstable) ──
+  console.log('[ActionPlanner] Trying OpenRouter + HF fallbacks first (Gemini secondary)');
+
+  const promptForTextModels = [systemPromptText, plannerPrompt].filter(Boolean).join('\n\n');
+
+  // Run fallbacks in parallel
+  const [hfResult, orResult] = await Promise.allSettled([
+    callHfChat(promptForTextModels, {
+      parameters: { max_tokens: 2048, temperature: 0.2, top_p: 0.95 }
+    }),
+    callOpenRouterForAction(plannerPrompt, systemPromptText, 2048)
+  ]);
+
+  if (orResult.status === 'fulfilled' && orResult.value.success && orResult.value.content) {
+    console.log('[ActionPlanner] ✅ OpenRouter succeeded');
+    return { success: true, content: orResult.value.content, modelUsed: 'openrouter/free' };
+  }
+
+  if (hfResult.status === 'fulfilled' && hfResult.value.success && hfResult.value.text) {
+    console.log(`[ActionPlanner] ✅ HuggingFace succeeded (${hfResult.value.model || 'hf'})`);
+    return { success: true, content: hfResult.value.text, modelUsed: hfResult.value.model || 'huggingface' };
+  }
+
+  // Only try Gemini if fallbacks failed and it's available
+  if (MODEL_CHAIN.length > 0) {
+    const firstModel = MODEL_CHAIN[0];
+    console.log(`[ActionPlanner] Fallback to Gemini: ${firstModel}`);
+    const geminiResult = await callGeminiOnce(firstModel, requestBody, apiKey);
+
+    if (geminiResult.ok && geminiResult.content) {
+      return { success: true, content: geminiResult.content, modelUsed: firstModel };
+    }
+    if (geminiResult.status === 400) {
+      return { success: false, error: 'BAD_REQUEST', userMessage: "Bad request to action planner." };
+    }
+  } else {
+    console.log('[ActionPlanner] All Gemini models exhausted');
+  }
+
+  return {
+    success: false,
+    error: 'ACTION_PLANNER_ALL_MODELS_FAILED',
+    userMessage: 'Could not generate action plan. All backends unavailable.'
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GEMINI API — MAIN (for conversation responses)
+// ─────────────────────────────────────────────────────────────────────────────
+async function callEnhancedGeminiAPI(
+  contents: any[],
+  apiKey: string,
+  configOverrides: any = {},
+  tierModelChain?: string[]
+): Promise<{ success: boolean; content?: string; error?: string; userMessage?: string; modelUsed?: string }> {
+  const envChain = Deno.env.get('GEMINI_MODEL_CHAIN')?.split(',').map(s => s.trim()).filter(Boolean);
+  const DEFAULT_CHAIN = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+  const MODEL_CHAIN = tierModelChain || envChain || DEFAULT_CHAIN;
+
+  const { systemInstruction, ...generationConfig } = configOverrides;
+  const requestBody: any = {
+    contents,
+    generationConfig: { temperature: 0.7, maxOutputTokens: 8192, topK: 40, topP: 0.95, ...generationConfig }
+  };
+  if (systemInstruction) requestBody.systemInstruction = systemInstruction;
+
+  for (const model of MODEL_CHAIN) {
+    console.log(`[GeminiAPI] Trying model: ${model}`);
+    const result = await callGeminiOnce(model, requestBody, apiKey);
+    if (result.ok && result.content) return { success: true, content: result.content, modelUsed: model };
+    if (result.status === 400) return { success: false, error: 'BAD_REQUEST', userMessage: "Couldn't process that request format." };
+    console.warn(`[GeminiAPI] ${model} failed (${result.status ?? 'err'})`);
+    logSystemError(supabase, {
+      severity: result.status === 429 ? 'warning' : 'error',
+      source: 'gemini-chat', component: 'gemini-api',
+      error_code: `GEMINI_HTTP_${result.status ?? 'ERR'}`,
+      message: `Gemini ${model} failed`, details: { model, status: result.status }
+    });
+  }
+
+  // OpenRouter fallback
+  if (openRouterApiKey) {
+    console.log('[OpenRouter] All Gemini models failed, falling back...');
+    try {
+      const orMessages = convertGeminiToOpenRouterMessages(contents, systemInstruction);
+      const orResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${openRouterApiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'openrouter/free',
+          messages: orMessages,
+          max_tokens: Math.min(generationConfig.maxOutputTokens || 4096, 4096),
+          temperature: generationConfig.temperature ?? 0.7,
+          transforms: ['middle-out']
+        })
+      });
+      if (orResp.ok) {
+        const data = await orResp.json();
+        const content = data.choices?.[0]?.message?.content;
+        if (content) return { success: true, content, modelUsed: 'openrouter/free' };
+      } else {
+        const err = await orResp.text();
+        console.error('[OpenRouter] Error', orResp.status, err.substring(0, 200));
+      }
+    } catch (err) {
+      console.error('[OpenRouter] Network error:', err);
+    }
+  }
+
+  return { success: false, error: 'ALL_MODELS_FAILED', userMessage: 'All AI services are currently unavailable. Please try again shortly.' };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GEMINI STREAMING (with fast quota failover)
+// ─────────────────────────────────────────────────────────────────────────────
+async function callEnhancedGeminiAPIStream(
+  contents: any[],
+  apiKey: string,
+  onChunk: (chunk: string) => Promise<void>,
+  configOverrides: any = {},
+  tierModelChain?: string[]
+): Promise<{ success: boolean; content?: string; error?: string; modelUsed?: string }> {
+  const envChain = Deno.env.get('GEMINI_MODEL_CHAIN')?.split(',').map(s => s.trim()).filter(Boolean);
+  const DEFAULT_CHAIN = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+  const MODEL_CHAIN = tierModelChain || envChain || DEFAULT_CHAIN;
+
+  const { systemInstruction, ...generationConfig } = configOverrides;
+  const requestBody: any = {
+    contents,
+    generationConfig: { temperature: 0.7, maxOutputTokens: 8192, ...generationConfig }
+  };
+  if (systemInstruction) requestBody.systemInstruction = systemInstruction;
+
+  for (const model of MODEL_CHAIN) {
+    if (isQuotaExhausted(model)) {
+      console.log(`[GeminiStream] Skipping quota-exhausted model: ${model}`);
+      continue;
+    }
+    console.log(`[GeminiAPI-Stream] Using model: ${model}`);
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+    try {
+      const resp = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!resp.ok) {
+        const txt = await resp.text();
+        console.error('[GeminiAPI-Stream] HTTP error:', resp.status, txt.substring(0, 200));
+        if (resp.status === 429 || resp.status === 503) markQuotaExhausted(model);
+        logSystemError(supabase, {
+          severity: resp.status === 429 ? 'warning' : 'error',
+          source: 'gemini-chat', component: 'gemini-stream',
+          error_code: `GEMINI_STREAM_HTTP_${resp.status}`,
+          message: `Gemini streaming ${model} HTTP ${resp.status}`,
+          details: { model, status: resp.status }
+        });
+        continue; // No sleep — move to next model immediately
+      }
+
+      const reader = resp.body?.getReader();
+      if (!reader) {
+        const data = await resp.json();
+        const extracted = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (extracted) { await onChunk(extracted); return { success: true, content: extracted, modelUsed: model }; }
+        continue;
+      }
+
+      const decoder = new TextDecoder();
+      let done = false;
+      let accumulated = '';
+
+      while (!done) {
+        const { value, done: rdone } = await reader.read();
+        done = rdone;
+        if (value) {
+          const chunkText = decoder.decode(value, { stream: !done });
+          try { await onChunk(chunkText); } catch (e) { console.warn('[GeminiAPI-Stream] onChunk error', e); }
+          accumulated += chunkText;
+        }
+      }
+
+      try {
+        const parsed = JSON.parse(accumulated);
+        const extracted = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (extracted) return { success: true, content: extracted, modelUsed: model };
+      } catch (_) {
+        if (accumulated) return { success: true, content: accumulated, modelUsed: model };
+      }
+    } catch (err) {
+      console.error('[GeminiAPI-Stream] Network error:', err);
+      logSystemError(supabase, {
+        severity: 'error', source: 'gemini-chat', component: 'gemini-stream',
+        error_code: 'GEMINI_STREAM_NETWORK_ERROR',
+        message: `Gemini streaming error: ${String(err)}`, details: { model }
+      });
+    }
+  }
+
+  // ── OpenRouter Streaming Fallback ──
+  if (openRouterApiKey) {
+    console.log('[OpenRouter-Stream] All Gemini models failed. Falling back...');
+    try {
+      const orMessages = convertGeminiToOpenRouterMessages(contents, systemInstruction);
+      const orResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${openRouterApiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'openrouter/free',
+          messages: orMessages,
+          max_tokens: Math.min(generationConfig.maxOutputTokens || 4096, 4096),
+          temperature: generationConfig.temperature ?? 0.7,
+          stream: true,
+          transforms: ['middle-out']
+        })
+      });
+
+      if (!orResp.ok) {
+        const err = await orResp.text();
+        console.error('[OpenRouter-Stream] Error', orResp.status, err.substring(0, 200));
+      } else {
+        const reader = orResp.body?.getReader();
+        if (reader) {
+          const decoder = new TextDecoder();
+          let accumulated = '';
+          let done = false;
+          let buffer = '';
+
+          while (!done) {
+            const { value, done: rdone } = await reader.read();
+            done = rdone;
+            if (value) {
+              buffer += decoder.decode(value, { stream: !done });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || '';
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed === 'data: [DONE]') continue;
+                if (trimmed.startsWith('data: ')) {
+                  try {
+                    const json = JSON.parse(trimmed.slice(6));
+                    const delta = json.choices?.[0]?.delta?.content;
+                    if (delta) {
+                      accumulated += delta;
+                      try { await onChunk(delta); } catch (e) { console.warn('[OpenRouter-Stream] onChunk error', e); }
+                    }
+                  } catch (_) { /* skip */ }
+                }
+              }
+            }
+          }
+
+          if (accumulated) {
+            console.log('[OpenRouter-Stream] Succeeded, chars:', accumulated.length);
+            return { success: true, content: accumulated };
+          }
+        } else {
+          const orData = await orResp.json();
+          const orContent = orData.choices?.[0]?.message?.content;
+          if (orContent) {
+            await onChunk(orContent);
+            return { success: true, content: orContent };
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[OpenRouter-Stream] Error:', err);
+    }
+  }
+
+  return { success: false, error: 'ALL_STREAM_MODELS_FAILED' };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SANITIZE ASSISTANT OUTPUT
+// ─────────────────────────────────────────────────────────────────────────────
+function sanitizeAssistantOutput(text: string | null | undefined): string {
+  if (!text) return '';
+  let out = text;
+  out = out.replace(/```(?:json|action)?\s*[\s\S]*?(?:DB_ACTION|GENERATE_IMAGE|ENGAGE_SOCIAL|"type"\s*:\s*"(?:DB_ACTION|GENERATE_IMAGE|ENGAGE_SOCIAL)")[\s\S]*?```/gi, '');
+  out = out.replace(/\{[^}]*"type"\s*:\s*"(?:DB_ACTION|GENERATE_IMAGE|ENGAGE_SOCIAL)"[^}]*\}/gi, '');
+  out = out.replace(/\{[\s\S]*?"actions"\s*:\s*\[[\s\S]*?\][\s\S]*?\}/gi, '');
+  out = out.replace(/^ACTION:\s*.*$/gim, '');
+  out = out.replace(/"thought_process"\s*:\s*"[^"]*"/gi, '');
+  out = out.replace(/"params"\s*:\s*\{[\s\S]*?"table"\s*:[\s\S]*?\}/gi, '');
+  out = out.replace(/^[{}\[\],]\s*$/gm, '');
+  out = out.replace(/^\s*"(?:type|params|table|operation|data|filters)"\s*:.*$/gm, '');
+  out = out.replace(/\n{3,}/g, '\n\n').trim();
+  out = out.replace(/\(\s*\)/g, '');
+  out = out.replace(/\[\s*\]/g, '');
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTION RESULT TRIMMER
+// ─────────────────────────────────────────────────────────────────────────────
+const ACTION_RESULT_MAX_RECORDS = 20;
+const ACTION_RESULT_MAX_STR = 300;
 
 function truncateActionResults(actions: any[]): any[] {
   return actions.map((action: any) => {
     const slim: any = { type: action.type, success: action.success };
     if (action.error) slim.error = action.error;
-
     if (action.data) {
-      // If data contains a result array, slim it
       const rawData = action.data.data || action.data;
       if (Array.isArray(rawData)) {
         const total = rawData.length;
@@ -101,12 +666,9 @@ function truncateActionResults(actions: any[]): any[] {
           return slimRow;
         });
         slim.data = { records: sliced, count: total };
-        // Forward pagination info if available
         if (action.data.total_count) slim.data.total_count = action.data.total_count;
         if (action.data.note) slim.data.note = action.data.note;
-        if (total > ACTION_RESULT_MAX_RECORDS) {
-          slim.data.truncated_note = `Showing ${ACTION_RESULT_MAX_RECORDS} of ${total} returned records in context.`;
-        }
+        if (total > ACTION_RESULT_MAX_RECORDS) slim.data.truncated_note = `Showing ${ACTION_RESULT_MAX_RECORDS} of ${total} records.`;
       } else {
         slim.data = rawData;
       }
@@ -118,440 +680,185 @@ function truncateActionResults(actions: any[]): any[] {
 function isNeedsConfirmationAction(action: any): boolean {
   return !!(action?.data?.needsConfirmation || action?.data?.data?.needsConfirmation);
 }
-// ========== ACTION EXECUTION FUNCTION ==========
-async function executeAIActions(userId: string, sessionId: string, aiResponse: string): Promise<{
-  executedActions: any[];
-  modifiedResponse: string;
-}> {
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTION EXECUTION
+// ─────────────────────────────────────────────────────────────────────────────
+async function executeAIActions(
+  userId: string,
+  sessionId: string,
+  aiResponse: string
+): Promise<{ executedActions: any[]; modifiedResponse: string }> {
   const executedActions: any[] = [];
   let modifiedResponse = aiResponse;
 
-  console.log(`[ActionExecution] Processing AI response for actions...`);
-
-  // 1. Parse actions from the text
   const actionsRaw = actionsService.parseActionFromText(aiResponse);
-  // Ensure array
   const actionList = Array.isArray(actionsRaw) ? actionsRaw : (actionsRaw ? [actionsRaw] : []);
 
-  // 2. Execute parsed action if found
   if (actionList.length > 0) {
-    console.log(`[ActionExecution] Found ${actionList.length} actions.`);
-
-    // First pass: Cleanup text for ALL actions
     for (const action of actionList) {
       if (action.matchedString) {
-        // Escape special regex chars
         const escaped = action.matchedString.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        // Remove the matched action string and any trailing text on the same line
         modifiedResponse = modifiedResponse.replace(new RegExp(escaped, 'g'), '').trim();
       }
     }
-    // Fallback cleanup
     modifiedResponse = modifiedResponse.replace(/ACTION:\s*[A-Z_]+(?:\|.*)?(?:\n+|$)/g, '').trim();
 
-    // 3. Actually execute them using the standardized runAction helper
     for (const action of actionList) {
       try {
-        console.log(`[ActionExecution] Executing action: ${action.action}`);
         const result = await runAction(actionsService, userId, sessionId, action.action, action.params);
-
-        executedActions.push({
-          type: action.action,
-          success: result?.success || false,
-          data: result,
-          timestamp: new Date().toISOString()
-        });
-
-        console.log(`[ActionExecution] ${action.action}: ${result?.success ? 'SUCCESS' : 'FAILED'}`);
+        executedActions.push({ type: action.action, success: result?.success || false, data: result, timestamp: new Date().toISOString() });
       } catch (err: any) {
         console.error(`[ActionExecution] Error executing ${action.action}:`, err);
         logSystemError(supabase, {
-          severity: 'error',
-          source: 'gemini-chat',
-          component: 'action-execution',
+          severity: 'error', source: 'gemini-chat', component: 'action-execution',
           error_code: 'ACTION_EXEC_FAILED',
           message: `Action '${action.action}' failed: ${err.message}`,
-          details: { action: action.action, params: action.params, error: String(err) },
+          details: { action: action.action, error: String(err) }
         });
-        executedActions.push({
-          type: action.action,
-          success: false,
-          error: err.message,
-          timestamp: new Date().toISOString()
-        });
+        executedActions.push({ type: action.action, success: false, error: err.message, timestamp: new Date().toISOString() });
       }
     }
   }
 
-  return {
-    executedActions,
-    modifiedResponse
-  };
+  return { executedActions, modifiedResponse };
 }
 
-// Sanitize assistant output before sending/saving to the user.
-// Removes embedded action JSON/code blocks and stray ACTION: markers.
-function sanitizeAssistantOutput(text: string | null | undefined): string {
-  if (!text) return '';
-  let out = text;
-
-  // 1) Remove code blocks that contain action-related keywords
-  // Match ```json, ```action, or generic ``` with action content
-  out = out.replace(/```(?:json|action)?\s*[\s\S]*?(?:DB_ACTION|GENERATE_IMAGE|ENGAGE_SOCIAL|"type"\s*:\s*"(?:DB_ACTION|GENERATE_IMAGE|ENGAGE_SOCIAL)")[\s\S]*?```/gi, '');
-  
-  // 2) Remove single-line JSON objects with action types
-  // Example: { "type": "DB_ACTION", "params": {...} }
-  out = out.replace(/\{[^}]*"type"\s*:\s*"(?:DB_ACTION|GENERATE_IMAGE|ENGAGE_SOCIAL)"[^}]*\}/gi, '');
-  
-  // 3) Remove multi-line JSON objects with "actions" arrays
-  // This catches the full action plan format: { "thought_process": "...", "actions": [...] }
-  out = out.replace(/\{[\s\S]*?"actions"\s*:\s*\[[\s\S]*?\][\s\S]*?\}/gi, '');
-  
-  // 4) Remove explicit ACTION: lines (legacy format)
-  out = out.replace(/^ACTION:\s*.*$/gim, '');
-  
-  // 5) Remove standalone "thought_process" entries
-  out = out.replace(/"thought_process"\s*:\s*"[^"]*"/gi, '');
-  
-  // 6) Remove "params" objects that look like action parameters
-  out = out.replace(/"params"\s*:\s*\{[\s\S]*?"table"\s*:[\s\S]*?\}/gi, '');
-
-  // 7) Remove standalone braces, brackets that were left behind
-  out = out.replace(/^[{}\[\],]\s*$/gm, '');
-  
-  // 8) Remove lines that start with common action-related JSON keys
-  out = out.replace(/^\s*"(?:type|params|table|operation|data|filters)"\s*:.*$/gm, '');
-
-  // 9) Clean up excessive whitespace left behind
-  out = out.replace(/\n{3,}/g, '\n\n').trim();
-  
-  // 10) Remove empty parentheses or brackets
-  out = out.replace(/\(\s*\)/g, '');
-  out = out.replace(/\[\s*\]/g, '');
-
-  return out;
-}
-
-// ========== HELPER FUNCTIONS ==========
-async function updateSessionTokenCount(sessionId: string, userId: string, messageContent: string, operation = 'add'): Promise<{ success: boolean, tokenCount: number }> {
+// ─────────────────────────────────────────────────────────────────────────────
+// SESSION / MESSAGE HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+async function updateSessionTokenCount(
+  sessionId: string,
+  userId: string,
+  messageContent: string,
+  operation = 'add'
+): Promise<{ success: boolean; tokenCount: number }> {
   try {
     const messageTokens = await calculateTokenCount(messageContent);
-    console.log(`[updateSessionTokenCount] Message tokens: ${messageTokens}`);
-
     if (operation === 'add') {
       const { data: sessionData, error: fetchError } = await supabase
-        .from('chat_sessions')
-        .select('token_count')
-        .eq('id', sessionId)
-        .eq('user_id', userId)
-        .maybeSingle();
+        .from('chat_sessions').select('token_count')
+        .eq('id', sessionId).eq('user_id', userId).maybeSingle();
 
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        console.error('[updateSessionTokenCount] Error fetching current token count:', fetchError);
-        return {
-          success: false,
-          tokenCount: 0
-        };
-      }
+      if (fetchError && fetchError.code !== 'PGRST116') return { success: false, tokenCount: 0 };
 
       if (!sessionData) {
-        console.log(`[updateSessionTokenCount] Session not found yet, creating session token_count: ${messageTokens}`);
-        try {
-          const { error: insertError } = await supabase
-            .from('chat_sessions')
-            .upsert({
-              id: sessionId,
-              user_id: userId,
-              token_count: messageTokens,
-              last_message_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            });
-
-          if (insertError) {
-            console.error('[updateSessionTokenCount] Error inserting initial token count:', insertError);
-            return { success: false, tokenCount: messageTokens };
-          }
-
-          return { success: true, tokenCount: messageTokens };
-        } catch (err) {
-          console.error('[updateSessionTokenCount] Exception inserting session token_count:', err);
-          return { success: false, tokenCount: messageTokens };
-        }
+        await supabase.from('chat_sessions').upsert({
+          id: sessionId, user_id: userId, token_count: messageTokens,
+          last_message_at: new Date().toISOString(), updated_at: new Date().toISOString()
+        });
+        return { success: true, tokenCount: messageTokens };
       }
 
-      const currentTokenCount = sessionData?.token_count || 0;
-      const newTokenCount = currentTokenCount + messageTokens;
-
-      const { error: updateError } = await supabase
-        .from('chat_sessions')
-        .update({
-          token_count: newTokenCount,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', sessionId)
-        .eq('user_id', userId);
-
-      if (updateError) {
-        console.error('[updateSessionTokenCount] Error updating token count:', updateError);
-        return {
-          success: false,
-          tokenCount: currentTokenCount
-        };
-      }
-
-      console.log(`[updateSessionTokenCount] Updated token count: ${currentTokenCount} -> ${newTokenCount}`);
-      return {
-        success: true,
-        tokenCount: newTokenCount
-      };
+      const newCount = (sessionData.token_count || 0) + messageTokens;
+      await supabase.from('chat_sessions').update({ token_count: newCount, updated_at: new Date().toISOString() })
+        .eq('id', sessionId).eq('user_id', userId);
+      console.log(`[updateSessionTokenCount] ${sessionData.token_count} -> ${newCount}`);
+      return { success: true, tokenCount: newCount };
     } else {
-      const { error: updateError } = await supabase
-        .from('chat_sessions')
-        .update({
-          token_count: messageTokens,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', sessionId)
-        .eq('user_id', userId);
-
-      if (updateError) {
-        console.error('[updateSessionTokenCount] Error setting token count:', updateError);
-        return {
-          success: false,
-          tokenCount: 0
-        };
-      }
-
-      console.log(`[updateSessionTokenCount] Set token count to: ${messageTokens}`);
-      return {
-        success: true,
-        tokenCount: messageTokens
-      };
+      await supabase.from('chat_sessions').update({ token_count: messageTokens, updated_at: new Date().toISOString() })
+        .eq('id', sessionId).eq('user_id', userId);
+      return { success: true, tokenCount: messageTokens };
     }
   } catch (error) {
     console.error('[updateSessionTokenCount] Exception:', error);
-    return {
-      success: false,
-      tokenCount: 0
-    };
+    return { success: false, tokenCount: 0 };
   }
 }
 
 async function getSessionTokenCount(sessionId: string, userId: string): Promise<number> {
   try {
-    const { data, error } = await supabase
-      .from('chat_sessions')
-      .select('token_count')
-      .eq('id', sessionId)
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (error && error.code !== 'PGRST116') {
-      console.error('[getSessionTokenCount] Error fetching token count:', error);
-      return 0;
-    }
-
-    if (!data) {
-      console.log(`[getSessionTokenCount] Session ${sessionId} not found yet`);
-      return 0;
-    }
-
-    const tokenCount = data?.token_count || 0;
-    console.log(`[getSessionTokenCount] Session ${sessionId} token count: ${tokenCount}`);
-    return tokenCount;
-  } catch (error) {
-    console.error('[getSessionTokenCount] Exception:', error);
-    return 0;
-  }
+    const { data, error } = await supabase.from('chat_sessions').select('token_count')
+      .eq('id', sessionId).eq('user_id', userId).maybeSingle();
+    if (error && error.code !== 'PGRST116') return 0;
+    return data?.token_count || 0;
+  } catch { return 0; }
 }
 
 async function updateConversationSummary(sessionId: string, userId: string, recentMessages: any[]): Promise<string | null> {
   if (recentMessages.length < ENHANCED_PROCESSING_CONFIG.SUMMARY_THRESHOLD) return null;
-
   try {
-    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-    if (!geminiApiKey) return null;
-
     const conversationText = recentMessages.map((msg: any) =>
       `${msg.role}: ${msg.content.substring(0, 100)}${msg.content.length > 100 ? '...' : ''}`
     ).join('\n');
-
-    const summaryPrompt = `Summarize this conversation in 2-3 sentences, focusing on main topics and user interests: ${conversationText}`;
-
-    const contents = [
-      {
-        role: 'user',
-        parts: [
-          {
-            text: summaryPrompt
-          }
-        ]
-      }
-    ];
-
+    const contents = [{ role: 'user', parts: [{ text: `Summarize this conversation in 2-3 sentences, focusing on main topics and user interests: ${conversationText}` }] }];
     const response = await callEnhancedGeminiAPI(contents, geminiApiKey);
-
     if (response.success && response.content) {
       const summary = response.content.trim();
-      await supabase
-        .from('chat_sessions')
-        .update({
-          context_summary: summary,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', sessionId)
-        .eq('user_id', userId);
-
-      console.log(`[updateConversationSummary] Updated summary for session ${sessionId}`);
+      await supabase.from('chat_sessions').update({ context_summary: summary, updated_at: new Date().toISOString() })
+        .eq('id', sessionId).eq('user_id', userId);
       return summary;
     }
-  } catch (error) {
-    console.error('Error updating conversation summary:', error);
-  }
-
+  } catch (error) { console.error('Error updating conversation summary:', error); }
   return null;
 }
 
-async function buildIntelligentContext(
-  userId: string,
-  sessionId: string,
-  currentMessage: string,
-  attachedDocumentIds: string[] = [],
-  attachedNoteIds: string[] = [],
-  initialContextWindow: number = 100
-): Promise<{
-  recentMessages: any[];
-  relevantOlderMessages: any[];
-  conversationSummary: string | null;
-  totalMessages: number;
-  summarizedMessages: number;
-  storedTokenCount: number;
-}> {
-  const logPrefix = `[buildIntelligentContext][Session:${sessionId}]`;
-  const storedTokenCount = await getSessionTokenCount(sessionId, userId);
-  console.log(`${logPrefix} Retrieved stored token count: ${storedTokenCount}`);
+async function getConversationHistory(userId: string, sessionId: string, maxMessages = ENHANCED_PROCESSING_CONFIG.MAX_CONVERSATION_HISTORY): Promise<any[]> {
+  try {
+    const { data: messages, error } = await supabase.from('chat_messages')
+      .select('id, content, role, timestamp')
+      .eq('user_id', userId).eq('session_id', sessionId).eq('is_error', false)
+      .order('timestamp', { ascending: true }).limit(maxMessages);
+    if (error) { console.error('Error fetching history:', error); return []; }
+    return messages || [];
+  } catch { return []; }
+}
 
+async function buildIntelligentContext(
+  userId: string, sessionId: string, currentMessage: string,
+  attachedDocumentIds: string[] = [], attachedNoteIds: string[] = []
+): Promise<{ recentMessages: any[]; relevantOlderMessages: any[]; conversationSummary: string | null; totalMessages: number; summarizedMessages: number; storedTokenCount: number }> {
+  const storedTokenCount = await getSessionTokenCount(sessionId, userId);
   const conversationHistory = await getConversationHistory(userId, sessionId);
 
   let conversationSummary = null;
   try {
-    const { data: sessionData } = await supabase
-      .from('chat_sessions')
+    const { data: sessionData } = await supabase.from('chat_sessions')
       .select('context_summary, title, last_message_at')
-      .eq('id', sessionId)
-      .eq('user_id', userId)
-      .single();
-
+      .eq('id', sessionId).eq('user_id', userId).single();
     if (sessionData?.context_summary) {
       conversationSummary = `Session "${sessionData.title}" (last active: ${new Date(sessionData.last_message_at).toLocaleDateString()}): ${sessionData.context_summary}`;
-      console.log(`${logPrefix} Using enhanced summary with session info`);
     }
-  } catch (error) {
-    console.error(`${logPrefix} Error fetching summary:`, error);
-  }
-  const MAX_HISTORY_TOKENS = ENHANCED_PROCESSING_CONFIG.MAX_INPUT_TOKENS - 8192; // Leave 8192 buffer for system prompt/files
-  let currentTokens = 0;
+  } catch {}
 
-  // Always include the summary if available
-  if (conversationSummary) {
-    currentTokens += estimateTokenCount(conversationSummary);
-  }
-
+  const MAX_HISTORY_TOKENS = ENHANCED_PROCESSING_CONFIG.MAX_INPUT_TOKENS - 8192;
+  let currentTokens = conversationSummary ? estimateTokenCount(conversationSummary) : 0;
   const selectedMessages: any[] = [];
 
-  // Iterate backwards through history to fill context window
   for (let i = conversationHistory.length - 1; i >= 0; i--) {
     const msg = conversationHistory[i];
-    const msgTokens = estimateTokenCount(msg.content) + 20; // +20 for role/metadata overhead
-
-    if (currentTokens + msgTokens > MAX_HISTORY_TOKENS) {
-      console.log(`${logPrefix} Reached token limit at message ${i} (${currentTokens} tokens)`);
-      break;
-    }
-
+    const msgTokens = estimateTokenCount(msg.content) + 20;
+    if (currentTokens + msgTokens > MAX_HISTORY_TOKENS) break;
     currentTokens += msgTokens;
     selectedMessages.unshift(msg);
   }
 
-  console.log(`${logPrefix} dynamic context: ${selectedMessages.length} messages selected (${currentTokens} estimated tokens)`);
-
+  console.log(`[buildIntelligentContext] ${selectedMessages.length} messages selected (~${currentTokens} tokens)`);
   return {
-    recentMessages: selectedMessages,
-    relevantOlderMessages: [], // No need for RAG on chat history if we include it all
-    conversationSummary,
+    recentMessages: selectedMessages, relevantOlderMessages: [], conversationSummary,
     totalMessages: conversationHistory.length,
     summarizedMessages: conversationHistory.length - selectedMessages.length,
     storedTokenCount
   };
 }
 
-async function getConversationHistory(userId: string, sessionId: string, maxMessages = ENHANCED_PROCESSING_CONFIG.MAX_CONVERSATION_HISTORY): Promise<any[]> {
-  try {
-    console.log(`Retrieving conversation history for session ${sessionId}`);
-
-    const { data: messages, error } = await supabase
-      .from('chat_messages')
-      .select('id, content, role, timestamp')
-      .eq('user_id', userId)
-      .eq('session_id', sessionId)
-      .eq('is_error', false)
-      .order('timestamp', {
-        ascending: true
-      })
-      .limit(maxMessages);
-
-    if (error) {
-      console.error('Error fetching conversation history:', error);
-      return [];
-    }
-
-    if (!messages || messages.length === 0) {
-      console.log('No conversation history found');
-      return [];
-    }
-
-    console.log(`Retrieved ${messages.length} messages`);
-    return messages;
-  } catch (error) {
-    console.error('Error in getConversationHistory:', error);
-    return [];
-  }
-}
-
 async function buildAttachedContext(documentIds: string[], noteIds: string[], userId: string): Promise<string> {
   let context = '';
-  const MAX_CONTENT_LENGTH = 300000;  // Truncate long content for speed
+  const MAX_CONTENT_LENGTH = 300000;
 
   if (documentIds.length > 0) {
-    const { data: documents, error } = await supabase
-      .from('documents')
+    const { data: documents } = await supabase.from('documents')
       .select('id, title, file_name, file_type, content_extracted, type, processing_status')
-      .eq('user_id', userId)
-      .in('id', documentIds);
-
-    if (error) {
-      console.error('Error fetching documents:', error);
-    } else if (documents) {
+      .eq('user_id', userId).in('id', documentIds);
+    if (documents) {
       context += 'DOCUMENTS:\n';
       for (const doc of documents) {
-        context += `Title: ${doc.title}\n`;
-        context += `File: ${doc.file_name}\n`;
-        context += `Type: ${doc.type.charAt(0).toUpperCase() + doc.type.slice(1)}\n`;
-
+        context += `Title: ${doc.title}\nFile: ${doc.file_name}\nType: ${doc.type}\n`;
         if (doc.content_extracted) {
-          // Truncate long content
-          const truncatedContent = doc.content_extracted.length > MAX_CONTENT_LENGTH
-            ? doc.content_extracted.substring(0, MAX_CONTENT_LENGTH) + '... [Content truncated for performance]'
+          const truncated = doc.content_extracted.length > MAX_CONTENT_LENGTH
+            ? doc.content_extracted.substring(0, MAX_CONTENT_LENGTH) + '... [truncated]'
             : doc.content_extracted;
-          context += `Content: ${truncatedContent}\n`;
-        } else {
-          if (doc.type === 'image' && doc.processing_status !== 'completed') {
-            context += `Content: Image processing ${doc.processing_status || 'pending'}. No extracted text yet.\n`;
-          } else if (doc.type === 'image' && doc.processing_status === 'completed' && !doc.content_extracted) {
-            context += `Content: Image analysis completed, but no text or detailed description was extracted.\n`;
-          } else {
-            context += `Content: No content extracted or available.\n`;
-          }
+          context += `Content: ${truncated}\n`;
         }
         context += '\n';
       }
@@ -559,35 +866,21 @@ async function buildAttachedContext(documentIds: string[], noteIds: string[], us
   }
 
   if (noteIds.length > 0) {
-    const { data: notes, error } = await supabase
-      .from('notes')
+    const { data: notes } = await supabase.from('notes')
       .select('id, title, category, content, ai_summary, tags')
-      .eq('user_id', userId)
-      .in('id', noteIds);
-
-    if (error) {
-      console.error('Error fetching notes:', error);
-    } else if (notes) {
+      .eq('user_id', userId).in('id', noteIds);
+    if (notes) {
       context += 'NOTES:\n';
       for (const note of notes) {
-        context += `Title: ${note.title}\n`;
-        context += `Category: ${note.category}\n`;
-
+        context += `Title: ${note.title}\nCategory: ${note.category}\n`;
         if (note.content) {
-          // Truncate long note content
-          const truncatedContent = note.content.length > MAX_CONTENT_LENGTH
-            ? note.content.substring(0, MAX_CONTENT_LENGTH) + '... [Content truncated for performance]'
+          const truncated = note.content.length > MAX_CONTENT_LENGTH
+            ? note.content.substring(0, MAX_CONTENT_LENGTH) + '... [truncated]'
             : note.content;
-          context += `Content: ${truncatedContent}\n`;
+          context += `Content: ${truncated}\n`;
         }
-
-        if (note.ai_summary) {
-          context += `AI Summary: ${note.ai_summary}\n`;
-        }
-
-        if (note.tags && note.tags.length > 0) {
-          context += `Tags: ${note.tags.join(', ')}\n`;
-        }
+        if (note.ai_summary) context += `AI Summary: ${note.ai_summary}\n`;
+        if (note.tags?.length) context += `Tags: ${note.tags.join(', ')}\n`;
         context += '\n';
       }
     }
@@ -596,2029 +889,645 @@ async function buildAttachedContext(documentIds: string[], noteIds: string[], us
   return context;
 }
 
-async function saveChatMessage({
-  userId,
-  sessionId,
-  content,
-  role,
-  attachedDocumentIds = null,
-  attachedNoteIds = null,
-  isError = false,
-  imageUrl = null,
-  imageMimeType = null,
-  conversationContext = null,
-  filesMetadata = null
-}: {
-  userId: string;
-  sessionId: string;
-  content: string;
-  role: string;
-  attachedDocumentIds?: string[] | null;
-  attachedNoteIds?: string[] | null;
-  isError?: boolean;
-  imageUrl?: string | null;
-  imageMimeType?: string | null;
-  conversationContext?: any;
-  filesMetadata?: any[] | null;
-}): Promise<{ id: string, timestamp: string } | null> {
+async function saveChatMessage(params: {
+  userId: string; sessionId: string; content: string; role: string;
+  attachedDocumentIds?: string[] | null; attachedNoteIds?: string[] | null;
+  isError?: boolean; imageUrl?: string | null; imageMimeType?: string | null;
+  conversationContext?: any; filesMetadata?: any[] | null;
+  messageIdToUpdate?: string | null;
+}): Promise<{ id: string; timestamp: string } | null> {
   try {
-    const { data, error } = await supabase
-      .from('chat_messages')
-      .insert({
-        user_id: userId,
-        session_id: sessionId,
-        content,
-        role,
-        attached_document_ids: attachedDocumentIds,
-        attached_note_ids: attachedNoteIds,
-        is_error: isError,
-        image_url: imageUrl,
-        image_mime_type: imageMimeType,
-        conversation_context: conversationContext,
-        timestamp: new Date().toISOString(),
-        files_metadata: filesMetadata,
-        has_been_displayed: role === 'user'
-      })
-      .select('id, timestamp')
-      .single();
-
-    if (error) {
-      console.error('Error saving chat message:', error);
-      return null;
-    }
-
-    return {
-      id: data.id,
-      timestamp: data.timestamp
+    const payload = {
+      content: params.content,
+      attached_document_ids: params.attachedDocumentIds,
+      attached_note_ids: params.attachedNoteIds,
+      is_error: params.isError || false,
+      image_url: params.imageUrl,
+      image_mime_type: params.imageMimeType,
+      conversation_context: params.conversationContext,
+      files_metadata: params.filesMetadata,
+      has_been_displayed: params.role === 'user'
     };
+
+    const query = params.messageIdToUpdate
+      ? supabase.from('chat_messages').update(payload).eq('id', params.messageIdToUpdate).eq('user_id', params.userId).eq('session_id', params.sessionId)
+      : supabase.from('chat_messages').insert({
+          user_id: params.userId,
+          session_id: params.sessionId,
+          content: params.content,
+          role: params.role,
+          attached_document_ids: params.attachedDocumentIds,
+          attached_note_ids: params.attachedNoteIds,
+          is_error: params.isError || false,
+          image_url: params.imageUrl,
+          image_mime_type: params.imageMimeType,
+          conversation_context: params.conversationContext,
+          timestamp: new Date().toISOString(),
+          files_metadata: params.filesMetadata,
+          has_been_displayed: params.role === 'user'
+        });
+
+    const { data, error } = await query.select('id, timestamp').single();
+    if (error) { console.error('Error saving chat message:', error); return null; }
+    return { id: data.id, timestamp: data.timestamp };
   } catch (error) {
-    console.error('Database error when saving chat message:', error);
-    logSystemError(supabase, {
-      severity: 'warning',
-      source: 'gemini-chat',
-      component: 'save-message',
-      error_code: 'MESSAGE_SAVE_FAILED',
-      message: `Failed to save chat message: ${String(error)}`,
-      details: { error: String(error), role: params?.role, sessionId: params?.sessionId },
-      user_id: params?.userId,
-    });
+    console.error('Database error saving chat message:', error);
     return null;
   }
 }
 
-const generateChatTitle = async (sessionId: string, userId: string, initialMessage: string, messageCount: number = 1): Promise<string> => {
-  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-  if (!geminiApiKey) return 'New Chat';
-
+const generateChatTitle = async (sessionId: string, userId: string, initialMessage: string, messageCount = 1): Promise<string> => {
   try {
-    // Get recent conversation context for better title generation
     let contextMessages = '';
     if (messageCount > 1) {
-      const { data: recentMessages } = await supabase
-        .from('chat_messages')
-        .select('content, role')
-        .eq('session_id', sessionId)
-        .eq('user_id', userId)
-        .order('timestamp', { ascending: false })
-        .limit(6);
-
-      if (recentMessages && recentMessages.length > 0) {
-        contextMessages = recentMessages
-          .reverse()
-          .map(m => `${m.role}: ${m.content.substring(0, 100)}`)
-          .join('\n');
+      const { data: recentMessages } = await supabase.from('chat_messages')
+        .select('content, role').eq('session_id', sessionId).eq('user_id', userId)
+        .order('timestamp', { ascending: false }).limit(6);
+      if (recentMessages?.length) {
+        contextMessages = recentMessages.reverse().map(m => `${m.role}: ${m.content.substring(0, 100)}`).join('\n');
       }
     }
-
     const contentToAnalyze = contextMessages || initialMessage.substring(0, 300);
-    const titlePrompt = `Analyze this conversation and create a concise, descriptive title (4-6 words max):\n\n${contentToAnalyze}\n\nTitle should capture the main topic/purpose. Return ONLY the title, no quotes or explanation.`;
-
-    const contents = [
-      {
-        role: 'user',
-        parts: [{ text: titlePrompt }]
-      }
-    ];
-
+    const contents = [{ role: 'user', parts: [{ text: `Create a concise title (4-6 words max) for this conversation:\n\n${contentToAnalyze}\n\nReturn ONLY the title, no quotes or explanation.` }] }];
     const response = await callEnhancedGeminiAPI(contents, geminiApiKey);
     if (response.success && response.content) {
-      let generatedTitle = response.content.trim();
-      // Remove quotes and clean up
-      generatedTitle = generatedTitle.replace(/^["'`]|["'`]$/g, '');
-      generatedTitle = generatedTitle.replace(/^(Title:|Chat:|Session:)\s*/i, '');
-      generatedTitle = generatedTitle.charAt(0).toUpperCase() + generatedTitle.slice(1);
-
-      if (generatedTitle.length > 50) {
-        generatedTitle = generatedTitle.substring(0, 47) + '...';
-      }
-
-      console.log(`📝 Generated title: "${generatedTitle}" (message count: ${messageCount})`);
-      return generatedTitle;
-    } else {
-      const words = initialMessage.split(' ');
-      return words.slice(0, 5).join(' ') + (words.length > 5 ? '...' : '');
+      let title = response.content.trim().replace(/^["'`]|["'`]$/g, '').replace(/^(Title:|Chat:|Session:)\s*/i, '');
+      title = title.charAt(0).toUpperCase() + title.slice(1);
+      return title.length > 50 ? title.substring(0, 47) + '...' : title;
     }
-  } catch (error) {
-    console.error('Error generating chat title:', error);
-    const words = initialMessage.split(' ');
-    return words.slice(0, 5).join(' ') + (words.length > 5 ? '...' : '');
-  }
+  } catch (error) { console.error('Error generating title:', error); }
+  const words = initialMessage.split(' ');
+  return words.slice(0, 5).join(' ') + (words.length > 5 ? '...' : '');
 };
 
-// Update session title based on conversation growth
 const maybeUpdateSessionTitle = async (sessionId: string, userId: string, messageCount: number, latestMessage: string): Promise<void> => {
+  if (![1, 4, 8].includes(messageCount)) return;
   try {
-    // Update title on message 1, 4, and 8 to refine based on conversation context
-    const shouldUpdateTitle = messageCount === 1 || messageCount === 4 || messageCount === 8;
-
-    if (!shouldUpdateTitle) return;
-
-    console.log(`🔄 Updating session title (message ${messageCount})...`);
-
     const newTitle = await generateChatTitle(sessionId, userId, latestMessage, messageCount);
-
-    const { error } = await supabase
-      .from('chat_sessions')
-      .update({ title: newTitle })
-      .eq('id', sessionId)
-      .eq('user_id', userId);
-
-    if (error) {
-      console.error('❌ Error updating session title:', error);
-    } else {
-      console.log(`✅ Session title updated: "${newTitle}"`);
-    }
-  } catch (error) {
-    console.error('❌ Error in maybeUpdateSessionTitle:', error);
-  }
+    await supabase.from('chat_sessions').update({ title: newTitle }).eq('id', sessionId).eq('user_id', userId);
+    console.log(`✅ Session title updated: "${newTitle}"`);
+  } catch (error) { console.error('Error updating session title:', error); }
 };
 
-async function ensureChatSession(userId: string, sessionId: string, newDocumentIds: string[] = [], initialMessage = ''): Promise<void> {
+async function ensureChatSession(userId: string, sessionId: string, newDocumentIds: string[] = [], initialMessage = '', incrementMessageCount = true): Promise<void> {
   try {
-    const { data: existingSession, error: fetchError } = await supabase
-      .from('chat_sessions')
+    const { data: existingSession, error: fetchError } = await supabase.from('chat_sessions')
       .select('id, document_ids, message_count, context_summary, title')
-      .eq('id', sessionId)
-      .eq('user_id', userId)
-      .single();
+      .eq('id', sessionId).eq('user_id', userId).single();
 
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      console.error('Error fetching chat session:', fetchError);
-      return;
-    }
+    if (fetchError && fetchError.code !== 'PGRST116') { console.error('Error fetching session:', fetchError); return; }
 
     if (existingSession) {
-      const newMessageCount = (existingSession.message_count || 0) + 1;
-      const updates: any = {
-        document_ids: newDocumentIds,
-        message_count: newMessageCount
-      };
-
+      const newMessageCount = incrementMessageCount ? (existingSession.message_count || 0) + 1 : (existingSession.message_count || 0);
+      const updates: any = incrementMessageCount ? { message_count: newMessageCount } : {};
       if (newDocumentIds.length > 0) {
-        const currentDocIds = existingSession.document_ids || [];
-        const updatedDocIds = [
-          ...new Set([
-            ...currentDocIds,
-            ...newDocumentIds
-          ])
-        ];
-        updates.document_ids = updatedDocIds;
+        updates.document_ids = [...new Set([...(existingSession.document_ids || []), ...newDocumentIds])];
       }
-
-      const { error: updateError } = await supabase
-        .from('chat_sessions')
-        .update(updates)
-        .eq('id', sessionId);
-
-      if (updateError) {
-        console.error('Error updating chat session:', updateError);
-      }
-
-      // Update title if needed based on message count
-      if (initialMessage) {
-        maybeUpdateSessionTitle(sessionId, userId, newMessageCount, initialMessage).catch(err =>
-          console.error('Error updating title:', err)
-        );
+      await supabase.from('chat_sessions').update(updates).eq('id', sessionId);
+      if (initialMessage && incrementMessageCount) {
+        maybeUpdateSessionTitle(sessionId, userId, newMessageCount, initialMessage).catch(console.error);
       }
     } else {
       const newTitle = initialMessage ? await generateChatTitle(sessionId, userId, initialMessage, 1) : 'New Chat';
-
-      const { error: insertError } = await supabase
-        .from('chat_sessions')
-        .insert({
-          id: sessionId,
-          user_id: userId,
-          title: newTitle,
-          document_ids: newDocumentIds,
-          message_count: 1,
-          token_count: 0,
-          last_message_at: new Date().toISOString()
-        })
-        .select('id')
-        .single();
-
-      if (insertError) {
-        console.error('Error creating chat session:', insertError);
-      } else {
-        console.log(`✅ New session created with title: "${newTitle}"`);
-      }
+      await supabase.from('chat_sessions').insert({
+        id: sessionId, user_id: userId, title: newTitle,
+        document_ids: newDocumentIds, message_count: 1, token_count: 0,
+        last_message_at: new Date().toISOString()
+      });
+      console.log(`✅ New session created: "${newTitle}"`);
     }
   } catch (error) {
-    console.error('Database error when ensuring chat session:', error);
-    logSystemError(supabase, {
-      severity: 'warning',
-      source: 'gemini-chat',
-      component: 'ensure-session',
-      error_code: 'SESSION_ENSURE_FAILED',
-      message: `Failed to ensure chat session: ${String(error)}`,
-      details: { error: String(error), sessionId },
-      user_id: userId,
-    });
+    console.error('Error ensuring session:', error);
+    logSystemError(supabase, { severity: 'warning', source: 'gemini-chat', component: 'ensure-session', error_code: 'SESSION_ENSURE_FAILED', message: String(error), details: { sessionId } });
   }
 }
 
 async function updateSessionLastMessage(sessionId: string, contextSummary: string | null = null, title: string | null = null): Promise<void> {
   try {
-    const update: any = {
-      last_message_at: new Date().toISOString(),
-      ...(contextSummary && {
-        context_summary: contextSummary
-      }),
-      ...(title && {
-        title: title
-      })
-    };
-
-    const { error } = await supabase
-      .from('chat_sessions')
-      .update(update)
-      .eq('id', sessionId);
-
-    if (error) console.error('Error updating session last message time:', error);
-  } catch (error) {
-    console.error('Database error when updating session:', error);
-  }
+    const update: any = { last_message_at: new Date().toISOString() };
+    if (contextSummary) update.context_summary = contextSummary;
+    if (title) update.title = title;
+    await supabase.from('chat_sessions').update(update).eq('id', sessionId);
+  } catch (error) { console.error('Error updating session:', error); }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// QUERY CLASSIFICATION
+// ─────────────────────────────────────────────────────────────────────────────
 function classifyUserQuery(message: string): string {
-  if (!message || typeof message !== 'string') {
-    return 'general-knowledge';
-  }
+  if (!message || typeof message !== 'string') return 'general-knowledge';
+  const lower = message.toLowerCase().trim();
+  const appKeywords = ['studdyhub', 'dashboard', 'notes', 'recordings', 'schedule', 'upload', 'create note', 'document', 'settings', 'profile', 'ai chat'];
+  const studyKeywords = ['help me understand', 'explain how to', 'study tips', 'learn about', 'homework', 'quiz me', 'summarize', 'solve this'];
+  const appPatterns = [/how (do|can) i (create|make|add|upload|delete|edit)/, /where (is|can i find) the/, /how to (use|access|navigate)/];
+  const studyPatterns = [/help me (with|understand|learn)/, /explain (this|how|what|why)/, /what (is|are|does|means?)/, /how (does|do|is|are)/];
 
-  const messageLower = message.toLowerCase().trim();
-  const appKeywords = [
-    'studdyhub',
-    'dashboard',
-    'notes',
-    'recordings',
-    'schedule',
-    'upload',
-    'create note',
-    'save document',
-    'document',
-    'file upload',
-    'settings',
-    'profile',
-    'preferences',
-    'learning style',
-    'how do i',
-    'how to use',
-    'can you help me with the app',
-    'create new',
-    'delete',
-    'edit',
-    'organize',
-    'category',
-    'ai chat',
-    'social feed',
-    'authentication',
-    'supabase',
-    'react component',
-    'tailwind',
-    'framer motion'
-  ];
-
-  const studyHelpKeywords = [
-    'help me understand',
-    'explain how to',
-    'study tips',
-    'learn about',
-    'homework help',
-    'assignment',
-    'practice problems',
-    'quiz me',
-    'test preparation',
-    'review',
-    'summarize',
-    'breakdown',
-    'solve this',
-    'work through',
-    'step by step',
-    'tutorial',
-    'concept explanation',
-    'example of',
-    'demonstrate'
-  ];
-
-  const appPatterns = [
-    /how (do|can) i (create|make|add|upload|delete|edit)/,
-    /where (is|can i find) the/,
-    /how to (use|access|navigate)/,
-    /(create|make|add) (a |an |new )?note/,
-    /upload (a |an )?file/,
-    /(schedule|calendar|timetable)/
-  ];
-
-  const studyPatterns = [
-    /help me (with|understand|learn)/,
-    /explain (this|how|what|why)/,
-    /(solve|work through|show me)/,
-    /what (is|are|does|means?)/,
-    /how (does|do|is|are)/
-  ];
-
-  if (appKeywords.some((keyword) => messageLower.includes(keyword)) ||
-    appPatterns.some((pattern) => pattern.test(messageLower))) {
-    return 'app-specific';
-  }
-
-  if (studyHelpKeywords.some((keyword) => messageLower.includes(keyword)) ||
-    studyPatterns.some((pattern) => pattern.test(messageLower))) {
-    return 'study-help';
-  }
-
+  if (appKeywords.some(k => lower.includes(k)) || appPatterns.some(p => p.test(lower))) return 'app-specific';
+  if (studyKeywords.some(k => lower.includes(k)) || studyPatterns.some(p => p.test(lower))) return 'study-help';
   return 'general-knowledge';
 }
 
 function buildUserMemoryContext(userContext: any): string | null {
   const sections: string[] = [];
-
-  const interests = userContext.userMemory?.filter((fact: any) =>
-    fact.fact_type === 'interest' && fact.confidence_score > 0.7
-  );
-
-  if (interests?.length > 0) {
-    const interestList = interests.map((interest: any) => interest.fact_value).join(', ');
-    sections.push(`KNOWN INTERESTS: ${interestList}`);
-  }
-
-  const learningPrefs = userContext.userMemory?.filter((fact: any) =>
-    fact.fact_type === 'learning_style' || fact.fact_type === 'preference'
-  );
-
-  if (learningPrefs?.length > 0) {
-    const prefs = learningPrefs.map((pref: any) => `${pref.fact_key}: ${pref.fact_value}`).join(', ');
-    sections.push(`LEARNING PREFERENCES: ${prefs}`);
-  }
-
-  const challenges = userContext.userMemory?.filter((fact: any) =>
-    fact.fact_type === 'skill_level' && fact.fact_key === 'challenging_areas'
-  );
-
-  if (challenges?.length > 0) {
-    const challengeList = challenges.map((challenge: any) => challenge.fact_value).join(', ');
-    sections.push(`AREAS FOR IMPROVEMENT: ${challengeList}`);
-  }
-
+  const interests = userContext.userMemory?.filter((f: any) => f.fact_type === 'interest' && f.confidence_score > 0.7);
+  if (interests?.length) sections.push(`KNOWN INTERESTS: ${interests.map((i: any) => i.fact_value).join(', ')}`);
+  const prefs = userContext.userMemory?.filter((f: any) => f.fact_type === 'learning_style' || f.fact_type === 'preference');
+  if (prefs?.length) sections.push(`LEARNING PREFERENCES: ${prefs.map((p: any) => `${p.fact_key}: ${p.fact_value}`).join(', ')}`);
   return sections.length > 0 ? sections.join('\n') : null;
 }
 
 function buildActionableContextText(actionableContext: any): string {
   const sections: string[] = [];
-
-  if (actionableContext.notes?.length > 0) {
-    sections.push(`📝 Available Notes: ${actionableContext.notes.map((n: any) => n.title).join(', ')}`);
-  }
-
-  if (actionableContext.documents?.length > 0) {
-    sections.push(`📄 Available Documents: ${actionableContext.documents.map((d: any) => d.title).join(', ')}`);
-  }
-
-  if (actionableContext.folders?.length > 0) {
-    sections.push(`📁 Available Folders: ${actionableContext.folders.map((f: any) => f.name).join(', ')}`);
-  }
-
-  if (actionableContext.goals?.length > 0) {
-    sections.push(`🎯 Active Goals: ${actionableContext.goals.map((g: any) => g.goal_text).join(', ')}`);
-  }
-
+  if (actionableContext.notes?.length) sections.push(`📝 Notes: ${actionableContext.notes.map((n: any) => n.title).join(', ')}`);
+  if (actionableContext.documents?.length) sections.push(`📄 Documents: ${actionableContext.documents.map((d: any) => d.title).join(', ')}`);
+  if (actionableContext.folders?.length) sections.push(`📁 Folders: ${actionableContext.folders.map((f: any) => f.name).join(', ')}`);
+  if (actionableContext.goals?.length) sections.push(`🎯 Goals: ${actionableContext.goals.map((g: any) => g.goal_text).join(', ')}`);
   return sections.join('\n');
 }
 
 async function buildEnhancedGeminiConversation(
-  userId: string,
-  sessionId: string,
-  currentMessage: string,
-  files: any[],
-  attachedContext: string,
-  systemPrompt: string
-): Promise<{
-  contents: any[];
-  systemInstruction: any;
-  contextInfo: any;
-  queryType: string;
-}> {
-  const logPrefix = `[buildEnhancedGeminiConversation][Session:${sessionId}]`;
-  console.log(`${logPrefix} Starting enhanced conversation build`);
+  userId: string, sessionId: string, currentMessage: string,
+  files: any[], attachedContext: string, systemPrompt: string
+): Promise<{ contents: any[]; systemInstruction: any; contextInfo: any; queryType: string }> {
+  const userContext = await contextService.getUserContext(userId);
+  const crossSessionContext = await contextService.getCrossSessionContext(userId, sessionId, currentMessage);
+  const actionableContext = await contextService.getActionableContext(userId);
+  const actionableContextText = buildActionableContextText(actionableContext);
 
-  try {
-    // Get comprehensive user context
-    const userContext = await contextService.getUserContext(userId);
-    const crossSessionContext = await contextService.getCrossSessionContext(userId, sessionId, currentMessage);
-    const actionableContext = await contextService.getActionableContext(userId);
-    const actionableContextText = buildActionableContextText(actionableContext);
+  const uc = userContext;
+  const userContextSummary = `\n\nUSER CONTEXT: Notes: ${uc.allNotes?.length ?? 0}, Documents: ${uc.allDocuments?.length ?? 0}, Goals: ${uc.learningGoals?.length ?? 0}, Flashcards: ${uc.flashcards?.length ?? 0}`;
 
+  const userName = uc.profile?.full_name || 'User';
+  const queryType = classifyUserQuery(currentMessage);
+  const conversationData = await buildIntelligentContext(userId, sessionId, currentMessage, [], []);
+  const geminiContents: any[] = [];
 
-
-    // Build a full user context summary for the system prompt
-    const uc = userContext;
-    const studyHabits = uc.studyHabits;
-    const learningPatterns = uc.learningPatterns;
-    const topicMastery = uc.topicMastery;
-    const totalCounts = uc.totalCounts;
-    const userContextSummary = `\n\nUSER CONTEXT SUMMARY:\n- Notes: ${uc.allNotes?.length ?? 0}\n- Documents: ${uc.allDocuments?.length ?? 0}\n- Recent Quizzes: ${uc.recentQuizzes?.length ?? 0}\n- Learning Schedule: ${uc.learningSchedule?.length ?? 0}\n- Learning Goals: ${uc.learningGoals?.length ?? 0}\n- User Memory: ${uc.userMemory?.length ?? 0}\n- Achievements: ${uc.achievements?.length ?? 0}\n- Flashcards: ${uc.flashcards?.length ?? 0}\n- Social Profile: ${uc.socialProfile ? 'Yes' : 'No'}\n- Recent Recordings: ${uc.recentRecordings?.length ?? 0}\n- Document Folders: ${uc.documentFolders?.length ?? 0}\n- Note Title Index: ${uc.noteTitleIndex?.size ?? 0}\n- Document Title Index: ${uc.documentTitleIndex?.size ?? 0}\n- Total Counts: ${JSON.stringify(totalCounts)}\n\nLEARNING PATTERNS:\n- Strong Subjects: ${Array.from(learningPatterns?.strongSubjects?.keys() ?? []).join(', ') || 'None'}\n- Weak Subjects: ${Array.from(learningPatterns?.weakSubjects?.keys() ?? []).join(', ') || 'None'}\n- Study Times: ${Array.from(learningPatterns?.studyTimes?.entries() ?? []).map(([k,v])=>`${k}: ${v}`).join(', ') || 'None'}\n- Preferred Note Categories: ${Array.from(learningPatterns?.preferredNoteCategories?.keys() ?? []).join(', ') || 'None'}\n- Frequent Topics: ${Array.from(learningPatterns?.frequentTopics?.keys() ?? []).join(', ') || 'None'}\n- Study Consistency: ${learningPatterns?.studyConsistency ?? 'N/A'}\n- Average Study Duration: ${learningPatterns?.averageStudyDuration ?? 'N/A'} min\n- Preferred Quiz Types: ${Array.from(learningPatterns?.preferredQuizTypes?.keys() ?? []).join(', ') || 'None'}\n- Top Tags: ${Array.from(learningPatterns?.topTags?.keys() ?? []).join(', ') || 'None'}\n- Recent Topics: ${learningPatterns?.recentTopics?.map(t=>t.content).join(', ') || 'None'}\n\nSTUDY HABITS:\n- Most Active Day: ${studyHabits?.mostActiveDay ?? 'N/A'}\n- Most Active Hour: ${studyHabits?.mostActiveHour ?? 'N/A'}\n- Average Sessions/Week: ${studyHabits?.averageSessionsPerWeek ?? 'N/A'}\n- Average Quizzes/Week: ${studyHabits?.averageQuizzesPerWeek ?? 'N/A'}\n- Average Notes/Week: ${studyHabits?.averageNotesPerWeek ?? 'N/A'}\n\nTOPIC MASTERY:\n${topicMastery && typeof topicMastery.forEach === 'function' && topicMastery.size > 0 ? Array.from(topicMastery.entries()).map(([topic, data]) => `- ${topic}: ${JSON.stringify(data)}`).join('\n') : 'No topic mastery data.'}`;
-
-    const userProfile = userContext.profile;
-    let userName = 'User';
-    if (userProfile) {
-      userName = userProfile.full_name || 'User';
-    }
-
-    const queryType = classifyUserQuery(currentMessage);
-
-    // Get conversation history
-    const conversationData = await buildIntelligentContext(userId, sessionId, currentMessage, [], []);
-    const geminiContents: any[] = [];
-    let systemInstruction = null;
-
-    if (systemPrompt) {
-      const queryGuidance: Record<string, string> = {
-        'general-knowledge': 'Provide accurate information. Only mention StuddyHub if directly relevant.',
-        'study-help': 'Provide educational support tailored to user\'s learning patterns and history.',
-        'app-specific': 'Focus on StuddyHub features and usage instructions based on user activity.'
-      };
-
-      let crossSessionText = '';
-      if (crossSessionContext) {
-        crossSessionText = crossSessionContext.map((session: any) => {
-          let sessionInfo = `Previous session "${session.sessionTitle}" (${new Date(session.lastActive).toLocaleDateString()}): `;
-          if (session.summary) {
-            sessionInfo += session.summary;
-          } else if (session.recentTopics?.length) {
-            sessionInfo += `Discussed: ${session.recentTopics.map((t: any) => t.content).join('; ')}`;
-          }
-          return sessionInfo;
-        }).join('\n');
-      }
-
-
-      const enhancedSystemPrompt = `${systemPrompt}
-
-    **ACTIONABLE CONTEXT:**
-    ${actionableContextText}
-
-    ${userContextSummary}
-
-    **USE THIS CONTEXT TO:**
-    1. Reference specific notes/documents by their exact titles when creating related content
-    2. Link items that already exist in the user's database
-    3. Update existing goals, notes, or schedule items
-    4. Avoid creating duplicate content
-
-    **MEMORY & RECALL INSTRUCTIONS:**
-    - When you recall previous conversations, mention specific topics and details
-    - Use phrases like "I remember we discussed..." or "Based on our previous conversation about..."
-    - Connect current questions to past learning topics explicitly
-    - Reference specific interests the user has shown before
-    - If you have summary information, use it to show continuity
-    - NEVER say "I don't have specific details memorized" - instead use the context provided`;
-
-      // Add current date and time context
-      const currentDateTime = new Date();
-      const dateTimeString = currentDateTime.toLocaleString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-        timeZoneName: 'short'
-      });
-
-      systemInstruction = {
-        parts: [
-          {
-            text: `${enhancedSystemPrompt}\n\nCURRENT DATE AND TIME: ${dateTimeString}\n\nQuery type: ${queryType}\n${queryGuidance[queryType]}\n\nCross-session context:\n${crossSessionText}\n\nYou are the AI Assistant for ${userName} on StuddyHub. Use the memory and context provided to give personalized, continuous responses.`
-          }
-        ]
-      };
-    }
-
-    if (conversationData.conversationSummary) {
-      geminiContents.push({
-        role: 'user',
-        parts: [
-          {
-            text: `CONTEXT RECALL (from this ongoing conversation): ${conversationData.conversationSummary}\n` +
-              `Use this to stay consistent with what we have already discussed. ` +
-              `Do not repeat or acknowledge this context block verbatim in your reply unless the user explicitly asks about it.` +
-              `\nIMPORTANT: Never start your reply by acknowledging or repeating any "RECALL THIS CONVERSATION CONTEXT" or "CONTEXT RECALL" blocks. Jump straight into answering the user's current request.`
-          }
-        ]
-      });
-    }
-
-    const recentMessages = conversationData.recentMessages;
-    // We rely on buildIntelligentContext to provide the correct number of messages (token-based)
-    // No further truncation needed.
-
-
-    if (recentMessages && recentMessages.length > 0) {
-      for (const msg of recentMessages) {
-        if (msg.role === 'user') {
-          geminiContents.push({
-            role: 'user',
-            parts: [
-              {
-                text: msg.content || ''
-              }
-            ]
-          });
-        } else if (msg.role === 'assistant' || msg.role === 'model') {
-          geminiContents.push({
-            role: 'model',
-            parts: [
-              {
-                text: msg.content || ''
-              }
-            ]
-          });
-        }
-      }
-    }
-
-    if (currentMessage || files.length > 0 || attachedContext) {
-      const currentMessageParts: any[] = [];
-
-      if (currentMessage) {
-        currentMessageParts.push({
-          text: currentMessage
-        });
-      }
-
-      if (attachedContext) {
-        currentMessageParts.push({
-          text: `\n\nAttached Context:\n${attachedContext}`
-        });
-      }
-
-      const userMemoryContext = buildUserMemoryContext(userContext);
-      if (userMemoryContext) {
-        currentMessageParts.push({
-          text: `\n\nUSER MEMORY & INTERESTS:\n${userMemoryContext}`
-        });
-      }
-
-      if (files.length > 0) {
-        for (const file of files) {
-          if (file.type === 'image' && file.data) {
-            currentMessageParts.push({
-              inlineData: {
-                mimeType: file.mimeType,
-                data: file.data
-              }
-            });
-          } else if (file.content) {
-            currentMessageParts.push({
-              text: `\n\n[File: ${file.name}]\n${file.content}`
-            });
-          }
-        }
-      }
-
-      if (currentMessageParts.length > 0) {
-        geminiContents.push({
-          role: 'user',
-          parts: currentMessageParts
-        });
-      }
-    }
-
-    console.log(`${logPrefix} Built enhanced conversation with ${geminiContents.length} parts`);
-
-    return {
-      contents: geminiContents,
-      systemInstruction: systemInstruction,
-      contextInfo: {
-        ...conversationData,
-        userContext,
-        crossSessionContext
-      },
-      queryType: queryType
-    };
-  } catch (error) {
-    console.error(`${logPrefix} Error:`, error);
-    throw error;
-  }
-}
-
-async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string, configOverrides: any = {}, tierModelChain?: string[]): Promise<{
-  success: boolean;
-  content?: string;
-  error?: string;
-  userMessage?: string;
-  modelUsed?: string;
-}> {
-  // 1. Define the Fallback Chain (Priority Order) — use tier-based chain if provided. Fallback to env var, then defaults.
-  const envChain = Deno.env.get('GEMINI_MODEL_CHAIN')?.split(',').map(s => s.trim()).filter(Boolean);
-  const DEFAULT_GEMINI_CHAIN = [
-    'gemini-3.5-pro',
-    'gemini-3-pro-preview',
-    'gemini-2.5-pro',
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-lite',
-  ];
-
-  const MODEL_CHAIN = tierModelChain || envChain || DEFAULT_GEMINI_CHAIN;
-
-  // Extract systemInstruction from configOverrides
-  const { systemInstruction, ...generationConfig } = configOverrides;
-
-  const requestBody: any = {
-    contents,
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 8192,
-      topK: 40,
-      topP: 0.95,
-      ...generationConfig
-    }
+  const queryGuidance: Record<string, string> = {
+    'general-knowledge': 'Provide accurate information. Only mention StuddyHub if directly relevant.',
+    'study-help': 'Provide educational support tailored to user\'s learning patterns.',
+    'app-specific': 'Focus on StuddyHub features and usage instructions.'
   };
 
-  if (systemInstruction) {
-    requestBody.systemInstruction = systemInstruction;
+  let crossSessionText = '';
+  if (crossSessionContext) {
+    crossSessionText = crossSessionContext.map((s: any) => {
+      let info = `Previous session "${s.sessionTitle}" (${new Date(s.lastActive).toLocaleDateString()}): `;
+      info += s.summary || (s.recentTopics?.length ? `Discussed: ${s.recentTopics.map((t: any) => t.content).join('; ')}` : '');
+      return info;
+    }).join('\n');
   }
 
-  // 2. Retry Loop with Model Switching
-  for (let attempt = 0; attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS; attempt++) {
-    const currentModel = MODEL_CHAIN[attempt % MODEL_CHAIN.length];
-    console.log(`[GeminiAPI] Attempt ${attempt + 1}/${ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS} using model: ${currentModel}`);
+  const dateTimeString = new Date().toLocaleString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: true, timeZoneName: 'short'
+  });
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${geminiApiKey}`;
-
-    try {
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const extractedContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-        if (extractedContent) {
-          return { success: true, content: extractedContent, modelUsed: currentModel };
-        } else {
-          console.warn(`[GeminiAPI] Model ${currentModel} returned no content.`);
-        }
-      } else {
-        const errorText = await response.text();
-        const status = response.status;
-        console.error(`[GeminiAPI] Error ${status} with ${currentModel}: ${errorText.substring(0, 200)}...`);
-        logSystemError(supabase, {
-          severity: 'error',
-          source: 'gemini-chat',
-          component: 'gemini-api',
-          error_code: `GEMINI_HTTP_${status}`,
-          message: `Gemini ${currentModel} returned HTTP ${status}`,
-          details: { model: currentModel, status, errorSnippet: errorText.substring(0, 500), attempt },
-        });
-
-        if (status === 429 || status === 503) {
-          console.warn(`[GeminiAPI] Quota/Load limit hit for ${currentModel}. Switching to next model...`);
-          if (attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
-            await sleep(1000);
-            continue;
-          }
-        }
-
-        if (status === 400) {
-          return { success: false, error: `BAD_REQUEST: ${errorText}`, userMessage: "I couldn't process that request format." };
-        }
-      }
-    } catch (error) {
-      console.error(`[GeminiAPI] Network error with ${currentModel}:`, error);
-      logSystemError(supabase, {
-        severity: 'error',
-        source: 'gemini-chat',
-        component: 'gemini-api',
-        error_code: 'GEMINI_NETWORK_ERROR',
-        message: `Gemini ${currentModel} network error: ${String(error)}`,
-        details: { model: currentModel, attempt, error: String(error) },
-      });
-      if (attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
-        await sleep(1000);
-      }
-    }
-  }
-
-  // ── OpenRouter Fallback ──
-  if (openRouterApiKey) {
-    console.log('[OpenRouter] All Gemini models failed. Falling back to OpenRouter...');
-    try {
-      const openRouterMessages = convertGeminiToOpenRouterMessages(contents, systemInstruction);
-      const orResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openRouterApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'openrouter/free',
-          messages: openRouterMessages,
-          max_tokens: Math.min(generationConfig.maxOutputTokens || 4096, 4096),
-          temperature: generationConfig.temperature ?? 0.7,
-          top_p: generationConfig.topP ?? 0.95,
-          transforms: ['middle-out'], // Auto-compress if still over limit
-        }),
-      });
-
-      if (orResponse.ok) {
-        const orData = await orResponse.json();
-        const orContent = orData.choices?.[0]?.message?.content;
-        if (orContent) {
-          console.log('[OpenRouter] Fallback succeeded, chars:', orContent.length);
-          return { success: true, content: orContent };
-        }
-        console.warn('[OpenRouter] Response had no content');
-      } else {
-        const errText = await orResponse.text();
-        console.error('[OpenRouter] Error', orResponse.status, errText.substring(0, 300));
-        logSystemError(supabase, {
-          severity: 'error',
-          source: 'gemini-chat',
-          component: 'openrouter-api',
-          error_code: `OPENROUTER_HTTP_${orResponse.status}`,
-          message: `OpenRouter fallback returned HTTP ${orResponse.status}`,
-          details: { status: orResponse.status, errorSnippet: errText.substring(0, 500) },
-        });
-      }
-    } catch (orErr) {
-      console.error('[OpenRouter] Network error:', orErr);
-      logSystemError(supabase, {
-        severity: 'error',
-        source: 'gemini-chat',
-        component: 'openrouter-api',
-        error_code: 'OPENROUTER_NETWORK_ERROR',
-        message: `OpenRouter fallback network error: ${String(orErr)}`,
-        details: { error: String(orErr) },
-      });
-    }
-  }
-
-  return {
-    success: false,
-    error: 'ALL_MODELS_FAILED',
-    userMessage: 'I am currently experiencing heavy load across all AI services. Please try again in a minute.'
-  };
-}
-
-// ── Helpers to convert Gemini format ↔ OpenRouter (OpenAI-compatible) format ──
-// OpenRouter free tier has a 262k token context limit. We aggressively truncate
-// to stay well within that budget (~200k tokens ≈ 800k chars to leave headroom).
-const OPENROUTER_MAX_CHARS = 800_000; // ~200k tokens at 4 chars/token
-const OPENROUTER_MAX_MSG_CHARS = 30_000; // Truncate individual messages beyond this
-
-function convertGeminiToOpenRouterMessages(contents: any[], systemInstruction?: any): Array<{role: string; content: string}> {
-  const messages: Array<{role: string; content: string}> = [];
-
-  // Add system instruction as a system message (truncated if huge)
-  if (systemInstruction) {
-    let sysText = '';
-    if (typeof systemInstruction === 'string') {
-      sysText = systemInstruction;
-    } else if (systemInstruction.parts) {
-      sysText = systemInstruction.parts.map((p: any) => p.text || '').join('\n');
-    }
-    if (sysText) {
-      // Keep system prompt but cap it
-      if (sysText.length > OPENROUTER_MAX_MSG_CHARS * 2) {
-        sysText = sysText.substring(0, OPENROUTER_MAX_MSG_CHARS * 2) + '\n... [system prompt truncated for context limit]';
-      }
-      messages.push({ role: 'system', content: sysText });
-    }
-  }
-
-  // Convert each Gemini content entry, truncating individual messages
-  const allConverted: Array<{role: string; content: string}> = [];
-  for (const entry of contents) {
-    const role = entry.role === 'model' ? 'assistant' : (entry.role || 'user');
-    const textParts = (entry.parts || []).map((p: any) => p.text || '').filter(Boolean);
-    if (textParts.length > 0) {
-      let content = textParts.join('\n');
-      if (content.length > OPENROUTER_MAX_MSG_CHARS) {
-        content = content.substring(0, OPENROUTER_MAX_MSG_CHARS) + '\n... [truncated]';
-      }
-      allConverted.push({ role, content });
-    }
-  }
-
-  // Budget check: keep system message chars, then fit conversation from the END
-  // (most recent messages are most important for the response)
-  const systemChars = messages.reduce((sum, m) => sum + m.content.length, 0);
-  let remainingBudget = OPENROUTER_MAX_CHARS - systemChars;
-
-  // Always keep the last message (the current user request)
-  const selectedFromEnd: Array<{role: string; content: string}> = [];
-  for (let i = allConverted.length - 1; i >= 0; i--) {
-    const msgLen = allConverted[i].content.length;
-    if (remainingBudget - msgLen < 0 && selectedFromEnd.length > 0) {
-      // No more budget — stop adding older messages
-      break;
-    }
-    remainingBudget -= msgLen;
-    selectedFromEnd.unshift(allConverted[i]);
-  }
-
-  const dropped = allConverted.length - selectedFromEnd.length;
-  if (dropped > 0) {
-    console.log(`[OpenRouter] Truncated conversation: dropped ${dropped} older messages to fit context window`);
-    // Add a note so the model knows context was trimmed
-    messages.push({ role: 'system', content: `[Note: ${dropped} earlier conversation messages were omitted to fit the context window. Focus on the recent messages below.]` });
-  }
-
-  messages.push(...selectedFromEnd);
-  console.log(`[OpenRouter] Final message count: ${messages.length}, estimated chars: ${messages.reduce((s, m) => s + m.content.length, 0)}`);
-  return messages;
-}
-
-// Streaming variant: forward incremental chunks to `onChunk` callback while
-// accumulating the full text. Falls back to non-streaming behaviour if the
-// API does not stream.
-async function callEnhancedGeminiAPIStream(contents: any[], geminiApiKey: string, onChunk: (chunk: string) => Promise<void>, configOverrides: any = {}, tierModelChain?: string[]): Promise<{
-  success: boolean;
-  content?: string;
-  error?: string;
-  modelUsed?: string;
-}> {
-  const envChain = Deno.env.get('GEMINI_MODEL_CHAIN')?.split(',').map(s => s.trim()).filter(Boolean);
-  const DEFAULT_GEMINI_CHAIN = [
-    'gemini-3.5-pro',
-    'gemini-3-pro-preview',
-    'gemini-2.5-pro',
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-lite',
-  ];
-  const MODEL_CHAIN = tierModelChain || envChain || DEFAULT_GEMINI_CHAIN;
-
-  const { systemInstruction, ...generationConfig } = configOverrides;
-
-  const requestBody: any = {
-    contents,
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 8192,
-      ...generationConfig
-    }
+  const systemInstruction = {
+    parts: [{
+      text: `${systemPrompt}\n\n**ACTIONABLE CONTEXT:**\n${actionableContextText}${userContextSummary}\n\nCURRENT DATE AND TIME: ${dateTimeString}\n\nQuery type: ${queryType}\n${queryGuidance[queryType]}\n\nCross-session context:\n${crossSessionText}\n\nYou are the AI Assistant for ${userName} on StuddyHub.`
+    }]
   };
 
-  if (systemInstruction) requestBody.systemInstruction = systemInstruction;
+  if (conversationData.conversationSummary) {
+    geminiContents.push({
+      role: 'user',
+      parts: [{ text: `CONTEXT RECALL: ${conversationData.conversationSummary}\nDo not acknowledge this block verbatim. Jump straight into answering.` }]
+    });
+  }
 
-  // Try each model in chain until success
-  for (let attempt = 0; attempt < MODEL_CHAIN.length; attempt++) {
-    const currentModel = MODEL_CHAIN[attempt];
-    console.log(`[GeminiAPI-Stream] Using model: ${currentModel}`);
-
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${geminiApiKey}`;
-
-    try {
-      const resp = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!resp.ok) {
-        const txt = await resp.text();
-        console.error('[GeminiAPI-Stream] HTTP error:', resp.status, txt.substring(0, 300));
-
-        // 404 usually indicates that model is not available; treat as warning and continue to next model
-        const severity = resp.status === 404 ? 'warning' : 'error';
-
-        logSystemError(supabase, {
-          severity,
-          source: 'gemini-chat',
-          component: 'gemini-stream',
-          error_code: `GEMINI_STREAM_HTTP_${resp.status}`,
-          message: `Gemini streaming ${currentModel} HTTP ${resp.status}`,
-          details: { model: currentModel, status: resp.status, errorSnippet: txt.substring(0, 500) },
-        });
-
-        // 503 often transient; continue and retry others
-        if (resp.status === 503) {
-          await new Promise(res => setTimeout(res, 800));
-        }
-
-        continue;
-      }
-
-      // If response body is a stream, read incremental chunks and forward
-      const reader = resp.body?.getReader();
-      if (!reader) {
-        // Fallback: parse full JSON
-        const data = await resp.json();
-        const extracted = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (extracted) {
-          await onChunk(extracted);
-          return { success: true, content: extracted, modelUsed: currentModel };
-        }
-        continue;
-      }
-
-      const decoder = new TextDecoder();
-      let done = false;
-      let accumulated = '';
-
-      while (!done) {
-        const { value, done: rdone } = await reader.read();
-        done = rdone;
-        if (value) {
-          const chunkText = decoder.decode(value, { stream: !done });
-          // Forward chunk to caller (UI)
-          try { await onChunk(chunkText); } catch (e) { console.warn('[GeminiAPI-Stream] onChunk handler failed', e); }
-          accumulated += chunkText;
-        }
-      }
-
-      // Attempt to extract meaningful text from accumulated response
-      try {
-        const parsed = JSON.parse(accumulated);
-        const extracted = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (extracted) return { success: true, content: extracted, modelUsed: currentModel };
-      } catch (e) {
-        // Not JSON — return raw accumulated stream
-        return { success: true, content: accumulated, modelUsed: currentModel };
-      }
-    } catch (err) {
-      console.error('[GeminiAPI-Stream] Network/stream error:', err);
-      logSystemError(supabase, {
-        severity: 'error',
-        source: 'gemini-chat',
-        component: 'gemini-stream',
-        error_code: 'GEMINI_STREAM_NETWORK_ERROR',
-        message: `Gemini streaming network error: ${String(err)}`,
-        details: { model: currentModel, error: String(err) },
-      });
-      continue;
+  for (const msg of conversationData.recentMessages) {
+    if (msg.role === 'user') {
+      geminiContents.push({ role: 'user', parts: [{ text: msg.content || '' }] });
+    } else if (msg.role === 'assistant' || msg.role === 'model') {
+      geminiContents.push({ role: 'model', parts: [{ text: msg.content || '' }] });
     }
   }
 
-  // ── OpenRouter Streaming Fallback ──
-  if (openRouterApiKey) {
-    console.log('[OpenRouter-Stream] All Gemini models failed. Falling back to OpenRouter...');
-    const { systemInstruction: sysInstr, ...genConfig } = configOverrides;
-    try {
-      const openRouterMessages = convertGeminiToOpenRouterMessages(contents, sysInstr);
-      const orResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openRouterApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'openrouter/free',
-          messages: openRouterMessages,
-          max_tokens: Math.min(genConfig.maxOutputTokens || 4096, 4096),
-          temperature: genConfig.temperature ?? 0.7,
-          stream: true,
-          transforms: ['middle-out'], // Auto-compress if still over limit
-        }),
-      });
+  if (currentMessage || files.length > 0 || attachedContext) {
+    const currentParts: any[] = [];
+    if (currentMessage) currentParts.push({ text: currentMessage });
+    if (attachedContext) currentParts.push({ text: `\n\nAttached Context:\n${attachedContext}` });
 
-      if (!orResp.ok) {
-        const errText = await orResp.text();
-        console.error('[OpenRouter-Stream] HTTP error:', orResp.status, errText.substring(0, 300));
-        logSystemError(supabase, {
-          severity: 'error',
-          source: 'gemini-chat',
-          component: 'openrouter-stream',
-          error_code: `OPENROUTER_STREAM_HTTP_${orResp.status}`,
-          message: `OpenRouter streaming HTTP ${orResp.status}`,
-          details: { status: orResp.status, errorSnippet: errText.substring(0, 500) },
-        });
-      } else {
-        const reader = orResp.body?.getReader();
-        if (reader) {
-          const decoder = new TextDecoder();
-          let accumulated = '';
-          let done = false;
-          let buffer = '';
+    const memCtx = buildUserMemoryContext(userContext);
+    if (memCtx) currentParts.push({ text: `\n\nUSER MEMORY:\n${memCtx}` });
 
-          while (!done) {
-            const { value, done: rdone } = await reader.read();
-            done = rdone;
-            if (value) {
-              buffer += decoder.decode(value, { stream: !done });
-              // Process SSE lines
-              const lines = buffer.split('\n');
-              buffer = lines.pop() || ''; // keep incomplete line in buffer
-
-              for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed || trimmed === 'data: [DONE]') continue;
-                if (trimmed.startsWith('data: ')) {
-                  try {
-                    const json = JSON.parse(trimmed.slice(6));
-                    const delta = json.choices?.[0]?.delta?.content;
-                    if (delta) {
-                      accumulated += delta;
-                      try { await onChunk(delta); } catch (e) { console.warn('[OpenRouter-Stream] onChunk failed', e); }
-                    }
-                  } catch (_) { /* skip non-JSON lines */ }
-                }
-              }
-            }
-          }
-
-          if (accumulated) {
-            console.log('[OpenRouter-Stream] Fallback stream succeeded, chars:', accumulated.length);
-            return { success: true, content: accumulated };
-          }
-        } else {
-          // Non-streaming fallback
-          const orData = await orResp.json();
-          const orContent = orData.choices?.[0]?.message?.content;
-          if (orContent) {
-            await onChunk(orContent);
-            console.log('[OpenRouter-Stream] Fallback non-stream succeeded, chars:', orContent.length);
-            return { success: true, content: orContent };
-          }
-        }
+    for (const file of files) {
+      if (file.type === 'image' && file.data) {
+        currentParts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
+      } else if (file.content) {
+        currentParts.push({ text: `\n\n[File: ${file.name}]\n${file.content}` });
       }
-    } catch (orErr) {
-      console.error('[OpenRouter-Stream] Error:', orErr);
-      logSystemError(supabase, {
-        severity: 'error',
-        source: 'gemini-chat',
-        component: 'openrouter-stream',
-        error_code: 'OPENROUTER_STREAM_ERROR',
-        message: `OpenRouter streaming error: ${String(orErr)}`,
-        details: { error: String(orErr) },
-      });
     }
+
+    if (currentParts.length > 0) geminiContents.push({ role: 'user', parts: currentParts });
   }
 
-  return { success: false, error: 'ALL_STREAM_MODELS_FAILED' };
+  return { contents: geminiContents, systemInstruction, contextInfo: { ...conversationData, userContext, crossSessionContext }, queryType };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// EXTRACT USER FACTS
+// ─────────────────────────────────────────────────────────────────────────────
 async function extractUserFacts(userMessage: string, aiResponse: string, userId: string, sessionId: string): Promise<any[]> {
   const facts: any[] = [];
-
-  const preferencePatterns = [
-    {
-      pattern: /(I prefer|I like|I enjoy|I love).*?(visual|auditory|kinesthetic|reading|writing|diagrams|examples|videos|hands.on)/gi,
-      type: 'learning_style',
-      key: 'learning_preference'
-    },
-    {
-      pattern: /(I (?:am|become) (?:interested|fascinated) (?:in|with)|I want to learn (?:more )?about|I'd? like to know (?:more )?about).*?([^.!?]+)/gi,
-      type: 'interest',
-      key: 'learning_interests'
-    },
-    {
-      pattern: /(I (?:struggle|have difficulty|need help|find it hard) (?:with|to)).*?([^.!?]+)/gi,
-      type: 'skill_level',
-      key: 'challenging_areas'
-    },
-    {
-      pattern: /(My (?:favorite|preferred) (?:subject|topic|area) (?:is|are)).*?([^.!?]+)/gi,
-      type: 'interest',
-      key: 'favorite_subjects'
-    },
-    {
-      pattern: /(I (?:am|'m) (?:good|great|excellent) (?:at|with)).*?([^.!?]+)/gi,
-      type: 'skill_level',
-      key: 'strong_areas'
-    }
+  const patterns = [
+    { pattern: /(I prefer|I like|I enjoy|I love).*?(visual|auditory|kinesthetic|reading|writing|diagrams|examples|videos|hands.on)/gi, type: 'learning_style', key: 'learning_preference' },
+    { pattern: /(I (?:struggle|have difficulty|need help|find it hard) (?:with|to)).*?([^.!?]+)/gi, type: 'skill_level', key: 'challenging_areas' },
+    { pattern: /(My (?:favorite|preferred) (?:subject|topic|area) (?:is|are)).*?([^.!?]+)/gi, type: 'interest', key: 'favorite_subjects' }
   ];
 
-  // Helper to extract facts from any text (user or AI)
-  function extractFromText(text: string, source: string) {
-    for (const { pattern, type, key } of preferencePatterns) {
+  function extractFromText(text: string) {
+    for (const { pattern, type, key } of patterns) {
       const matches = text.matchAll(pattern);
       for (const match of matches) {
-        if (match[2]) {
-          const value = match[2].trim();
-          if (value.length > 3 && value.length < 100) {
-            facts.push({
-              fact_type: type,
-              fact_key: key,
-              fact_value: value,
-              confidence_score: 0.8,
-              source_session_id: sessionId
-            });
-            console.log(`[extractUserFacts] Matched fact from ${source}: type=${type}, key=${key}, value=${value}`);
-          }
+        const value = match[2]?.trim();
+        if (value && value.length > 3 && value.length < 100) {
+          facts.push({ fact_type: type, fact_key: key, fact_value: value, confidence_score: 0.8, source_session_id: sessionId });
         }
       }
     }
-    for (const pattern of topicPatterns) {
-      const matches = text.match(pattern) || [];
-      for (const match of matches) {
-        if (match && !facts.some((f) => f.fact_value.toLowerCase() === match.toLowerCase())) {
-          facts.push({
-            fact_type: 'interest',
-            fact_key: 'discussed_topics',
-            fact_value: match.toLowerCase(),
-            confidence_score: 0.7,
-            source_session_id: sessionId
-          });
-          console.log(`[extractUserFacts] Matched topic from ${source}: ${match.toLowerCase()}`);
-        }
+    const topicMatch = userMessage.match(/(genetics|biology|aviation|flight|birds|science|math|history|literature|programming|technology)/gi) || [];
+    for (const topic of topicMatch) {
+      if (!facts.some(f => f.fact_value.toLowerCase() === topic.toLowerCase())) {
+        facts.push({ fact_type: 'interest', fact_key: 'discussed_topics', fact_value: topic.toLowerCase(), confidence_score: 0.7, source_session_id: sessionId });
       }
     }
   }
 
-  extractFromText(userMessage, 'user');
-  extractFromText(aiResponse, 'ai');
-
-  const topicPatterns = [
-    /(genetics|biology|aviation|flight|birds|science|math|history|literature|programming|technology)/gi
-  ];
-
-  for (const pattern of topicPatterns) {
-    const matches = userMessage.match(pattern) || [];
-    for (const match of matches) {
-      if (match && !facts.some((f) => f.fact_value.toLowerCase() === match.toLowerCase())) {
-        facts.push({
-          fact_type: 'interest',
-          fact_key: 'discussed_topics',
-          fact_value: match.toLowerCase(),
-          confidence_score: 0.7,
-          source_session_id: sessionId
-        });
-        console.log(`[extractUserFacts] Matched topic: ${match.toLowerCase()}`);
-      }
-    }
-  }
-
-  console.log(`[extractUserFacts] Extracted facts:`, facts);
-
-  // If the AI response contains a section like "Here are the key 'learning facts' I know about you:", try to parse bullet points as facts
-  const aiFactSectionMatch = aiResponse.match(/Here are the key ["']?learning facts["']?[^\n]*\n([\s\S]+?)(?:\n\n|$)/i);
-  if (aiFactSectionMatch) {
-    const lines = aiFactSectionMatch[1].split(/\n|\*/).map(l => l.trim()).filter(l => l.length > 0);
-    for (const line of lines) {
-      // Try to extract a key-value pair from the line
-      const colonIdx = line.indexOf(':');
-      if (colonIdx > 0) {
-        const key = line.slice(0, colonIdx).replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, '').toLowerCase();
-        const value = line.slice(colonIdx + 1).trim();
-        if (value.length > 3 && value.length < 200) {
-          facts.push({
-            fact_type: 'ai_inferred',
-            fact_key: key,
-            fact_value: value,
-            confidence_score: 0.6,
-            source_session_id: sessionId
-          });
-          console.log(`[extractUserFacts] Inferred from AI summary: key=${key}, value=${value}`);
-        }
-      }
-    }
-  }
-
+  extractFromText(userMessage);
   return facts;
 }
 
-// ========== STREAMING HANDLER FUNCTION ==========
+// ─────────────────────────────────────────────────────────────────────────────
+// STREAMING HANDLER
+// ─────────────────────────────────────────────────────────────────────────────
 async function handleStreamingResponse(
-  userId: string,
-  sessionId: string,
-  message: string,
-  allDocumentIds: string[],
-  attachedNoteIds: string[],
-  learningStyle: string,
-  learningPreferences: any,
-  userMessageImageUrl: string | null,
-  imageMimeType: string | null,
-  filesMetadata: any[],
-  userMessageId: string | null,
-  userMessageTimestamp: string | null,
+  userId: string, sessionId: string, message: string,
+  allDocumentIds: string[], attachedNoteIds: string[],
+  learningStyle: string, learningPreferences: any,
+  userMessageImageUrl: string | null, imageMimeType: string | null,
+  filesMetadata: any[], userMessageId: string | null, userMessageTimestamp: string | null,
   aiMessageIdToUpdate: string | null,
   courseMaterialsContext?: string,
   courseContext?: { id: string; code?: string; title?: string } | null
 ): Promise<Response> {
   const { stream, handler } = createStreamResponse();
-
-  // Start automatic heartbeat to prevent client timeout during long operations
   handler.startHeartbeat(15_000);
 
-  // Get tier-based AI model configuration for this user
   const aiModelConfig = await (async () => {
     try {
       const validator = createSubscriptionValidator();
       return await validator.getAiModelConfig(userId);
-    } catch (e) {
-      console.warn('[Streaming] Failed to get AI model config, using default chain:', e);
-      return {
-        tier: 'free' as const,
-        modelChain: ['gemini-2.0-flash', 'gemini-2.0-flash-lite'],
-        streamingChain: ['gemini-2.0-flash', 'gemini-2.0-flash-lite'],
-        displayLabel: 'Gemini Flash',
-      };
+    } catch {
+      return { tier: 'free' as const, modelChain: ['gemini-2.0-flash', 'gemini-2.0-flash-lite'], streamingChain: ['gemini-2.0-flash', 'gemini-2.0-flash-lite'], displayLabel: 'Gemini Flash' };
     }
   })();
-  console.log(`[Streaming] AI model tier: ${aiModelConfig.tier}, primary model: ${aiModelConfig.modelChain[0]}, label: ${aiModelConfig.displayLabel}`);
 
-  // Start async processing
   (async () => {
     try {
-      console.log('🚀 Starting streaming response for message:', message.substring(0, 50));
+      console.log('🚀 Starting streaming response');
 
-      // Step 1: Understanding Phase
-      handler.sendThinkingStep(
-        'understanding',
-        'Analyzing your request',
-        'Interpreting message intent and key entities...',
-        'in-progress'
-      );
-      console.log('✅ Sent understanding step (in-progress)');
+      // ── Understanding Phase ──
+      handler.sendThinkingStep('understanding', 'Analyzing your request', 'Interpreting message intent...', 'in-progress');
 
-      console.log('📚 Getting conversation history...');
       const conversationHistory = await getConversationHistory(userId, sessionId);
-      console.log('✅ Retrieved conversation history:', conversationHistory.length, 'messages');
-
       let userIntent: UserIntent;
       try {
-        console.log('🧠 Understanding query...');
         userIntent = await agenticCore.understandQuery(message, userId, conversationHistory);
-        console.log('✅ Query understood:', userIntent.primary);
-      } catch (error: any) {
-        console.error('❌ Error in understandQuery:', error.message, error.stack);
-        logSystemError(supabase, {
-          severity: 'warning',
-          source: 'gemini-chat',
-          component: 'understand-query',
-          error_code: 'QUERY_UNDERSTANDING_FAILED',
-          message: `understandQuery failed: ${error.message}`,
-          details: { stack: error.stack },
-          user_id: userId,
-        });
-        // Fallback intent if query understanding fails
-        userIntent = {
-          primary: 'general_query',
-          secondary: [],
-          entities: [],
-          complexity: 'simple' as const,
-          requiresContext: false,
-          requiresAction: false,
-          confidence: 0.5
-        };
-        console.log('⚠️ Using fallback intent');
+      } catch {
+        userIntent = { primary: 'general_query', secondary: [], entities: [], complexity: 'simple' as const, requiresContext: false, requiresAction: false, confidence: 0.5 };
       }
 
-      console.log('📤 Sending understanding complete step...');
-      const entitiesPreview = (userIntent.entities || []).length > 0
-        ? ` (Entities: ${(userIntent.entities || []).map(e => e.value).join(', ')})`
-        : '';
-      handler.sendThinkingStep(
-        'understanding',
-        'Query understood',
-        `Recognized intent: ${userIntent.primary}${entitiesPreview}. Complexity: ${userIntent.complexity}`,
-        'completed',
-        { intent: userIntent.primary, entities: (userIntent.entities || []).map((e: EntityMention) => `${e.type}:${e.value}`) }
-      );
-      console.log('✅ Understanding phase complete');
+      const entitiesPreview = userIntent.entities?.length > 0 ? ` (Entities: ${userIntent.entities.map(e => e.value).join(', ')})` : '';
+      handler.sendThinkingStep('understanding', 'Query understood', `Intent: ${userIntent.primary}${entitiesPreview}`, 'completed', { intent: userIntent.primary });
 
-      // Step 2: Retrieval Phase
-      console.log('🔍 Starting retrieval phase...');
-      const retrievalDetail = userIntent.entities?.length > 0
-        ? `Searching for relevant data about ${userIntent.entities.map(e => e.value).join(', ')}...`
-        : 'Searching through your notes, documents, and past conversations...';
-
-      handler.sendThinkingStep(
-        'retrieval',
-        'Gathering relevant information',
-        retrievalDetail,
-        'in-progress'
-      );
-
+      // ── Retrieval Phase ──
+      handler.sendThinkingStep('retrieval', 'Gathering relevant information', 'Searching notes, documents, past conversations...', 'in-progress');
       let relevantContext: any[] = [];
       try {
-        console.log('📥 Retrieving relevant context...');
         relevantContext = await agenticCore.retrieveRelevantContext(userIntent, userId, sessionId);
-        console.log('✅ Retrieved context:', relevantContext?.length || 0, 'items');
-      } catch (error: any) {
-        console.error('❌ Error in retrieveRelevantContext:', error.message, error.stack);
-        logSystemError(supabase, {
-          severity: 'warning',
-          source: 'gemini-chat',
-          component: 'retrieve-context',
-          error_code: 'CONTEXT_RETRIEVAL_FAILED',
-          message: `retrieveRelevantContext failed: ${error.message}`,
-          details: { stack: error.stack },
-          user_id: userId,
-        });
-        // Continue with empty context
-      }
+      } catch { /* continue with empty context */ }
+      handler.sendThinkingStep('retrieval', 'Context retrieved', `Found ${relevantContext.length} relevant items`, 'completed', { contextCount: relevantContext.length });
 
-      console.log('📤 Sending retrieval complete step...');
-      handler.sendThinkingStep(
-        'retrieval',
-        'Context retrieved',
-        `Found ${relevantContext?.length || 0} relevant items (${(relevantContext || []).filter(c => c.type === 'note').length} notes, ${(relevantContext || []).filter(c => c.type === 'document').length} documents)`,
-        'completed',
-        { contextCount: relevantContext?.length || 0, topItems: (relevantContext || []).slice(0, 3).map(c => c.title) }
-      );
-      console.log('✅ Retrieval phase complete');
-
-      // Step 3: Reasoning Phase
-      console.log('🤔 Starting reasoning phase...');
-      handler.sendThinkingStep(
-        'reasoning',
-        'Building reasoning chain',
-        'Analyzing what we know and determining the best approach...',
-        'in-progress'
-      );
-
+      // ── Reasoning Phase ──
+      handler.sendThinkingStep('reasoning', 'Building reasoning chain', 'Analyzing and determining best approach...', 'in-progress');
       let reasoningChain: string[] = [];
       try {
-        console.log('⚙️ Building reasoning chain...');
         reasoningChain = await agenticCore.buildReasoningChain(userIntent, relevantContext, message);
-        console.log('✅ Built reasoning chain:', reasoningChain?.length || 0, 'steps');
-      } catch (error: any) {
-        console.error('❌ Error in buildReasoningChain:', error.message, error.stack);
-        logSystemError(supabase, {
-          severity: 'warning',
-          source: 'gemini-chat',
-          component: 'reasoning-chain',
-          error_code: 'REASONING_CHAIN_FAILED',
-          message: `buildReasoningChain failed: ${error.message}`,
-          details: { stack: error.stack },
-          user_id: userId,
-        });
-        // Continue with empty reasoning chain
-      }
+      } catch { /* continue */ }
+      handler.sendThinkingStep('reasoning', 'Reasoning complete', `Built ${reasoningChain.length} reasoning steps`, 'completed');
 
-      console.log('📤 Sending reasoning complete step...');
-      handler.sendThinkingStep(
-        'reasoning',
-        'Reasoning complete',
-        `Built ${reasoningChain?.length || 0} reasoning steps`,
-        'completed',
-        { reasoningSteps: reasoningChain || [] }
-      );
-      console.log('✅ Reasoning phase complete');
-
-      // Step 4: Memory Loading Phase
-      console.log('🧠 Starting memory loading phase...');
-      handler.sendThinkingStep(
-        'memory',
-        'Loading memory systems',
-        'Accessing working memory, long-term patterns, and past interactions...',
-        'in-progress'
-      );
-
-      console.log('💾 Loading memory systems...');
+      // ── Memory Phase ──
+      handler.sendThinkingStep('memory', 'Loading memory systems', 'Accessing working memory and past interactions...', 'in-progress');
       const [workingMemory, longTermMemory, episodicMemory] = await Promise.all([
         agenticCore.getWorkingMemory(sessionId, userId),
         agenticCore.getLongTermMemory(userId),
         agenticCore.getEpisodicMemory(userId, message)
       ]);
-      console.log('✅ Memory systems loaded');
+      handler.sendThinkingStep('memory', 'Memory loaded', `Loaded ${workingMemory.recentMessages?.length || 0} recent messages, ${longTermMemory.facts?.length || 0} facts`, 'completed');
 
-      console.log('📤 Sending memory complete step...');
-      handler.sendThinkingStep(
-        'memory',
-        'Memory loaded',
-        `Loaded ${workingMemory.recentMessages?.length || 0} recent messages, ${longTermMemory.facts?.length || 0} learned facts`,
-        'completed',
-        { msgCount: workingMemory.recentMessages?.length || 0, factCount: longTermMemory.facts?.length || 0 }
-      );
-      console.log('✅ Memory phase complete');
-
-      // Build context
-      console.log('📝 Building context...');
+      // ── Build Context ──
       let attachedContext = '';
       if (allDocumentIds.length > 0 || attachedNoteIds.length > 0) {
-        console.log('📎 Building attached context from', allDocumentIds.length, 'documents and', attachedNoteIds.length, 'notes');
         attachedContext = await buildAttachedContext(allDocumentIds, attachedNoteIds, userId);
-        console.log('✅ Attached context built:', attachedContext.length, 'characters');
       }
+      if (courseMaterialsContext) attachedContext = `${courseMaterialsContext}\n\n${attachedContext}`;
 
-      // Merge any course materials context we fetched earlier
-      if (courseMaterialsContext && courseMaterialsContext.length > 0) {
-        attachedContext = `${courseMaterialsContext}\n\n${attachedContext}`;
-      }
-
-      // Add semantically retrieved context
-      if (relevantContext && relevantContext.length > 0) {
-        console.log('🔗 Adding semantic context...');
+      if (relevantContext.length > 0) {
         attachedContext += '\n\n=== SEMANTICALLY RELEVANT CONTEXT ===\n';
         relevantContext.slice(0, 10).forEach(ctx => {
-          attachedContext += `\n[${ctx.type.toUpperCase()}] ${ctx.title} (Relevance: ${(ctx.relevanceScore * 100).toFixed(0)}%)\n`;
-          if (ctx.content) {
-            const preview = ctx.content.substring(0, 500);
-            attachedContext += `${preview}${ctx.content.length > 500 ? '...' : ''}\n`;
-          }
+          attachedContext += `\n[${ctx.type.toUpperCase()}] ${ctx.title} (${(ctx.relevanceScore * 100).toFixed(0)}% relevant)\n`;
+          if (ctx.content) attachedContext += `${ctx.content.substring(0, 500)}${ctx.content.length > 500 ? '...' : ''}\n`;
         });
-        console.log('✅ Semantic context added');
       }
 
-      attachedContext += '\n\n=== REASONING CHAIN ===\n';
-      attachedContext += (reasoningChain || []).join('\n');
-
+      attachedContext += '\n\n=== REASONING CHAIN ===\n' + (reasoningChain || []).join('\n');
       if (episodicMemory.relevantSessions?.length > 0) {
-        console.log('📋 Adding episodic memory...');
         attachedContext += '\n\n=== RELEVANT PAST DISCUSSIONS ===\n';
-        episodicMemory.relevantSessions.forEach((sess: any) => {
-          attachedContext += `- ${sess.title}: ${sess.context_summary || 'No summary'}\n`;
-        });
+        episodicMemory.relevantSessions.forEach((s: any) => { attachedContext += `- ${s.title}: ${s.context_summary || 'No summary'}\n`; });
       }
 
-      console.log('🎯 Building enhanced prompt...');
       const userContext = await contextService.getUserContext(userId);
       let systemPrompt = promptEngine.createEnhancedSystemPrompt(learningStyle, learningPreferences, userContext, 'light');
 
-      // If streaming path provided a courseContext, instruct the model to adopt a learning-first tone
-      if (typeof courseContext !== 'undefined' && courseContext && (courseContext.title || courseContext.id)) {
-        const courseLabel = courseContext.title ? `${courseContext.title}${courseContext.code ? ` (${courseContext.code})` : ''}` : courseContext.id;
-        const courseInstr = `COURSE CONTEXT: The user is studying ${courseLabel}. Assume their intent is to learn and master this course. Prioritize educational explanations, step-by-step walkthroughs, examples, practice problems, and short quizzes. When appropriate, suggest next study actions and summarize key takeaways.`;
-        systemPrompt = `${systemPrompt}\n\n${courseInstr}`;
+      if (courseContext && (courseContext.title || courseContext.id)) {
+        const label = courseContext.title ? `${courseContext.title}${courseContext.code ? ` (${courseContext.code})` : ''}` : courseContext.id;
+        systemPrompt += `\n\nCOURSE CONTEXT: The user is studying ${label}. Prioritize educational explanations, step-by-step walkthroughs, and practice problems.`;
       }
+
       const conversationData = await buildEnhancedGeminiConversation(userId, sessionId, message, [], attachedContext, systemPrompt);
-      console.log('✅ Prompt built with', conversationData.contents.length, 'conversation parts');
 
-      // =========================================================================
-      // STEP 5: ACTION PLANNING (JSON) - UPDATED WITH CLEARER INSTRUCTIONS
-      // =========================================================================
-      console.log('⚙️ Starting Action Planning phase...');
-      handler.sendThinkingStep(
-        'action',
-        'Planning actions',
-        'Determining necessary operations based on your request...',
-        'in-progress'
-      );
+      // ── Action Planning Phase ──
+      handler.sendThinkingStep('action', 'Planning actions', 'Determining necessary operations...', 'in-progress');
 
-      // Define supported action types clearly
       const SUPPORTED_ACTION_TYPES = ['DB_ACTION', 'GENERATE_IMAGE', 'ENGAGE_SOCIAL'];
-      const ACTION_TYPE_DESCRIPTION = `
-ONLY these action types are supported by the system:
-1. DB_ACTION - Database operations (INSERT, SELECT, UPDATE, DELETE)
-2. GENERATE_IMAGE - AI image generation using diffusion models
-3. ENGAGE_SOCIAL - Social media interactions and posts
-
-ANY OTHER ACTION TYPE WILL BE IGNORED AND SKIPPED.
-If you think you need a different action type, DON'T include it. Only use the three types above.
-`;
-
       const actionSystemPrompt = `
-═══════════════════════════════════════════════════════════
-YOU ARE NOW IN: ACTION PLANNING PHASE
-═══════════════════════════════════════════════════════════
+YOU ARE IN: ACTION PLANNING PHASE
+Return ONLY valid JSON. No prose, no markdown, no code blocks.
 
-Your ONLY job is to return valid JSON representing the actions needed.
+SUPPORTED ACTIONS ONLY: DB_ACTION | GENERATE_IMAGE | ENGAGE_SOCIAL
+Any other type is IGNORED.
 
-${ACTION_TYPE_DESCRIPTION}
-
-REQUIRED JSON FORMAT:
+FORMAT:
 {
-  "thought_process": "Brief machine-readable explanation",
-  "actions": [
-    {
-      "type": "DB_ACTION|GENERATE_IMAGE|ENGAGE_SOCIAL",
-      "params": { ... }
-    }
-  ]
+  "thought_process": "one sentence",
+  "actions": [{ "type": "DB_ACTION", "params": { ... } }]
 }
 
-CRITICAL RULES:
-1. Return ONLY the JSON object above - absolutely no other text
-2. Use ONLY the 3 action types listed (DB_ACTION, GENERATE_IMAGE, ENGAGE_SOCIAL)
-3. If you need any other action type, DO NOT include it (it will be skipped anyway)
-4. If no actions are needed, return: { "thought_process": "No actions required", "actions": [] }
-5. When referring to the current user ID, use the literal string "auth.uid()"
-6. For DELETE/UPDATE operations, include proper filters to avoid accidental data loss
-7. DO NOT add conversational text, explanations, or markdown
-8. DO NOT wrap the JSON in code blocks
+If no actions needed: { "thought_process": "No actions required", "actions": [] }
 
-FOR DB_ACTION FORMATTING (Follow exactly):
-- params must include: table (string), operation (INSERT|UPDATE|DELETE|SELECT)
-- For UPDATE/DELETE, include filters object with specific conditions
-- For INSERT, include data object with row values
-- For schedule_items INSERT: "type" MUST be one of: 'class', 'study', 'assignment', 'exam', 'other'. "subject" is REQUIRED (non-null text).
-- Date/time range filters use comparison objects:
-  "filters": { "start_time": { "gte": "2026-01-26T12:00:00Z", "lte": "2026-01-26T19:30:00Z" } }
-- Array-valued fields (like recurrence_days) must be actual JSON arrays:
-  "recurrence_days": [1,2,3]  ✓ CORRECT
-  "recurrence_days": ["1","2"]  ✗ WRONG
-- Use filters with in for matching multiple values:
-  "filters": { "title": { "in": ["Note 1", "Note 2"] } }
-
-EXAMPLES (follow these patterns):
-
-Example 1 - Simple SELECT:
-{
-  "thought_process": "User wants to see their schedules",
-  "actions": [
-    {
-      "type": "DB_ACTION",
-      "params": {
-        "table": "schedule_items",
-        "operation": "SELECT",
-        "filters": { "user_id": "auth.uid()" },
-        "limit": 50
-      }
-    }
-  ]
-}
-
-Example 2 - DELETE with specific filters:
-{
-  "thought_process": "Remove Monday items in time range",
-  "actions": [
-    {
-      "type": "DB_ACTION",
-      "params": {
-        "table": "schedule_items",
-        "operation": "DELETE",
-        "filters": {
-          "user_id": "auth.uid()",
-          "is_recurring": true,
-          "recurrence_days": [1],
-          "start_time": { "gte": "2026-01-26T12:00:00Z", "lte": "2026-01-26T19:30:00Z" }
-        }
-      }
-    }
-  ]
-}
-
-Example 3 - INSERT with proper data:
-{
-  "thought_process": "Create new note",
-  "actions": [
-    {
-      "type": "DB_ACTION",
-      "params": {
-        "table": "notes",
-        "operation": "INSERT",
-        "data": {
-          "user_id": "auth.uid()",
-          "title": "Study Notes",
-          "content": "Content here...",
-          "category": "general",
-          "tags": ["study"]
-        }
-      }
-    }
-  ]
-}
-
-Example 4 - No actions needed:
-{
-  "thought_process": "This is a question that doesn't require database operations",
-  "actions": []
-}
+RULES:
+- user_id = "auth.uid()"
+- schedule_items.type MUST be: 'class' | 'study' | 'assignment' | 'exam' | 'other'
+- schedule_items.subject is REQUIRED
+- Date filters: { "start_time": { "gte": "...", "lte": "..." } }
+- Arrays must be real JSON arrays: [1,2,3] not ["1","2"]
 
 DATABASE SCHEMA:
-${typeof DB_SCHEMA_DEFINITION === 'string' ? DB_SCHEMA_DEFINITION : JSON.stringify(DB_SCHEMA_DEFINITION, null, 2)}
+${typeof DB_SCHEMA_DEFINITION === 'string' ? DB_SCHEMA_DEFINITION.substring(0, 3000) : JSON.stringify(DB_SCHEMA_DEFINITION, null, 2).substring(0, 3000)}
 
-USER'S REQUEST:
-See the conversation history above.
+Return ONLY the JSON object:`;
 
-NOW: Return ONLY the JSON action plan (nothing else, no markdown, no explanation):
-`;
-
-      // Build action planning conversation
-      const actionContents = [...conversationData.contents];
-
-      // Initialize tracking
       let executedActions: any[] = [];
-      let finalResponseContext = '';
       let planningAttempt = 0;
 
       try {
-        // Action planning loop with retry and self-correction
         while (planningAttempt < ENHANCED_PROCESSING_CONFIG.ACTION_FIX_ATTEMPTS) {
-          console.log(`[ActionPlanningLoop] Attempt ${planningAttempt + 1}/${ENHANCED_PROCESSING_CONFIG.ACTION_FIX_ATTEMPTS}`);
+          console.log(`[ActionPlanningLoop] Attempt ${planningAttempt + 1}`);
 
-          console.log('🤖 Calling Gemini API for Action Plan...');
-          const actionResponse = await callEnhancedGeminiAPI(actionContents, geminiApiKey, {
-            responseMimeType: 'application/json',
-            systemInstruction: { parts: [{ text: actionSystemPrompt }] }
-          });
+          const actionResponse = await callActionPlannerWithFallback(
+            conversationData.contents, geminiApiKey,
+            { systemInstruction: { parts: [{ text: actionSystemPrompt }] } },
+            aiModelConfig.modelChain
+          );
 
           if (!actionResponse.success || !actionResponse.content) {
-            console.error('[ActionPlanningLoop] Failed to get action plan from API');
-            handler.sendThinkingStep('action', 'Planning skipped', 'Could not generate action plan', 'completed');
+            handler.sendThinkingStep('action', 'Planning skipped', 'No action plan generated', 'completed');
             break;
           }
 
-          console.log('[ActionPlanningLoop][RAW_PLAN]', actionResponse.content);
-
-          // Parse the action plan
+          // Parse JSON — more robust extraction
           let parsed: any = null;
-          try {
-            parsed = JSON.parse(actionResponse.content);
-          } catch (e) {
-            // Try to extract JSON from response
-            const jsonMatch = actionResponse.content.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
+          let rawContent = actionResponse.content.trim();
+
+          // 1. Try to extract JSON object
+          const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            try {
+              parsed = JSON.parse(jsonMatch[0]);
+            } catch (e) {
+              console.warn('[ActionPlanningLoop] JSON parse failed on first match');
+            }
+          }
+
+          // 2. Fallback: try full content
+          if (!parsed) {
+            try {
+              parsed = JSON.parse(rawContent);
+            } catch (e) {
+              // Try cleaning common model wrappers
+              const cleaned = rawContent
+                .replace(/```(?:json)?/g, '')
+                .replace(/```/g, '')
+                .trim();
               try {
-                parsed = JSON.parse(jsonMatch[0]);
-              } catch (e2) {
-                console.warn('[ActionPlanningLoop] Could not parse JSON from response');
-              }
+                parsed = JSON.parse(cleaned);
+              } catch {}
             }
           }
 
           if (!parsed) {
-            console.error('[ActionPlanningLoop] Failed to parse action plan JSON');
-            handler.sendThinkingStep('action', 'Action Planning Warning', 'Could not parse model action plan JSON; continuing...', 'completed');
+            console.error('[ActionPlanningLoop] Failed to parse action plan JSON after cleaning');
+            handler.sendThinkingStep('action', 'Action Planning Warning', 'Could not parse action plan (model output issue)', 'completed');
             break;
           }
 
-          // Normalize to actions array
-          let actionsToExecute: any[] = [];
-          if (Array.isArray(parsed)) actionsToExecute = parsed;
-          else if (parsed && Array.isArray(parsed.actions)) actionsToExecute = parsed.actions;
-          else if (parsed && parsed.type) actionsToExecute = [parsed];
+          let actionsToExecute: any[] = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.actions) ? parsed.actions : (parsed.type ? [parsed] : []));
 
-          if (!actionsToExecute || actionsToExecute.length === 0) {
-            console.log('[ActionPlanningLoop] No actions planned.');
+          if (!actionsToExecute.length) {
             handler.sendThinkingStep('action', 'No actions needed', 'Proceeding to response...', 'completed', { actionCount: 0 });
             break;
           }
 
-          // Filter to supported action types and record skipped actions
-          const filteredActions: any[] = [];
-          for (const a of actionsToExecute) {
-            if (SUPPORTED_ACTION_TYPES.includes(a.type)) {
-              filteredActions.push(a);
-            } else {
-              console.warn(`[ActionPlanningLoop] Skipping unsupported action type: ${a.type}`);
-              executedActions.push({
-                type: a.type,
-                success: false,
-                error: `Unsupported action type '${a.type}' - Only DB_ACTION, GENERATE_IMAGE, ENGAGE_SOCIAL are supported`,
-                timestamp: new Date().toISOString()
-              });
-              handler.sendThinkingStep('action', `Skipped unsupported action`, `Action type '${a.type}' is not supported`, 'completed', { action: a });
-            }
-          }
+          // Filter to supported types
+          const filteredActions = actionsToExecute.filter(a => {
+            if (SUPPORTED_ACTION_TYPES.includes(a.type)) return true;
+            console.warn(`[ActionPlanningLoop] Skipping unsupported action: ${a.type}`);
+            executedActions.push({ type: a.type, success: false, error: `Unsupported action type '${a.type}'`, timestamp: new Date().toISOString() });
+            return false;
+          });
 
-          // Execute planned actions (only supported ones)
           if (filteredActions.length > 0) {
-            const execResults = await executeParsedActions(
-              actionsService,
-              userId,
-              sessionId,
-              filteredActions,
-              (action, index, total) => {
-                const actionLabel = getFriendlyActionLabel(action.type, action.params);
-                handler.sendThinkingStep('action', `Action ${index + 1}/${total}`, `${actionLabel}...`, 'in-progress', { action, index, total });
+            const execResults = await executeParsedActions(actionsService, userId, sessionId, filteredActions,
+              (action: any, index: number, total: number) => {
+                handler.sendThinkingStep('action', `Action ${index + 1}/${total}`, `${getFriendlyActionLabel(action.type, action.params)}...`, 'in-progress');
               }
             );
-
             executedActions = executedActions.concat(execResults);
           }
 
-          // Check if actions require confirmation
-          const needsConfirmation = executedActions.filter((a: any) => isNeedsConfirmationAction(a));
+          const needsConfirmation = executedActions.filter(isNeedsConfirmationAction);
           if (needsConfirmation.length > 0) {
-            handler.sendThinkingStep('action', 'Awaiting confirmation', `One or more actions require confirmation before proceeding.`, 'completed');
-            finalResponseContext += '\n\n=== ACTIONS REQUIRING CONFIRMATION ===\n';
-            finalResponseContext += JSON.stringify(needsConfirmation, null, 2);
+            handler.sendThinkingStep('action', 'Awaiting confirmation', 'Actions require user confirmation.', 'completed');
             break;
           }
 
-          // Check for failures
-          const failures = executedActions.filter((a: any) => !a.success);
+          const failures = executedActions.filter(a => !a.success);
           if (failures.length === 0) {
-            finalResponseContext += '\n\n=== EXECUTED ACTIONS RESULTS ===\n';
-            finalResponseContext += JSON.stringify(truncateActionResults(executedActions), null, 2);
-            const successfulActions = executedActions.filter((a: any) => a.success && !isNeedsConfirmationAction(a));
-            handler.sendThinkingStep('action', 'Actions executed', `Successfully executed ${successfulActions.length} actions.`, 'completed');
+            handler.sendThinkingStep('action', 'Actions executed', `Successfully executed ${executedActions.filter(a => a.success).length} actions.`, 'completed');
             break;
           }
 
-          // If failures and not at max attempts, try to fix
-          planningAttempt += 1;
+          planningAttempt++;
           if (planningAttempt >= ENHANCED_PROCESSING_CONFIG.ACTION_FIX_ATTEMPTS) {
-            console.error('[ActionPlanningLoop] Reached max fix attempts');
             handler.sendThinkingStep('action', 'Action Fix Failed', `Some actions failed after ${planningAttempt} attempts.`, 'completed');
-            finalResponseContext += '\n\n=== EXECUTED ACTIONS RESULTS (WITH FAILURES) ===\n';
-            finalResponseContext += JSON.stringify(truncateActionResults(executedActions), null, 2);
             break;
           }
 
-          // Prepare repair prompt with schema hints so the AI learns from errors
-          const repairInstruction = `The previous action plan produced failures. Here are the results:
-
-PLAN:
-${actionResponse.content}
-
-EXECUTION_RESULTS:
-${JSON.stringify(truncateActionResults(executedActions), null, 2)}
-
-COMMON FIXES:
-- schedule_items.type MUST be one of: 'class', 'study', 'assignment', 'exam', 'other' (NOT 'personal', 'event', etc.)
-- schedule_items.subject is REQUIRED (non-null text)
-- Always include all NOT NULL columns
-
-Please provide a corrected JSON action plan that ONLY re-does the FAILED actions (do not repeat actions that already succeeded). Return JSON ONLY.`;
-
-          actionContents.push({ role: 'user', parts: [{ text: repairInstruction }] });
+          const repairPrompt = `Previous actions failed. Results:\n${JSON.stringify(truncateActionResults(executedActions), null, 2)}\n\nFix ONLY the failed actions. Return corrected JSON only:`;
+          conversationData.contents.push({ role: 'user', parts: [{ text: repairPrompt }] });
           await sleep(ENHANCED_PROCESSING_CONFIG.ACTION_FIX_BACKOFF_MS * planningAttempt);
         }
       } catch (actionError: any) {
         console.error('Error during action planning:', actionError);
-        logSystemError(supabase, {
-          severity: 'error',
-          source: 'gemini-chat',
-          component: 'action-planning',
-          error_code: 'ACTION_PLANNING_FAILED',
-          message: `Action planning loop failed: ${actionError.message}`,
-          details: { stack: actionError.stack, sessionId: requestData?.sessionId },
-          user_id: requestData?.userId,
-        });
         handler.sendThinkingStep('action', 'Action Planning Error', 'Continuing to response generation...', 'completed');
       }
 
-      // =========================================================================
-      // STEP 6: FINAL RESPONSE GENERATION (Text)
-      // =========================================================================
+      // ── Final Response Generation ──
       console.log('🏁 Generating Final Response...');
-
       const finalContents = [...conversationData.contents];
+
       if (executedActions.length > 0) {
-        const successfulActions = executedActions.filter((a: any) => a.success && !isNeedsConfirmationAction(a));
-        const confirmationRequiredActions = executedActions.filter((a: any) => isNeedsConfirmationAction(a));
-        const failedActions = executedActions.filter((a: any) => !a.success && !isNeedsConfirmationAction(a));
-        const slimResults = truncateActionResults(executedActions);
+        const successful = executedActions.filter(a => a.success && !isNeedsConfirmationAction(a));
+        const pending = executedActions.filter(isNeedsConfirmationAction);
+        const failed = executedActions.filter(a => !a.success && !isNeedsConfirmationAction(a));
 
-        // Collect image URLs from successful GENERATE_IMAGE actions to include in the instruction
-        const generatedImageUrls: string[] = [];
-        for (const ea of executedActions) {
-          if (ea.type === 'GENERATE_IMAGE' && ea.success && ea.data) {
-            const imgUrl = ea.data.imageUrl || ea.data.image_url || ea.data.url;
-            if (imgUrl) generatedImageUrls.push(imgUrl);
-          }
-        }
+        const imageUrls: string[] = executedActions
+          .filter(a => a.type === 'GENERATE_IMAGE' && a.success && a.data)
+          .map(a => a.data.imageUrl || a.data.image_url || a.data.url).filter(Boolean);
 
-        let imageInstruction = '';
-        if (generatedImageUrls.length > 0) {
-          imageInstruction = `\n          5. For generated images, include them in your response using markdown image syntax: ![description](url). Here are the generated image URLs:\n`;
-          for (const url of generatedImageUrls) {
-            imageInstruction += `             - ${url}\n`;
-          }
-          imageInstruction += `          You MUST include each image URL in your response using ![description](url) format so the user can see them.`;
-        }
-
-        const statusLines: string[] = [];
-        if (successfulActions.length > 0) {
-          statusLines.push(`- Executed successfully: ${successfulActions.length}`);
-        }
-        if (confirmationRequiredActions.length > 0) {
-          statusLines.push(`- Awaiting user confirmation: ${confirmationRequiredActions.length}`);
-        }
-        if (failedActions.length > 0) {
-          statusLines.push(`- Failed: ${failedActions.length}`);
-        }
+        const imageInstr = imageUrls.length > 0
+          ? `\nInclude generated images using: ![description](url)\nURLs: ${imageUrls.map(u => `- ${u}`).join('\n')}`
+          : '';
 
         finalContents.push({
           role: 'user',
-          parts: [{ text: `System Update: Action execution results are below.
-          
-          Status Summary:
-          ${statusLines.join('\n')}
-
-          Results: ${JSON.stringify(slimResults)}
-          
-          CRITICAL INSTRUCTION FOR FINAL RESPONSE:
-          1. Do NOT output any raw JSON action objects, "DB_ACTION", or action code blocks.
-          2. Only confirm actions as completed when they are in "Executed successfully".
-          3. If any action is "Awaiting user confirmation", explicitly ask for confirmation and do NOT claim it was completed.
-          4. If any action failed, clearly say it failed and provide the shortest helpful next step.
-          5. If the results show a total_count higher than the records shown, tell the user how many total exist.
-          6. Keep the response concise.${imageInstruction}` }]
+          parts: [{
+            text: `System: Actions complete. ${successful.length} succeeded, ${pending.length} awaiting confirmation, ${failed.length} failed.\nResults: ${JSON.stringify(truncateActionResults(executedActions))}\n\nDo NOT output raw JSON. Respond naturally to the user.${imageInstr}`
+          }]
         });
       }
 
-      console.log('🤖 Calling Gemini API for Final Response...');
-
       let generatedText = '';
       let modelUsed = aiModelConfig.displayLabel;
-      // Stream tokens to the client as they arrive. This handler is only invoked
-      // when the outer request enabled streaming, so we always attempt streaming.
-      const streamResult = await callEnhancedGeminiAPIStream(finalContents, geminiApiKey, async (chunk: string) => {
-        try {
-          handler.sendContentChunk(chunk);
-        } catch (e) {
-          console.warn('[Streaming] Failed to send content chunk:', e);
-        }
-      }, { systemInstruction: conversationData.systemInstruction }, aiModelConfig.streamingChain);
+
+      const streamResult = await callEnhancedGeminiAPIStream(
+        finalContents, geminiApiKey,
+        async (chunk) => { try { handler.sendContentChunk(chunk); } catch {} },
+        { systemInstruction: conversationData.systemInstruction },
+        aiModelConfig.streamingChain
+      );
 
       if (!streamResult.success || !streamResult.content) {
-        // Fallback to synchronous generation if streaming failed
-        const finalResponse = await callEnhancedGeminiAPI(finalContents, geminiApiKey, {
-          systemInstruction: conversationData.systemInstruction
-        }, aiModelConfig.modelChain);
-        if (!finalResponse.success || !finalResponse.content) {
-          throw new Error('Failed to generate final response');
-        }
-        generatedText = finalResponse.content;
-        if (finalResponse.modelUsed) modelUsed = finalResponse.modelUsed;
+        const fallback = await callEnhancedGeminiAPI(finalContents, geminiApiKey, { systemInstruction: conversationData.systemInstruction }, aiModelConfig.modelChain);
+        if (!fallback.success || !fallback.content) throw new Error('Failed to generate final response');
+        generatedText = fallback.content;
+        if (fallback.modelUsed) modelUsed = fallback.modelUsed;
         handler.sendContentChunk(generatedText);
-        console.log('[Streaming] Fallback full response sent; chars:', generatedText.length);
       } else {
         generatedText = streamResult.content;
         if (streamResult.modelUsed) modelUsed = streamResult.modelUsed;
-        console.log('[Streaming] Completed streaming final response; total chars:', generatedText.length);
       }
-      // Skip finalize-check to conserve API quota — the response is already streamed to the user
+
       handler.sendThinkingStep('action', 'Response generated', 'Successfully generated response', 'completed');
-      console.log('✅ Action phase complete');
 
-      const successfulActionsCount = executedActions.filter((a: any) => a.success && !isNeedsConfirmationAction(a)).length;
-      const confirmationRequiredCount = executedActions.filter((a: any) => isNeedsConfirmationAction(a)).length;
-      const failedActionsCount = executedActions.filter((a: any) => !a.success && !isNeedsConfirmationAction(a)).length;
-      console.log('✅ Actions executed (summary):', `${successfulActionsCount} successful, ${confirmationRequiredCount} awaiting confirmation, ${failedActionsCount} failed`);
-
-      // Detect embedded image code blocks like ```image\n{ "url": "...", "alt": "..." }\n```
+      // ── Extract & Save Images ──
       function extractImageBlocks(text: string): { cleaned: string; images: Array<{ url: string; alt?: string }> } {
-        const imageRegex = /```image\s*\n([\s\S]*?)\n```/g;
         const images: Array<{ url: string; alt?: string }> = [];
         let cleaned = text;
+        const imageRegex = /```image\s*\n([\s\S]*?)\n```/g;
         let match: RegExpExecArray | null;
         while ((match = imageRegex.exec(text)) !== null) {
           try {
-            const jsonText = match[1].trim();
-            const parsed = JSON.parse(jsonText);
-            if (parsed && parsed.url) {
-              images.push({ url: parsed.url, alt: parsed.alt || parsed.description || '' });
-              // Replace the code block in cleaned output with a markdown image tag
-              cleaned = cleaned.replace(match[0], `![${(parsed.alt || '').replace(/\]|\(/g,'')}](${parsed.url})`);
+            const parsed = JSON.parse(match[1].trim());
+            if (parsed?.url) {
+              images.push({ url: parsed.url, alt: parsed.alt || '' });
+              cleaned = cleaned.replace(match[0], `![${(parsed.alt || '').replace(/\]|\(/g, '')}](${parsed.url})`);
             }
-          } catch (err) {
-            console.warn('[extractImageBlocks] Failed to parse image block JSON:', err);
-          }
+          } catch {}
         }
         return { cleaned, images };
       }
 
-      console.log('💾 Saving AI message...');
       const { cleaned, images } = extractImageBlocks(generatedText);
-
-      // Also collect images from successfully executed GENERATE_IMAGE actions
-      // (the model may not embed ```image blocks, so we extract them directly)
       for (const ea of executedActions) {
         if (ea.type === 'GENERATE_IMAGE' && ea.success && ea.data) {
           const imgUrl = ea.data.imageUrl || ea.data.image_url || ea.data.url;
-          if (imgUrl && !images.some(img => img.url === imgUrl)) {
-            images.push({ url: imgUrl, alt: ea.data.prompt || ea.data.message || 'Generated image' });
-            console.log(`[ImageExtraction] Added image from GENERATE_IMAGE action: ${imgUrl}`);
-          }
+          if (imgUrl && !images.some(i => i.url === imgUrl)) images.push({ url: imgUrl, alt: ea.data.prompt || 'Generated image' });
         }
       }
 
-      // Sanitize assistant output to remove any embedded action JSON/code blocks
-      let sanitizedCleaned = sanitizeAssistantOutput(cleaned);
-
-      // If we have generated images but the response text doesn't reference them,
-      // append markdown image tags so the user sees them inline
-      if (images.length > 0) {
-        const hasImageRef = images.some(img => sanitizedCleaned.includes(img.url));
-        if (!hasImageRef) {
-          const imageMd = images.map(img => `\n\n![${(img.alt || 'Generated image').replace(/[[\]()]/g, '')}](${img.url})`).join('');
-          sanitizedCleaned = sanitizedCleaned.trimEnd() + imageMd;
-          console.log(`[ImageExtraction] Appended ${images.length} image(s) as markdown to response`);
-        }
+      let finalText = sanitizeAssistantOutput(cleaned);
+      if (images.length > 0 && !images.some(img => finalText.includes(img.url))) {
+        finalText = finalText.trimEnd() + images.map(img => `\n\n![${(img.alt || 'Generated image').replace(/[[\]()]/g, '')}](${img.url})`).join('');
       }
 
-      const aiMessageData: any = {
-        userId,
-        sessionId,
-        content: sanitizedCleaned,
-        role: 'assistant',
+      // Save AI message
+      const savedAiMessage = await saveChatMessage({
+        userId, sessionId, content: finalText, role: 'assistant',
         attachedDocumentIds: allDocumentIds.length > 0 ? allDocumentIds : null,
         attachedNoteIds: attachedNoteIds.length > 0 ? attachedNoteIds : null,
         isError: false,
         filesMetadata: images.length > 0 ? images.map(img => ({ type: 'image', url: img.url, alt: img.alt })) : null,
         imageUrl: images.length > 0 ? images[0].url : null,
-        imageMimeType: images.length > 0 ? (images[0].url.endsWith('.png') ? 'image/png' : images[0].url.endsWith('.jpg') || images[0].url.endsWith('.jpeg') ? 'image/jpeg' : null) : null
-      };
+        imageMimeType: images.length > 0 ? (images[0].url.endsWith('.png') ? 'image/png' : 'image/jpeg') : null
+      });
 
-      const savedAiMessage = await saveChatMessage(aiMessageData);
-      console.log('✅ AI message saved:', savedAiMessage?.id);
+      if (generatedText) await updateSessionTokenCount(sessionId, userId, generatedText, 'add').catch(console.error);
 
-      try {
-        if (generatedText) {
-          await updateSessionTokenCount(sessionId, userId, generatedText, 'add');
-        }
-      } catch (err) {
-        console.error('[Streaming] Failed to update token count after saving AI message:', err);
-      }
-
-      // Send final response (include image metadata so client can render inline)
-      console.log('🏁 Sending final response...');
-
-      // Prepare top-level convenience fields
-      const topLevelImageUrl = images.length > 0 ? images[0].url : undefined;
-      const filesMetadata = images.length > 0 ? JSON.stringify(images) : undefined;
-
-      // Sanitize final outgoing response to avoid leaking action JSON/code
-      // Use sanitizedCleaned which already has image markdown appended
-      const finalResponseText = sanitizedCleaned;
-
-      try {
-        // Log a compact summary instead of the full payload to avoid bloating logs
-        const donePayloadSummary = {
-          response: finalResponseText.substring(0, 200) + (finalResponseText.length > 200 ? '...' : ''),
-          responseLength: finalResponseText.length,
-          aiMessageId: savedAiMessage?.id,
-          userMessageId,
-          sessionId,
-          userId,
-          actionCount: successfulActionsCount,
-          awaitingConfirmationCount: confirmationRequiredCount,
-          failedActionCount: failedActionsCount,
-          imageCount: images.length,
-        };
-        console.log('SENT_DONE_PAYLOAD', JSON.stringify(donePayloadSummary));
-      } catch (err) {
-        console.error('Failed to serialize SENT_DONE_PAYLOAD', err);
-      }
+      const successCount = executedActions.filter(a => a.success && !isNeedsConfirmationAction(a)).length;
+      const confirmCount = executedActions.filter(isNeedsConfirmationAction).length;
+      const failCount = executedActions.filter(a => !a.success && !isNeedsConfirmationAction(a)).length;
 
       handler.sendDone({
-        response: finalResponseText,
+        response: finalText,
         aiMessageId: savedAiMessage?.id,
         aiMessageTimestamp: savedAiMessage?.timestamp,
-        userMessageId,
-        userMessageTimestamp,
-        sessionId,
-        userId,
+        userMessageId, userMessageTimestamp, sessionId, userId,
         executedActions: truncateActionResults(executedActions),
         images: images.length > 0 ? images : null,
-        imageUrl: topLevelImageUrl,
-        files_metadata: filesMetadata,
-        modelUsed,
-        modelLabel: aiModelConfig.displayLabel,
-        modelTier: aiModelConfig.tier,
+        imageUrl: images.length > 0 ? images[0].url : undefined,
+        modelUsed, modelLabel: aiModelConfig.displayLabel, modelTier: aiModelConfig.tier
       });
-      console.log('✅ Final response sent, closing stream');
 
       handler.close();
-      console.log('✅✅✅ Streaming response completed successfully! ✅✅✅');
+      console.log('✅✅✅ Streaming response completed successfully!');
 
-      // Fire-and-forget: generate conversation summary if enough messages
       if (conversationData.contextInfo.recentMessages.length >= ENHANCED_PROCESSING_CONFIG.SUMMARY_THRESHOLD) {
-        updateConversationSummary(sessionId, userId, conversationData.contextInfo.recentMessages).catch(err =>
-          console.error('[Streaming] Error updating conversation summary:', err)
-        );
+        updateConversationSummary(sessionId, userId, conversationData.contextInfo.recentMessages).catch(console.error);
       }
     } catch (error: any) {
-      console.error('❌ FATAL ERROR in streaming handler:', error.message);
-      console.error('❌ Stack trace:', error.stack);
-      console.error('❌ Full error:', JSON.stringify(error, null, 2));
+      console.error('❌ FATAL ERROR in streaming handler:', error.message, error.stack);
       logSystemError(supabase, {
-        severity: 'critical',
-        source: 'gemini-chat',
-        component: 'streaming-handler',
-        error_code: 'STREAMING_FATAL',
-        message: `Fatal streaming error: ${error.message}`,
-        details: { stack: error.stack, sessionId: requestData?.sessionId },
-        user_id: requestData?.userId,
+        severity: 'critical', source: 'gemini-chat', component: 'streaming-handler',
+        error_code: 'STREAMING_FATAL', message: `Fatal streaming error: ${error.message}`,
+        details: { stack: error.stack, sessionId }, user_id: userId
       });
-      if (!handler.isClosed) {
-        handler.sendError(error.message || 'An error occurred');
-      }
+      if (!handler.isClosed) handler.sendError(error.message || 'An error occurred');
       handler.close();
     }
   })();
 
   return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      ...corsHeaders
-    }
+    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive', ...corsHeaders }
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN SERVER HANDLER
+// ─────────────────────────────────────────────────────────────────────────────
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: corsHeaders
-    });
-  }
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   const startTime = Date.now();
   let requestData: any = null;
@@ -2639,276 +1548,113 @@ serve(async (req) => {
         sessionId: formData.get('sessionId'),
         learningStyle: formData.get('learningStyle'),
         learningPreferences: formData.get('learningPreferences') ? JSON.parse(formData.get('learningPreferences') as string) : {},
-        chatHistory: formData.get('chatHistory') ? JSON.parse(formData.get('chatHistory') as string) : [],
         message: formData.get('message') || '',
         attachedDocumentIds: formData.get('attachedDocumentIds') ? JSON.parse(formData.get('attachedDocumentIds') as string) : [],
         attachedNoteIds: formData.get('attachedNoteIds') ? JSON.parse(formData.get('attachedNoteIds') as string) : [],
-        imageUrl: formData.get('imageUrl'),
-        imageMimeType: formData.get('imageMimeType'),
-        aiMessageIdToUpdate: formData.get('aiMessageIdToUpdate')
+        imageUrl: formData.get('imageUrl'), imageMimeType: formData.get('imageMimeType'),
+        aiMessageIdToUpdate: formData.get('aiMessageIdToUpdate'),
+        userMessageIdToUpdate: formData.get('userMessageIdToUpdate')
       };
-
-      for (const [key, value] of formData.entries()) {
-        if (value instanceof File) {
-          rawFiles.push(value);
-        }
+      for (const [, value] of formData.entries()) {
+        if (value instanceof File) rawFiles.push(value);
       }
     } else if (contentType.includes('application/json')) {
-      const responseBody = await req.text();
+      const body = await req.text();
       try {
-        requestData = JSON.parse(responseBody);
+        requestData = JSON.parse(body);
       } catch (e) {
-        console.error("Failed to parse JSON", e);
-        logSystemError(supabase, {
-          severity: 'error',
-          source: 'gemini-chat',
-          component: 'request-parse',
-          error_code: 'REQUEST_JSON_PARSE_FAILED',
-          message: `Failed to parse request body JSON`,
-          details: { error: String(e) },
-        });
-        return new Response(JSON.stringify({
-          error: 'Invalid JSON in request body'
-        }), {
-          status: 400,
-          headers: {
-            'Content-Type': 'application/json',
-            ...corsHeaders
-          }
-        });
+        return new Response(JSON.stringify({ error: 'Invalid JSON in request body' }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
       }
-
-      if (requestData.files && Array.isArray(requestData.files)) {
-        jsonFiles = requestData.files;
-      }
+      if (requestData.files && Array.isArray(requestData.files)) jsonFiles = requestData.files;
     } else {
-      return new Response(JSON.stringify({
-        error: 'Unsupported content type'
-      }), {
-        status: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          ...corsHeaders
-        }
-      });
+      return new Response(JSON.stringify({ error: 'Unsupported content type' }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
     }
 
     const {
-      userId,
-      sessionId,
+      userId, sessionId,
       learningStyle = 'visual',
       learningPreferences = {},
       message = '',
       attachedDocumentIds = [],
       attachedNoteIds = [],
       courseContext = null,
-      imageUrl = null,
-      imageMimeType = null,
+      imageUrl = null, imageMimeType = null,
       aiMessageIdToUpdate = null,
-      enableStreaming = true  // Enable streaming by default for agentic visibility
+      userMessageIdToUpdate = null,
+      enableStreaming = true
     } = requestData;
 
     if (!userId || !sessionId) {
-      return new Response(JSON.stringify({
-        error: 'Missing required parameters: userId or sessionId'
-      }), {
-        status: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          ...corsHeaders
-        }
-      });
+      return new Response(JSON.stringify({ error: 'Missing required parameters: userId or sessionId' }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
     }
 
-    // Validate AI message limit before processing
     const validator = createSubscriptionValidator();
     const limitCheck = await validator.checkAiMessageLimit(userId);
+    if (!limitCheck.allowed) return createErrorResponse(limitCheck.message || 'AI message limit exceeded', 403);
 
-    if (!limitCheck.allowed) {
-      return createErrorResponse(limitCheck.message || 'AI message limit exceeded', 403);
-    }
-
-    // **VALIDATE FILE COUNT LIMIT**
     const totalFiles = rawFiles.length + jsonFiles.length;
-    const MAX_FILES_PER_REQUEST = 10;
-
-    if (totalFiles > MAX_FILES_PER_REQUEST) {
-      return new Response(JSON.stringify({
-        error: `Too many files attached. Maximum is ${MAX_FILES_PER_REQUEST} files per request.`,
-        details: `You attached ${totalFiles} files. Please reduce the number of files and try again.`
-      }), {
-        status: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          ...corsHeaders
-        }
-      });
+    if (totalFiles > 10) {
+      return new Response(JSON.stringify({ error: `Too many files. Maximum is 10 per request. You attached ${totalFiles}.` }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
     }
-
-    // **VALIDATE INDIVIDUAL FILE SIZES**
-    const MAX_FILE_SIZE_MB = 20; // 20MB per file
-    const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
     for (const file of rawFiles) {
-      if (file.size > MAX_FILE_SIZE_BYTES) {
-        return new Response(JSON.stringify({
-          error: `File too large: ${file.name}`,
-          details: `Maximum file size is ${MAX_FILE_SIZE_MB}MB. This file is ${(file.size / 1024 / 1024).toFixed(2)}MB.`
-        }), {
-          status: 400,
-          headers: {
-            'Content-Type': 'application/json',
-            ...corsHeaders
-          }
-        });
+      if (file.size > 20 * 1024 * 1024) {
+        return new Response(JSON.stringify({ error: `File too large: ${file.name}. Maximum is 20MB.` }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
       }
     }
 
-    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-    if (!geminiApiKey) throw new Error('GEMINI_API_KEY not configured');
-
     let filesMetadata: any[] = [];
     let courseMaterialsContext = '';
-    let attachedContext: string = '';
+    let attachedContext = '';
 
-    // If a course context is provided, fetch course materials and include their document ids
-    if (courseContext && courseContext.id) {
+    // Fetch course materials
+    if (courseContext?.id) {
       try {
-        const { data: cmData, error: cmError } = await supabase
-          .from('course_materials')
-          .select('document_id')
-          .eq('course_id', courseContext.id);
-
-        if (!cmError && Array.isArray(cmData) && cmData.length > 0) {
+        const { data: cmData } = await supabase.from('course_materials').select('document_id').eq('course_id', courseContext.id);
+        if (Array.isArray(cmData) && cmData.length > 0) {
           const courseDocIds = cmData.map((r: any) => r.document_id).filter(Boolean);
-          // Merge unique ids into attachedDocumentIds
-          for (const id of courseDocIds) {
-            if (!attachedDocumentIds.includes(id)) attachedDocumentIds.push(id);
-          }
-
-          // Fetch document extracts for context
-          const { data: docs, error: docsError } = await supabase
-            .from('documents')
-            .select('id,title,file_name,content_extracted,processing_status')
-            .in('id', courseDocIds);
-
-          if (!docsError && Array.isArray(docs)) {
+          for (const id of courseDocIds) { if (!attachedDocumentIds.includes(id)) attachedDocumentIds.push(id); }
+          const { data: docs } = await supabase.from('documents').select('id,title,file_name,content_extracted,processing_status').in('id', courseDocIds);
+          if (Array.isArray(docs)) {
             courseMaterialsContext += `COURSE MATERIALS FOR ${courseContext.title || courseContext.id}:\n`;
             for (const d of docs) {
               courseMaterialsContext += `Title: ${d.title || d.file_name}\n`;
-              if (d.content_extracted) {
-                courseMaterialsContext += `Content: ${d.content_extracted}\n\n`;
-              } else {
-                courseMaterialsContext += `Processing status: ${d.processing_status || 'pending'}\n\n`;
-              }
+              courseMaterialsContext += d.content_extracted ? `Content: ${d.content_extracted}\n\n` : `Processing: ${d.processing_status || 'pending'}\n\n`;
             }
           }
         }
       } catch (err) {
         console.error('[gemini-chat] Error fetching course materials:', err);
-        logSystemError(supabase, {
-          severity: 'warning',
-          source: 'gemini-chat',
-          component: 'course-materials',
-          error_code: 'COURSE_MATERIALS_FETCH_FAILED',
-          message: `Failed to fetch course materials: ${String(err)}`,
-          details: { error: String(err) },
-          user_id: userId,
-        });
       }
     }
-    const hasFiles = rawFiles.length > 0 || jsonFiles.length > 0;
 
+    const hasFiles = rawFiles.length > 0 || jsonFiles.length > 0;
     let userMessageId: string | null = null;
     let userMessageTimestamp: string | null = null;
-    let aiMessageId: string | null = null;
-    let aiMessageTimestamp: string | null = null;
 
+    // Process files
     if (hasFiles) {
-      const processorUrl = Deno.env.get('DOCUMENT_PROCESSOR_URL'); // ✅ Fixed
+      const processorUrl = Deno.env.get('DOCUMENT_PROCESSOR_URL');
       if (!processorUrl) throw new Error('DOCUMENT_PROCESSOR_URL not configured');
 
-      let processorResponse;
+      let processorResponse: Response;
       if (contentType.includes('multipart/form-data')) {
         const formData = new FormData();
         formData.append('userId', userId);
-        for (const file of rawFiles) {
-          formData.append('file', file);
-        }
-
-        processorResponse = await fetch(processorUrl, {
-          method: 'POST',
-          headers: {
-            // ✅ Add authorization headers
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-            'apikey': supabaseServiceKey
-          },
-          body: formData
-        });
+        for (const file of rawFiles) formData.append('file', file);
+        processorResponse = await fetch(processorUrl, { method: 'POST', headers: { 'Authorization': `Bearer ${supabaseServiceKey}`, 'apikey': supabaseServiceKey }, body: formData });
       } else {
-        const body = JSON.stringify({
-          userId,
-          files: jsonFiles
-        });
-
-        processorResponse = await fetch(processorUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            // ✅ Add authorization headers
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-            'apikey': supabaseServiceKey
-          },
-          body
-        });
+        processorResponse = await fetch(processorUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}`, 'apikey': supabaseServiceKey }, body: JSON.stringify({ userId, files: jsonFiles }) });
       }
 
       if (!processorResponse.ok) {
         const errorBody = await processorResponse.text();
-        console.error(`Document processor error: ${processorResponse.status} - ${errorBody}`);
-        logSystemError(supabase, {
-          severity: 'error',
-          source: 'gemini-chat',
-          component: 'document-processor',
-          error_code: `DOC_PROCESSOR_HTTP_${processorResponse.status}`,
-          message: `Document processor failed: HTTP ${processorResponse.status}`,
-          details: { status: processorResponse.status, errorBody: errorBody?.substring(0, 500) },
-          user_id: userId,
+        const errorMsg = await saveChatMessage({
+          userId, sessionId,
+          content: `❌ I encountered an issue processing your documents. Please try uploading smaller files or one at a time.\n\nError: ${errorBody}`,
+          role: 'assistant', isError: true
         });
-
-        // ✅ Send user-friendly error message
-        const errorMessage = {
-          userId,
-          sessionId,
-          content: `❌ I encountered an issue processing your documents:\n\n${errorBody}\n\nPlease try:\n• Uploading smaller files\n• Using a different file format\n• Uploading one file at a time\n\nYou can still continue our conversation without the files.`,
-          role: 'assistant',
-          isError: true,
-          attachedDocumentIds: attachedDocumentIds.length > 0 ? attachedDocumentIds : null,
-          attachedNoteIds: attachedNoteIds.length > 0 ? attachedNoteIds : null,
-          imageUrl: imageUrl,
-          imageMimeType: imageMimeType
-        };
-
-        const savedErrorMessage = await saveChatMessage(errorMessage);
-
-        // ✅ Return error response immediately instead of continuing
-        return new Response(JSON.stringify({
-          error: 'Document processing failed',
-          errorDetails: errorBody,
-          aiMessageId: savedErrorMessage?.id,
-          aiMessageTimestamp: savedErrorMessage?.timestamp,
-          userMessageId,
-          userMessageTimestamp,
-          sessionId,
-          userId,
-          success: false
-        }), {
-          status: 400,
-          headers: {
-            'Content-Type': 'application/json',
-            ...corsHeaders
-          }
-        });
+        return new Response(JSON.stringify({ error: 'Document processing failed', aiMessageId: errorMsg?.id, success: false }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
       }
 
       const processedData = await processorResponse.json();
@@ -2916,551 +1662,204 @@ serve(async (req) => {
       filesMetadata = processedData.filesMetadata || [];
       processingResults = processedData.processingResults || [];
 
-      // ✅ Check for partial failures
-      const failedFiles = processedData.processingResults?.filter(
-        (result: any) => result.status === 'failed'
-      ) || [];
-
-      if (failedFiles.length > 0 && failedFiles.length < processedData.processingResults.length) {
-        // Partial failure - some succeeded, some failed
-        console.warn(`Partial document processing failure: ${failedFiles.length}/${processedData.processingResults.length} files failed`);
-      } else if (failedFiles.length === processedData.processingResults.length) {
-        // Total failure - all files failed
-        const errorMessage = {
-          userId,
-          sessionId,
-          content: `❌ All ${failedFiles.length} file(s) failed to process:\n\n${failedFiles.map((f: any) => `• ${f.name}: ${f.error || 'Unknown error'}`).join('\n')
-            }\n\nPlease check the file formats and try again.`,
-          role: 'assistant',
-          isError: true
-        };
-
-        const savedErrorMessage = await saveChatMessage(errorMessage);
-
-        return new Response(JSON.stringify({
-          error: 'All documents failed to process',
-          errorDetails: failedFiles,
-          aiMessageId: savedErrorMessage?.id,
-          aiMessageTimestamp: savedErrorMessage?.timestamp,
-          userMessageId,
-          userMessageTimestamp,
-          sessionId,
-          userId,
-          success: false
-        }), {
-          status: 400,
-          headers: {
-            'Content-Type': 'application/json',
-            ...corsHeaders
-          }
+      const failedFiles = processingResults.filter((r: any) => r.status === 'failed');
+      if (failedFiles.length === processingResults.length && failedFiles.length > 0) {
+        const errorMsg = await saveChatMessage({
+          userId, sessionId,
+          content: `❌ All ${failedFiles.length} file(s) failed to process. Please check file formats and try again.`,
+          role: 'assistant', isError: true
         });
+        return new Response(JSON.stringify({ error: 'All documents failed to process', aiMessageId: errorMsg?.id, success: false }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
       }
     }
 
-    const allDocumentIds = [
-      ...new Set([
-        ...uploadedDocumentIds,
-        ...attachedDocumentIds
-      ])
-    ];
+    const allDocumentIds = [...new Set([...uploadedDocumentIds, ...attachedDocumentIds])];
+    await ensureChatSession(userId, sessionId, allDocumentIds, message, !userMessageIdToUpdate);
 
-    await ensureChatSession(userId, sessionId, allDocumentIds, message);
-
-    // Save user message BEFORE streaming (so we have the ID to send back)
+    // Save user message
     if (message || hasFiles || attachedContext) {
-      const userMessageData = {
-        userId,
-        sessionId,
-        content: message,
-        role: 'user',
+      const saved = await saveChatMessage({
+        userId, sessionId, content: message, role: 'user',
         attachedDocumentIds: allDocumentIds.length > 0 ? allDocumentIds : null,
         attachedNoteIds: attachedNoteIds.length > 0 ? attachedNoteIds : null,
         imageUrl: userMessageImageUrl || imageUrl,
         imageMimeType: userMessageImageMimeType || imageMimeType,
-        filesMetadata: filesMetadata.length > 0 ? filesMetadata : null
-      };
-
-      const savedUserMessage = await saveChatMessage(userMessageData);
-      if (savedUserMessage) {
-        userMessageId = savedUserMessage.id;
-        userMessageTimestamp = savedUserMessage.timestamp;
-        console.log('✅ User message saved for streaming:', userMessageId);
-        try {
-          if (message) {
-            await updateSessionTokenCount(sessionId, userId, message, 'add');
-          }
-        } catch (err) {
-          console.error('[Main] Failed to update token count after saving user message:', err);
-        }
+        filesMetadata: filesMetadata.length > 0 ? filesMetadata : null,
+        messageIdToUpdate: userMessageIdToUpdate
+      });
+      if (saved) {
+        userMessageId = saved.id;
+        userMessageTimestamp = saved.timestamp;
+        if (message) updateSessionTokenCount(sessionId, userId, message, 'add').catch(console.error);
       }
     }
 
-    // Check if streaming is enabled
+    // ── STREAMING PATH ──
     if (enableStreaming) {
-      // Return streaming response with saved user message ID
       return handleStreamingResponse(
-        userId,
-        sessionId,
-        message,
-        allDocumentIds,
-        attachedNoteIds,
-        learningStyle,
-        learningPreferences,
-        userMessageImageUrl,
-        imageMimeType,
-        filesMetadata,
-        userMessageId,
-        userMessageTimestamp,
-        aiMessageIdToUpdate,
-        courseMaterialsContext,
-        courseContext
+        userId, sessionId, message, allDocumentIds, attachedNoteIds,
+        learningStyle, learningPreferences, userMessageImageUrl, imageMimeType,
+        filesMetadata, userMessageId, userMessageTimestamp, aiMessageIdToUpdate,
+        courseMaterialsContext, courseContext
       );
     }
 
-    // ========== AGENTIC UNDERSTANDING PHASE ==========
-    console.log('[Agentic] Starting advanced query understanding...');
-
-    // Get tier-based AI model configuration for this user (non-streaming path)
+    // ── NON-STREAMING PATH ──
     const aiModelConfig = await (async () => {
       try {
-        const modelValidator = createSubscriptionValidator();
-        return await modelValidator.getAiModelConfig(userId);
-      } catch (e) {
-        console.warn('[NonStreaming] Failed to get AI model config, using default chain:', e);
-        return {
-          tier: 'free' as const,
-          modelChain: ['gemini-2.0-flash', 'gemini-2.0-flash-lite'],
-          streamingChain: ['gemini-2.0-flash', 'gemini-2.0-flash-lite'],
-          displayLabel: 'Gemini Flash',
-        };
+        const mv = createSubscriptionValidator();
+        return await mv.getAiModelConfig(userId);
+      } catch {
+        return { tier: 'free' as const, modelChain: ['gemini-2.0-flash', 'gemini-2.0-flash-lite'], streamingChain: ['gemini-2.0-flash', 'gemini-2.0-flash-lite'], displayLabel: 'Gemini Flash' };
       }
     })();
-    console.log(`[NonStreaming] AI model tier: ${aiModelConfig.tier}, primary model: ${aiModelConfig.modelChain[0]}`);
 
-    // Get conversation history for context
     const conversationHistory = await getConversationHistory(userId, sessionId);
-
-    // Step 1: Understand user intent deeply
     const userIntent = await agenticCore.understandQuery(message, userId, conversationHistory);
-    console.log(`[Agentic] Intent: ${userIntent.primary}, Complexity: ${userIntent.complexity}, Confidence: ${userIntent.confidence}`);
-    console.log(`[Agentic] Entities detected: ${userIntent.entities.map(e => `${e.type}:${e.value}`).join(', ')}`);
-
-    // Step 2: Retrieve relevant context using semantic understanding
     const relevantContext = await agenticCore.retrieveRelevantContext(userIntent, userId, sessionId);
-    console.log(`[Agentic] Retrieved ${relevantContext.length} relevant context items`);
-
-    // Step 3: Build reasoning chain
     const reasoningChain = await agenticCore.buildReasoningChain(userIntent, relevantContext, message);
-    console.log(`[Agentic] Reasoning steps: ${reasoningChain.length}`);
-
-    // Step 4: Get comprehensive memory
     const [workingMemory, longTermMemory, episodicMemory] = await Promise.all([
       agenticCore.getWorkingMemory(sessionId, userId),
       agenticCore.getLongTermMemory(userId),
       agenticCore.getEpisodicMemory(userId, message)
     ]);
-    console.log(`[Agentic] Memory loaded - Working: ${workingMemory.recentMessages?.length || 0} msgs, LongTerm: ${longTermMemory.facts?.length || 0} facts`);
 
-    // Step 5: Select appropriate tools if needed
-    const selectedTools = await agenticCore.selectTools(userIntent, relevantContext);
-    if (selectedTools.length > 0) {
-      console.log(`[Agentic] Tools selected: ${selectedTools.join(', ')}`);
-    }
-
-    // Build enhanced attached context from agentic retrieval
     attachedContext = '';
     if (allDocumentIds.length > 0 || attachedNoteIds.length > 0) {
       attachedContext = await buildAttachedContext(allDocumentIds, attachedNoteIds, userId);
     }
+    if (courseMaterialsContext) attachedContext = `${courseMaterialsContext}\n\n${attachedContext}`;
 
-    // Merge any course materials context we fetched earlier (non-streaming path)
-    if (courseMaterialsContext && courseMaterialsContext.length > 0) {
-      attachedContext = `${courseMaterialsContext}\n\n${attachedContext}`;
-    }
-
-    // Add semantically retrieved context
     if (relevantContext.length > 0) {
       attachedContext += '\n\n=== SEMANTICALLY RELEVANT CONTEXT ===\n';
       relevantContext.slice(0, 10).forEach(ctx => {
-        attachedContext += `\n[${ctx.type.toUpperCase()}] ${ctx.title} (Relevance: ${(ctx.relevanceScore * 100).toFixed(0)}%)\n`;
-        if (ctx.content) {
-          const preview = ctx.content.substring(0, 500);
-          attachedContext += `${preview}${ctx.content.length > 500 ? '...' : ''}\n`;
-        }
+        attachedContext += `\n[${ctx.type.toUpperCase()}] ${ctx.title} (${(ctx.relevanceScore * 100).toFixed(0)}%)\n`;
+        if (ctx.content) attachedContext += `${ctx.content.substring(0, 500)}${ctx.content.length > 500 ? '...' : ''}\n`;
       });
     }
-
-    // Add reasoning chain to system understanding
-    attachedContext += '\n\n=== REASONING CHAIN ===\n';
-    attachedContext += reasoningChain.join('\n');
-
-    // Add memory context
+    attachedContext += '\n\n=== REASONING CHAIN ===\n' + reasoningChain.join('\n');
     if (episodicMemory.relevantSessions?.length > 0) {
       attachedContext += '\n\n=== RELEVANT PAST DISCUSSIONS ===\n';
-      episodicMemory.relevantSessions.forEach((sess: any) => {
-        attachedContext += `- ${sess.title}: ${sess.context_summary || 'No summary'}\n`;
-      });
+      episodicMemory.relevantSessions.forEach((s: any) => { attachedContext += `- ${s.title}: ${s.context_summary || 'No summary'}\n`; });
     }
-
-    console.log('[Agentic] Context building complete');
 
     const userContext = await contextService.getUserContext(userId);
     const systemPrompt = promptEngine.createEnhancedSystemPrompt(learningStyle, learningPreferences, userContext, 'light');
-
     const conversationData = await buildEnhancedGeminiConversation(userId, sessionId, message, [], attachedContext, systemPrompt);
 
-    // **TOKEN VALIDATION**: Estimate total token count before sending to Gemini
-    let totalEstimatedTokens = 0;
-
-    // Estimate tokens from conversation contents
-    for (const content of conversationData.contents) {
-      if (content.parts) {
-        for (const part of content.parts) {
-          if (part.text) {
-            totalEstimatedTokens += estimateTokenCount(part.text);
-          }
-          // Images contribute significantly to token count
-          if (part.inlineData) {
-            totalEstimatedTokens += 1000; // Rough estimate per image
-          }
-        }
-      }
-    }
-
-    // Estimate tokens from system instruction
-    if (conversationData.systemInstruction?.parts) {
-      for (const part of conversationData.systemInstruction.parts) {
-        if (part.text) {
-          totalEstimatedTokens += estimateTokenCount(part.text);
-        }
-      }
-    }
-
-    // Check if exceeding token limit
-    const MAX_SAFE_INPUT_TOKENS = ENHANCED_PROCESSING_CONFIG.MAX_INPUT_TOKENS * 0.9; // 90% of max for safety
-
-    if (totalEstimatedTokens > MAX_SAFE_INPUT_TOKENS) {
-      console.error(`[TokenValidation] Estimated tokens (${totalEstimatedTokens}) exceeds safe limit (${MAX_SAFE_INPUT_TOKENS})`);
-      return new Response(JSON.stringify({
-        error: 'Content too large to process',
-        details: `The total content (message + attachments + context) is too large. Estimated: ${totalEstimatedTokens} tokens, Maximum: ${Math.floor(MAX_SAFE_INPUT_TOKENS)} tokens. Please reduce the number of attachments or message length.`,
-        estimatedTokens: totalEstimatedTokens,
-        maxTokens: Math.floor(MAX_SAFE_INPUT_TOKENS)
-      }), {
-        status: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          ...corsHeaders
-        }
-      });
-    }
-
-    console.log(`[TokenValidation] Estimated input tokens: ${totalEstimatedTokens} (within safe limit: ${MAX_SAFE_INPUT_TOKENS})`);
-
-    if (message || hasFiles || attachedContext) {
-      const userMessageData = {
-        userId,
-        sessionId,
-        content: message,
-        role: 'user',
-        attachedDocumentIds: allDocumentIds.length > 0 ? allDocumentIds : null,
-        attachedNoteIds: attachedNoteIds.length > 0 ? attachedNoteIds : null,
-        imageUrl: userMessageImageUrl || imageUrl,
-        imageMimeType: userMessageImageMimeType || imageMimeType,
-        conversationContext: {
-          totalMessages: conversationData.contextInfo.totalMessages,
-          recentMessages: conversationData.contextInfo.recentMessages?.length || 0,
-          summarizedMessages: conversationData.contextInfo.summarizedMessages || 0,
-          hasSummary: !!conversationData.contextInfo.conversationSummary,
-          crossSessionContext: conversationData.contextInfo.crossSessionContext?.length || 0
-        },
-        filesMetadata: filesMetadata.length > 0 ? filesMetadata : null
-      };
-
-      const savedUserMessage = await saveChatMessage(userMessageData);
-      if (savedUserMessage) {
-        userMessageId = savedUserMessage.id;
-        userMessageTimestamp = savedUserMessage.timestamp;
-        if (message) {
-          await updateSessionTokenCount(sessionId, userId, message, 'add');
-        }
-      }
-    }
-
     if (aiMessageIdToUpdate) {
-      await supabase
-        .from('chat_messages')
-        .update({
-          is_updating: true,
-          is_error: false
-        })
-        .eq('id', aiMessageIdToUpdate)
-        .eq('session_id', sessionId)
-        .eq('user_id', userId);
+      await supabase.from('chat_messages').update({ is_updating: true, is_error: false })
+        .eq('id', aiMessageIdToUpdate).eq('session_id', sessionId).eq('user_id', userId);
     }
-
-    console.log('🤖 Calling Gemini API for Final Response...');
 
     const finalResponse = await callEnhancedGeminiAPI(conversationData.contents, geminiApiKey, {
       systemInstruction: conversationData.systemInstruction,
-      temperature: 0.7,
-      topK: 40,
-      topP: 0.95,
-      maxOutputTokens: 8192
+      temperature: 0.7, topK: 40, topP: 0.95, maxOutputTokens: 8192
     }, aiModelConfig.modelChain);
 
-    let generatedText = '';
-    let apiCallSuccess = false;
+    let generatedText = finalResponse.success && finalResponse.content
+      ? finalResponse.content
+      : (finalResponse.userMessage || 'I apologize, but I was unable to generate a response. Please try again.');
 
-    if (!finalResponse.success || !finalResponse.content) {
-      generatedText = finalResponse.userMessage || finalResponse.error || `I apologize, but I wasn't able to generate a response at this time. Your message has been saved, and you can try asking again.`;
-      apiCallSuccess = false;
-    } else {
-      generatedText = finalResponse.content;
-      apiCallSuccess = true;
-    }
-
-    // ========== AGENTIC VERIFICATION PHASE ==========
-    if (apiCallSuccess && generatedText) {
-      console.log('[Agentic] Verifying response quality...');
-      const verification = await agenticCore.verifyResponse(generatedText, userIntent, relevantContext);
-      console.log(`[Agentic] Response confidence: ${(verification.confidence * 100).toFixed(1)}%`);
-
-      if (verification.issues.length > 0) {
-        console.warn(`[Agentic] Issues detected: ${verification.issues.join(', ')}`);
-
-        // If confidence is too low, add clarification
-        if (verification.confidence < 0.5) {
-          generatedText += '\n\n_Note: I may not have all the information needed for a complete answer. Please let me know if you need clarification._';
-        }
-      }
-
-      // If we identified missing information during understanding, ask for it
-      if (userIntent.confidence < 0.7 && userIntent.entities.some(e => !e.resolvedId)) {
-        const unresolvedEntities = userIntent.entities.filter(e => !e.resolvedId);
-        generatedText += `\n\n_I noticed you mentioned: ${unresolvedEntities.map(e => e.value).join(', ')}. Could you clarify which specific ${unresolvedEntities[0].type} you're referring to?_`;
-      }
-    }
-
-    console.log(`[Main] Checking for actions in AI response...`);
     const actionResult = await executeAIActions(userId, sessionId, generatedText);
-    generatedText = actionResult.modifiedResponse;
+    generatedText = sanitizeAssistantOutput(actionResult.modifiedResponse);
 
-    // Ensure final assistant text does not contain any leftover action blocks
-    generatedText = sanitizeAssistantOutput(generatedText);
-
-    // Extract images from successfully executed GENERATE_IMAGE actions (non-streaming path)
     const nonStreamImages: Array<{ url: string; alt?: string }> = [];
     for (const ea of actionResult.executedActions) {
       if (ea.type === 'GENERATE_IMAGE' && ea.success && ea.data) {
         const imgUrl = ea.data.imageUrl || ea.data.image_url || ea.data.url;
-        if (imgUrl) {
-          nonStreamImages.push({ url: imgUrl, alt: ea.data.prompt || ea.data.message || 'Generated image' });
-          console.log(`[ImageExtraction][NonStream] Added image from GENERATE_IMAGE action: ${imgUrl}`);
-        }
+        if (imgUrl) nonStreamImages.push({ url: imgUrl, alt: ea.data.prompt || 'Generated image' });
       }
     }
-
-    // Append image markdown to response if images exist but aren't referenced
-    if (nonStreamImages.length > 0) {
-      const hasImageRef = nonStreamImages.some(img => generatedText.includes(img.url));
-      if (!hasImageRef) {
-        const imageMd = nonStreamImages.map(img => `\n\n![${(img.alt || 'Generated image').replace(/[[\]()]/g, '')}](${img.url})`).join('');
-        generatedText = generatedText.trimEnd() + imageMd;
-        console.log(`[ImageExtraction][NonStream] Appended ${nonStreamImages.length} image(s) as markdown to response`);
-      }
+    if (nonStreamImages.length > 0 && !nonStreamImages.some(img => generatedText.includes(img.url))) {
+      generatedText = generatedText.trimEnd() + nonStreamImages.map(img => `\n\n![${(img.alt || 'Generated image').replace(/[[\]()]/g, '')}](${img.url})`).join('');
     }
 
-
-    if (apiCallSuccess && generatedText) {
+    if (finalResponse.success && generatedText) {
       try {
-        const extractedFacts = await extractUserFacts(message, generatedText, userId, sessionId);
-        if (extractedFacts.length > 0) {
-          await contextService.updateUserMemory(userId, extractedFacts);
-        }
-      } catch (factError) {
-        console.error('Error extracting user facts:', factError);
-        logSystemError(supabase, {
-          severity: 'info',
-          source: 'gemini-chat',
-          component: 'user-facts',
-          error_code: 'USER_FACTS_EXTRACTION_FAILED',
-          message: `User facts extraction failed: ${String(factError)}`,
-          details: { error: String(factError) },
-          user_id: userId,
-        });
-      }
+        const facts = await extractUserFacts(message, generatedText, userId, sessionId);
+        if (facts.length > 0) await contextService.updateUserMemory(userId, facts);
+      } catch {}
     }
 
-    // Get current session title for response
-    let aiGeneratedTitle = 'New Chat Session';
-    const { data: existingSession } = await supabase
-      .from('chat_sessions')
-      .select('title')
-      .eq('id', sessionId)
-      .eq('user_id', userId)
-      .single();
+    const { data: existingSession } = await supabase.from('chat_sessions').select('title').eq('id', sessionId).eq('user_id', userId).single();
+    const aiGeneratedTitle = existingSession?.title || 'New Chat Session';
 
-    if (existingSession?.title) {
-      aiGeneratedTitle = existingSession.title;
-    }
-
-    const assistantMessageData = {
-      userId,
-      sessionId,
-      content: generatedText,
-      role: 'assistant',
-      attachedDocumentIds: allDocumentIds.length > 0 ? allDocumentIds : null,
-      attachedNoteIds: attachedNoteIds.length > 0 ? attachedNoteIds : null,
-      imageUrl: nonStreamImages.length > 0 ? nonStreamImages[0].url : (userMessageImageUrl || imageUrl),
-      imageMimeType: nonStreamImages.length > 0 ? (nonStreamImages[0].url.endsWith('.png') ? 'image/png' : 'image/jpeg') : (userMessageImageMimeType || imageMimeType),
-      filesMetadata: nonStreamImages.length > 0 ? nonStreamImages.map(img => ({ type: 'image', url: img.url, alt: img.alt })) : null,
-      isError: !apiCallSuccess,
-      conversationContext: {
-        totalMessages: (conversationData.contextInfo?.totalMessages || 0) + 1,
-        recentMessages: conversationData.contextInfo?.recentMessages?.length || 0,
-        summarizedMessages: conversationData.contextInfo?.summarizedMessages || 0,
-        hasSummary: !!conversationData.contextInfo?.conversationSummary
-      }
-    };
+    let aiMessageId: string | null = null;
+    let aiMessageTimestamp: string | null = null;
 
     if (aiMessageIdToUpdate) {
-      await supabase
-        .from('chat_messages')
-        .update({
-          content: generatedText,
-          is_updating: false,
-          is_error: !apiCallSuccess,
-          conversation_context: assistantMessageData.conversationContext
-        })
-        .eq('id', aiMessageIdToUpdate)
-        .eq('session_id', sessionId)
-        .eq('user_id', userId);
-
+      await supabase.from('chat_messages').update({
+        content: generatedText, is_updating: false, is_error: !finalResponse.success,
+        conversation_context: { totalMessages: (conversationData.contextInfo?.totalMessages || 0) + 1 }
+      }).eq('id', aiMessageIdToUpdate).eq('session_id', sessionId).eq('user_id', userId);
       aiMessageId = aiMessageIdToUpdate;
       aiMessageTimestamp = new Date().toISOString();
     } else {
-      const savedAiMessage = await saveChatMessage(assistantMessageData);
-      if (savedAiMessage) {
-        aiMessageId = savedAiMessage.id;
-        aiMessageTimestamp = savedAiMessage.timestamp;
-        console.log(`[gemini-chat] Saved AI message with ID: ${aiMessageId}`);
-      }
+      const savedAiMessage = await saveChatMessage({
+        userId, sessionId, content: generatedText, role: 'assistant',
+        attachedDocumentIds: allDocumentIds.length > 0 ? allDocumentIds : null,
+        attachedNoteIds: attachedNoteIds.length > 0 ? attachedNoteIds : null,
+        imageUrl: nonStreamImages.length > 0 ? nonStreamImages[0].url : (userMessageImageUrl || imageUrl),
+        imageMimeType: nonStreamImages.length > 0 ? 'image/jpeg' : (userMessageImageMimeType || imageMimeType),
+        filesMetadata: nonStreamImages.length > 0 ? nonStreamImages.map(img => ({ type: 'image', url: img.url, alt: img.alt })) : null,
+        isError: !finalResponse.success
+      });
+      if (savedAiMessage) { aiMessageId = savedAiMessage.id; aiMessageTimestamp = savedAiMessage.timestamp; }
     }
 
-    if (generatedText) {
-      await updateSessionTokenCount(sessionId, userId, generatedText, 'add');
+    if (generatedText) await updateSessionTokenCount(sessionId, userId, generatedText, 'add').catch(console.error);
+    await updateSessionLastMessage(sessionId, conversationData.contextInfo?.conversationSummary || null, aiGeneratedTitle);
+
+    if ((conversationData.contextInfo?.recentMessages?.length || 0) >= ENHANCED_PROCESSING_CONFIG.SUMMARY_THRESHOLD) {
+      updateConversationSummary(sessionId, userId, conversationData.contextInfo.recentMessages).catch(console.error);
     }
-
-    const summaryToSave = conversationData.contextInfo?.conversationSummary || null;
-    await updateSessionLastMessage(sessionId, summaryToSave, aiGeneratedTitle);
-
-    if (conversationData.contextInfo?.recentMessages &&
-      conversationData.contextInfo.recentMessages.length >= ENHANCED_PROCESSING_CONFIG.SUMMARY_THRESHOLD) {
-      updateConversationSummary(sessionId, userId, conversationData.contextInfo.recentMessages)
-        .catch((err) => console.error('Summary update failed:', err));
-    }
-
-    const processingTime = Date.now() - startTime;
 
     return new Response(JSON.stringify({
       response: generatedText,
-      userId,
-      sessionId,
-      title: aiGeneratedTitle,
+      userId, sessionId, title: aiGeneratedTitle,
       timestamp: new Date().toISOString(),
-      userMessageId,
-      userMessageTimestamp,
-      aiMessageId,
-      aiMessageTimestamp,
-      processingTime,
+      userMessageId, userMessageTimestamp, aiMessageId, aiMessageTimestamp,
+      processingTime: Date.now() - startTime,
       filesProcessed: hasFiles ? rawFiles.length || jsonFiles.length : 0,
       documentIds: allDocumentIds,
       contextInfo: {
         totalMessages: conversationData.contextInfo?.totalMessages || 0,
         recentMessages: conversationData.contextInfo?.recentMessages?.length || 0,
-        relevantOlderMessages: conversationData.contextInfo?.relevantOlderMessages?.length || 0,
         summarizedMessages: conversationData.contextInfo?.summarizedMessages || 0,
-        hasSummary: !!conversationData.contextInfo?.conversationSummary,
-        crossSessionReferences: conversationData.contextInfo?.crossSessionContext?.length || 0,
-        userMemoryUsed: userContext.userMemory?.length || 0
+        hasSummary: !!conversationData.contextInfo?.conversationSummary
       },
       processingResults,
-      success: apiCallSuccess,
+      success: finalResponse.success,
       modelUsed: finalResponse.modelUsed || aiModelConfig.modelChain[0],
       modelLabel: aiModelConfig.displayLabel,
       modelTier: aiModelConfig.tier,
-      executedActions: actionResult.executedActions.map((a: any) => ({
-        type: a.type,
-        success: a.success,
-        timestamp: a.timestamp
-      })),
+      executedActions: actionResult.executedActions.map(a => ({ type: a.type, success: a.success, timestamp: a.timestamp })),
       images: nonStreamImages.length > 0 ? nonStreamImages : null,
-      imageUrl: nonStreamImages.length > 0 ? nonStreamImages[0].url : undefined,
-      files_metadata: nonStreamImages.length > 0 ? JSON.stringify(nonStreamImages) : undefined
-    }), {
-      headers: {
-        'Content-Type': 'application/json',
-        ...corsHeaders
-      }
-    });
+      imageUrl: nonStreamImages.length > 0 ? nonStreamImages[0].url : undefined
+    }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+
   } catch (error: any) {
-    const hasFiles = rawFiles.length > 0 || jsonFiles.length > 0;
     const processingTime = Date.now() - startTime;
     console.error('Error in ai-chat function:', error);
-
     logSystemError(supabase, {
-      severity: 'critical',
-      source: 'gemini-chat',
-      component: 'main-handler',
+      severity: 'critical', source: 'gemini-chat', component: 'main-handler',
       error_code: 'CHAT_REQUEST_FAILED',
-      message: `AI chat request failed: ${error.message || String(error)}`,
-      details: { stack: error.stack, processingTime, hasFiles, sessionId: requestData?.sessionId },
-      user_id: requestData?.userId,
+      message: `AI chat request failed: ${error.message}`,
+      details: { stack: error.stack, processingTime, sessionId: requestData?.sessionId },
+      user_id: requestData?.userId
     });
 
-    let userFriendlyMessage = 'I apologize, but I encountered an unexpected error while processing your request. Please try again.';
-
-    if (error.message?.includes('GEMINI_API_KEY')) {
-      userFriendlyMessage = 'The AI service is not properly configured. Please contact support.';
-    } else if (error.message?.includes('FILE_PROCESSOR')) {
-      userFriendlyMessage = 'I had trouble processing your files. Please try uploading them again.';
-    } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
-      userFriendlyMessage = 'I\'m having trouble connecting to the AI service. Please check your internet connection and try again.';
-    } else if (error.message?.includes('timeout')) {
-      userFriendlyMessage = 'The request took too long to process. Please try again with a shorter message or fewer files.';
-    }
+    let userFriendlyMessage = 'I apologize, but I encountered an unexpected error. Please try again.';
+    if (error.message?.includes('GEMINI_API_KEY')) userFriendlyMessage = 'The AI service is not properly configured. Please contact support.';
+    else if (error.message?.includes('network') || error.message?.includes('fetch')) userFriendlyMessage = "I'm having trouble connecting to the AI service. Please check your connection.";
 
     if (requestData?.userId && requestData?.sessionId) {
       try {
-        await saveChatMessage({
-          userId: requestData.userId,
-          sessionId: requestData.sessionId,
-          content: userFriendlyMessage,
-          role: 'assistant',
-          isError: true,
-          attachedDocumentIds: uploadedDocumentIds.length > 0 ? uploadedDocumentIds : null,
-          attachedNoteIds: requestData.attachedNoteIds?.length > 0 ? requestData.attachedNoteIds : null,
-          imageUrl: userMessageImageUrl || requestData.imageUrl,
-          imageMimeType: userMessageImageMimeType || requestData.imageMimeType
-        });
-      } catch (dbError) {
-        console.error('Failed to save error message to database:', dbError);
-      }
+        await saveChatMessage({ userId: requestData.userId, sessionId: requestData.sessionId, content: userFriendlyMessage, role: 'assistant', isError: true });
+      } catch {}
     }
 
-    return new Response(JSON.stringify({
-      error: userFriendlyMessage,
-      errorDetails: error.message || 'Internal Server Error',
-      processingTime,
-      filesProcessed: hasFiles ? rawFiles.length || jsonFiles.length : 0,
-      success: false
-    }), {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        ...corsHeaders
-      }
-    });
+    return new Response(JSON.stringify({ error: userFriendlyMessage, errorDetails: error.message, processingTime, success: false }), { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
   }
 });

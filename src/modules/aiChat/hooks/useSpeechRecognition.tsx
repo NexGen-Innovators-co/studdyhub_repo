@@ -38,6 +38,40 @@ declare global {
     }
 }
 
+// ─── ANDROID / SAMSUNG BEHAVIOUR NOTES ────────────────────────────────────────
+//
+// Android Chrome Web Speech API behaves very differently from desktop:
+//
+//  1. KEYBOARD INTERFERENCE — Samsung keyboard silently modifies the textarea
+//     between recognition events (trailing spaces from autocomplete, first-letter
+//     capitalisation, etc.).  This fires onChange → updates inputMessageRef
+//     without touching lastSetValueRef → the edit-detection check sees a
+//     mismatch → preExistingTextRef keeps growing → words repeat on every cycle.
+//     FIX: normalise both strings before comparing (trim + collapse whitespace).
+//
+//  2. MIC-DROP WITHOUT FINAL — Android fires onend between every few words,
+//     often without ever sending isFinal=true.  The current session finals are
+//     empty so preExistingTextRef never advances; when the mic restarts from
+//     silence the new interim starts appending onto "" instead of the spoken text.
+//     FIX: commit the current interim as preExistingTextRef in onend when there
+//     are no finals.
+//
+//  3. REPLAY IN NEW SESSION — When recognition restarts, Android re-sends the
+//     full transcript from the beginning of its audio buffer as the first interim
+//     of the new session.  Combined with fix #2 this would double the text:
+//     preExisting="so it's getting" + replayed interim="so it's getting and" =
+//     "so it's getting so it's getting and".
+//     FIX: track lastSessionInterimRef.  If the new session's growing interim
+//     starts with (or equals) that value, strip the known-prefix so only
+//     genuinely NEW speech is appended to preExistingTextRef.
+//
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** Trim + collapse all whitespace.  Used for edit-detection comparison only. */
+function normalise(s: string): string {
+    return s.trim().replace(/\s+/g, ' ');
+}
+
 export const useSpeechRecognition = ({
     setInputMessage,
     resizeTextarea,
@@ -50,25 +84,17 @@ export const useSpeechRecognition = ({
     const [micPermissionStatus, setMicPermissionStatus] = useState<'unknown' | 'granted' | 'denied' | 'checking'>('unknown');
     const recognitionRef = useRef<SpeechRecognition | null>(null);
     const isRecognizingRef = useRef(false);
-    // Track text components separately to avoid fragile stripping
+
     const preExistingTextRef = useRef<string>('');
-    // Finals from previous (auto-restarted) recognition sessions
     const previousSessionsTextRef = useRef<string>('');
-    // Finals from the current active recognition session
     const currentSessionFinalsRef = useRef<string>('');
-    // What onresult last wrote to the textarea, so we can detect manual user edits
     const lastSetValueRef = useRef<string>('');
     const finalResultsByIndexRef = useRef<Map<number, string>>(new Map());
-    // FIX: The Web Speech API sends CUMULATIVE results — every onresult event
-    // replays ALL results from index 0 of the current session. When the user
-    // manually edits and we clear finalResultsByIndexRef, the very next onresult
-    // re-adds all the old finals back from the browser's cumulative payload,
-    // causing old speech to reappear and double up with typed text.
-    //
-    // Solution: track a "floor" index. After a manual edit we record the highest
-    // result index seen so far. Any result at or below that floor is from before
-    // the edit and must be ignored in all future onresult events this session.
     const resultIndexFloorRef = useRef<number>(-1);
+
+    // ANDROID FIX #3 — the interim text that was showing when the last
+    // no-final onend fired.  Used to strip Android's session-replay prefix.
+    const lastSessionInterimRef = useRef<string>('');
 
     useEffect(() => {
         checkMicrophonePermission().then(status => {
@@ -77,17 +103,13 @@ export const useSpeechRecognition = ({
     }, [checkMicrophonePermission]);
 
     const resizeTextareaThrottled = useCallback(
-        throttle(() => {
-            resizeTextarea();
-        }, 200),
+        throttle(() => { resizeTextarea(); }, 200),
         [resizeTextarea]
     );
 
     useEffect(() => {
         const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognitionConstructor) {
-            return;
-        }
+        if (!SpeechRecognitionConstructor) return;
 
         const recognition = new SpeechRecognitionConstructor() as SpeechRecognition;
         recognition.continuous = true;
@@ -96,26 +118,30 @@ export const useSpeechRecognition = ({
         (recognition as any).maxAlternatives = 1;
 
         recognition.onresult = (event: SpeechRecognitionResultEvent) => {
-            // Detect manual user edits and restart tracking from current text.
             const currentInput = inputMessageRef.current;
-            if (currentInput !== lastSetValueRef.current) {
+
+            // ── EDIT DETECTION ───────────────────────────────────────────────
+            // ANDROID FIX #1: Samsung keyboard injects whitespace / capitalisation
+            // changes into the textarea between events.  A strict equality check
+            // would falsely flag these as manual edits, causing preExistingTextRef
+            // to accumulate stale text and words to repeat.  Use normalised
+            // comparison so only genuine content changes are treated as edits.
+            if (normalise(currentInput) !== normalise(lastSetValueRef.current)) {
                 preExistingTextRef.current = currentInput.trimEnd();
                 previousSessionsTextRef.current = '';
                 currentSessionFinalsRef.current = '';
-                // Record the highest result index seen so far as the new floor.
-                // The browser will keep replaying results from index 0, so we
-                // must ignore everything at or below this point going forward.
                 const currentMaxIndex = finalResultsByIndexRef.current.size > 0
                     ? Math.max(...finalResultsByIndexRef.current.keys())
                     : event.results.length - 1;
                 resultIndexFloorRef.current = currentMaxIndex;
                 finalResultsByIndexRef.current.clear();
+                // A real user edit invalidates any saved Android replay prefix
+                lastSessionInterimRef.current = '';
             }
 
             let interimTranscript = '';
 
             for (let i = 0; i < event.results.length; i++) {
-                // Skip any result that was finalised before the last manual edit
                 if (i <= resultIndexFloorRef.current) continue;
 
                 const transcript = event.results[i][0].transcript.trim();
@@ -123,12 +149,38 @@ export const useSpeechRecognition = ({
                     if (transcript) {
                         finalResultsByIndexRef.current.set(i, transcript);
                     }
+                    // A genuine final result means no Android replay in this session
+                    lastSessionInterimRef.current = '';
                 } else if (transcript) {
                     interimTranscript = transcript;
                 }
             }
 
-            // Build all current final text in order, robust to browsers sending deltas or cumulative sets.
+            // ── ANDROID FIX #3: strip replay prefix ─────────────────────────
+            // Android re-sends the full transcript from the start of its audio
+            // buffer when a new session begins.  If the growing interim is just
+            // the replayed prefix (or extends it), strip the known part so only
+            // genuinely new speech is shown.
+            if (lastSessionInterimRef.current && interimTranscript) {
+                const phantom = lastSessionInterimRef.current;
+                if (interimTranscript === phantom || phantom.startsWith(interimTranscript)) {
+                    // Still replaying — suppress until we see something genuinely new
+                    interimTranscript = '';
+                } else if (interimTranscript.startsWith(phantom)) {
+                    // Past the replay point — keep only the new portion
+                    interimTranscript = interimTranscript.slice(phantom.length).trim();
+                    // Once we've consumed past the phantom, clear it
+                    if (!interimTranscript) {
+                        interimTranscript = '';
+                    } else {
+                        lastSessionInterimRef.current = '';
+                    }
+                } else {
+                    // Genuinely different speech — clear the phantom
+                    lastSessionInterimRef.current = '';
+                }
+            }
+
             const sessionFinals = Array.from(finalResultsByIndexRef.current.entries())
                 .sort((a, b) => a[0] - b[0])
                 .map(([, text]) => text)
@@ -138,9 +190,7 @@ export const useSpeechRecognition = ({
             currentSessionFinalsRef.current = sessionFinals;
 
             const combinedFinals = [previousSessionsTextRef.current, currentSessionFinalsRef.current]
-                .filter(Boolean)
-                .join(' ')
-                .trim();
+                .filter(Boolean).join(' ').trim();
 
             const base = preExistingTextRef.current;
             const parts = [base, combinedFinals, interimTranscript].filter(Boolean);
@@ -152,11 +202,7 @@ export const useSpeechRecognition = ({
         };
 
         recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-            if (event.error === 'no-speech') {
-                return;
-            }
-
-            // Only stop and show error for non-aborted errors
+            if (event.error === 'no-speech') return;
             if (event.error !== 'aborted') {
                 setIsRecognizing(false);
                 isRecognizingRef.current = false;
@@ -165,13 +211,12 @@ export const useSpeechRecognition = ({
         };
 
         recognition.onend = () => {
-            // onresult's edit detection only fires while speech is actively coming in.
-            // Any manual edit made during a silence gap (before onend fires) is invisible
-            // to onresult. Repeating the same check here ensures edits made during a
-            // pause always win over stale finals.
             const currentInput = inputMessageRef.current;
-            if (currentInput !== lastSetValueRef.current) {
-                // User edited manually — trust their version, discard stale finals entirely
+
+            // ── EDIT DETECTION (gap version) ─────────────────────────────────
+            // Same normalised comparison as in onresult, for edits made while
+            // the mic was paused (before onend fires).
+            if (normalise(currentInput) !== normalise(lastSetValueRef.current)) {
                 const currentMaxIndex = finalResultsByIndexRef.current.size > 0
                     ? Math.max(...finalResultsByIndexRef.current.keys())
                     : -1;
@@ -181,29 +226,40 @@ export const useSpeechRecognition = ({
                 currentSessionFinalsRef.current = '';
                 finalResultsByIndexRef.current.clear();
                 lastSetValueRef.current = currentInput;
+                lastSessionInterimRef.current = '';
             } else {
                 const existingFinal = [previousSessionsTextRef.current, currentSessionFinalsRef.current]
-                    .filter(Boolean)
-                    .join(' ')
-                    .trim();
+                    .filter(Boolean).join(' ').trim();
 
                 if (existingFinal) {
+                    // Normal desktop path — finals were committed
                     const finalMessage = [preExistingTextRef.current, existingFinal]
-                        .filter(Boolean)
-                        .join(' ')
-                        .replace(/\s+/g, ' ')
-                        .trim();
+                        .filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
                     setInputMessage(finalMessage);
-                    // Bake everything into preExistingTextRef and reset
-                    // previousSessionsTextRef to '' (not finalMessage) so the next
-                    // auto-restarted session doesn't re-include already-committed
-                    // text and cause the looping/duplication bug.
                     preExistingTextRef.current = finalMessage;
                     previousSessionsTextRef.current = '';
                     currentSessionFinalsRef.current = '';
                     finalResultsByIndexRef.current.clear();
-                    // Reset the floor too — new session starts from scratch
                     resultIndexFloorRef.current = -1;
+                    lastSessionInterimRef.current = ''; // clean finals → no replay expected
+
+                } else if (currentInput.trim()) {
+                    // ── ANDROID FIX #2 + #3 ──────────────────────────────────
+                    // Android fired onend without any isFinal result (mic-drop).
+                    // The textarea contains interim text the user expects to keep.
+                    //
+                    // Fix #2: commit that interim as preExistingTextRef so the
+                    // next session appends to it correctly instead of to "".
+                    //
+                    // Fix #3: save the interim as lastSessionInterimRef so the
+                    // next session can detect and strip Android's replay of it.
+                    preExistingTextRef.current = currentInput.trimEnd();
+                    lastSessionInterimRef.current = currentInput.trimEnd();
+                    previousSessionsTextRef.current = '';
+                    currentSessionFinalsRef.current = '';
+                    finalResultsByIndexRef.current.clear();
+                    resultIndexFloorRef.current = -1;
+                    // Keep lastSetValueRef as-is (it already equals currentInput)
                 }
             }
 
@@ -253,6 +309,7 @@ export const useSpeechRecognition = ({
             previousSessionsTextRef.current = '';
             currentSessionFinalsRef.current = '';
             resultIndexFloorRef.current = -1;
+            lastSessionInterimRef.current = ''; // fresh start — no phantom prefix
             isRecognizingRef.current = true;
             recognitionRef.current.start();
             setIsRecognizing(true);
@@ -270,8 +327,8 @@ export const useSpeechRecognition = ({
             isRecognizingRef.current = false;
             recognitionRef.current.stop();
             setIsRecognizing(false);
-            // Keep recognized text in place so users don't lose it
             preExistingTextRef.current = inputMessageRef.current.trimEnd();
+            lastSessionInterimRef.current = ''; // user stopped — no replay expected
             toast.success('Speech recognition stopped.');
         }
     }, [inputMessageRef]);

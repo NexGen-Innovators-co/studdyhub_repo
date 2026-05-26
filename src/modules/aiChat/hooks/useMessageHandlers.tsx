@@ -92,6 +92,7 @@ export const useMessageHandlers = () => {
     imageMimeType?: string,
     imageDataBase64?: string,
     aiMessageIdToUpdate: string | null = null,
+    userMessageIdToUpdate: string | null = null,
     attachedFiles?: FileData[],
     enableStreaming?: boolean  // NEW: Enable streaming mode
   ) => {
@@ -279,8 +280,8 @@ export const useMessageHandlers = () => {
         chatHistoryForAI.push({ role: msg.role, parts: msgParts });
       });
 
-      // Create optimistic user message
-      const optimisticUserMessageId = `optimistic-user-${uuidv4()}`;
+      // Create optimistic user message (reuse existing ID when updating)
+      const optimisticUserMessageId = userMessageIdToUpdate || `optimistic-user-${uuidv4()}`;
       const optimisticUserMessage: Message = {
         id: optimisticUserMessageId,
         content: messageContent || '[Files attached]',
@@ -297,7 +298,7 @@ export const useMessageHandlers = () => {
       };
 
       // Create optimistic AI message with special loading flag
-      const optimisticAiMessageId = `optimistic-ai-${uuidv4()}`;
+      const optimisticAiMessageId = aiMessageIdToUpdate || `optimistic-ai-${uuidv4()}`;
       const optimisticAiMessage: Message = {
         id: optimisticAiMessageId,
         content: '', // Empty content to trigger loading animation
@@ -313,10 +314,25 @@ export const useMessageHandlers = () => {
         isStreaming: enableStreaming || false, // Set streaming flag
       };
 
-      // Add optimistic messages to UI immediately
+      // Add or update optimistic messages in-place to avoid creating duplicates
       setChatMessages(prev => {
-        const filtered = prev.filter(msg => msg.id !== aiMessageIdToUpdate);
-        return [...filtered, optimisticUserMessage, optimisticAiMessage];
+        let foundUser = false;
+        let foundAi = false;
+        const mapped = (prev || []).map(msg => {
+          if (msg.id === optimisticUserMessageId) {
+            foundUser = true;
+            return { ...msg, ...optimisticUserMessage, isLoading: false };
+          }
+          if (msg.id === optimisticAiMessageId) {
+            foundAi = true;
+            return { ...msg, ...optimisticAiMessage };
+          }
+          return msg;
+        });
+        const result = [...mapped];
+        if (!foundUser) result.push(optimisticUserMessage);
+        if (!foundAi) result.push(optimisticAiMessage);
+        return result;
       });
 
       // Update file processing progress
@@ -349,6 +365,7 @@ export const useMessageHandlers = () => {
           imageUrl: imageUrl,
           imageMimeType: imageMimeType,
           aiMessageIdToUpdate: aiMessageIdToUpdate,
+          userMessageIdToUpdate: userMessageIdToUpdate,
           onThinkingStep: (step: ThinkingStep) => {
             // Update the optimistic AI message with new thinking step
             setChatMessages(prev => {
@@ -393,29 +410,35 @@ export const useMessageHandlers = () => {
                 .in('id', [userMessageId, aiMessageId])
                 .order('timestamp', { ascending: true });
 
-              if (!error && messages) {
-                // Map DB snake_case to frontend camelCase
-                const mappedMessages = messages.map((msg: any) => ({
-                  ...msg,
-                  attachedDocumentIds: msg.attached_document_ids || [],
-                  attachedNoteIds: msg.attached_note_ids || [],
-                  // Inject model info from backend response for assistant messages
-                  ...(msg.role === 'assistant' && finalData.modelLabel ? {
-                    model: finalData.modelUsed,
-                    modelLabel: finalData.modelLabel,
-                  } : {}),
-                }));
+                if (!error && messages) {
+                  // Map DB snake_case to frontend camelCase
+                  const mappedMessages = messages.map((msg: any) => ({
+                    ...msg,
+                    attachedDocumentIds: msg.attached_document_ids || [],
+                    attachedNoteIds: msg.attached_note_ids || [],
+                    // Inject model info from backend response for assistant messages
+                    ...(msg.role === 'assistant' && finalData.modelLabel ? {
+                      model: finalData.modelUsed,
+                      modelLabel: finalData.modelLabel,
+                    } : {}),
+                  }));
 
-                // Replace optimistic messages with real database messages
-                setChatMessages(prev => {
-                  const withoutOptimistic = prev.filter(msg =>
-                    msg.id !== optimisticUserMessageId && msg.id !== optimisticAiMessageId
-                  );
-                  return [...withoutOptimistic, ...mappedMessages];
-                });
-              } else {
+                  // Replace or insert mapped messages into existing UI messages
+                  setChatMessages(prev => {
+                    const prevList = prev || [];
+                    const result = prevList.map(pm => {
+                      const found = mappedMessages.find(mm => mm.id === pm.id);
+                      return found ? found : pm;
+                    });
+                    // Append any mapped messages that didn't exist in prev
+                    mappedMessages.forEach(mm => {
+                      if (!result.find(r => r.id === mm.id)) result.push(mm);
+                    });
+                    return result;
+                  });
+                } else {
                 //console.error('Error fetching final messages:', error);
-                // Fallback: create messages from finalData
+                // Fallback: create messages from finalData and merge in-place
                 const realUserMessage: Message = {
                   id: aiMessageId,
                   content: finalData.response,
@@ -426,15 +449,13 @@ export const useMessageHandlers = () => {
                   attachedNoteIds: finalAttachedNoteIds,
                   session_id: currentSessionId,
                   has_been_displayed: false,
-                  // Extract images and executedActions from backend payload
                   images: Array.isArray(finalData.images) ? finalData.images : [],
                   executedActions: Array.isArray(finalData.executedActions) ? finalData.executedActions : [],
-                  // Robust image_url extraction
                   image_url: (Array.isArray(finalData.images) && finalData.images.length > 0 && finalData.images[0])
                     ? finalData.images[0]
                     : (Array.isArray(finalData.executedActions) && finalData.executedActions.length > 0 && finalData.executedActions[0] && finalData.executedActions[0].data && finalData.executedActions[0].data.imageUrl)
                       ? finalData.executedActions[0].data.imageUrl
-                      : (typeof finalData.response === 'string' && finalData.response.match(/^https?:\/\//))
+                      : (typeof finalData.response === 'string' && finalData.response.match(/^https?:\/\/))
                         ? finalData.response
                         : null,
                   image_mime_type: imageMimeType,
@@ -457,10 +478,14 @@ export const useMessageHandlers = () => {
                 };
 
                 setChatMessages(prev => {
-                  const withoutOptimistic = prev.filter(msg =>
-                    msg.id !== optimisticUserMessageId && msg.id !== optimisticAiMessageId
-                  );
-                  return [...withoutOptimistic, realUserMessage, finalMessage];
+                  const prevList = prev || [];
+                  const replacements = [realUserMessage, finalMessage];
+                  const result = prevList.map(pm => {
+                    const found = replacements.find(r => r.id === pm.id);
+                    return found ? found : pm;
+                  });
+                  replacements.forEach(r => { if (!result.find(x => x.id === r.id)) result.push(r); });
+                  return result;
                 });
               }
             } else {
@@ -516,6 +541,7 @@ export const useMessageHandlers = () => {
             courseContext: currentCourse || null,
             imageUrl: imageUrl,
             imageMimeType: imageMimeType,
+            userMessageIdToUpdate: userMessageIdToUpdate,
             aiMessageIdToUpdate: aiMessageIdToUpdate,
             enableStreaming: false, // Explicitly disable streaming
           },
@@ -532,8 +558,7 @@ export const useMessageHandlers = () => {
 
         ////console.log('[handleSubmitMessage] Backend response:', data);
 
-        // **Replace optimistic messages with real messages from response**
-        // Backend should return userMessageId and aiMessageId
+        // **Merge backend response into existing messages in-place**
         const realUserMessage: Message = {
           id: data.userMessageId || optimisticUserMessageId,
           content: messageContent || '[Files attached]',
@@ -565,26 +590,24 @@ export const useMessageHandlers = () => {
             ? data.images[0]
             : (Array.isArray(data.executedActions) && data.executedActions.length > 0 && data.executedActions[0] && data.executedActions[0].data && data.executedActions[0].data.imageUrl)
               ? data.executedActions[0].data.imageUrl
-              : (typeof data.response === 'string' && data.response.match(/^https?:\/\//))
+              : (typeof data.response === 'string' && data.response.match(/^https?:\/\/))
                 ? data.response
                 : null,
         };
-            // console.log('[AI Message Handler] Constructed AI message:', realAiMessage);
 
-        // Update UI with real messages
         setChatMessages(prev => {
-          // Remove optimistic messages
-          const withoutOptimistic = prev.filter(msg =>
-            msg.id !== optimisticUserMessageId && msg.id !== optimisticAiMessageId
-          );
-
-          // Add real messages
-          const newMessages = [...withoutOptimistic, realUserMessage, realAiMessage];
+          const prevList = prev || [];
+          const replacements = [realUserMessage, realAiMessage];
+          const result = prevList.map(pm => {
+            const found = replacements.find(r => r.id === pm.id);
+            return found ? found : pm;
+          });
+          replacements.forEach(r => { if (!result.find(x => x.id === r.id)) result.push(r); });
 
           // Save to offline storage
           offlineStorage.saveAll(STORES.CHAT_MESSAGES, [realUserMessage, realAiMessage]);
 
-          return newMessages;
+          return result;
         });
 
         // Update the session with the new title if provided
@@ -771,6 +794,7 @@ export const useMessageHandlers = () => {
         lastUserMessage.image_mime_type,
         undefined,
         lastAssistantMessage?.id || null,
+        lastUserMessage.id,
         undefined,
         true // Enable streaming for regeneration
       );
@@ -826,6 +850,7 @@ export const useMessageHandlers = () => {
         lastUserMessage.image_mime_type,
         undefined,
         failedAiMessageId,
+        lastUserMessage.id,
         undefined,
         true // Enable streaming for retry
       );
@@ -885,6 +910,7 @@ export const useMessageHandlers = () => {
         lastUserMessage.image_mime_type,
         undefined,
         lastAssistantMessageId,
+        lastUserMessage.id,
         undefined,
         true // Enable streaming for resume
       );
@@ -914,11 +940,17 @@ export const useMessageHandlers = () => {
       return;
     }
 
-    // Remove the original user message and its corresponding AI message (if any)
+    // Mark original messages as updating in-place instead of removing them
     setChatMessages(prevAllMessages =>
-      (prevAllMessages || []).filter(msg =>
-        msg.id !== originalUserMessageId && msg.id !== originalAssistantMessageId
-      )
+      (prevAllMessages || []).map(msg => {
+        if (msg.id === originalUserMessageId) {
+          return { ...msg, content: editedUserMessageContent, isError: false, isLoading: true };
+        }
+        if (originalAssistantMessageId && msg.id === originalAssistantMessageId) {
+          return { ...msg, content: '', isError: false, isLoading: true, thinking_steps: [] };
+        }
+        return msg;
+      })
     );
 
     toast.info('Editing and resending message...');
@@ -930,8 +962,9 @@ export const useMessageHandlers = () => {
         attachedNoteIds,
         image_url,
         image_mime_type,
-        undefined, // No parent message ID for the new user message
-        null, // No AI message to replace initially
+        undefined, // No existing AI message update target for the user edit
+        originalAssistantMessageId,
+        originalUserMessageId,
         undefined,
         true // Enable streaming
       );
@@ -958,6 +991,7 @@ export const useMessageHandlers = () => {
         undefined,
         undefined,
         null, // This is a new message, not an update to an old one or it can be a new exchange
+        undefined,
         undefined,
         true // Enable streaming
       );

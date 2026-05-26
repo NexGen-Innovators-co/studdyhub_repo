@@ -1,53 +1,43 @@
-/**
+﻿/**
  * resume-processing/index.ts
  *
- * Resumes extraction for documents with processing_status = 'partial'.
+ * Resumes extraction for documents in partial/processing state with safe retry.
  *
- * POST body:
- *   { "userId": "...", "documentId": "..." }
+ * POST body: { userId: string, documentId?: string, limit?: number }
  *
- * Flow:
- *   1. Load the document record from the DB
- *   2. Re-fetch the original file from Supabase Storage
- *   3. Read the resume_cursor from processing_metadata
- *   4. Continue extraction from where it stopped
- *   5. Append new content to existing content_extracted
- *   6. Update the DB record (status → completed | partial)
+ * Behavior:
+ * 1) If documentId provided, resume exactly that row.
+ * 2) If no documentId, auto-resume stale docs (processing/partial/failed older than 5m).
+ * 3) On success update document row with completed/partial.
+ * 4) On error increment processing_attempts and mark failed after 5 attempts.
  */
 
-import { serve }        from 'https://deno.land/std@0.168.0/http/server.ts';
+declare const Deno: any;
+
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { logSystemError } from '../_shared/errorLogger.ts';
+import { extractPdfTextWithPdfjsChunked, extractTextFromZip } from '../document-processor/processors/documents.ts';
 
-import { extractPdfTextWithPdfjsChunked } from '../document-processor/processors/documents.ts';
-
-// ============================================================================
-// CORS
-// ============================================================================
+const STALE_THRESHOLD_MS = 5 * 60 * 1000;
+const MAX_RESUME_ATTEMPTS = 5;
+const MAX_BATCH = 15;
+const DB_CONTENT_CAP = 1 * 1024 * 1024; // 1MB
 
 const getCorsHeaders = (origin = '*') => ({
-  'Access-Control-Allow-Origin':      origin,
-  'Access-Control-Allow-Headers':     'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods':     'POST, OPTIONS',
+  'Access-Control-Allow-Origin': origin,
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Credentials': 'true',
-  'Vary':                             'Origin',
+  Vary: 'Origin',
 });
 
-// ============================================================================
-// SUPABASE CLIENT
-// ============================================================================
-
-const supabaseUrl        = Deno.env.get('SUPABASE_URL')!;
+const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const supabase           = createClient(supabaseUrl, supabaseServiceKey);
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// ============================================================================
-// SERVER
-// ============================================================================
-
-serve(async (req) => {
+serve(async (req: any) => {
   const origin = req.headers.get('origin') ?? '*';
-
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: getCorsHeaders(origin) });
   }
@@ -55,65 +45,162 @@ serve(async (req) => {
   const startTime = Date.now();
 
   try {
-    const { userId, documentId } = await req.json();
+    const body = await req.json();
+    const userId = body?.userId;
+    const documentId = body?.documentId as string | undefined;
+    const limit = Math.min(Number(body?.limit) || MAX_BATCH, MAX_BATCH);
 
-    if (!userId || !documentId) {
-      return jsonError('Missing required fields: userId and documentId', 400, origin);
+    if (!userId) {
+      return jsonError('Missing required parameter: userId', 400, origin);
     }
 
-    // ── 1. Load document from DB ─────────────────────────────────────────────
-    const { data: doc, error: docError } = await supabase
+    if (documentId) {
+      const data = await resumeOneDocument(userId, documentId);
+      return jsonOk({ documentCount: data ? 1 : 0, documents: data ? [data] : [] }, origin);
+    }
+
+    const documents = await loadStaleDocuments(userId, limit);
+    if (!documents.length) {
+      return jsonOk({ documentCount: 0, documents: [] }, origin);
+    }
+
+    const results = [];
+    for (const doc of documents) {
+      const rr = await resumeOneDocument(userId, doc.id, doc);
+      results.push(rr);
+    }
+
+    return jsonOk({ documentCount: results.length, processingTimeMs: Date.now() - startTime, documents: results }, origin);
+  } catch (err: any) {
+    await logError('resume-processing', err);
+    return jsonError(err?.message ?? 'Internal Server Error', 500, origin);
+  }
+});
+
+async function loadStaleDocuments(userId: string, limit: number) {
+  const staleTime = new Date(Date.now() - STALE_THRESHOLD_MS).toISOString();
+  const { data, error } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('user_id', userId)
+    .in('processing_status', ['processing', 'partial', 'failed'])
+    .lt('updated_at', staleTime)
+    .order('updated_at', { ascending: true })
+    .limit(limit);
+
+  if (error || !data) return [];
+  return data as any[];
+}
+
+async function resumeOneDocument(userId: string, documentId: string, docRecord?: any) {
+  let doc = docRecord;
+  if (!doc) {
+    const { data, error } = await supabase
       .from('documents')
       .select('*')
       .eq('id', documentId)
       .eq('user_id', userId)
       .single();
 
-    if (docError || !doc) {
-      return jsonError(`Document not found: ${docError?.message}`, 404, origin);
+    if (error || !data) {
+      return { documentId, status: 'failed', error: `Document not found: ${error?.message || 'unknown'}` };
     }
+    doc = data;
+  }
 
-    if (doc.processing_status === 'completed') {
-      return jsonOk({ message: 'Document already fully processed.', documentId }, origin);
-    }
+  if (doc.processing_status === 'completed') {
+    return { documentId, status: 'completed', isComplete: true };
+  }
 
-    if (!['partial', 'processing', 'failed'].includes(doc.processing_status)) {
-      return jsonError(
-        `Document status '${doc.processing_status}' cannot be resumed.`,
-        400, origin,
-      );
-    }
+  if (!['pending', 'processing', 'partial', 'failed'].includes(doc.processing_status)) {
+    return { documentId, status: 'failed', error: `Cannot resume status ${doc.processing_status}` };
+  }
 
-    // ── 2. Re-fetch original file from Storage ───────────────────────────────
-    if (!doc.file_url) {
-      return jsonError('No file_url on document — cannot resume without original file.', 400, origin);
-    }
+  if (!doc.file_url) {
+    await markDocumentFailed(doc.id, 'No file_url for document');
+    return { documentId, status: 'failed', error: 'Missing file_url' };
+  }
 
-    const fileResp = await fetch(doc.file_url);
-    if (!fileResp.ok) {
-      return jsonError(`Failed to fetch file from storage: ${fileResp.status}`, 502, origin);
-    }
+  const fileResp = await fetch(doc.file_url);
+  if (!fileResp.ok) {
+    await markDocumentFailed(doc.id, `Failed to fetch file_url: ${fileResp.status}`);
+    return { documentId, status: 'failed', error: `Failed to fetch file: ${fileResp.status}` };
+  }
 
-    // Use binary buffer directly — avoid the wasteful base64 round-trip
-    // (ArrayBuffer → string → base64 → atob → Uint8Array costs ~3x the file size in memory)
-    const buffer = new Uint8Array(await fileResp.arrayBuffer());
+  const buffer = new Uint8Array(await fileResp.arrayBuffer());
+  const options = await extractContentFromBuffer(doc, buffer);
 
-    // ── 3. Read resume cursor ─────────────────────────────────────────────────
+  if (!options.success) {
+    const attempt = (doc.processing_metadata?.processing_attempts ?? 0) + 1;
+    const nextStatus = attempt >= MAX_RESUME_ATTEMPTS ? 'failed' : 'partial';
+    const failReason = options.error || 'Extraction failed';
+
+    await supabase.from('documents').update({
+      processing_status: nextStatus,
+      processing_error: failReason,
+      continuation_attempt: (doc.continuation_attempt ?? 0) + 1,
+      processing_metadata: {
+        ...(doc.processing_metadata ?? {}),
+        processing_attempts: attempt,
+        lastResumedAt: new Date().toISOString(),
+      },
+      updated_at: new Date().toISOString(),
+    }).eq('id', doc.id);
+
+    return { documentId: doc.id, status: nextStatus, isComplete: false, error: failReason };
+  }
+
+  const existingContent = doc.content_extracted ?? '';
+  const existingCursor = doc.processing_metadata?.resume_cursor;
+  const resumedFromStart = !existingCursor || existingCursor.lastPage === 0;
+
+  const combinedRaw = resumedFromStart
+    ? options.newContent ?? ''
+    : [existingContent, options.newContent ?? ''].filter(Boolean).join('\n\n---RESUMED---\n\n');
+
+  const finalContent = sanitizeContentForDb(combinedRaw, '');
+
+  const resumeCursor = options.updatedCursor || null;
+  const isComplete = options.isComplete;
+  const newStatus = isComplete ? 'completed' : 'partial';
+
+  await supabase.from('documents').update({
+    content_extracted: finalContent,
+    processing_status: newStatus,
+    processing_error: isComplete ? null : null,
+    continuation_attempt: (doc.continuation_attempt ?? 0) + 1,
+    processing_metadata: {
+      ...(doc.processing_metadata ?? {}),
+      resume_cursor: resumeCursor,
+      processing_attempts: (doc.processing_metadata?.processing_attempts ?? 0) + 1,
+      lastResumedAt: new Date().toISOString(),
+    },
+    updated_at: new Date().toISOString(),
+  }).eq('id', doc.id);
+
+  return {
+    documentId: doc.id,
+    status: newStatus,
+    isComplete,
+    newContentLength: options.newContent?.length ?? 0,
+    totalContentLength: finalContent.length,
+    canResumeAgain: newStatus === 'partial',
+  };
+}
+
+async function extractContentFromBuffer(doc: any, buffer: Uint8Array) {
+  try {
     const cursor: any = doc.processing_metadata?.resume_cursor ?? {};
-
     let newContent = '';
     let isComplete = false;
-    let updatedCursor: any = null;
+    let updatedCursor = null;
 
-    // ── 4. Continue extraction (local only, no LLM) ──────────────────────────
-
-    if (cursor.type === 'pdf_pages' || doc.file_type === 'application/pdf') {
-      // PDF: resume page-by-page using local pdf.js
+    if (doc.mime_type === 'application/pdf' || cursor.type === 'pdf_pages') {
       const startPage = cursor.lastPage ? cursor.lastPage + 1 : 1;
-
       const result = await extractPdfTextWithPdfjsChunked(buffer, { startPage });
-      newContent   = result.fullText;
-      isComplete   = result.isComplete;
+
+      newContent = result.fullText ?? '';
+      isComplete = result.isComplete;
 
       if (!isComplete) {
         updatedCursor = {
@@ -123,76 +210,43 @@ serve(async (req) => {
           windowsProcessed: (cursor.windowsProcessed ?? 0) + 1,
         };
       }
-
     } else {
-      // Non-PDF or unknown cursor: use local ZIP-based extraction
-      const { extractTextFromZip } = await import('../document-processor/processors/documents.ts');
-
-      newContent = await extractTextFromZip(buffer, doc.file_name ?? 'unknown');
+      newContent = await extractTextFromZip(buffer, doc.file_name || 'unknown');
       isComplete = true;
+      updatedCursor = null;
     }
 
-    // ── 5. Append + update DB ─────────────────────────────────────────────────
-    const DB_CAP     = 1 * 1024 * 1024;
-    const combined   = [doc.content_extracted, newContent].filter(Boolean).join('\n\n---RESUMED---\n\n');
-    const forDb      = combined.length > DB_CAP
-      ? combined.slice(0, DB_CAP) + '\n\n[DB_TRUNCATED]'
-      : combined;
-
-    const newStatus  = isComplete ? 'completed' : 'partial';
-    const newError   = isComplete
-      ? null
-      : `Partial: further resume required. Call /resume-processing again with documentId ${documentId}.`;
-
-    const updatedMetadata = {
-      ...(doc.processing_metadata ?? {}),
-      resume_cursor: updatedCursor ?? null,
-      lastResumedAt: new Date().toISOString(),
-    };
-
-    const { error: updateError } = await supabase
-      .from('documents')
-      .update({
-        content_extracted:  forDb,
-        processing_status:  newStatus,
-        processing_error:   newError,
-        processing_metadata: updatedMetadata,
-        updated_at:          new Date().toISOString(),
-      })
-      .eq('id', documentId);
-
-    if (updateError) {
-      return jsonError(`Failed to update document: ${updateError.message}`, 500, origin);
-    }
-
-    return jsonOk({
-      documentId,
-      processing_status: newStatus,
-      isComplete,
-      newContentLength: newContent.length,
-      totalContentLength: forDb.length,
-      processingTimeMs: Date.now() - startTime,
-      canResumeAgain: !isComplete,
-    }, origin);
-
-  } catch (err: any) {
-    try {
-      const logClient = createClient(supabaseUrl, supabaseServiceKey);
-      await logSystemError(logClient, {
-        severity: 'error',
-        source:   'resume-processing',
-        message:  err?.message ?? String(err),
-        details:  { stack: err?.stack },
-      });
-    } catch { /* ignore logging failure */ }
-
-    return jsonError(err.message ?? 'Internal Server Error', 500, origin);
+    return { success: true, newContent, updatedCursor, isComplete };
+  } catch (error: any) {
+    return { success: false, error: error?.message ?? String(error) };
   }
-});
+}
 
-// ============================================================================
-// HELPERS
-// ============================================================================
+function sanitizeContentForDb(existing: string, incoming: string) {
+  const merged = [existing || '', incoming || ''].filter(Boolean).join('\n\n---RESUMED---\n\n');
+  return merged.length > DB_CONTENT_CAP ? merged.slice(0, DB_CONTENT_CAP) + '\n\n[DB_TRUNCATED]' : merged;
+}
+
+async function markDocumentFailed(docId: string, reason: string) {
+  await supabase.from('documents').update({
+    processing_status: 'failed',
+    processing_error: reason,
+    updated_at: new Date().toISOString(),
+  }).eq('id', docId);
+}
+
+async function logError(source: string, error: any) {
+  try {
+    await logSystemError(supabase, {
+      severity: 'error',
+      source,
+      message: error?.message ?? String(error),
+      details: { stack: error?.stack ?? null },
+    });
+  } catch {
+    // ignore
+  }
+}
 
 function jsonOk(body: unknown, origin: string) {
   return new Response(JSON.stringify(body), {

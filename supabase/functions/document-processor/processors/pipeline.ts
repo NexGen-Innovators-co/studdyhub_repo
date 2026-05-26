@@ -70,8 +70,9 @@ export async function enhancedFileProcessing(file: any, geminiApiKey: string): P
         throw new Error(`Unknown processing strategy: ${fileConfig.strategy}`);
     }
 
-    // If chunked processing set status to 'processing', leave it alone
-    if (file.processing_status !== 'processing') file.processing_status = 'completed';
+    // If status is still 'processing' after strategy, then mark as completed.
+    // If strategy intentionally left it partial/failed, preserve that value.
+    if (file.processing_status === 'processing') file.processing_status = 'completed';
 
     file.processing_completed_at  = new Date().toISOString();
     file.total_processing_time_ms = Date.now() - startTime;

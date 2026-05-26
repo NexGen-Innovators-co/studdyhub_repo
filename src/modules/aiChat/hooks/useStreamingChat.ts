@@ -41,6 +41,7 @@ interface StreamingParams {
   imageUrl?: string;
   courseContext?: { id: string; code?: string; title?: string } | null;
   aiMessageIdToUpdate?: string | null;
+  userMessageIdToUpdate?: string | null;
   onThinkingStep: (step: ThinkingStep) => void;
   onContentChunk: (chunk: string) => void;
   onComplete: (finalMessage: any) => void; // Changed to any to match backend response

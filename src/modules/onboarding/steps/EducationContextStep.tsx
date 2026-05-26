@@ -25,6 +25,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 // ─── Props ──────────────────────────────────────────────────────
 export interface EducationStepData {
+  notCurrentlySchooling: boolean;
   countryId: string | null;
   countryCode: string | null;
   educationLevelId: string | null;
@@ -212,6 +213,29 @@ export const EducationContextStep: React.FC<EducationContextStepProps> = ({
     onChange({ ...data, selectedSubjectIds: Array.from(current) });
   };
 
+  const toggleNotCurrentlySchooling = () => {
+    const nextValue = !data.notCurrentlySchooling;
+
+    if (nextValue) {
+      onChange({
+        ...data,
+        notCurrentlySchooling: true,
+        countryId: null,
+        countryCode: null,
+        educationLevelId: null,
+        curriculumId: null,
+        examinationId: null,
+        selectedSubjectIds: [],
+        institutionId: null,
+        institutionName: '',
+        yearOrGrade: '',
+      });
+      return;
+    }
+
+    onChange({ ...data, notCurrentlySchooling: false });
+  };
+
   // Filter countries by search
   const filteredCountries = useMemo(() => {
     if (!countrySearch.trim()) return countries;
@@ -239,6 +263,30 @@ export const EducationContextStep: React.FC<EducationContextStepProps> = ({
       )}
 
       <div className={`space-y-5 ${compact ? 'max-h-[45vh]' : 'max-h-[60vh]'} overflow-y-auto pr-1`}>
+        <section>
+          <button
+            type="button"
+            onClick={toggleNotCurrentlySchooling}
+            className={`w-full rounded-xl border px-3 py-2.5 text-left transition-colors ${
+              data.notCurrentlySchooling
+                ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-blue-300'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                I am not currently schooling
+              </span>
+              {data.notCurrentlySchooling && <Check className="w-4 h-4 text-blue-500 flex-shrink-0" />}
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              We will personalize your workspace without school-specific settings.
+            </p>
+          </button>
+        </section>
+
+        {!data.notCurrentlySchooling && (
+          <>
         {/* ── 1. Country ── */}
         <section>
           <label className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">
@@ -451,6 +499,8 @@ export const EducationContextStep: React.FC<EducationContextStepProps> = ({
               />
             </div>
           </motion.section>
+        )}
+          </>
         )}
       </div>
     </div>

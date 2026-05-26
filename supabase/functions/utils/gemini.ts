@@ -1,6 +1,10 @@
 import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
+import { callHfChat } from './huggingface.ts';
 // supabase/functions/utils/gemini.ts
 // Shared Gemini AI helper for all edge functions
+
+const AI_PROVIDER_MODE = (Deno.env.get('AI_PROVIDER_MODE') || 'hf_only').toLowerCase();
+const USE_PAID_MODELS = AI_PROVIDER_MODE === 'paid';
 
 const MODEL_CHAIN = [
   'gemini-2.5-flash',
@@ -35,11 +39,6 @@ export async function callGemini(
   prompt: string,
   options: GeminiOptions = {}
 ): Promise<GeminiResult> {
-  const apiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GEMINI_API_KEY_VERTEX');
-  if (!apiKey) {
-    return { success: false, error: 'GEMINI_API_KEY not configured' };
-  }
-
   const {
     temperature = 0.3,
     maxOutputTokens = 4096,
@@ -47,6 +46,38 @@ export async function callGemini(
     topP = 0.95,
     systemInstruction,
   } = options;
+
+  if (!USE_PAID_MODELS) {
+    const hfResult = await callHfChat(prompt, {
+      model: Deno.env.get('HF_FALLBACK_MODEL') || Deno.env.get('HF_DEFAULT_MODEL') || 'openai/gpt-oss-120b:fastest',
+      parameters: { max_tokens: maxOutputTokens, temperature, top_p: topP },
+    });
+
+    if (hfResult.success && hfResult.text) {
+      return { success: true, text: hfResult.text, model: hfResult.model || 'huggingface' };
+    }
+
+    return { success: false, error: hfResult.error || 'HF_ONLY_FAILED' };
+  }
+
+  const apiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GEMINI_API_KEY_VERTEX');
+  if (!apiKey) {
+    const hfResult = await callHfChat(prompt, { model: Deno.env.get('HF_FALLBACK_MODEL') || Deno.env.get('HF_DEFAULT_MODEL') || 'gpt2', parameters: { max_new_tokens: maxOutputTokens, temperature } });
+    if (hfResult.success && hfResult.text) {
+      return { success: true, text: hfResult.text, model: hfResult.model || 'huggingface' };
+    }
+
+    const orResult = await callOpenRouterFallback(prompt, {
+      source: 'utils-gemini',
+      systemPrompt: systemInstruction,
+      maxTokens: maxOutputTokens,
+    });
+    if (orResult.success && orResult.content) {
+      return { success: true, text: orResult.content, model: 'openrouter/free' };
+    }
+
+    return { success: false, error: 'GEMINI_API_KEY not configured' };
+  }
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const model = MODEL_CHAIN[attempt % MODEL_CHAIN.length];
@@ -102,6 +133,13 @@ export async function callGemini(
   if (orResult.success && orResult.content) {
     return { success: true, text: orResult.content, model: 'openrouter/free' };
   }
+
+  // Hugging Face fallback if available
+  const hfResult = await callHfChat(prompt, { model: Deno.env.get('HF_FALLBACK_MODEL') || Deno.env.get('HF_DEFAULT_MODEL') || 'gpt2', parameters: { max_new_tokens: maxOutputTokens, temperature } });
+  if (hfResult.success && hfResult.text) {
+    return { success: true, text: hfResult.text, model: hfResult.model || 'huggingface' };
+  }
+
   return { success: false, error: 'ALL_MODELS_FAILED' };
 }
 
@@ -136,6 +174,6 @@ export async function callGeminiJSON<T = any>(
     const data = JSON.parse(jsonText) as T;
     return { success: true, data, model: result.model };
   } catch (err) {
-    return { success: false, error: `JSON_PARSE_ERROR: ${err.message}` };
+    return { success: false, error: `JSON_PARSE_ERROR: ${err instanceof Error ? err.message : String(err)}` };
   }
 }

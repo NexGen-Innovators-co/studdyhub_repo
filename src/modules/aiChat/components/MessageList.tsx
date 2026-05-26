@@ -523,7 +523,7 @@ export const MessageList = memo(({
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                onClick={() => onRetryClick(messages[index - 1]?.content, message.content || '')}
+                                                onClick={() => onRetryClick(messages[index - 1]?.content, message.id)}
                                                 className="text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/50"
                                             >
                                                 Retry

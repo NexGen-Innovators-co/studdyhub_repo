@@ -110,6 +110,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   // Education step state
   const [educationData, setEducationData] = useState<EducationStepData>({
+    notCurrentlySchooling: Boolean(userProfile?.learning_preferences?.not_currently_schooling),
     countryId: null,
     countryCode: null,
     educationLevelId: null,
@@ -262,8 +263,12 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       // 2. Build profile update via SECURITY DEFINER RPC (bypasses recursive RLS)
       const personalContext = buildPersonalContext();
       const chosenRole = selectedRole || 'student';
-      const resolvedSchool = educationData.institutionName.trim() || school.trim() || userProfile?.school || null;
-      const resolvedInstitutionId = educationData.institutionId || null;
+      const resolvedSchool = educationData.notCurrentlySchooling
+        ? null
+        : educationData.institutionName.trim() || school.trim() || userProfile?.school || null;
+      const resolvedInstitutionId = educationData.notCurrentlySchooling
+        ? null
+        : educationData.institutionId || null;
 
       const { data, error } = await supabase.rpc('complete_onboarding', {
         _email: userEmail || authUser?.email || null,
@@ -276,6 +281,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           explanation_style: explanationStyle,
           examples: true,
           difficulty,
+          not_currently_schooling: educationData.notCurrentlySchooling,
         },
         _user_role: chosenRole,
         _personal_context: personalContext || null,
@@ -313,7 +319,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       }
 
       // 4. Save education context (if user filled it in)
-      if (educationData.countryId) {
+      if (!educationData.notCurrentlySchooling && educationData.countryId) {
         try {
           // Upsert education profile
           const { data: eduProfile, error: eduErr } = await supabase

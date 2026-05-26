@@ -14,7 +14,10 @@ let _pdfGetDocument: any = null;
 async function getPdfGetDocument() {
   if (!_pdfGetDocument) {
     const mod = await import('https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.mjs');
-    mod.GlobalWorkerOptions.workerSrc = '';
+    // Deno Deploy has no Worker API — explicitly disable the worker so pdf.js
+    // runs synchronously in the main thread. Without this, every call throws
+    // "No GlobalWorkerOptions.workerSrc specified" and falls back to Gemini.
+    mod.GlobalWorkerOptions.workerSrc = null;
     _pdfGetDocument = mod.getDocument;
   }
   return _pdfGetDocument;
@@ -29,27 +32,50 @@ async function extractPdfTextWithGemini(
   options: { startPage?: number; prevText?: string } = {},
 ): Promise<{ fullText: string; lastPageProcessed: number; isComplete: boolean; totalPages: number }> {
   const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-  if (!geminiApiKey) throw new Error('GEMINI_API_KEY not set — cannot fall back to Gemini for PDF extraction');
+  if (!geminiApiKey) {
+    throw new Error('GEMINI_API_KEY not set — cannot fall back to Gemini for PDF extraction');
+  }
 
   const { prevText = '' } = options;
 
-  // Convert buffer to base64 for the Gemini API
-  const base64 = btoa(String.fromCharCode(...buffer));
+  function uint8ToBase64(bytes: Uint8Array): string {
+    let binary = '';
+    const chunkSize = 32768;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode(
+        ...bytes.subarray(i, Math.min(i + chunkSize, bytes.length)),
+      );
+    }
+    return btoa(binary);
+  }
 
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+  const base64 = uint8ToBase64(buffer);
 
-  const prompt = `Extract ALL text content from this PDF document. Preserve the original structure, headings, paragraphs, lists, and formatting as much as possible. Output ONLY the extracted text — no commentary, no summaries, no markdown formatting beyond what exists in the document. If there are code blocks, preserve them. If there are tables, format them readably.`;
+  const models = [
+    'gemini-3-pro-preview',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+  ];
+
+  const prompt =
+    `Extract ALL text content from this PDF document. ` +
+    `Preserve the original structure, headings, paragraphs, lists, and formatting as much as possible. ` +
+    `Output ONLY the extracted text — no commentary, no summaries, no markdown formatting beyond ` +
+    `what exists in the document. If there are code blocks, preserve them. ` +
+    `If there are tables, format them readably.`;
 
   for (const model of models) {
     try {
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
+      const apiUrl =
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
+
       const resp = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{
             parts: [
-              { inlineData: { mimeType: 'application/pdf', data: base64 } },
+              { inline_data: { mime_type: 'application/pdf', data: base64 } },
               { text: prompt },
             ],
           }],
@@ -67,25 +93,42 @@ async function extractPdfTextWithGemini(
       }
 
       const data = await resp.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      const candidate = data.candidates?.[0];
+      const text = candidate?.content?.parts?.[0]?.text;
+      const finishReason = candidate?.finishReason;
+
       if (!text) {
-        console.warn(`[pdf-gemini] ${model} returned no text content`);
+        console.warn(`[pdf-gemini] ${model} returned no text content (finishReason: ${finishReason})`);
         continue;
       }
 
-      const combined = prevText ? prevText + '\n\n---GEMINI EXTRACTED---\n\n' + text : text;
+      const combined = prevText
+        ? prevText + '\n\n---GEMINI EXTRACTED---\n\n' + text
+        : text;
+
       const cap = ENHANCED_PROCESSING_CONFIG.MAX_SINGLE_FILE_CONTENT;
       const safeTruncated = combined.length > cap
         ? combined.slice(0, cap) + '\n\n[CONTENT TRUNCATED]'
         : combined;
 
-      console.log(`[pdf-gemini] ${model} extracted ${text.length} chars`);
+      const hitTokenCap = finishReason === 'MAX_TOKENS';
+
+      if (hitTokenCap) {
+        console.warn(
+          `[pdf-gemini] ${model} hit MAX_TOKENS — extraction is incomplete. ` +
+          `Extracted ${text.length} chars. Document will be marked partial.`,
+        );
+      } else {
+        console.log(`[pdf-gemini] ${model} extracted ${text.length} chars successfully`);
+      }
+
       return {
         fullText: safeTruncated.trim(),
-        lastPageProcessed: 9999,
-        isComplete: true,
+        lastPageProcessed: hitTokenCap ? 0 : 9999,
+        isComplete: !hitTokenCap,
         totalPages: 0,
       };
+
     } catch (err: any) {
       console.warn(`[pdf-gemini] ${model} error: ${err.message}`);
       continue;
@@ -120,7 +163,11 @@ async function _extractPdfTextWithPdfjs(
   const { startPage = 1, endPage = null, prevText = '' } = options;
 
   const getDocument = await getPdfGetDocument();
-  const pdf = await getDocument({ data: buffer }).promise;
+  const pdf = await getDocument({
+    data: buffer,
+    disableWorker: true,
+    isEvalSupported: false,
+  }).promise;
   const totalPages = pdf.numPages;
   const toPage     = Math.min(
     endPage ?? startPage + ENHANCED_PROCESSING_CONFIG.PDF_PAGES_PER_CHUNK - 1,

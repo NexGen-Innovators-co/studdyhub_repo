@@ -442,7 +442,35 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
 
     const isLongContent = cleanedContent.length > 280;
 
+    const parseMediaFromContent = (content: string) => {
+      const urlRegex = /(https?:\/\/(?:www\.)?[\w\-./?&=%#]+)/gi;
+      const urls: string[] = [];
+      let match;
+      while ((match = urlRegex.exec(content))) {
+        const url = match[1];
+        if (!urls.includes(url)) urls.push(url);
+      }
 
+      const mediaFromText = urls.map((url) => {
+        const clean = url.split('?')[0].toLowerCase();
+        if (clean.match(/\.(jpg|jpeg|png|gif|webp)$/)) {
+          return { type: 'image', url };
+        }
+        if (clean.match(/\.(mp4|webm|ogg|mov|m4v)$/)) {
+          return { type: 'video', url };
+        }
+        return null;
+      }).filter(Boolean) as any[];
+
+      return mediaFromText;
+    };
+
+    const autoMedia = parseMediaFromContent(post.content || '');
+    const mediaUrls = new Set((post.media || []).map((m) => m.url));
+    const mergedMedia = [
+      ...(post.media || []),
+      ...autoMedia.filter((m) => !mediaUrls.has(m.url)),
+    ];
 
     const handleLike = async () => {
       if (!canInteract) return setShowUpgradePrompt(true);
@@ -935,7 +963,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
 
                 {/* Media */}
                 <div onClick={e => e.stopPropagation()}>
-                  <MediaDisplay media={post.media} onOpenFullscreen={setFullscreenIndex} />
+                  <MediaDisplay media={mergedMedia} onOpenFullscreen={setFullscreenIndex} />
                 </div>
 
                 {/* Footer Actions */}

@@ -121,7 +121,7 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 max-h-screen overflow-y-auto">
+      <DialogContent className="w-full h-full min-h-screen sm:min-h-[auto] max-w-full sm:max-w-3xl md:max-w-2xl bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 shadow-xl sm:rounded-xl overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-gray-200">Create Post</DialogTitle>
         </DialogHeader>
