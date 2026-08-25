@@ -63,6 +63,10 @@ mobile/.DS_Store
 
 # Database exports with secrets
 scripts/all_rls_triggers_func.json
+scripts/old_users.json
+scripts/old_profiles.json
+scripts/export/*.json
 
 # Misc
 func_analysis.json
+*.patch

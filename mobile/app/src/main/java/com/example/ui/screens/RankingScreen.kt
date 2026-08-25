@@ -45,7 +45,7 @@ fun RankingScreen(
     val activeTier = remember(currentProfile?.academicTier) {
         AcademicTier.fromKey(currentProfile?.academicTier)
     }
-    var selectedTier by remember(activeTier) { mutableStateOf(activeTier) }
+    var selectedTier by remember { mutableStateOf(AcademicTier.ALL) }
     var showClassOnly by remember { mutableStateOf(false) }
     var users by remember { mutableStateOf<List<LeaderboardUser>>(emptyList()) }
     var isOffline by remember { mutableStateOf(false) }

@@ -342,7 +342,9 @@ serve(async (req: Request) => {
         const school = getParam(url, "school", "");
         const academicLevel = getParam(url, "academic_level", "");
         const limit = getLimit(url, 50);
+        const offset = getOffset(url);
 
+        // Query profiles with user_stats for XP — show ALL users regardless of tier
         let profileQuery = supabase.from("profiles").select("id, full_name, school, points_balance, avatar_url, academic_tier, academic_level");
         if (tier && tier !== "all") profileQuery = profileQuery.eq("academic_tier", tier);
         if (school) profileQuery = profileQuery.eq("school", school);
@@ -352,18 +354,29 @@ serve(async (req: Request) => {
         if (pErr) throw pErr;
         if (!profiles || profiles.length === 0) return ok([]);
 
+        // Get actual XP from user_stats (server-authoritative)
         const userIds = profiles.map((p: any) => p.id);
-        const { data: stats } = await supabase.from("user_stats").select("user_id, total_xp").in("user_id", userIds);
-        const statsMap: Record<string, number> = {};
-        if (stats) for (const s of stats as any[]) statsMap[s.user_id] = s.total_xp || 0;
+        const { data: stats } = await supabase.from("user_stats").select("user_id, total_xp, level").in("user_id", userIds);
+        const statsMap: Record<string, { total_xp: number; level: number }> = {};
+        if (stats) for (const s of stats as any[]) statsMap[s.user_id] = { total_xp: s.total_xp || 0, level: s.level || 1 };
 
+        // Merge and sort by total_xp descending
         const merged = profiles.map((p: any) => ({
           id: p.id, full_name: p.full_name || "Scholar", school: p.school || "",
-          points_balance: p.points_balance || 0, avatar_url: p.avatar_url || null,
-          academic_tier: p.academic_tier || tier, total_xp: statsMap[p.id] || p.points_balance || 0,
+          avatar_url: p.avatar_url || null,
+          academic_tier: p.academic_tier || null,
+          total_xp: statsMap[p.id]?.total_xp || p.points_balance || 0,
+          level: statsMap[p.id]?.level || 1,
         }));
         merged.sort((a: any, b: any) => (b.total_xp || 0) - (a.total_xp || 0));
-        return ok(merged.slice(0, limit));
+
+        // Add rank and paginate
+        const ranked = merged.map((entry: any, index: number) => ({
+          ...entry,
+          rank: offset + index + 1,
+        }));
+
+        return ok(ranked.slice(0, limit));
       }
     }
 

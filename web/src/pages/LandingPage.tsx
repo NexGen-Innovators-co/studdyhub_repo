@@ -73,7 +73,11 @@ const LandingPage: React.FC = () => {
   const [currentTestimonialIndex, setCurrentTestimonialIndex] = useState(0);
   const [appStats, setAppStats] = useState({
     activeUsers: '0+',
+    totalUsers: '0',
     notesProcessed: '0+',
+    quizzesTaken: '0+',
+    documentsUploaded: '0+',
+    podcastsGenerated: '0+',
     uptime: '0%',
     userRating: '0/5',
   });
@@ -113,57 +117,36 @@ const LandingPage: React.FC = () => {
           .from('app_stats')
           .select('*')
           .eq('id', '00000000-0000-0000-0000-000000000001')
-          .single();
-
-        if (error && error.code === 'PGRST116') {
-          const defaultStats = {
-            id: '00000000-0000-0000-0000-000000000001',
-            active_users: '50K+',
-            notes_processed: '1M+',
-            uptime: '99.9%',
-            user_rating: '4.9/5',
-          };
-          const { error: insertError } = await supabase
-            .from('app_stats')
-            .insert([defaultStats]);
-
-          if (insertError) {
-            //console.error("Error inserting default app stats:", insertError);
-            setAppStats({
-              activeUsers: '50K+',
-              notesProcessed: '1M+',
-              uptime: '99.9%',
-              userRating: '4.9/5',
-            });
-          } else {
-            setAppStats({
-              activeUsers: defaultStats.active_users,
-              notesProcessed: defaultStats.notes_processed,
-              uptime: defaultStats.uptime,
-              userRating: defaultStats.user_rating,
-            });
-          }
-        } else if (error) {
-          //console.error("Error fetching app stats from Supabase:", error);
+          .single();          if (error) {
           setAppStats({
-            activeUsers: '50K+',
-            notesProcessed: '1M+',
+            activeUsers: '350+',
+            totalUsers: '354',
+            notesProcessed: '0+',
+            quizzesTaken: '0+',
+            documentsUploaded: '0+',
+            podcastsGenerated: '0+',
             uptime: '99.9%',
             userRating: '4.9/5',
           });
         } else if (data) {
           setAppStats({
             activeUsers: data.active_users || '0+',
+            totalUsers: data.total_users || '0',
             notesProcessed: data.notes_processed || '0+',
-            uptime: data.uptime || '0%',
-            userRating: data.user_rating || '0/5',
+            quizzesTaken: data.quizzes_taken || '0+',
+            documentsUploaded: data.documents_uploaded || '0+',
+            podcastsGenerated: data.podcasts_generated || '0+',
+            uptime: data.uptime || '99.9%',
+            userRating: data.user_rating || '4.9/5',
           });
-        }
-      } catch (error) {
-        //console.error("Unexpected error fetching app stats:", error);
+        }        } catch (error) {
         setAppStats({
-          activeUsers: '50K+',
-          notesProcessed: '1M+',
+          activeUsers: '350+',
+          totalUsers: '354',
+          notesProcessed: '0+',
+          quizzesTaken: '0+',
+          documentsUploaded: '0+',
+          podcastsGenerated: '0+',
           uptime: '99.9%',
           userRating: '4.9/5',
         });
@@ -487,28 +470,42 @@ const LandingPage: React.FC = () => {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-100px" }}
               transition={{ duration: 0.6, staggerChildren: 0.1 }}
-              className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8"
+              className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6"
             >
               <div className="text-center group hover:-translate-y-1 transition-transform duration-300">
                 <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-blue-100 text-blue-600 rounded-full mb-4 dark:bg-blue-900/30 dark:text-blue-400 group-hover:scale-110 transition-transform duration-300 shadow-sm">
                   <Users className="h-6 w-6 md:h-7 md:w-7" />
                 </div>
                 <div className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">{appStats.activeUsers}</div>
-                <div className="text-gray-600 dark:text-gray-400 font-medium">Active Users</div>
+                <div className="text-gray-600 dark:text-gray-400 font-medium text-sm">Active Users</div>
+              </div>
+              <div className="text-center group hover:-translate-y-1 transition-transform duration-300">
+                <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-indigo-100 text-indigo-600 rounded-full mb-4 dark:bg-indigo-900/30 dark:text-indigo-400 group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                  <Users className="h-6 w-6 md:h-7 md:w-7" />
+                </div>
+                <div className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">{appStats.totalUsers}</div>
+                <div className="text-gray-600 dark:text-gray-400 font-medium text-sm">Total Users</div>
               </div>
               <div className="text-center group hover:-translate-y-1 transition-transform duration-300">
                 <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-green-100 text-green-600 rounded-full mb-4 dark:bg-green-900/30 dark:text-green-400 group-hover:scale-110 transition-transform duration-300 shadow-sm">
                   <FileText className="h-6 w-6 md:h-7 md:w-7" />
                 </div>
                 <div className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">{appStats.notesProcessed}</div>
-                <div className="text-gray-600 dark:text-gray-400 font-medium">Notes Processed</div>
+                <div className="text-gray-600 dark:text-gray-400 font-medium text-sm">Notes Created</div>
               </div>
               <div className="text-center group hover:-translate-y-1 transition-transform duration-300">
                 <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-purple-100 text-purple-600 rounded-full mb-4 dark:bg-purple-900/30 dark:text-purple-400 group-hover:scale-110 transition-transform duration-300 shadow-sm">
-                  <TrendingUp className="h-6 w-6 md:h-7 md:w-7" />
+                  <Zap className="h-6 w-6 md:h-7 md:w-7" />
                 </div>
-                <div className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">{appStats.uptime}</div>
-                <div className="text-gray-600 dark:text-gray-400 font-medium">Uptime</div>
+                <div className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">{appStats.quizzesTaken}</div>
+                <div className="text-gray-600 dark:text-gray-400 font-medium text-sm">Quizzes Taken</div>
+              </div>
+              <div className="text-center group hover:-translate-y-1 transition-transform duration-300">
+                <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-orange-100 text-orange-600 rounded-full mb-4 dark:bg-orange-900/30 dark:text-orange-400 group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                  <Mic className="h-6 w-6 md:h-7 md:w-7" />
+                </div>
+                <div className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">{appStats.podcastsGenerated}</div>
+                <div className="text-gray-600 dark:text-gray-400 font-medium text-sm">Podcasts</div>
               </div>
               <div className="text-center group hover:-translate-y-1 transition-transform duration-300">
                 <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-yellow-100 text-yellow-600 rounded-full mb-4 dark:bg-yellow-900/30 dark:text-yellow-400 group-hover:scale-110 transition-transform duration-300 shadow-sm">
@@ -519,8 +516,8 @@ const LandingPage: React.FC = () => {
                     ? `${liveRatingStats.average}/5`
                     : appStats.userRating}
                 </div>
-                <div className="text-gray-600 dark:text-gray-400 font-medium">
-                  User Rating{liveRatingStats && liveRatingStats.count > 0 ? ` (${liveRatingStats.count})` : ''}
+                <div className="text-gray-600 dark:text-gray-400 font-medium text-sm">
+                  Rating{liveRatingStats && liveRatingStats.count > 0 ? ` (${liveRatingStats.count})` : ''}
                 </div>
               </div>
             </motion.div>

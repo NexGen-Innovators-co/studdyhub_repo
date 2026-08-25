@@ -23,6 +23,14 @@ enum class AcademicTier(
     val mascotRole: String,
     val emoji: String
 ) {
+    ALL(
+        key = "all",
+        displayName = "All",
+        subtitle = "Every User",
+        tagLine = "Global Ranking",
+        mascotRole = "",
+        emoji = "🌍"
+    ),
     EXPLORER(
         key = "explorer",
         displayName = "Explorer",
@@ -50,13 +58,14 @@ enum class AcademicTier(
 
     companion object {
         fun fromKey(key: String?): AcademicTier {
-            val normalized = key?.lowercase()?.trim() ?: return ACHIEVER
+            val normalized = key?.lowercase()?.trim() ?: return ALL
             return when {
+                normalized.contains("all") -> ALL
                 normalized.contains("explorer") || normalized.contains("basic") || normalized.contains("jhs") || normalized.contains("primary") -> EXPLORER
                 normalized.contains("scholar") || normalized.contains("undergraduate") || normalized.contains("graduate") ||
                     normalized.contains("phd") || normalized.contains("post-doc") || normalized.contains("self-learner") || normalized.contains("university") -> SCHOLAR
                 normalized.contains("achiever") || normalized.contains("high_school") || normalized.contains("shs") || normalized.contains("wassce") -> ACHIEVER
-                else -> ACHIEVER
+                else -> ALL
             }
         }
     }

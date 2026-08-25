@@ -1,10 +1,10 @@
-# Developer Onboarding Guide
+# Android Developer Guide
 
-> **Read this before writing any code.** This document is the single source of truth for the current state of the project.
+> **For mobile-specific docs.** See `../DEVELOPER.md` for the full monorepo architecture.
 
 ## Project Overview
 
-**StuddyHub** is an AI-powered study workspace — an Android app with a Supabase backend. It supports notes, quizzes, flashcards, class recordings, AI podcasts, schedules, live multiplayer quizzes, an agentic AI tutor, and a social study community.
+**StuddyHub** Android app — part of a monorepo with a web app (`../web/`) sharing the same Supabase backend.
 
 **Stack:** Kotlin + Jetpack Compose · Room (local DB) · Supabase (Postgres + Edge Functions) · Gemini AI
 
