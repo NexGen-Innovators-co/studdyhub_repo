@@ -222,14 +222,29 @@ export class AgenticCore {
     // Get recent conversation from current session
     // Use the enhanced config for max history
     const MAX_HISTORY = CONFIG.MAX_CONVERSATION_HISTORY;
-    const { data: recentMessages } = await this.supabase
+    const { data: recentMessages, error } = await this.supabase
       .from('chat_messages')
-      .select('content, role, timestamp, attached_document_ids, attached_note_ids')
+      .select('content, role, timestamp, attached_document_ids, attached_note_ids, conversation_context')
       .eq('session_id', sessionId)
       .eq('user_id', userId)
       .eq('is_error', false)
       .order('timestamp', { ascending: false })
       .limit(MAX_HISTORY);
+
+    console.log('[HISTORY_DIAG] agenticCore.getWorkingMemory', {
+      sessionId,
+      userId,
+      maxHistoryConfigUsed: MAX_HISTORY,
+      // Confirms whether the ENHANCED_PROCESSING_CONFIG cross-module reference
+      // resolved, or silently fell back to DEFAULT_ENHANCED_PROCESSING_CONFIG.
+      configSource: (typeof ENHANCED_PROCESSING_CONFIG !== 'undefined' && ENHANCED_PROCESSING_CONFIG) ? 'shared ENHANCED_PROCESSING_CONFIG' : 'DEFAULT_ENHANCED_PROCESSING_CONFIG fallback',
+      returnedCount: recentMessages?.length || 0,
+      error: error || null
+    });
+
+    if (error) {
+      console.error('[HISTORY_DIAG] getWorkingMemory query error', { sessionId, userId, error });
+    }
 
     return {
       recentMessages: recentMessages || [],
@@ -275,7 +290,7 @@ export class AgenticCore {
       .eq('user_id', userId)
       .gte('last_message_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
       .order('last_message_at', { ascending: false })
-      .limit(10);
+      .limit(20);
 
     return {
       relevantSessions: this.filterRelevantSessions(pastSessions, topics),
@@ -437,8 +452,11 @@ export class AgenticCore {
       intents.push('content_creation');
     }
 
-    // Retrieval patterns
-    if (/show|find|get|retrieve|search|look for|where is/i.test(query)) {
+    // Retrieval patterns — P1-3: added bare "check"/"see if"/"is there"/"do i
+    // have" etc. so "check studdyhub and see if it is there" is classified as
+    // retrieval instead of general_query (previously skipped the DB lookup and
+    // falsely claimed nothing existed).
+    if (/show|find|get|retrieve|search|look for|look up|where is|where's|check|see if|is there|do i have|have i|pull up|fetch|is it there|does (studdyhub|my account)/i.test(query)) {
       intents.push('information_retrieval');
     }
 

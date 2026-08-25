@@ -1,0 +1,322 @@
+[
+    {
+        "name":  "update_admin_system_settings_updated_at",
+        "table_name":  "admin_system_settings",
+        "definition":  "CREATE TRIGGER update_admin_system_settings_updated_at BEFORE UPDATE ON public.admin_system_settings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()"
+    },
+    {
+        "name":  "update_admin_users_updated_at",
+        "table_name":  "admin_users",
+        "definition":  "CREATE TRIGGER update_admin_users_updated_at BEFORE UPDATE ON public.admin_users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()"
+    },
+    {
+        "name":  "cleanup_cohosts_on_podcast_end",
+        "table_name":  "ai_podcasts",
+        "definition":  "CREATE TRIGGER cleanup_cohosts_on_podcast_end AFTER UPDATE ON public.ai_podcasts FOR EACH ROW EXECUTE FUNCTION cleanup_podcast_cohosts()"
+    },
+    {
+        "name":  "update_app_stats_updated_at",
+        "table_name":  "app_stats",
+        "definition":  "CREATE TRIGGER update_app_stats_updated_at BEFORE UPDATE ON public.app_stats FOR EACH ROW EXECUTE FUNCTION update_timestamp()"
+    },
+    {
+        "name":  "update_calendar_integrations_updated_at",
+        "table_name":  "calendar_integrations",
+        "definition":  "CREATE TRIGGER update_calendar_integrations_updated_at BEFORE UPDATE ON public.calendar_integrations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()"
+    },
+    {
+        "name":  "chat_message_insert_count_trigger",
+        "table_name":  "chat_messages",
+        "definition":  "CREATE TRIGGER chat_message_insert_count_trigger AFTER INSERT ON public.chat_messages FOR EACH ROW EXECUTE FUNCTION update_chat_session_message_count()"
+    },
+    {
+        "name":  "update_activity_on_chat_create_trigger",
+        "table_name":  "chat_sessions",
+        "definition":  "CREATE TRIGGER update_activity_on_chat_create_trigger AFTER INSERT ON public.chat_sessions FOR EACH ROW EXECUTE FUNCTION update_activity_on_chat_create()"
+    },
+    {
+        "name":  "trg_recalculate_course_progress",
+        "table_name":  "course_progress",
+        "definition":  "CREATE TRIGGER trg_recalculate_course_progress AFTER INSERT OR DELETE OR UPDATE ON public.course_progress FOR EACH ROW EXECUTE FUNCTION trigger_recalculate_course_progress()"
+    },
+    {
+        "name":  "trg_update_enrollment_last_accessed",
+        "table_name":  "course_progress",
+        "definition":  "CREATE TRIGGER trg_update_enrollment_last_accessed AFTER INSERT OR UPDATE ON public.course_progress FOR EACH ROW EXECUTE FUNCTION trigger_update_enrollment_last_accessed()"
+    },
+    {
+        "name":  "update_activity_on_document_create_trigger",
+        "table_name":  "documents",
+        "definition":  "CREATE TRIGGER update_activity_on_document_create_trigger AFTER INSERT ON public.documents FOR EACH ROW EXECUTE FUNCTION update_activity_on_document_create()"
+    },
+    {
+        "name":  "update_documents_updated_at",
+        "table_name":  "documents",
+        "definition":  "CREATE TRIGGER update_documents_updated_at BEFORE UPDATE ON public.documents FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()"
+    },
+    {
+        "name":  "update_flashcards_updated_at",
+        "table_name":  "flashcards",
+        "definition":  "CREATE TRIGGER update_flashcards_updated_at BEFORE UPDATE ON public.flashcards FOR EACH ROW EXECUTE FUNCTION update_flashcard_updated_at()"
+    },
+    {
+        "name":  "trg_game_progress_updated_at",
+        "table_name":  "game_progress",
+        "definition":  "CREATE TRIGGER trg_game_progress_updated_at BEFORE UPDATE ON public.game_progress FOR EACH ROW EXECUTE FUNCTION touch_game_progress_updated_at()"
+    },
+    {
+        "name":  "trg_sync_institution_education",
+        "table_name":  "institution_members",
+        "definition":  "CREATE TRIGGER trg_sync_institution_education AFTER INSERT OR UPDATE ON public.institution_members FOR EACH ROW EXECUTE FUNCTION sync_institution_to_education_profile()"
+    },
+    {
+        "name":  "update_live_quiz_sessions_updated_at",
+        "table_name":  "live_quiz_sessions",
+        "definition":  "CREATE TRIGGER update_live_quiz_sessions_updated_at BEFORE UPDATE ON public.live_quiz_sessions FOR EACH ROW EXECUTE FUNCTION update_updated_at()"
+    },
+    {
+        "name":  "trg_update_app_stats_on_notes",
+        "table_name":  "notes",
+        "definition":  "CREATE TRIGGER trg_update_app_stats_on_notes AFTER INSERT OR DELETE ON public.notes FOR EACH STATEMENT EXECUTE FUNCTION update_app_stats_function()"
+    },
+    {
+        "name":  "trg_update_app_stats_on_notes_update",
+        "table_name":  "notes",
+        "definition":  "CREATE TRIGGER trg_update_app_stats_on_notes_update AFTER UPDATE ON public.notes FOR EACH STATEMENT EXECUTE FUNCTION update_app_stats_function()"
+    },
+    {
+        "name":  "update_activity_on_note_create_trigger",
+        "table_name":  "notes",
+        "definition":  "CREATE TRIGGER update_activity_on_note_create_trigger AFTER INSERT ON public.notes FOR EACH ROW EXECUTE FUNCTION update_activity_on_note_create()"
+    },
+    {
+        "name":  "update_notification_preferences_updated_at",
+        "table_name":  "notification_preferences",
+        "definition":  "CREATE TRIGGER update_notification_preferences_updated_at BEFORE UPDATE ON public.notification_preferences FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()"
+    },
+    {
+        "name":  "update_notification_subscriptions_updated_at",
+        "table_name":  "notification_subscriptions",
+        "definition":  "CREATE TRIGGER update_notification_subscriptions_updated_at BEFORE UPDATE ON public.notification_subscriptions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()"
+    },
+    {
+        "name":  "trigger_send_push_notification",
+        "table_name":  "notifications",
+        "definition":  "CREATE TRIGGER trigger_send_push_notification AFTER INSERT ON public.notifications FOR EACH ROW EXECUTE FUNCTION send_push_notification()"
+    },
+    {
+        "name":  "trg_platform_updates_updated_at",
+        "table_name":  "platform_updates",
+        "definition":  "CREATE TRIGGER trg_platform_updates_updated_at BEFORE UPDATE ON public.platform_updates FOR EACH ROW EXECUTE FUNCTION update_platform_updates_updated_at()"
+    },
+    {
+        "name":  "on_profile_created_assign_referral",
+        "table_name":  "profiles",
+        "definition":  "CREATE TRIGGER on_profile_created_assign_referral BEFORE INSERT ON public.profiles FOR EACH ROW WHEN ((new.referral_code IS NULL)) EXECUTE FUNCTION assign_referral_code()"
+    },
+    {
+        "name":  "trg_sync_profile_to_social",
+        "table_name":  "profiles",
+        "definition":  "CREATE TRIGGER trg_sync_profile_to_social AFTER UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION sync_profile_to_social()"
+    },
+    {
+        "name":  "trg_update_app_stats_on_profiles",
+        "table_name":  "profiles",
+        "definition":  "CREATE TRIGGER trg_update_app_stats_on_profiles AFTER INSERT OR DELETE ON public.profiles FOR EACH STATEMENT EXECUTE FUNCTION update_app_stats_function()"
+    },
+    {
+        "name":  "trg_update_app_stats_on_profiles_update",
+        "table_name":  "profiles",
+        "definition":  "CREATE TRIGGER trg_update_app_stats_on_profiles_update AFTER UPDATE ON public.profiles FOR EACH STATEMENT EXECUTE FUNCTION update_app_stats_function()"
+    },
+    {
+        "name":  "update_activity_on_quiz_attempt_trigger",
+        "table_name":  "quiz_attempts",
+        "definition":  "CREATE TRIGGER update_activity_on_quiz_attempt_trigger AFTER INSERT ON public.quiz_attempts FOR EACH ROW EXECUTE FUNCTION update_activity_on_quiz_attempt()"
+    },
+    {
+        "name":  "trg_bookmark_signal",
+        "table_name":  "social_bookmarks",
+        "definition":  "CREATE TRIGGER trg_bookmark_signal AFTER INSERT ON public.social_bookmarks FOR EACH ROW EXECUTE FUNCTION record_bookmark_signal()"
+    },
+    {
+        "name":  "trg_social_chat_message_reads_after_ins_upd",
+        "table_name":  "social_chat_message_reads",
+        "definition":  "CREATE TRIGGER trg_social_chat_message_reads_after_ins_upd AFTER INSERT OR UPDATE ON public.social_chat_message_reads FOR EACH ROW EXECUTE FUNCTION _social_chat_message_reads_propagate()"
+    },
+    {
+        "name":  "trigger_chat_message_updated_at",
+        "table_name":  "social_chat_messages",
+        "definition":  "CREATE TRIGGER trigger_chat_message_updated_at BEFORE UPDATE ON public.social_chat_messages FOR EACH ROW EXECUTE FUNCTION update_chat_message_timestamp()"
+    },
+    {
+        "name":  "trigger_notify_chat_message",
+        "table_name":  "social_chat_messages",
+        "definition":  "CREATE TRIGGER trigger_notify_chat_message AFTER INSERT ON public.social_chat_messages FOR EACH ROW EXECUTE FUNCTION notify_chat_message()"
+    },
+    {
+        "name":  "trigger_notify_group_message",
+        "table_name":  "social_chat_messages",
+        "definition":  "CREATE TRIGGER trigger_notify_group_message AFTER INSERT ON public.social_chat_messages FOR EACH ROW EXECUTE FUNCTION notify_group_message()"
+    },
+    {
+        "name":  "trigger_update_session_last_message",
+        "table_name":  "social_chat_messages",
+        "definition":  "CREATE TRIGGER trigger_update_session_last_message AFTER INSERT ON public.social_chat_messages FOR EACH ROW EXECUTE FUNCTION update_session_last_message()"
+    },
+    {
+        "name":  "update_chat_session_timestamp_trigger",
+        "table_name":  "social_chat_messages",
+        "definition":  "CREATE TRIGGER update_chat_session_timestamp_trigger AFTER INSERT ON public.social_chat_messages FOR EACH ROW EXECUTE FUNCTION update_chat_session_timestamp()"
+    },
+    {
+        "name":  "on_social_comment_insert",
+        "table_name":  "social_comments",
+        "definition":  "CREATE TRIGGER on_social_comment_insert AFTER INSERT ON public.social_comments FOR EACH ROW EXECUTE FUNCTION handle_new_comment_notification()"
+    },
+    {
+        "name":  "trg_comment_signal",
+        "table_name":  "social_comments",
+        "definition":  "CREATE TRIGGER trg_comment_signal AFTER INSERT ON public.social_comments FOR EACH ROW EXECUTE FUNCTION record_comment_signal()"
+    },
+    {
+        "name":  "trigger_update_comment_counts",
+        "table_name":  "social_comments",
+        "definition":  "CREATE TRIGGER trigger_update_comment_counts AFTER INSERT OR DELETE ON public.social_comments FOR EACH ROW EXECUTE FUNCTION update_comment_counts()"
+    },
+    {
+        "name":  "update_activity_on_group_comment_trigger",
+        "table_name":  "social_comments",
+        "definition":  "CREATE TRIGGER update_activity_on_group_comment_trigger AFTER INSERT ON public.social_comments FOR EACH ROW EXECUTE FUNCTION update_activity_on_group_interaction()"
+    },
+    {
+        "name":  "trigger_notify_new_follower",
+        "table_name":  "social_follows",
+        "definition":  "CREATE TRIGGER trigger_notify_new_follower AFTER INSERT ON public.social_follows FOR EACH ROW EXECUTE FUNCTION notify_new_follower()"
+    },
+    {
+        "name":  "trigger_update_follow_counts",
+        "table_name":  "social_follows",
+        "definition":  "CREATE TRIGGER trigger_update_follow_counts AFTER INSERT OR DELETE ON public.social_follows FOR EACH ROW EXECUTE FUNCTION update_follow_counts()"
+    },
+    {
+        "name":  "trg_social_group_members_after_del",
+        "table_name":  "social_group_members",
+        "definition":  "CREATE TRIGGER trg_social_group_members_after_del AFTER DELETE ON public.social_group_members FOR EACH ROW EXECUTE FUNCTION _social_group_members_propagate()"
+    },
+    {
+        "name":  "trg_social_group_members_after_ins",
+        "table_name":  "social_group_members",
+        "definition":  "CREATE TRIGGER trg_social_group_members_after_ins AFTER INSERT ON public.social_group_members FOR EACH ROW EXECUTE FUNCTION _social_group_members_propagate()"
+    },
+    {
+        "name":  "trg_social_group_members_after_upd",
+        "table_name":  "social_group_members",
+        "definition":  "CREATE TRIGGER trg_social_group_members_after_upd AFTER UPDATE OF group_id, status ON public.social_group_members FOR EACH ROW EXECUTE FUNCTION _social_group_members_propagate()"
+    },
+    {
+        "name":  "trigger_notify_group_invite",
+        "table_name":  "social_group_members",
+        "definition":  "CREATE TRIGGER trigger_notify_group_invite AFTER INSERT ON public.social_group_members FOR EACH ROW EXECUTE FUNCTION notify_group_invite()"
+    },
+    {
+        "name":  "trigger_update_group_member_counts",
+        "table_name":  "social_group_members",
+        "definition":  "CREATE TRIGGER trigger_update_group_member_counts AFTER INSERT OR DELETE ON public.social_group_members FOR EACH ROW EXECUTE FUNCTION update_group_member_counts()"
+    },
+    {
+        "name":  "on_social_like_insert",
+        "table_name":  "social_likes",
+        "definition":  "CREATE TRIGGER on_social_like_insert AFTER INSERT ON public.social_likes FOR EACH ROW EXECUTE FUNCTION handle_new_like_notification()"
+    },
+    {
+        "name":  "trg_like_signal",
+        "table_name":  "social_likes",
+        "definition":  "CREATE TRIGGER trg_like_signal AFTER INSERT ON public.social_likes FOR EACH ROW EXECUTE FUNCTION record_like_signal()"
+    },
+    {
+        "name":  "trg_unlike_signal",
+        "table_name":  "social_likes",
+        "definition":  "CREATE TRIGGER trg_unlike_signal AFTER DELETE ON public.social_likes FOR EACH ROW EXECUTE FUNCTION remove_like_signal()"
+    },
+    {
+        "name":  "trigger_update_like_counts",
+        "table_name":  "social_likes",
+        "definition":  "CREATE TRIGGER trigger_update_like_counts AFTER INSERT OR DELETE ON public.social_likes FOR EACH ROW EXECUTE FUNCTION update_like_counts()"
+    },
+    {
+        "name":  "trigger_update_hashtag_counts",
+        "table_name":  "social_post_hashtags",
+        "definition":  "CREATE TRIGGER trigger_update_hashtag_counts AFTER INSERT OR DELETE ON public.social_post_hashtags FOR EACH ROW EXECUTE FUNCTION update_hashtag_counts()"
+    },
+    {
+        "name":  "trg_view_signal",
+        "table_name":  "social_post_views",
+        "definition":  "CREATE TRIGGER trg_view_signal AFTER INSERT ON public.social_post_views FOR EACH ROW EXECUTE FUNCTION record_view_signal()"
+    },
+    {
+        "name":  "trigger_notify_post_mention",
+        "table_name":  "social_posts",
+        "definition":  "CREATE TRIGGER trigger_notify_post_mention AFTER INSERT ON public.social_posts FOR EACH ROW EXECUTE FUNCTION notify_post_mention()"
+    },
+    {
+        "name":  "trigger_update_post_counts",
+        "table_name":  "social_posts",
+        "definition":  "CREATE TRIGGER trigger_update_post_counts AFTER INSERT OR DELETE ON public.social_posts FOR EACH ROW EXECUTE FUNCTION update_post_counts()"
+    },
+    {
+        "name":  "update_activity_on_post_create_trigger",
+        "table_name":  "social_posts",
+        "definition":  "CREATE TRIGGER update_activity_on_post_create_trigger AFTER INSERT ON public.social_posts FOR EACH ROW EXECUTE FUNCTION update_activity_on_post_create()"
+    },
+    {
+        "name":  "trg_share_signal",
+        "table_name":  "social_shares",
+        "definition":  "CREATE TRIGGER trg_share_signal AFTER INSERT ON public.social_shares FOR EACH ROW EXECUTE FUNCTION record_share_signal()"
+    },
+    {
+        "name":  "trigger_notify_post_share",
+        "table_name":  "social_shares",
+        "definition":  "CREATE TRIGGER trigger_notify_post_share AFTER INSERT ON public.social_shares FOR EACH ROW EXECUTE FUNCTION notify_post_share()"
+    },
+    {
+        "name":  "trg_sync_social_to_profile",
+        "table_name":  "social_users",
+        "definition":  "CREATE TRIGGER trg_sync_social_to_profile AFTER UPDATE ON public.social_users FOR EACH ROW EXECUTE FUNCTION sync_social_to_profile()"
+    },
+    {
+        "name":  "trigger_sync_last_active_on_login",
+        "table_name":  "social_users",
+        "definition":  "CREATE TRIGGER trigger_sync_last_active_on_login BEFORE UPDATE ON public.social_users FOR EACH ROW EXECUTE FUNCTION sync_last_active_on_login()"
+    },
+    {
+        "name":  "update_subscriptions_updated_at",
+        "table_name":  "subscriptions",
+        "definition":  "CREATE TRIGGER update_subscriptions_updated_at BEFORE UPDATE ON public.subscriptions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()"
+    },
+    {
+        "name":  "trg_system_error_logs_updated_at",
+        "table_name":  "system_error_logs",
+        "definition":  "CREATE TRIGGER trg_system_error_logs_updated_at BEFORE UPDATE ON public.system_error_logs FOR EACH ROW EXECUTE FUNCTION update_system_error_logs_updated_at()"
+    },
+    {
+        "name":  "update_system_settings_updated_at",
+        "table_name":  "system_settings",
+        "definition":  "CREATE TRIGGER update_system_settings_updated_at BEFORE UPDATE ON public.system_settings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()"
+    },
+    {
+        "name":  "update_engagement_tier_trigger",
+        "table_name":  "user_activity_tracking",
+        "definition":  "CREATE TRIGGER update_engagement_tier_trigger BEFORE UPDATE ON public.user_activity_tracking FOR EACH ROW EXECUTE FUNCTION update_engagement_tier()"
+    },
+    {
+        "name":  "trg_user_learning_goals_updated_at",
+        "table_name":  "user_learning_goals",
+        "definition":  "CREATE TRIGGER trg_user_learning_goals_updated_at BEFORE UPDATE ON public.user_learning_goals FOR EACH ROW EXECUTE FUNCTION touch_user_learning_goals_updated_at()"
+    },
+    {
+        "name":  "update_user_stats_updated_at",
+        "table_name":  "user_stats",
+        "definition":  "CREATE TRIGGER update_user_stats_updated_at BEFORE UPDATE ON public.user_stats FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()"
+    }
+]

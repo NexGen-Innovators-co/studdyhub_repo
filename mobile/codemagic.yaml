@@ -1,0 +1,29 @@
+workflows:
+  android-build:
+    name: Build StuddyHub Android APK
+    max_build_duration: 30
+    instance_type: mac_mini_m1
+    environment:
+      java: 17
+      vars:
+        GEMINI_API_KEY: ${GEMINI_API_KEY}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+      groups:
+        - studdyhub
+    scripts:
+      - name: Set executable permissions
+        script: |
+          chmod +x gradlew
+      - name: Create .env file
+        script: |
+          cat > .env << EOF
+          GEMINI_API_KEY=$GEMINI_API_KEY
+          VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+          VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+          EOF
+      - name: Build Debug APK
+        script: |
+          ./gradlew assembleDebug --stacktrace
+    artifacts:
+      - app/build/outputs/apk/debug/*.apk

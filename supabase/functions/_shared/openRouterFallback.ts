@@ -93,12 +93,7 @@ export async function callOpenRouterFallback(
   input: string | Array<{ role: string; parts: Array<{ text?: string; inlineData?: any }> }>,
   options: OpenRouterOptions = {},
 ): Promise<OpenRouterResult> {
-  const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
-  if (!openRouterApiKey) {
-    return { success: false, error: 'No OPENROUTER_API_KEY configured' };
-  }
-
-  const tag = options.source ? `[OpenRouter:${options.source}]` : '[OpenRouter]';
+  const tag = options.source ? `[MultiFallback:${options.source}]` : '[MultiFallback]';
 
   // Build messages
   let messages: Array<{ role: string; content: string }>;
@@ -113,10 +108,57 @@ export async function callOpenRouterFallback(
   }
 
   if (messages.length === 0) {
-    return { success: false, error: 'No text content to send to OpenRouter' };
+    return { success: false, error: 'No text content to send to fallback providers' };
   }
 
-  console.log(`${tag} All Gemini models failed. Falling back to OpenRouter (${messages.length} messages)...`);
+  // 1. Try Groq API first if GROQ_API_KEY is available (Ultra-fast, high rate limit)
+  const rawGroq = Deno.env.get('GROQ_API_KEY') || '';
+  const rawXai = Deno.env.get('XAI_API_KEY') || Deno.env.get('GROK_API_KEY') || Deno.env.get('GROK_API_TOKEN') || '';
+  const groqApiKey = rawGroq.startsWith('gsk_') ? rawGroq : (rawXai.startsWith('gsk_') ? rawXai : rawGroq);
+
+  if (groqApiKey) {
+    const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it'];
+    for (const model of groqModels) {
+      try {
+        console.log(`${tag} Trying Groq fallback model: ${model}...`);
+        const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${groqApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            max_tokens: Math.min(options.maxTokens || 4096, 4096),
+            temperature: options.temperature ?? 0.7
+          })
+        });
+
+        if (resp.ok) {
+          const data = await resp.json();
+          const content = data.choices?.[0]?.message?.content;
+          if (content) {
+            console.log(`${tag} Groq fallback succeeded with ${model} (${content.length} chars)`);
+            return { success: true, content };
+          }
+        } else {
+          const errText = await resp.text();
+          console.warn(`${tag} Groq ${model} status ${resp.status}: ${errText.substring(0, 200)}`);
+        }
+      } catch (err) {
+        console.error(`${tag} Groq exception with ${model}:`, err);
+      }
+    }
+  }
+
+  // 2. Fall back to OpenRouter free tier
+  const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
+  if (!openRouterApiKey) {
+    return { success: false, error: 'No GROQ_API_KEY or OPENROUTER_API_KEY configured' };
+  }
+
+  console.log(`${tag} All Groq models unavailable/exhausted. Falling back to OpenRouter (${messages.length} messages)...`);
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -138,18 +180,18 @@ export async function callOpenRouterFallback(
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content;
       if (content) {
-        console.log(`${tag} Fallback succeeded (${content.length} chars)`);
+        console.log(`${tag} OpenRouter fallback succeeded (${content.length} chars)`);
         return { success: true, content };
       }
-      console.warn(`${tag} Response had no content`);
+      console.warn(`${tag} OpenRouter response had no content`);
       return { success: false, error: 'OpenRouter returned empty content' };
     } else {
       const errText = await response.text();
-      console.error(`${tag} HTTP ${response.status}: ${errText.substring(0, 300)}`);
+      console.error(`${tag} OpenRouter HTTP ${response.status}: ${errText.substring(0, 300)}`);
       return { success: false, error: `OpenRouter HTTP ${response.status}` };
     }
   } catch (err) {
-    console.error(`${tag} Network error:`, err);
+    console.error(`${tag} OpenRouter network error:`, err);
     return { success: false, error: `OpenRouter network error: ${String(err)}` };
   }
 }

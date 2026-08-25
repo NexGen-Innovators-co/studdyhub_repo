@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getEducationContext, formatEducationContextForPrompt } from '../_shared/educationContext.ts';
 import { logSystemError } from '../_shared/errorLogger.ts';
 import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
+import { UserContextService } from '../gemini-chat/context-service.ts';
 
 // CORS headers for browser access
 const CORS_HEADERS = {
@@ -13,11 +14,8 @@ const CORS_HEADERS = {
 
 // Model fallback chain for quota/rate-limit resilience
 const MODEL_CHAIN = [
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
-  'gemini-2.5-pro',
-  'gemini-3-pro-preview',
+  'gemini-3.5-flash',
+  'gemini-3.6-flash',
 ];
 
 async function callGeminiWithModelChain(prompt: string, apiKey: string, config: any = {}): Promise<{ text: string; model: string }> {
@@ -96,8 +94,9 @@ serve(async (req) => {
       throw new Error('Missing stats data');
     }
 
-    // Fetch education context if auth is available
+    // Fetch education context and cross-table correlations if auth is available
     let educationBlock = '';
+    let crossCorrelationsBlock = '';
     try {
       const supabaseUrl = Deno.env.get('SUPABASE_URL');
       const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -111,10 +110,16 @@ serve(async (req) => {
           if (eduCtx) {
             educationBlock = `\n\n${formatEducationContextForPrompt(eduCtx)}\nUse this education context to make insights curriculum-specific and exam-relevant.\n`;
           }
+
+          const contextService = new UserContextService(supabaseUrl, supabaseServiceKey);
+          const fullCtx = await contextService.getUserContext(user.id);
+          if (fullCtx && Array.isArray(fullCtx.crossCorrelations) && fullCtx.crossCorrelations.length > 0) {
+            crossCorrelationsBlock = `\n\nSYNTHESIZED CROSS-TABLE CORRELATIONS:\n` + JSON.stringify(fullCtx.crossCorrelations, null, 2);
+          }
         }
       }
-    } catch (_eduErr) {
-      // Non-critical — continue without education context
+    } catch (_ctxErr) {
+      // Non-critical — continue without context
     }
 
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GEMINI_API_KEY_VERTEX');
@@ -132,6 +137,7 @@ serve(async (req) => {
       USER PROFILE:
       ${JSON.stringify(userProfile || {}, null, 2)}
       ${educationBlock}
+      ${crossCorrelationsBlock}
       
       OUTPUT REQUIREMENTS:
       - Return ONLY a valid JSON array.

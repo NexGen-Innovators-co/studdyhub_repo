@@ -1,0 +1,794 @@
+[
+    {
+        "table_name":  "achievements",
+        "column_name":  "badge_id",
+        "foreign_table":  "badges",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "admin_activity_logs",
+        "column_name":  "admin_id",
+        "foreign_table":  "admin_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "admin_system_settings",
+        "column_name":  "updated_by",
+        "foreign_table":  "admin_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "ai_user_memory",
+        "column_name":  "source_session_id",
+        "foreign_table":  "chat_sessions",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "audio_processing_results",
+        "column_name":  "document_id",
+        "foreign_table":  "documents",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "audio_segments",
+        "column_name":  "podcast_id",
+        "foreign_table":  "ai_podcasts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "chat_messages",
+        "column_name":  "user_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "chat_sessions",
+        "column_name":  "default_folder_id",
+        "foreign_table":  "document_folders",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "chat_sessions",
+        "column_name":  "user_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "class_recordings",
+        "column_name":  "document_id",
+        "foreign_table":  "documents",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "class_recordings",
+        "column_name":  "user_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "content_moderation_queue",
+        "column_name":  "moderator_id",
+        "foreign_table":  "admin_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "course_enrollments",
+        "column_name":  "course_id",
+        "foreign_table":  "courses",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "course_enrollments",
+        "column_name":  "user_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "course_materials",
+        "column_name":  "document_id",
+        "foreign_table":  "documents",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "course_materials",
+        "column_name":  "course_id",
+        "foreign_table":  "courses",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "course_progress",
+        "column_name":  "enrollment_id",
+        "foreign_table":  "course_enrollments",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "course_progress",
+        "column_name":  "resource_id",
+        "foreign_table":  "course_resources",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "course_resources",
+        "column_name":  "course_id",
+        "foreign_table":  "courses",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "course_resources",
+        "column_name":  "created_by",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "country_id",
+        "foreign_table":  "countries",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "created_by",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "curriculum_id",
+        "foreign_table":  "curricula",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "education_level_id",
+        "foreign_table":  "education_levels",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "institution_id",
+        "foreign_table":  "institutions",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "curricula",
+        "column_name":  "country_id",
+        "foreign_table":  "countries",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "curricula",
+        "column_name":  "education_level_id",
+        "foreign_table":  "education_levels",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "document_folder_items",
+        "column_name":  "document_id",
+        "foreign_table":  "documents",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "document_folder_items",
+        "column_name":  "folder_id",
+        "foreign_table":  "document_folders",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "document_folders",
+        "column_name":  "parent_folder_id",
+        "foreign_table":  "document_folders",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "user_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "education_levels",
+        "column_name":  "country_id",
+        "foreign_table":  "countries",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "examinations",
+        "column_name":  "curriculum_id",
+        "foreign_table":  "curricula",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "failed_chunks",
+        "column_name":  "document_id",
+        "foreign_table":  "documents",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "flashcards",
+        "column_name":  "note_id",
+        "foreign_table":  "notes",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "institution_invites",
+        "column_name":  "institution_id",
+        "foreign_table":  "institutions",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "institution_members",
+        "column_name":  "institution_id",
+        "foreign_table":  "institutions",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "country_id",
+        "foreign_table":  "countries",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "verified_by",
+        "foreign_table":  "admin_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "education_level_id",
+        "foreign_table":  "education_levels",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "learning_topic_connections",
+        "column_name":  "to_session_id",
+        "foreign_table":  "chat_sessions",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "learning_topic_connections",
+        "column_name":  "from_session_id",
+        "foreign_table":  "chat_sessions",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "live_quiz_answers",
+        "column_name":  "session_id",
+        "foreign_table":  "live_quiz_sessions",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "live_quiz_answers",
+        "column_name":  "question_id",
+        "foreign_table":  "live_quiz_questions",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "session_id",
+        "foreign_table":  "live_quiz_sessions",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "live_quiz_questions",
+        "column_name":  "session_id",
+        "foreign_table":  "live_quiz_sessions",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "quiz_id",
+        "foreign_table":  "quizzes",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "notes",
+        "column_name":  "document_id",
+        "foreign_table":  "documents",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "notes",
+        "column_name":  "user_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "platform_update_reads",
+        "column_name":  "update_id",
+        "foreign_table":  "platform_updates",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "updated_by",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "created_by",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "player_question_progress",
+        "column_name":  "question_id",
+        "foreign_table":  "live_quiz_questions",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "player_question_progress",
+        "column_name":  "session_id",
+        "foreign_table":  "live_quiz_sessions",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "podcast_chunks",
+        "column_name":  "podcast_id",
+        "foreign_table":  "ai_podcasts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "podcast_cohosts",
+        "column_name":  "user_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "podcast_cohosts",
+        "column_name":  "podcast_id",
+        "foreign_table":  "ai_podcasts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "podcast_invites",
+        "column_name":  "podcast_id",
+        "foreign_table":  "ai_podcasts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "podcast_invites",
+        "column_name":  "invitee_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "podcast_invites",
+        "column_name":  "inviter_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "podcast_listeners",
+        "column_name":  "podcast_id",
+        "foreign_table":  "ai_podcasts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "podcast_members",
+        "column_name":  "podcast_id",
+        "foreign_table":  "ai_podcasts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "podcast_members",
+        "column_name":  "invited_by",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "podcast_participation_requests",
+        "column_name":  "user_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "podcast_participation_requests",
+        "column_name":  "podcast_id",
+        "foreign_table":  "ai_podcasts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "podcast_participation_requests",
+        "column_name":  "responder_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "podcast_recordings",
+        "column_name":  "podcast_id",
+        "foreign_table":  "ai_podcasts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "podcast_shares",
+        "column_name":  "podcast_id",
+        "foreign_table":  "ai_podcasts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "institution_id",
+        "foreign_table":  "institutions",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "quiz_attempts",
+        "column_name":  "quiz_id",
+        "foreign_table":  "quizzes",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "quizzes",
+        "column_name":  "user_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "quizzes",
+        "column_name":  "class_id",
+        "foreign_table":  "class_recordings",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "role_verification_requests",
+        "column_name":  "institution_id",
+        "foreign_table":  "institutions",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "user_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "schedule_reminders",
+        "column_name":  "schedule_id",
+        "foreign_table":  "schedule_items",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_bookmarks",
+        "column_name":  "user_id",
+        "foreign_table":  "social_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_bookmarks",
+        "column_name":  "post_id",
+        "foreign_table":  "social_posts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_chat_message_media",
+        "column_name":  "message_id",
+        "foreign_table":  "social_chat_messages",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_chat_message_reads",
+        "column_name":  "message_id",
+        "foreign_table":  "social_chat_messages",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_chat_message_reads",
+        "column_name":  "user_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_chat_message_resources",
+        "column_name":  "message_id",
+        "foreign_table":  "social_chat_messages",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_chat_messages",
+        "column_name":  "group_id",
+        "foreign_table":  "social_groups",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_chat_messages",
+        "column_name":  "sender_id",
+        "foreign_table":  "social_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_chat_messages",
+        "column_name":  "session_id",
+        "foreign_table":  "social_chat_sessions",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_chat_sessions",
+        "column_name":  "user_id1",
+        "foreign_table":  "social_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_chat_sessions",
+        "column_name":  "user_id2",
+        "foreign_table":  "social_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_chat_sessions",
+        "column_name":  "group_id",
+        "foreign_table":  "social_groups",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_comment_media",
+        "column_name":  "comment_id",
+        "foreign_table":  "social_comments",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_comments",
+        "column_name":  "author_id",
+        "foreign_table":  "social_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_comments",
+        "column_name":  "parent_comment_id",
+        "foreign_table":  "social_comments",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_comments",
+        "column_name":  "post_id",
+        "foreign_table":  "social_posts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_event_attendees",
+        "column_name":  "event_id",
+        "foreign_table":  "social_events",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_event_attendees",
+        "column_name":  "user_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_events",
+        "column_name":  "group_id",
+        "foreign_table":  "social_groups",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_events",
+        "column_name":  "organizer_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_follows",
+        "column_name":  "follower_id",
+        "foreign_table":  "social_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_follows",
+        "column_name":  "following_id",
+        "foreign_table":  "social_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_group_members",
+        "column_name":  "group_id",
+        "foreign_table":  "social_groups",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_group_members",
+        "column_name":  "user_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_groups",
+        "column_name":  "created_by",
+        "foreign_table":  "social_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_likes",
+        "column_name":  "comment_id",
+        "foreign_table":  "social_comments",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_likes",
+        "column_name":  "user_id",
+        "foreign_table":  "social_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_likes",
+        "column_name":  "post_id",
+        "foreign_table":  "social_posts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_media",
+        "column_name":  "post_id",
+        "foreign_table":  "social_posts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_notifications",
+        "column_name":  "actor_id",
+        "foreign_table":  "social_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_notifications",
+        "column_name":  "post_id",
+        "foreign_table":  "social_posts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_notifications",
+        "column_name":  "user_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_post_hashtags",
+        "column_name":  "post_id",
+        "foreign_table":  "social_posts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_post_hashtags",
+        "column_name":  "hashtag_id",
+        "foreign_table":  "social_hashtags",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_post_tags",
+        "column_name":  "post_id",
+        "foreign_table":  "social_posts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_post_tags",
+        "column_name":  "tag_id",
+        "foreign_table":  "social_tags",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_post_views",
+        "column_name":  "post_id",
+        "foreign_table":  "social_posts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "author_id",
+        "foreign_table":  "social_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "group_id",
+        "foreign_table":  "social_groups",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "reported_user_id",
+        "foreign_table":  "social_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "reporter_id",
+        "foreign_table":  "social_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "group_id",
+        "foreign_table":  "social_groups",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "moderator_id",
+        "foreign_table":  "social_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "post_id",
+        "foreign_table":  "social_posts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "comment_id",
+        "foreign_table":  "social_comments",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_shares",
+        "column_name":  "original_post_id",
+        "foreign_table":  "social_posts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_shares",
+        "column_name":  "user_id",
+        "foreign_table":  "social_users",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_user_signals",
+        "column_name":  "user_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "social_user_signals",
+        "column_name":  "post_id",
+        "foreign_table":  "social_posts",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "subjects",
+        "column_name":  "curriculum_id",
+        "foreign_table":  "curricula",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "column_name":  "target_examination_id",
+        "foreign_table":  "examinations",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "column_name":  "education_level_id",
+        "foreign_table":  "education_levels",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "column_name":  "curriculum_id",
+        "foreign_table":  "curricula",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "column_name":  "country_id",
+        "foreign_table":  "countries",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "user_session_digests",
+        "column_name":  "user_id",
+        "foreign_table":  "profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "user_subjects",
+        "column_name":  "user_education_profile_id",
+        "foreign_table":  "user_education_profiles",
+        "foreign_column":  "id"
+    },
+    {
+        "table_name":  "user_subjects",
+        "column_name":  "subject_id",
+        "foreign_table":  "subjects",
+        "foreign_column":  "id"
+    }
+]

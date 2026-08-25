@@ -1,4 +1,4 @@
-﻿/**
+/**
  * resume-processing/index.ts
  *
  * Resumes extraction for documents in partial/processing state with safe retry.

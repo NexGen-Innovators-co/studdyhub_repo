@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <!-- Mermaid for Flowcharts and Diagrams -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@9.4.3/dist/mermaid.min.js"></script>
+  <!-- Chart.js for Visual Charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Viz.js for Graphviz DOT diagrams -->
+  <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2/viz.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2/full.render.js"></script>
+  <!-- KaTeX for LaTeX Math Equation Rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+  <!-- Highlight.js for Code Block Syntax Highlighting (Python, Kotlin, JS, Java, etc) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.8.0/styles/github-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.8.0/highlight.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #1e293b;
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior-y: contain;
+      touch-action: pan-y;
+      -webkit-overflow-scrolling: touch;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      html, body {
+        color: #f8fafc;
+      }
+    }
+    
+    #editor { 
+      width: 100%;
+      min-height: 100%;
+      padding: 12px 12px 160px 12px;
+      box-sizing: border-box;
+      font-size: 16px;
+      line-height: 1.6;
+      outline: none;
+      border: none;
+      background: transparent;
+      word-break: break-word;
+      cursor: text;
+      -webkit-user-select: text;
+      user-select: text;
+      color: inherit;
+    }
+
+    #editor p, #editor div, #editor li, #editor span {
+      color: inherit;
+    }
+
+    #editor[contenteditable=true]:empty:before,
+    #editor[contenteditable=true] p:only-child:empty:before {
+      content: "Start writing your note like in MS Word...";
+      color: rgba(140, 140, 140, 0.6);
+      font-style: italic;
+      pointer-events: none;
+      display: block;
+    }
+
+    /* Word-style typography & element styles */
+    #editor h1 {
+      font-size: 26px;
+      font-weight: 700;
+      margin-top: 18px;
+      margin-bottom: 8px;
+      color: #4f46e5;
+    }
+    #editor h2 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-top: 14px;
+      margin-bottom: 6px;
+      color: #6366f1;
+    }
+    #editor h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-top: 12px;
+      margin-bottom: 4px;
+      color: #10b981;
+    }
+    #editor p {
+      margin-top: 0;
+      margin-bottom: 8px;
+      min-height: 24px;
+    }
+    #editor blockquote {
+      border-left: 4px solid #6366f1;
+      padding: 8px 14px;
+      margin: 12px 0;
+      font-style: italic;
+      background: rgba(99, 102, 241, 0.08);
+      border-radius: 0 8px 8px 0;
+    }
+    #editor pre {
+      background-color: #0f172a !important;
+      color: #f8fafc !important;
+      border-radius: 8px;
+      padding: 12px;
+      font-family: "Fira Code", monospace, monospace;
+      font-size: 14px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      margin: 12px 0;
+    }
+    #editor code {
+      background-color: rgba(99, 102, 241, 0.12);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: "Fira Code", monospace, monospace;
+      font-size: 14px;
+    }
+
+    /* MS Word Styled Tables & Interactive Controls */
+    #editor table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 16px 0;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid rgba(156, 163, 175, 0.4);
+      background-color: rgba(248, 250, 252, 0.05);
+      position: relative;
+    }
+    #editor th, #editor td {
+      border: 1px solid rgba(156, 163, 175, 0.35);
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 15px;
+      position: relative;
+    }
+    #editor th {
+      background-color: rgba(99, 102, 241, 0.15);
+      font-weight: 600;
+      color: #4f46e5;
+    }
+    #editor tr:nth-child(even) {
+      background-color: rgba(99, 102, 241, 0.03);
+    }
+
+    /* Interactive Floating Toolbars */
+    #table-toolbar, #media-toolbar {
+      position: absolute;
+      display: none;
+      z-index: 999;
+      background: #1e293b;
+      color: #ffffff;
+      padding: 6px 10px;
+      border-radius: 20px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+      font-size: 12px;
+      gap: 6px;
+      align-items: center;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #table-toolbar button, #media-toolbar button {
+      background: rgba(255,255,255,0.15);
+      color: #ffffff;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+    }
+    #table-toolbar button:active, #media-toolbar button:active {
+      background: #6366f1;
+    }
+    #table-toolbar button.btn-danger, #media-toolbar button.btn-danger {
+      background: rgba(239, 68, 68, 0.8);
+    }
+
+    /* Checkbox & Lists */
+    #editor ul, #editor ol {
+      padding-left: 24px;
+      margin: 8px 0;
+    }
+    #editor li {
+      margin-bottom: 4px;
+    }
+
+    /* Resizable & Draggable Images and Diagrams */
+    #editor img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 12px;
+      margin: 12px auto;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+      display: block;
+      transition: width 0.2s ease, margin 0.2s ease;
+      cursor: pointer;
+    }
+
+    .diagram-box {
+      background: rgba(99, 102, 241, 0.06);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: 12px;
+      padding: 14px;
+      margin: 16px auto;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      overflow-x: auto;
+      transition: width 0.2s ease;
+      cursor: pointer;
+    }
+    .diagram-header {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #6366f1;
+      margin-bottom: 8px;
+    }
+    .mermaid {
+      display: block;
+      margin: 0 auto;
+      text-align: center;
+      background: transparent !important;
+      font-family: monospace;
+      font-size: 14px;
+      overflow: visible;
+    }
+    .mermaid svg {
+      max-width: 100% !important;
+      height: auto !important;
+    }
+    .chartjs-container {
+      width: 100%;
+      max-width: 500px;
+      margin: 16px auto;
+      padding: 12px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+    }
+  </style>
+  <script>
+    var isSelfUpdate = false;
+    var debounceTimer = null;
+    var isDarkMode = false;
+    var activeCell = null;
+    var activeTable = null;
+    var activeMediaEl = null;
+
+    console.log("Quill Editor script loaded");
+
+    function renderMathAndSyntax() {
+      if (typeof renderMathInElement !== 'undefined') {
+        try {
+          renderMathInElement(document.getElementById('editor'), {
+            delimiters: [
+              {left: '$$', right: '$$', display: true},
+              {left: '$', right: '$', display: false},
+              {left: '\\(', right: '\\)', display: false},
+              {left: '\\[', right: '\\]', display: true}
+            ],
+            throwOnError: false
+          });
+        } catch(e) { console.warn("KaTeX error:", e); }
+      }
+
+      if (typeof hljs !== 'undefined') {
+        try {
+          var blocks = document.querySelectorAll('#editor pre, #editor code');
+          blocks.forEach(function(block) {
+            if (!block.classList.contains('mermaid') && !block.classList.contains('dot') && !block.getAttribute('data-highlighted')) {
+              hljs.highlightElement(block);
+              block.setAttribute('data-highlighted', 'true');
+            }
+          });
+        } catch(e) { console.warn("Highlight.js error:", e); }
+      }
+    }
+
+    // Decode HTML entities that survive into a diagram element (newlines arrive
+    // as &#10; because the HTML parser flattens literal newlines inside attribute
+    // values to spaces — that used to hand mermaid single-line code and fail).
+    function decodeDiagramCode(raw) {
+      return raw
+        .replace(/&#10;/g, '\n')
+        .replace(/&quot;/g, '"')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&');
+    }
+
+    // Prefer the element's TEXT CONTENT: it preserves newlines through HTML
+    // parsing, whereas data-code arrives with newlines flattened to spaces and
+    // entity-encoded. Falls back to data-code only when text content is empty.
+    function readDiagramCode(el) {
+      var text = el.textContent || '';
+      var cleaned = text.replace(/^```(mermaid|dot|graphviz|chartjs|chart|chart\.js)\s*/i, '').replace(/```\s*$/i, '').trim();
+      if (cleaned) return cleaned;
+      var attr = el.getAttribute('data-code') || '';
+      return decodeDiagramCode(attr).replace(/^```(mermaid|dot|graphviz|chartjs|chart|chart\.js)\s*/i, '').replace(/```\s*$/i, '').trim();
+    }
+
+    // Retry counters so slow-loading CDN scripts (offline/slow networks) still
+    // render once they arrive — the old code checked `typeof X !== 'undefined'`
+    // ONCE and silently gave up, leaving raw code visible forever.
+    var diagramRetryCount = 0;
+    function retryOrGiveUp() {
+      diagramRetryCount++;
+      if (diagramRetryCount <= 30) {
+        setTimeout(renderAllDiagrams, 400);
+      } else {
+        console.warn('Diagram render gave up after ' + diagramRetryCount + ' attempts (CDN unreachable?).');
+      }
+    }
+
+    function renderMermaidDiagrams() {
+      var elements = document.querySelectorAll('.mermaid');
+      if (elements.length === 0) return;
+      if (typeof mermaid === 'undefined') { retryOrGiveUp(); return; }
+      diagramRetryCount = 0;
+      try {
+        elements.forEach(function(el, idx) {
+          if (el.getAttribute('data-rendered') === 'true') return;
+          var decodedCode = readDiagramCode(el);
+          if (!decodedCode) return;
+          var uniqueId = 'mermaid-svg-' + Date.now() + '-' + idx;
+          try {
+            mermaid.initialize({
+              startOnLoad: false,
+              theme: isDarkMode ? 'dark' : 'default',
+              securityLevel: 'loose',
+              flowchart: { useMaxWidth: true, htmlLabels: true }
+            });
+            mermaid.render(uniqueId, decodedCode, function(svgCode) {
+              el.innerHTML = svgCode;
+              el.setAttribute('data-rendered', 'true');
+            });
+          } catch (err) {
+            console.warn("Mermaid render error:", err);
+            el.innerHTML = '<div style="color:#6366f1;font-family:monospace;padding:8px;background:rgba(99,102,241,0.1);border-radius:6px;white-space:pre-wrap;">' + decodedCode + '</div>';
+          }
+        });
+      } catch(e) {
+        console.log("Mermaid init warning:", e);
+      }
+    }
+
+    function renderChartJs() {
+      var canvases = document.querySelectorAll('.chartjs-canvas');
+      if (canvases.length === 0) return;
+      if (typeof Chart === 'undefined') { retryOrGiveUp(); return; }
+      diagramRetryCount = 0;
+      try {
+        for (var i = 0; i < canvases.length; i++) {
+          var canvas = canvases[i];
+          if (canvas.getAttribute('data-rendered') === 'true') continue;
+          var configStr = canvas.getAttribute('data-config');
+          if (configStr) {
+            var decodedConfig = decodeDiagramCode(configStr);
+            var config = JSON.parse(decodedConfig);
+            new Chart(canvas.getContext('2d'), config);
+            canvas.setAttribute('data-rendered', 'true');
+          }
+        }
+      } catch(e) {
+        console.log("Chart.js render warning:", e);
+      }
+    }
+
+    function renderDotDiagrams() {
+      var elements = document.querySelectorAll('.dot');
+      if (elements.length === 0) return;
+      if (typeof Viz === 'undefined') { retryOrGiveUp(); return; }
+      diagramRetryCount = 0;
+      try {
+        elements.forEach(function(el, idx) {
+          if (el.getAttribute('data-rendered') === 'true') return;
+          var dotCode = readDiagramCode(el);
+          if (!dotCode) return;
+          try {
+            Viz.instance().then(function(viz) {
+              var svg = viz.renderSVGElement(dotCode);
+              svg.style.maxWidth = '100%';
+              svg.style.height = 'auto';
+              el.innerHTML = '';
+              el.appendChild(svg);
+              el.setAttribute('data-rendered', 'true');
+            }).catch(function(err) {
+              console.warn("DOT render error:", err);
+              el.innerHTML = '<div style="color:#6366f1;font-family:monospace;padding:8px;background:rgba(99,102,241,0.1);border-radius:6px;white-space:pre-wrap;">' + dotCode + '</div>';
+            });
+          } catch (err) {
+            console.warn("DOT render error:", err);
+            el.innerHTML = '<div style="color:#6366f1;font-family:monospace;padding:8px;background:rgba(99,102,241,0.1);border-radius:6px;white-space:pre-wrap;">' + dotCode + '</div>';
+          }
+        });
+      } catch(e) {
+        console.log("DOT init warning:", e);
+      }
+    }
+
+    function renderAllDiagrams() {
+      renderMermaidDiagrams();
+      renderChartJs();
+      renderDotDiagrams();
+      renderMathAndSyntax();
+      setupMediaClickListeners();
+    }
+
+    /* Media (Image / Diagram) Floating Resizer & Drag Alignment Toolbar */
+    function showMediaToolbar(element) {
+      activeMediaEl = element;
+      var tb = document.getElementById('media-toolbar');
+      if (!tb) return;
+      var rect = element.getBoundingClientRect();
+      tb.style.top = Math.max(10, (rect.top + window.scrollY - 36)) + 'px';
+      tb.style.left = Math.max(10, (rect.left + window.scrollX)) + 'px';
+      tb.style.display = 'flex';
+    }
+
+    function hideMediaToolbar() {
+      var tb = document.getElementById('media-toolbar');
+      if (tb) tb.style.display = 'none';
+      activeMediaEl = null;
+    }
+
+    function resizeMedia(sizePercent) {
+      if (!activeMediaEl) return;
+      activeMediaEl.style.width = sizePercent + '%';
+      if (sizePercent < 100) {
+        activeMediaEl.style.marginLeft = 'auto';
+        activeMediaEl.style.marginRight = 'auto';
+      } else {
+        activeMediaEl.style.width = '100%';
+      }
+      notifyAndroid();
+    }
+
+    function alignMedia(alignType) {
+      if (!activeMediaEl) return;
+      if (alignType === 'left') {
+        activeMediaEl.style.marginLeft = '0';
+        activeMediaEl.style.marginRight = 'auto';
+      } else if (alignType === 'center') {
+        activeMediaEl.style.marginLeft = 'auto';
+        activeMediaEl.style.marginRight = 'auto';
+      } else if (alignType === 'right') {
+        activeMediaEl.style.marginLeft = 'auto';
+        activeMediaEl.style.marginRight = '0';
+      }
+      notifyAndroid();
+    }
+
+    function deleteMedia() {
+      if (!activeMediaEl) return;
+      if (activeMediaEl.parentNode) {
+        activeMediaEl.parentNode.removeChild(activeMediaEl);
+      }
+      hideMediaToolbar();
+      notifyAndroid();
+    }
+
+    function setupMediaClickListeners() {
+      var mediaEls = document.querySelectorAll('#editor img, #editor .diagram-box');
+      mediaEls.forEach(function(el) {
+        if (el.getAttribute('data-listener-set')) return;
+        el.setAttribute('data-listener-set', 'true');
+        el.addEventListener('click', function(e) {
+          e.stopPropagation();
+          hideTableToolbar();
+          showMediaToolbar(el);
+        });
+      });
+    }
+
+    /* Table Floating Toolbar Operations */
+    function showTableToolbar(table, cell) {
+      activeTable = table;
+      activeCell = cell;
+      var tb = document.getElementById('table-toolbar');
+      if (!tb) return;
+      var rect = table.getBoundingClientRect();
+      tb.style.top = Math.max(10, (rect.top + window.scrollY - 36)) + 'px';
+      tb.style.left = Math.max(10, (rect.left + window.scrollX)) + 'px';
+      tb.style.display = 'flex';
+    }
+
+    function hideTableToolbar() {
+      var tb = document.getElementById('table-toolbar');
+      if (tb) tb.style.display = 'none';
+      activeCell = null;
+      activeTable = null;
+    }
+
+    function addTableRowCurrent() {
+      if (!activeTable) return;
+      var targetRowIdx = activeCell ? activeCell.parentNode.rowIndex + 1 : activeTable.rows.length;
+      var row = activeTable.insertRow(targetRowIdx);
+      var colCount = activeTable.rows[0] ? activeTable.rows[0].cells.length : 3;
+      for (var i = 0; i < colCount; i++) {
+        var cell = row.insertCell(i);
+        cell.innerHTML = "New Cell";
+      }
+      notifyAndroid();
+      showTableToolbar(activeTable, row.cells[0]);
+    }
+
+    function deleteTableRowCurrent() {
+      if (!activeTable || activeTable.rows.length <= 1) return;
+      var targetRowIdx = activeCell ? activeCell.parentNode.rowIndex : activeTable.rows.length - 1;
+      activeTable.deleteRow(targetRowIdx);
+      notifyAndroid();
+      if (activeTable.rows.length > 0) {
+        showTableToolbar(activeTable, activeTable.rows[0].cells[0]);
+      } else {
+        hideTableToolbar();
+      }
+    }
+
+    function addTableColCurrent() {
+      if (!activeTable) return;
+      var targetColIdx = activeCell ? activeCell.cellIndex + 1 : activeTable.rows[0].cells.length;
+      for (var i = 0; i < activeTable.rows.length; i++) {
+        var r = activeTable.rows[i];
+        var isHeader = (i === 0 && r.cells[0] && r.cells[0].tagName.toLowerCase() === 'th');
+        var newCell = isHeader ? document.createElement('th') : document.createElement('td');
+        newCell.innerHTML = isHeader ? 'Header ' + (r.cells.length + 1) : 'Cell';
+        if (targetColIdx < r.cells.length) {
+          r.insertBefore(newCell, r.cells[targetColIdx]);
+        } else {
+          r.appendChild(newCell);
+        }
+      }
+      notifyAndroid();
+      showTableToolbar(activeTable, activeCell);
+    }
+
+    function deleteTableColCurrent() {
+      if (!activeTable || !activeTable.rows[0] || activeTable.rows[0].cells.length <= 1) return;
+      var targetColIdx = activeCell ? activeCell.cellIndex : activeTable.rows[0].cells.length - 1;
+      for (var i = 0; i < activeTable.rows.length; i++) {
+        if (activeTable.rows[i].cells[targetColIdx]) {
+          activeTable.rows[i].deleteCell(targetColIdx);
+        }
+      }
+      notifyAndroid();
+      if (activeTable.rows[0] && activeTable.rows[0].cells.length > 0) {
+        showTableToolbar(activeTable, activeTable.rows[0].cells[0]);
+      } else {
+        hideTableToolbar();
+      }
+    }
+
+    function deleteTableCurrent() {
+      if (!activeTable) return;
+      if (activeTable.parentNode) {
+        activeTable.parentNode.removeChild(activeTable);
+      }
+      hideTableToolbar();
+      notifyAndroid();
+    }
+
+    function getEditorElement() {
+      return document.getElementById('editor');
+    }
+
+    function notifyAndroid() {
+      if (isSelfUpdate) return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(function() {
+        var editor = getEditorElement();
+        if (editor && window.AndroidBridge && typeof window.AndroidBridge.onContentChanged === 'function') {
+          window.AndroidBridge.onContentChanged(editor.innerHTML);
+        }
+      }, 300);
+    }
+
+    function setHtmlContent(html, force) {
+      var editor = getEditorElement();
+      if (!editor) return;
+      if (!force && document.activeElement === editor) {
+        return;
+      }
+      var formattedHtml = html;
+      if (!formattedHtml || formattedHtml.trim() === '' || formattedHtml === '<p></p>') {
+        formattedHtml = '<p><br></p>';
+      }
+      if (force || editor.innerHTML !== formattedHtml) {
+        isSelfUpdate = true;
+        editor.innerHTML = formattedHtml;
+        isSelfUpdate = false;
+        setTimeout(renderAllDiagrams, 80);
+      }
+    }
+
+    function getHtmlContent() {
+      var editor = getEditorElement();
+      return editor ? editor.innerHTML : '';
+    }
+
+    function clearHtmlContent() {
+      var editor = getEditorElement();
+      if (editor) {
+        isSelfUpdate = true;
+        editor.innerHTML = '<p><br></p>';
+        isSelfUpdate = false;
+      }
+    }
+
+    function setTheme(isDark, textColor) {
+      isDarkMode = isDark;
+      var colorToUse = textColor;
+      if (!colorToUse || colorToUse === '#' || colorToUse.length < 4) {
+        colorToUse = isDark ? '#f8fafc' : '#1e293b';
+      }
+      document.body.style.color = colorToUse;
+      var editor = getEditorElement();
+      if (editor) {
+        editor.style.color = colorToUse;
+      }
+      setTimeout(renderAllDiagrams, 100);
+    }
+
+    function toggleFormat(formatName, value) {
+      var editor = getEditorElement();
+      if (!editor) return;
+      editor.focus();
+      if (formatName === 'bold') {
+        document.execCommand('bold', false, null);
+      } else if (formatName === 'italic') {
+        document.execCommand('italic', false, null);
+      } else if (formatName === 'underline') {
+        document.execCommand('underline', false, null);
+      } else if (formatName === 'strike') {
+        document.execCommand('strikeThrough', false, null);
+      } else if (formatName === 'header') {
+        var tag = value === 1 ? '<h1>' : (value === 2 ? '<h2>' : (value === 3 ? '<h3>' : '<p>'));
+        document.execCommand('formatBlock', false, tag);
+      } else if (formatName === 'list') {
+        if (value === 'bullet') {
+          document.execCommand('insertUnorderedList', false, null);
+        } else if (value === 'ordered') {
+          document.execCommand('insertOrderedList', false, null);
+        } else if (value === 'unchecked') {
+          insertHtmlSnippet('<p>☐ Task item</p>');
+        }
+      } else if (formatName === 'blockquote') {
+        document.execCommand('formatBlock', false, 'blockquote');
+      } else if (formatName === 'code-block') {
+        document.execCommand('formatBlock', false, 'pre');
+      } else if (formatName === 'background') {
+        document.execCommand('backColor', false, value || '#fef08a');
+      }
+      notifyAndroid();
+    }
+
+    function insertHtmlSnippet(htmlSnippet) {
+      var editor = getEditorElement();
+      if (!editor) return;
+      editor.focus();
+      document.execCommand('insertHTML', false, htmlSnippet);
+      notifyAndroid();
+      setTimeout(renderAllDiagrams, 100);
+    }
+
+    function undoEditor() {
+      document.execCommand('undo', false, null);
+      notifyAndroid();
+    }
+
+    function redoEditor() {
+      document.execCommand('redo', false, null);
+      notifyAndroid();
+    }
+
+    function focusEditor() {
+      var editor = getEditorElement();
+      if (editor) {
+        editor.focus();
+      }
+    }
+
+    function initListeners() {
+      var editor = getEditorElement();
+      if (editor) {
+        editor.addEventListener('input', notifyAndroid);
+        editor.addEventListener('keyup', notifyAndroid);
+        editor.addEventListener('click', function(e) {
+          hideMediaToolbar();
+          var cell = e.target.closest('td, th');
+          if (cell) {
+            var table = cell.closest('table');
+            if (table) {
+              showTableToolbar(table, cell);
+              return;
+            }
+          }
+          hideTableToolbar();
+        });
+        editor.addEventListener('paste', function(e) {
+          var clipboardData = e.clipboardData || window.clipboardData;
+          if (!clipboardData) return;
+          var pastedText = clipboardData.getData('text/plain');
+          if (!pastedText) return;
+
+          var hasMarkdown = /```|^\s*\||^\s*#{1,6}\s|^\s*[-*+]\s|^\s*>\s/m.test(pastedText);
+          if (hasMarkdown && window.AndroidBridge && typeof window.AndroidBridge.convertMarkdownToHtml === 'function') {
+            e.preventDefault();
+            var html = window.AndroidBridge.convertMarkdownToHtml(pastedText);
+            document.execCommand('insertHTML', false, html);
+            notifyAndroid();
+            setTimeout(renderAllDiagrams, 100);
+          }
+        });
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      initListeners();
+      console.log("DOM content loaded in Quill Editor");
+      if (window.AndroidBridge && typeof window.AndroidBridge.onEditorReady === 'function') {
+        window.AndroidBridge.onEditorReady();
+      }
+      setTimeout(renderAllDiagrams, 200);
+    });
+
+    window.addEventListener('load', function() {
+      console.log("Quill Editor window loaded!");
+      if (window.AndroidBridge && typeof window.AndroidBridge.onEditorReady === 'function') {
+        window.AndroidBridge.onEditorReady();
+      }
+      setTimeout(renderAllDiagrams, 200);
+    });
+  </script>
+</head>
+<body>
+  <div id="table-toolbar">
+    <button type="button" onclick="addTableRowCurrent()">➕ Row</button>
+    <button type="button" onclick="deleteTableRowCurrent()">➖ Row</button>
+    <button type="button" onclick="addTableColCurrent()">➕ Col</button>
+    <button type="button" onclick="deleteTableColCurrent()">➖ Col</button>
+    <button type="button" class="btn-danger" onclick="deleteTableCurrent()">🗑️ Table</button>
+  </div>
+  <div id="media-toolbar">
+    <button type="button" onclick="resizeMedia(35)">🔬 Small</button>
+    <button type="button" onclick="resizeMedia(65)">📱 Medium</button>
+    <button type="button" onclick="resizeMedia(100)">🖥️ Full</button>
+    <button type="button" onclick="alignMedia('left')">⬅️ Left</button>
+    <button type="button" onclick="alignMedia('center')">↔️ Center</button>
+    <button type="button" onclick="alignMedia('right')">➡️ Right</button>
+    <button type="button" class="btn-danger" onclick="deleteMedia()">🗑️ Remove</button>
+  </div>
+  <div id="editor" contenteditable="true" spellcheck="true"><p><br></p></div>
+</body>
+</html>

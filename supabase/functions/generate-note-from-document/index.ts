@@ -5,12 +5,14 @@ import { logSystemError } from '../_shared/errorLogger.ts';
 import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
 
 // Model fallback chain for quota/rate-limit resilience
+// Ordered by what the project's key can actually serve: the 2.x models currently return
+// 429 (free-tier daily quota exhausted), so leading with them exhausted the chain before
+// reaching a usable model and the whole generation failed.
 const MODEL_CHAIN = [
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
-  'gemini-2.5-pro',
-  'gemini-3-pro-preview',
+  'gemini-3.5-flash',
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-3.6-flash',
 ];
 
 async function callGeminiWithModelChain(prompt: string, apiKey: string): Promise<string> {
@@ -77,8 +79,38 @@ const corsHeaders = {
     'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
 
+/**
+ * Detects content that is binary or container noise rather than readable document text — e.g. PDF
+ * bytes that were decoded as UTF-8 before being stored.
+ */
+const isUnreadableContent = (text: string): boolean => {
+    if (!text) return false;
+    const lower = text.toLowerCase();
+    if (text.includes('%PDF') || text.startsWith('PK') || lower.includes('flatedecode')) return true;
+    if (lower.includes('stream') && lower.includes('endstream')) return true;
+    if (lower.includes('obj') && lower.includes('endobj') && lower.includes('xref')) return true;
+
+    const sample = text.slice(0, 4000);
+    if (!sample.length) return false;
+    let unreadable = 0;
+    for (const ch of sample) {
+        const code = ch.charCodeAt(0);
+        if (code === 0 || code === 0xFFFD || (code < 32 && ch !== '\n' && ch !== '\r' && ch !== '\t')) unreadable++;
+    }
+    return (unreadable * 100) / sample.length >= 5;
+};
+
 // Helper function to construct the dynamic AI prompt.
-const createPrompt = (userProfile, document, selectedSection = null) => {
+const createPrompt = (userProfile, document, selectedSection = null, option = 'note', customPrompt = '') => {
+    // Callers may send a partial profile (or none at all); fill the gaps rather than emitting
+    // "undefined" into the prompt, which degrades the model's output.
+    const profile = userProfile || {};
+    const prefs = profile.learning_preferences || {};
+    const learningStyle = profile.learning_style || 'balanced';
+    const explanationStyle = prefs.explanation_style || 'detailed and comprehensive';
+    const difficulty = prefs.difficulty || 'intermediate';
+    const wantsExamples = prefs.examples !== false;
+
     let sectionInstruction = '';
     if (selectedSection) {
         sectionInstruction = `
@@ -87,24 +119,34 @@ Please extract and synthesize information primarily from this section. If the se
 `;
     }
 
+    // The client offers note / summary / quiz / custom modes; honour the one that was picked.
+    let optionInstruction = '';
+    if (option === 'summary') {
+        optionInstruction = `\n**Requested Output:** Prioritise section 1 (Summary) and section 2 (Key Concepts), emphasising key highlights, definitions, and formulas. Keep other sections brief.\n`;
+    } else if (option === 'quiz') {
+        optionInstruction = `\n**Requested Output:** Prioritise section 3 (Potential Quiz Questions) — provide at least 8 varied active-recall questions with answers. Keep other sections brief.\n`;
+    } else if (option === 'custom' && customPrompt) {
+        optionInstruction = `\n**Requested Output (user's own instruction — follow it closely):** ${customPrompt}\n`;
+    }
+
     return `
 **You are studdyhub, an expert AI learning assistant.** Your primary goal is to generate a high-quality, structured, and visually appealing note from the provided document text, tailored to the student's learning profile. The output must be in **Markdown format** and follow the specified structure precisely.
 
 **Student's Learning Profile:**
-- Learning Style: ${userProfile.learning_style}
-- Desired Explanation Style: ${userProfile.learning_preferences.explanation_style}
-- Needs Examples: ${userProfile.learning_preferences.examples ? 'Yes' : 'No'}
-- Desired Difficulty: ${userProfile.learning_preferences.difficulty}
-${userProfile.personal_context ? `\n**Personal Context (provided by the student — use to tailor the note):**\n${userProfile.personal_context}` : ''}
-
+- Learning Style: ${learningStyle}
+- Desired Explanation Style: ${explanationStyle}
+- Needs Examples: ${wantsExamples ? 'Yes' : 'No'}
+- Desired Difficulty: ${difficulty}
+${profile.personal_context ? `\n**Personal Context (provided by the student — use to tailor the note):**\n${profile.personal_context}` : ''}
+${optionInstruction}
 **Crucial Instructions for AI Output Tailoring:**
-* **Explanation Style:** Adapt your explanations to be "${userProfile.learning_preferences.explanation_style}". For example:
+* **Explanation Style:** Adapt your explanations to be "${explanationStyle}". For example:
     * If "simple and direct", use straightforward language.
     * If "detailed and comprehensive", provide more in-depth explanations.
     * If "conceptual and abstract", focus on underlying principles.
     * If "practical and application-focused", emphasize real-world use.
 * **Examples:** If "Needs Examples" is "Yes", ensure each key concept has a clear, concise, and relevant example. If "No", omit examples.
-* **Difficulty:** Adjust the complexity of the language and concepts to be "${userProfile.learning_preferences.difficulty}". For example:
+* **Difficulty:** Adjust the complexity of the language and concepts to be "${difficulty}". For example:
     * "Beginner": Use very simple terms, avoid jargon.
     * "Intermediate": Use standard terminology, explain complex terms.
     * "Advanced": Assume familiarity with domain-specific jargon, delve into nuances.
@@ -300,23 +342,47 @@ serve(async (req) => {
     }
 
     try {
-        // 2. Initialize Supabase client with user's auth token
-        const supabaseClient = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_ANON_KEY'), {
-            global: {
-                headers: {
-                    Authorization: req.headers.get('Authorization')
-                }
-            }
+        // 2. Resolve the caller's JWT. The anon key is also a valid JWT, so a client that falls back
+        // to `Bearer <anon key>` reaches this function and then fails getUser() with a bare 401.
+        // Detect that case explicitly so the client gets an actionable reason.
+        const authHeader = req.headers.get('Authorization') || '';
+        const accessToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+        const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+
+        if (!accessToken) {
+            return new Response(JSON.stringify({
+                error: 'Missing Authorization header. Sign in and retry.',
+                code: 'no_token'
+            }), {
+                status: 401,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+        if (accessToken === anonKey) {
+            return new Response(JSON.stringify({
+                error: 'Anonymous key used instead of a user session. Sign in and retry.',
+                code: 'anon_token'
+            }), {
+                status: 401,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+
+        const supabaseClient = createClient(Deno.env.get('SUPABASE_URL'), anonKey, {
+            global: { headers: { Authorization: `Bearer ${accessToken}` } },
+            auth: { persistSession: false, autoRefreshToken: false }
         });
 
         // Initialize Supabase client with service role key for internal function calls and storage access
         const supabaseServiceRoleClient = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'));
 
         // 3. Get authenticated user
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        if (!user) {
+        const { data: { user }, error: authError } = await supabaseClient.auth.getUser(accessToken);
+        if (authError || !user) {
+            console.error('[generate-note-from-document] Auth failed:', authError?.message);
             return new Response(JSON.stringify({
-                error: 'Unauthorized'
+                error: authError?.message || 'Session expired or invalid. Sign in and retry.',
+                code: 'invalid_token'
             }), {
                 status: 401,
                 headers: {
@@ -334,11 +400,12 @@ serve(async (req) => {
             return createSubErrorResponse(limitCheck.message || 'AI generation limit exceeded', 403);
         }
 
-        // 4. Parse request body
-        const { documentId, userProfile, selectedSection, noteId } = await req.json(); // Destructure selectedSection and noteId
-        if (!documentId || !userProfile) {
+        // 4. Parse request body. `userProfile` is optional — createPrompt fills sensible defaults,
+        // so a client that only knows the documentId still gets a usable note.
+        const { documentId, userProfile, selectedSection, noteId, option, customPrompt, preview } = await req.json();
+        if (!documentId) {
             return new Response(JSON.stringify({
-                error: 'Missing documentId or userProfile'
+                error: 'Missing documentId'
             }), {
                 status: 400,
                 headers: {
@@ -363,8 +430,33 @@ serve(async (req) => {
             });
         }
 
-        // 6. Construct the AI prompt, passing selectedSection
-        const prompt = createPrompt(userProfile, document, selectedSection);
+        // 5.5 Reject unreadable content up front. Older uploads stored PDF bytes decoded as UTF-8,
+        // so content_extracted is object-stream noise. Feeding that to the model is exactly what
+        // produced "this file is in a raw PDF format" replies — better to tell the client to
+        // re-extract from the original file than to spend a model call producing a refusal.
+        const extracted = document.content_extracted || '';
+        if (!extracted.trim()) {
+            return new Response(JSON.stringify({
+                error: 'This document has no extracted text yet. Re-upload it so its text can be extracted.',
+                code: 'no_content'
+            }), {
+                status: 422,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+        if (isUnreadableContent(extracted)) {
+            console.warn(`[generate-note-from-document] Document ${documentId} holds binary/unreadable content`);
+            return new Response(JSON.stringify({
+                error: 'This document was stored as raw binary, not text. Re-upload it so its text can be extracted.',
+                code: 'binary_content'
+            }), {
+                status: 422,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+
+        // 6. Construct the AI prompt, passing selectedSection and the requested generation mode
+        const prompt = createPrompt(userProfile, document, selectedSection, option || 'note', customPrompt || '');
 
         // 7. Call the Gemini API with model chain fallback
         const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GEMINI_API_KEY_VERTEX');
@@ -377,7 +469,22 @@ serve(async (req) => {
         // 7.5. Process image placeholders in the AI-generated content
         aiContent = await processImagePlaceholders(aiContent, user.id, supabaseServiceRoleClient);
 
-        // 8. Save the new note to the database (or update existing if noteId provided)
+        // 8. Preview mode returns the generated content without persisting. The mobile client loads
+        // the result into its editor and saves from there, so persisting here too would create a
+        // duplicate note for every generation.
+        if (preview === true) {
+            return new Response(JSON.stringify({
+                content: aiContent,
+                ai_summary: extractSummary(aiContent),
+                document_id: documentId,
+                preview: true
+            }), {
+                status: 200,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+
+        // Save the new note to the database (or update existing if noteId provided)
         const notePayload = {
             user_id: user.id,
             document_id: documentId,

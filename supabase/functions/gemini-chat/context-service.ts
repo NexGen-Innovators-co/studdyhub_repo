@@ -781,6 +781,19 @@ async getUserContext(userId: string): Promise<any> {
             folders: documentFolders.data?.length || 0
         };
 
+        // Synthesize Cross-Correlations across all 78 tables / fetched resources
+        const crossCorrelations = this.synthesizeCrossCorrelations({
+            learningSchedule: learningSchedule.data || [],
+            recentQuizzes: recentQuizzes.data || [],
+            topicMastery,
+            allNotes: allNotes.data || [],
+            flashcards: flashcards.data || [],
+            learningGoals: learningGoals.data || [],
+            userMemory: userMemory.data || [],
+            recentRecordings: recentRecordings.data || [],
+            studyHabits
+        });
+
         return {
             profile: profile || null,
             stats: stats || null,
@@ -801,6 +814,7 @@ async getUserContext(userId: string): Promise<any> {
             learningPatterns,
             studyHabits,
             topicMastery,
+            crossCorrelations,
             totalCounts,
             educationContext: educationContext || null
         };
@@ -809,6 +823,173 @@ async getUserContext(userId: string): Promise<any> {
         return this.getFallbackContext(userId);
     }
 }
+
+    /**
+     * Synthesize cross-table correlations (Schedule + Quizzes + Notes + Flashcards + Goals)
+     * To provide "second brain" proactive insights instead of isolated data points.
+     */
+    synthesizeCrossCorrelations(data: {
+        learningSchedule: any[];
+        recentQuizzes: any[];
+        topicMastery: Map<string, any>;
+        allNotes: any[];
+        flashcards: any[];
+        learningGoals: any[];
+        userMemory: any[];
+        recentRecordings: any[];
+        studyHabits: any;
+    }) {
+        const insights: Array<{
+            category: string;
+            title: string;
+            urgency: 'high' | 'medium' | 'low';
+            subject?: string;
+            insight: string;
+            actionableType?: string;
+            details?: any;
+        }> = [];
+
+        const now = new Date();
+        const fourteenDaysFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+        // 1. Upcoming Exams / Tests vs Quiz Mastery & Note Recency
+        const upcomingExams = data.learningSchedule.filter(item => {
+            const title = (item.title || item.subject || '').toLowerCase();
+            const type = (item.type || '').toLowerCase();
+            const startTime = new Date(item.start_time);
+            const isExam = title.includes('exam') || title.includes('test') || title.includes('midterm') || title.includes('final') || type.includes('exam') || type.includes('test');
+            return isExam && startTime >= now && startTime <= fourteenDaysFromNow;
+        });
+
+        upcomingExams.forEach(exam => {
+            const subject = exam.subject || exam.title;
+            const examDate = new Date(exam.start_time);
+            const daysUntilExam = Math.ceil((examDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+            // Check quiz mastery for this subject
+            let mastery = data.topicMastery.get(subject);
+            if (!mastery) {
+                // Try partial match
+                for (const [topSubject, m] of data.topicMastery.entries()) {
+                    if (subject.toLowerCase().includes(topSubject.toLowerCase()) || topSubject.toLowerCase().includes(subject.toLowerCase())) {
+                        mastery = m;
+                        break;
+                    }
+                }
+            }
+
+            // Check note update recency for this subject
+            const matchingNotes = data.allNotes.filter(n => {
+                const noteText = `${n.title} ${n.category || ''} ${n.content || ''}`.toLowerCase();
+                return noteText.includes(subject.toLowerCase());
+            });
+
+            const newestNoteDate = matchingNotes.length > 0
+                ? new Date(Math.max(...matchingNotes.map(n => new Date(n.updated_at || n.created_at).getTime())))
+                : null;
+            const daysSinceLastNote = newestNoteDate ? Math.floor((now.getTime() - newestNoteDate.getTime()) / (1000 * 60 * 60 * 24)) : null;
+
+            // Check flashcards
+            const matchingFlashcards = data.flashcards.filter(f => {
+                const cardText = `${f.question || ''} ${f.answer || ''} ${f.deck_name || f.subject || ''}`.toLowerCase();
+                return cardText.includes(subject.toLowerCase());
+            });
+
+            const quizScore = mastery?.averageScore ?? null;
+            const isLowScore = quizScore !== null && quizScore < 65;
+            const isStaleNotes = daysSinceLastNote === null || daysSinceLastNote > 10;
+            const hasLowFlashcards = matchingFlashcards.length === 0;
+
+            if (isLowScore || isStaleNotes || hasLowFlashcards) {
+                insights.push({
+                    category: 'exam_preparedness_gap',
+                    title: `Upcoming Exam Readiness Gap: ${subject}`,
+                    urgency: daysUntilExam <= 3 ? 'high' : 'medium',
+                    subject,
+                    insight: `Exam "${exam.title || subject}" is in ${daysUntilExam} day(s). ` +
+                        (quizScore !== null ? `Your quiz average on this subject is ${quizScore}% (${mastery?.trend || 'needs work'}). ` : 'No quiz attempts recorded for this subject yet. ') +
+                        (daysSinceLastNote !== null ? `Your notes were last updated ${daysSinceLastNote} days ago. ` : 'No notes created for this subject yet. ') +
+                        (hasLowFlashcards ? '0 flashcards exist for this topic.' : `${matchingFlashcards.length} flashcard(s) exist.`),
+                    actionableType: 'Quiz',
+                    details: { daysUntilExam, quizScore, daysSinceLastNote, flashcardsCount: matchingFlashcards.length }
+                });
+            }
+        });
+
+        // 2. Unreviewed Weak Subjects (Low Quiz Average + No Recent Activity)
+        data.topicMastery.forEach((mastery, subject) => {
+            if (mastery.averageScore < 60 || mastery.trend === 'declining') {
+                const hasRecentNote = data.allNotes.some(n => {
+                    const noteText = `${n.title} ${n.content || ''}`.toLowerCase();
+                    const noteDate = new Date(n.updated_at || n.created_at);
+                    const daysAgo = (now.getTime() - noteDate.getTime()) / (1000 * 60 * 60 * 24);
+                    return noteText.includes(subject.toLowerCase()) && daysAgo < 7;
+                });
+
+                if (!hasRecentNote) {
+                    insights.push({
+                        category: 'unreviewed_weakness',
+                        title: `Untouched Weak Subject: ${subject}`,
+                        urgency: 'medium',
+                        subject,
+                        insight: `Your quiz score in "${subject}" is ${mastery.averageScore}% (${mastery.trend}), but you haven't reviewed or updated notes on this in over a week.`,
+                        actionableType: 'Review',
+                        details: { averageScore: mastery.averageScore, trend: mastery.trend }
+                    });
+                }
+            }
+        });
+
+        // 3. Passive Consumption vs Testing Gap (High Note/Recording Volume but Zero Quizzes)
+        const noteCountsBySubject = new Map<string, number>();
+        data.allNotes.forEach(n => {
+            const sub = n.category || n.title.split(' ')[0] || 'General';
+            noteCountsBySubject.set(sub, (noteCountsBySubject.get(sub) || 0) + 1);
+        });
+
+        noteCountsBySubject.forEach((count, sub) => {
+            if (count >= 3 && !data.topicMastery.has(sub)) {
+                insights.push({
+                    category: 'passive_study_gap',
+                    title: `High Note Volume, No Self-Testing: ${sub}`,
+                    urgency: 'low',
+                    subject: sub,
+                    insight: `You have ${count} notes on "${sub}", but 0 quiz attempts or flashcard reviews to test your recall.`,
+                    actionableType: 'Quiz',
+                    details: { noteCount: count }
+                });
+            }
+        });
+
+        // 4. Overdue Flashcards Review Queue
+        const overdueFlashcards = data.flashcards.filter(f => f.next_review_at && new Date(f.next_review_at) <= now);
+        if (overdueFlashcards.length > 0) {
+            insights.push({
+                category: 'flashcard_queue',
+                title: 'Spaced Repetition Review Due',
+                urgency: overdueFlashcards.length > 15 ? 'high' : 'medium',
+                insight: `You have ${overdueFlashcards.length} flashcard(s) due for spaced-repetition review.`,
+                actionableType: 'Flashcards',
+                details: { overdueCount: overdueFlashcards.length }
+            });
+        }
+
+        // 5. Monthly / Weekly Study Story Narrative
+        const avgQuizzes = data.studyHabits?.averageQuizzesPerWeek ?? 0;
+        const avgNotes = data.studyHabits?.averageNotesPerWeek ?? 0;
+        const peakDay = data.studyHabits?.mostActiveDay ?? 'Unknown';
+        const peakHour = data.studyHabits?.mostActiveHour ?? 'Unknown';
+
+        insights.push({
+            category: 'study_narrative',
+            title: 'Learning Habit Story',
+            urgency: 'low',
+            insight: `Your peak study window is ${peakDay}s at ${peakHour}. You average ${avgQuizzes} quiz(zes) and ${avgNotes} note(s) per week.`,
+            details: { avgQuizzes, avgNotes, peakDay, peakHour }
+        });
+
+        return insights;
+    }
  getFallbackActionableContext() {
         return {
             notes: [],

@@ -158,7 +158,7 @@ Post content: "${content.substring(0, 500)}"
 Respond with ONLY valid JSON (no markdown, no code blocks):
 {"isEducational": boolean, "confidence": number, "reason": "string"}`;
 
-        const MODEL_CHAIN = ['gemini-2.5-flash', 'gemini-3-pro-preview', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+        const MODEL_CHAIN = ['gemini-3.5-flash', 'gemini-3.6-flash'];
         let moderationSuccess = false;
         let lastGeminiError = '';
 

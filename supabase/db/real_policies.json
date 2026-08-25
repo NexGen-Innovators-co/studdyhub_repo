@@ -1,0 +1,4706 @@
+[
+    {
+        "name":  "Users can insert own achievements",
+        "table_name":  "achievements",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "achievements_select_own",
+        "table_name":  "achievements",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "admin_activity_logs_select_admin",
+        "table_name":  "admin_activity_logs",
+        "using_expr":  "is_admin()",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_admin_activity_logs",
+        "table_name":  "admin_activity_logs",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_admin_activity_logs",
+        "table_name":  "admin_activity_logs",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_admin_activity_logs",
+        "table_name":  "admin_activity_logs",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_admin_activity_logs",
+        "table_name":  "admin_activity_logs",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Admins can manage system settings",
+        "table_name":  "admin_system_settings",
+        "using_expr":  "is_admin(auth.uid(), \u0027admin\u0027::admin_role)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Public settings are readable by all",
+        "table_name":  "admin_system_settings",
+        "using_expr":  "(is_public = true)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_delete_admin_system_settings",
+        "table_name":  "admin_system_settings",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_admin_system_settings",
+        "table_name":  "admin_system_settings",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_admin_system_settings",
+        "table_name":  "admin_system_settings",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_admin_system_settings",
+        "table_name":  "admin_system_settings",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Super admins can manage admin users",
+        "table_name":  "admin_users",
+        "using_expr":  "is_admin(auth.uid(), \u0027super_admin\u0027::admin_role)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "admin_users_select_admin",
+        "table_name":  "admin_users",
+        "using_expr":  "((auth.uid() = user_id) OR is_admin())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Admins can manage all podcasts",
+        "table_name":  "ai_podcasts",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE (admin_users.user_id = auth.uid())))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Anyone can view public podcasts",
+        "table_name":  "ai_podcasts",
+        "using_expr":  "(is_public = true)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16484"
+    },
+    {
+        "name":  "ai_podcasts_delete_own",
+        "table_name":  "ai_podcasts",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "ai_podcasts_insert_own",
+        "table_name":  "ai_podcasts",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "ai_podcasts_select_own_or_public",
+        "table_name":  "ai_podcasts",
+        "using_expr":  "((auth.uid() = user_id) OR (is_public = true))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "ai_podcasts_update_own",
+        "table_name":  "ai_podcasts",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_ai_podcasts",
+        "table_name":  "ai_podcasts",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = auth.uid()) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_ai_podcasts",
+        "table_name":  "ai_podcasts",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = auth.uid()) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "ai_user_memory_delete_own",
+        "table_name":  "ai_user_memory",
+        "using_expr":  "(( SELECT auth.uid() AS uid) = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "ai_user_memory_insert_own",
+        "table_name":  "ai_user_memory",
+        "using_expr":  null,
+        "with_check":  "(( SELECT auth.uid() AS uid) = user_id)",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "ai_user_memory_select_own",
+        "table_name":  "ai_user_memory",
+        "using_expr":  "(( SELECT auth.uid() AS uid) = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "ai_user_memory_update_own",
+        "table_name":  "ai_user_memory",
+        "using_expr":  "(( SELECT auth.uid() AS uid) = user_id)",
+        "with_check":  "(( SELECT auth.uid() AS uid) = user_id)",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Admins can read all ratings",
+        "table_name":  "app_ratings",
+        "using_expr":  "is_admin(auth.uid())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Anyone can read ratings",
+        "table_name":  "app_ratings",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can insert own rating",
+        "table_name":  "app_ratings",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update own rating",
+        "table_name":  "app_ratings",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Allow authenticated insert of default stats row",
+        "table_name":  "app_stats",
+        "using_expr":  null,
+        "with_check":  "(id = \u002700000000-0000-0000-0000-000000000001\u0027::uuid)",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Allow authenticated update of stats row",
+        "table_name":  "app_stats",
+        "using_expr":  "(id = \u002700000000-0000-0000-0000-000000000001\u0027::uuid)",
+        "with_check":  "(id = \u002700000000-0000-0000-0000-000000000001\u0027::uuid)",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Allow public read access to app_stats",
+        "table_name":  "app_stats",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_app_stats",
+        "table_name":  "app_stats",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_app_stats",
+        "table_name":  "app_stats",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_app_stats",
+        "table_name":  "app_stats",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_app_stats",
+        "table_name":  "app_stats",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Admins can delete any testimonial",
+        "table_name":  "app_testimonials",
+        "using_expr":  "is_admin(auth.uid())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Admins can read all testimonials",
+        "table_name":  "app_testimonials",
+        "using_expr":  "is_admin(auth.uid())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Admins can update any testimonial",
+        "table_name":  "app_testimonials",
+        "using_expr":  "is_admin(auth.uid())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Anyone can read approved testimonials",
+        "table_name":  "app_testimonials",
+        "using_expr":  "((is_approved = true) OR (auth.uid() = user_id))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can delete own testimonial",
+        "table_name":  "app_testimonials",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can insert own testimonial",
+        "table_name":  "app_testimonials",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update own testimonial",
+        "table_name":  "app_testimonials",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Allow authenticated users to insert their own audio processing ",
+        "table_name":  "audio_processing_results",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Allow authenticated users to read their own audio processing re",
+        "table_name":  "audio_processing_results",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Allow authenticated users to update their own audio processing ",
+        "table_name":  "audio_processing_results",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can delete their own audio processing results",
+        "table_name":  "audio_processing_results",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_delete_audio_processing_results",
+        "table_name":  "audio_processing_results",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_audio_processing_results",
+        "table_name":  "audio_processing_results",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_audio_processing_results",
+        "table_name":  "audio_processing_results",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_audio_processing_results",
+        "table_name":  "audio_processing_results",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Insert/Update for podcast hosts on audio_segments",
+        "table_name":  "audio_segments",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM ai_podcasts p\n  WHERE ((p.id = audio_segments.podcast_id) AND (p.user_id = auth.uid()))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM ai_podcasts p\n  WHERE ((p.id = audio_segments.podcast_id) AND (p.user_id = auth.uid()))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Read access for audio segments",
+        "table_name":  "audio_segments",
+        "using_expr":  "((EXISTS ( SELECT 1\n   FROM ai_podcasts p\n  WHERE ((p.id = audio_segments.podcast_id) AND ((p.is_public = true) OR ((auth.uid() IS NOT NULL) AND (p.user_id = auth.uid())))))) OR ((auth.uid() IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM podcast_members pm\n  WHERE ((pm.podcast_id = audio_segments.podcast_id) AND (pm.user_id = auth.uid()))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Authenticated users can view badges",
+        "table_name":  "badges",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can delete own integrations",
+        "table_name":  "calendar_integrations",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can insert own integrations",
+        "table_name":  "calendar_integrations",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update own integrations",
+        "table_name":  "calendar_integrations",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view own integrations",
+        "table_name":  "calendar_integrations",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable update for users",
+        "table_name":  "chat_messages",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "chat_messages_delete_own",
+        "table_name":  "chat_messages",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "chat_messages_insert_own",
+        "table_name":  "chat_messages",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "chat_messages_select_own",
+        "table_name":  "chat_messages",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_chat_messages",
+        "table_name":  "chat_messages",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_chat_messages",
+        "table_name":  "chat_messages",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_chat_messages",
+        "table_name":  "chat_messages",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_chat_messages",
+        "table_name":  "chat_messages",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "chat_sessions_delete_own",
+        "table_name":  "chat_sessions",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "chat_sessions_insert_own",
+        "table_name":  "chat_sessions",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "chat_sessions_select_own",
+        "table_name":  "chat_sessions",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "chat_sessions_update_own",
+        "table_name":  "chat_sessions",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_chat_sessions",
+        "table_name":  "chat_sessions",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_chat_sessions",
+        "table_name":  "chat_sessions",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_chat_sessions",
+        "table_name":  "chat_sessions",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_chat_sessions",
+        "table_name":  "chat_sessions",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Allow read for owners and shared recordings via chat",
+        "table_name":  "class_recordings",
+        "using_expr":  "((user_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM ((social_chat_message_resources r\n     JOIN social_chat_messages m ON ((m.id = r.message_id)))\n     JOIN social_chat_sessions s ON ((s.id = m.session_id)))\n  WHERE ((r.resource_id = class_recordings.id) AND ((r.resource_type)::text = \u0027class_recording\u0027::text) AND ((((s.chat_type)::text = \u0027p2p\u0027::text) AND ((s.user_id1 = auth.uid()) OR (s.user_id2 = auth.uid()))) OR (((s.chat_type)::text = \u0027group\u0027::text) AND (EXISTS ( SELECT 1\n           FROM social_group_members gm\n          WHERE ((gm.group_id = s.group_id) AND (gm.user_id = auth.uid()) AND (gm.status = \u0027active\u0027::text))))))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "class_recordings_delete_own",
+        "table_name":  "class_recordings",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "class_recordings_insert_own",
+        "table_name":  "class_recordings",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "class_recordings_select_own",
+        "table_name":  "class_recordings",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "class_recordings_update_own",
+        "table_name":  "class_recordings",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_class_recordings",
+        "table_name":  "class_recordings",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_class_recordings",
+        "table_name":  "class_recordings",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_class_recordings",
+        "table_name":  "class_recordings",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_class_recordings",
+        "table_name":  "class_recordings",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Admins can view all moderation logs",
+        "table_name":  "content_moderation_log",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE ((admin_users.user_id = auth.uid()) AND ((admin_users.role = \u0027super_admin\u0027::admin_role) OR (admin_users.role = \u0027admin\u0027::admin_role) OR (admin_users.role = \u0027moderator\u0027::admin_role)))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Block client inserts on moderation logs",
+        "table_name":  "content_moderation_log",
+        "using_expr":  null,
+        "with_check":  "false",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can view their own moderation logs",
+        "table_name":  "content_moderation_log",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Admins can manage moderation queue",
+        "table_name":  "content_moderation_queue",
+        "using_expr":  "is_admin(auth.uid())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_delete_content_moderation_queue",
+        "table_name":  "content_moderation_queue",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_content_moderation_queue",
+        "table_name":  "content_moderation_queue",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_content_moderation_queue",
+        "table_name":  "content_moderation_queue",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_content_moderation_queue",
+        "table_name":  "content_moderation_queue",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Admins can manage countries",
+        "table_name":  "countries",
+        "using_expr":  "is_admin()",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Anyone can read active countries",
+        "table_name":  "countries",
+        "using_expr":  "(is_active = true)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can delete own enrollment",
+        "table_name":  "course_enrollments",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can enroll themselves",
+        "table_name":  "course_enrollments",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can update own enrollment",
+        "table_name":  "course_enrollments",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "enrollments_select_scoped",
+        "table_name":  "course_enrollments",
+        "using_expr":  "((user_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM courses c\n  WHERE ((c.id = course_enrollments.course_id) AND (c.created_by = auth.uid())))) OR (EXISTS ( SELECT 1\n   FROM courses c\n  WHERE ((c.id = course_enrollments.course_id) AND (c.institution_id IS NOT NULL) AND is_institution_member(auth.uid(), c.institution_id, \u0027admin\u0027::text)))) OR (EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE (admin_users.user_id = auth.uid()))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Admins can delete course_materials",
+        "table_name":  "course_materials",
+        "using_expr":  "is_admin()",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Admins can insert course_materials",
+        "table_name":  "course_materials",
+        "using_expr":  null,
+        "with_check":  "is_admin()",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Admins can update course_materials",
+        "table_name":  "course_materials",
+        "using_expr":  "is_admin()",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Everyone can view course_materials",
+        "table_name":  "course_materials",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can insert own progress",
+        "table_name":  "course_progress",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM course_enrollments\n  WHERE ((course_enrollments.id = course_progress.enrollment_id) AND (course_enrollments.user_id = auth.uid()))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can update own progress",
+        "table_name":  "course_progress",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM course_enrollments\n  WHERE ((course_enrollments.id = course_progress.enrollment_id) AND (course_enrollments.user_id = auth.uid()))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM course_enrollments\n  WHERE ((course_enrollments.id = course_progress.enrollment_id) AND (course_enrollments.user_id = auth.uid()))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can view own progress",
+        "table_name":  "course_progress",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM course_enrollments\n  WHERE ((course_enrollments.id = course_progress.enrollment_id) AND (course_enrollments.user_id = auth.uid()))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Anyone can view course resources",
+        "table_name":  "course_resources",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "educators_delete_course_resources",
+        "table_name":  "course_resources",
+        "using_expr":  "((EXISTS ( SELECT 1\n   FROM courses c\n  WHERE ((c.id = course_resources.course_id) AND (c.created_by = auth.uid())))) OR (EXISTS ( SELECT 1\n   FROM courses c\n  WHERE ((c.id = course_resources.course_id) AND (c.institution_id IS NOT NULL) AND is_institution_member(auth.uid(), c.institution_id, \u0027admin\u0027::text)))) OR (EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE (admin_users.user_id = auth.uid()))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "educators_insert_course_resources",
+        "table_name":  "course_resources",
+        "using_expr":  null,
+        "with_check":  "((EXISTS ( SELECT 1\n   FROM courses c\n  WHERE ((c.id = course_resources.course_id) AND (c.created_by = auth.uid())))) OR (EXISTS ( SELECT 1\n   FROM courses c\n  WHERE ((c.id = course_resources.course_id) AND (c.institution_id IS NOT NULL) AND is_institution_member(auth.uid(), c.institution_id, \u0027admin\u0027::text)))) OR (EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE (admin_users.user_id = auth.uid()))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "educators_update_course_resources",
+        "table_name":  "course_resources",
+        "using_expr":  "((EXISTS ( SELECT 1\n   FROM courses c\n  WHERE ((c.id = course_resources.course_id) AND (c.created_by = auth.uid())))) OR (EXISTS ( SELECT 1\n   FROM courses c\n  WHERE ((c.id = course_resources.course_id) AND (c.institution_id IS NOT NULL) AND is_institution_member(auth.uid(), c.institution_id, \u0027admin\u0027::text)))) OR (EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE (admin_users.user_id = auth.uid()))))",
+        "with_check":  "((EXISTS ( SELECT 1\n   FROM courses c\n  WHERE ((c.id = course_resources.course_id) AND (c.created_by = auth.uid())))) OR (EXISTS ( SELECT 1\n   FROM courses c\n  WHERE ((c.id = course_resources.course_id) AND (c.institution_id IS NOT NULL) AND is_institution_member(auth.uid(), c.institution_id, \u0027admin\u0027::text)))) OR (EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE (admin_users.user_id = auth.uid()))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Admins can delete courses",
+        "table_name":  "courses",
+        "using_expr":  "is_admin()",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Admins can insert courses",
+        "table_name":  "courses",
+        "using_expr":  null,
+        "with_check":  "is_admin()",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Admins can update courses",
+        "table_name":  "courses",
+        "using_expr":  "is_admin()",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Everyone can view courses",
+        "table_name":  "courses",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "courses_delete_own",
+        "table_name":  "courses",
+        "using_expr":  "((created_by = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE (admin_users.user_id = auth.uid()))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "courses_insert_educator",
+        "table_name":  "courses",
+        "using_expr":  null,
+        "with_check":  "(is_educator(auth.uid()) OR (EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE (admin_users.user_id = auth.uid()))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "courses_select_visible",
+        "table_name":  "courses",
+        "using_expr":  "(((visibility = \u0027public\u0027::text) AND (is_published = true)) OR ((visibility = \u0027institution\u0027::text) AND (institution_id IN ( SELECT user_institution_ids(auth.uid()) AS user_institution_ids))) OR (created_by = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE (admin_users.user_id = auth.uid()))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "courses_update_own",
+        "table_name":  "courses",
+        "using_expr":  "((created_by = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE (admin_users.user_id = auth.uid()))))",
+        "with_check":  "((created_by = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE (admin_users.user_id = auth.uid()))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Admins can manage curricula",
+        "table_name":  "curricula",
+        "using_expr":  "is_admin()",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Anyone can read active curricula",
+        "table_name":  "curricula",
+        "using_expr":  "(is_active = true)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "admins_view_all_notification_logs",
+        "table_name":  "daily_notification_log",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE (admin_users.user_id = ( SELECT auth.uid() AS uid))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "system_insert_notification_logs",
+        "table_name":  "daily_notification_log",
+        "using_expr":  null,
+        "with_check":  "true",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "users_view_own_notification_logs",
+        "table_name":  "daily_notification_log",
+        "using_expr":  "(( SELECT auth.uid() AS uid) = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can add items to their folders",
+        "table_name":  "document_folder_items",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM document_folders\n  WHERE ((document_folders.id = document_folder_items.folder_id) AND (document_folders.user_id = auth.uid()))))",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can delete items from their folders",
+        "table_name":  "document_folder_items",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM document_folders\n  WHERE ((document_folders.id = document_folder_items.folder_id) AND (document_folders.user_id = auth.uid()))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update items in their folders",
+        "table_name":  "document_folder_items",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM document_folders\n  WHERE ((document_folders.id = document_folder_items.folder_id) AND (document_folders.user_id = auth.uid()))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view items in their folders",
+        "table_name":  "document_folder_items",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM document_folders\n  WHERE ((document_folders.id = document_folder_items.folder_id) AND (document_folders.user_id = auth.uid()))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can create their own folders",
+        "table_name":  "document_folders",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can delete their own folders",
+        "table_name":  "document_folders",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update their own folders",
+        "table_name":  "document_folders",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view their own folders",
+        "table_name":  "document_folders",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "document_folders_update_own",
+        "table_name":  "document_folders",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can create their own documents",
+        "table_name":  "documents",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can delete their own documents",
+        "table_name":  "documents",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update their own documents",
+        "table_name":  "documents",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view their own documents",
+        "table_name":  "documents",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "allow_read_for_owners_and_shared_via_chat_documents_fix",
+        "table_name":  "documents",
+        "using_expr":  "((user_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM ((social_chat_message_resources r\n     JOIN social_chat_messages m ON ((m.id = r.message_id)))\n     JOIN social_chat_sessions s ON ((s.id = m.session_id)))\n  WHERE ((r.resource_id = documents.id) AND ((r.resource_type)::text = ANY (ARRAY[(\u0027document\u0027::character varying)::text, (\u0027documents\u0027::character varying)::text])) AND ((((s.chat_type)::text = \u0027p2p\u0027::text) AND ((s.user_id1 = auth.uid()) OR (s.user_id2 = auth.uid()))) OR (((s.chat_type)::text = \u0027group\u0027::text) AND (EXISTS ( SELECT 1\n           FROM social_group_members gm\n          WHERE ((gm.group_id = s.group_id) AND (gm.user_id = auth.uid()) AND (gm.status = \u0027active\u0027::text))))))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_documents",
+        "table_name":  "documents",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_documents",
+        "table_name":  "documents",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_documents",
+        "table_name":  "documents",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_documents",
+        "table_name":  "documents",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Admins can manage education levels",
+        "table_name":  "education_levels",
+        "using_expr":  "is_admin()",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Anyone can read active education levels",
+        "table_name":  "education_levels",
+        "using_expr":  "(is_active = true)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "error_logs_service_role",
+        "table_name":  "error_logs",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16486"
+    },
+    {
+        "name":  "super_admin_delete_error_logs",
+        "table_name":  "error_logs",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_error_logs",
+        "table_name":  "error_logs",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_error_logs",
+        "table_name":  "error_logs",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_error_logs",
+        "table_name":  "error_logs",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Admins can manage examinations",
+        "table_name":  "examinations",
+        "using_expr":  "is_admin()",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Anyone can read active examinations",
+        "table_name":  "examinations",
+        "using_expr":  "(is_active = true)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Owners can delete own failed_chunks",
+        "table_name":  "failed_chunks",
+        "using_expr":  "(( SELECT auth.uid() AS uid) = document_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Owners can insert failed_chunks",
+        "table_name":  "failed_chunks",
+        "using_expr":  null,
+        "with_check":  "(( SELECT auth.uid() AS uid) = document_id)",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Owners can update own failed_chunks",
+        "table_name":  "failed_chunks",
+        "using_expr":  "(( SELECT auth.uid() AS uid) = document_id)",
+        "with_check":  "(( SELECT auth.uid() AS uid) = document_id)",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Owners can view own failed_chunks",
+        "table_name":  "failed_chunks",
+        "using_expr":  "(( SELECT auth.uid() AS uid) = document_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "failed_chunks_delete",
+        "table_name":  "failed_chunks",
+        "using_expr":  "((document_id IS NULL) OR (document_id IN ( SELECT documents.id\n   FROM documents\n  WHERE (documents.user_id = ( SELECT auth.uid() AS uid)))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "failed_chunks_insert",
+        "table_name":  "failed_chunks",
+        "using_expr":  null,
+        "with_check":  "((document_id IS NULL) OR (document_id IN ( SELECT documents.id\n   FROM documents\n  WHERE (documents.user_id = ( SELECT auth.uid() AS uid)))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "failed_chunks_select",
+        "table_name":  "failed_chunks",
+        "using_expr":  "((document_id IS NULL) OR (document_id IN ( SELECT documents.id\n   FROM documents\n  WHERE (documents.user_id = ( SELECT auth.uid() AS uid)))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "failed_chunks_update",
+        "table_name":  "failed_chunks",
+        "using_expr":  "((document_id IS NULL) OR (document_id IN ( SELECT documents.id\n   FROM documents\n  WHERE (documents.user_id = ( SELECT auth.uid() AS uid)))))",
+        "with_check":  "((document_id IS NULL) OR (document_id IN ( SELECT documents.id\n   FROM documents\n  WHERE (documents.user_id = ( SELECT auth.uid() AS uid)))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_delete_failed_chunks",
+        "table_name":  "failed_chunks",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_failed_chunks",
+        "table_name":  "failed_chunks",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_failed_chunks",
+        "table_name":  "failed_chunks",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_failed_chunks",
+        "table_name":  "failed_chunks",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can delete their own flashcards",
+        "table_name":  "flashcards",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can insert their own flashcards",
+        "table_name":  "flashcards",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update their own flashcards",
+        "table_name":  "flashcards",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view their own flashcards",
+        "table_name":  "flashcards",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "game_progress_delete_own",
+        "table_name":  "game_progress",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "game_progress_insert_own",
+        "table_name":  "game_progress",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "game_progress_select_own",
+        "table_name":  "game_progress",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "game_progress_update_own",
+        "table_name":  "game_progress",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "invites_delete_admin",
+        "table_name":  "institution_invites",
+        "using_expr":  "((EXISTS ( SELECT 1\n   FROM institution_members im\n  WHERE ((im.user_id = auth.uid()) AND (im.institution_id = institution_invites.institution_id) AND (im.status = \u0027active\u0027::text) AND (im.role = ANY (ARRAY[\u0027owner\u0027::text, \u0027admin\u0027::text]))))) OR (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.user_role = \u0027admin\u0027::text)))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "invites_insert_admin",
+        "table_name":  "institution_invites",
+        "using_expr":  null,
+        "with_check":  "((EXISTS ( SELECT 1\n   FROM institution_members im\n  WHERE ((im.user_id = auth.uid()) AND (im.institution_id = institution_invites.institution_id) AND (im.status = \u0027active\u0027::text) AND (im.role = ANY (ARRAY[\u0027owner\u0027::text, \u0027admin\u0027::text]))))) OR (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.user_role = \u0027admin\u0027::text)))))",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "invites_select_admin_or_recipient",
+        "table_name":  "institution_invites",
+        "using_expr":  "((EXISTS ( SELECT 1\n   FROM institution_members im\n  WHERE ((im.user_id = auth.uid()) AND (im.institution_id = institution_invites.institution_id) AND (im.status = \u0027active\u0027::text) AND (im.role = ANY (ARRAY[\u0027owner\u0027::text, \u0027admin\u0027::text]))))) OR (email = (( SELECT users.email\n   FROM auth.users\n  WHERE (users.id = auth.uid())))::text) OR (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.user_role = \u0027admin\u0027::text)))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "invites_update_admin",
+        "table_name":  "institution_invites",
+        "using_expr":  "((EXISTS ( SELECT 1\n   FROM institution_members im\n  WHERE ((im.user_id = auth.uid()) AND (im.institution_id = institution_invites.institution_id) AND (im.status = \u0027active\u0027::text) AND (im.role = ANY (ARRAY[\u0027owner\u0027::text, \u0027admin\u0027::text]))))) OR (email = (( SELECT users.email\n   FROM auth.users\n  WHERE (users.id = auth.uid())))::text) OR (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.user_role = \u0027admin\u0027::text)))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "members_delete_owner_or_self",
+        "table_name":  "institution_members",
+        "using_expr":  "((user_id = auth.uid()) OR is_institution_member(auth.uid(), institution_id, \u0027owner\u0027::text))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "members_insert_admin_or_self",
+        "table_name":  "institution_members",
+        "using_expr":  null,
+        "with_check":  "(is_institution_member(auth.uid(), institution_id, \u0027admin\u0027::text) OR (user_id = auth.uid()))",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "members_select_same_institution",
+        "table_name":  "institution_members",
+        "using_expr":  "((institution_id IN ( SELECT user_institution_ids(auth.uid()) AS user_institution_ids)) OR (user_id = auth.uid()) OR is_admin())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "members_update_admin",
+        "table_name":  "institution_members",
+        "using_expr":  "is_institution_member(auth.uid(), institution_id, \u0027admin\u0027::text)",
+        "with_check":  "is_institution_member(auth.uid(), institution_id, \u0027admin\u0027::text)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "institutions_insert_authenticated",
+        "table_name":  "institutions",
+        "using_expr":  null,
+        "with_check":  "(auth.role() = \u0027authenticated\u0027::text)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "institutions_select_active",
+        "table_name":  "institutions",
+        "using_expr":  "((is_active = true) OR is_institution_member(auth.uid(), id, \u0027admin\u0027::text) OR is_admin())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "institutions_update_admin",
+        "table_name":  "institutions",
+        "using_expr":  "(is_institution_member(auth.uid(), id, \u0027admin\u0027::text) OR is_admin())",
+        "with_check":  "(is_institution_member(auth.uid(), id, \u0027admin\u0027::text) OR is_admin())",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "kid_roadmap_steps_delete_own",
+        "table_name":  "kid_roadmap_steps",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "kid_roadmap_steps_insert_own",
+        "table_name":  "kid_roadmap_steps",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "kid_roadmap_steps_select_own",
+        "table_name":  "kid_roadmap_steps",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "kid_roadmap_steps_update_own",
+        "table_name":  "kid_roadmap_steps",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "learning_topic_connections_delete_own",
+        "table_name":  "learning_topic_connections",
+        "using_expr":  "(( SELECT auth.uid() AS uid) = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "learning_topic_connections_insert_own",
+        "table_name":  "learning_topic_connections",
+        "using_expr":  null,
+        "with_check":  "(( SELECT auth.uid() AS uid) = user_id)",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "learning_topic_connections_select_own",
+        "table_name":  "learning_topic_connections",
+        "using_expr":  "(( SELECT auth.uid() AS uid) = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "learning_topic_connections_update_own",
+        "table_name":  "learning_topic_connections",
+        "using_expr":  "(( SELECT auth.uid() AS uid) = user_id)",
+        "with_check":  "(( SELECT auth.uid() AS uid) = user_id)",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Anyone can view answers",
+        "table_name":  "live_quiz_answers",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16484,16485"
+    },
+    {
+        "name":  "Host can timeout-insert answers",
+        "table_name":  "live_quiz_answers",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM (live_quiz_questions q\n     JOIN live_quiz_sessions s ON ((s.id = q.session_id)))\n  WHERE ((q.id = live_quiz_answers.question_id) AND (s.host_user_id = auth.uid()))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can submit answers",
+        "table_name":  "live_quiz_answers",
+        "using_expr":  null,
+        "with_check":  "(user_id = auth.uid())",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can update own answers",
+        "table_name":  "live_quiz_answers",
+        "using_expr":  "(user_id = auth.uid())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Anyone can view players",
+        "table_name":  "live_quiz_players",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16484,16485"
+    },
+    {
+        "name":  "Authenticated can join as own player",
+        "table_name":  "live_quiz_players",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can delete own player",
+        "table_name":  "live_quiz_players",
+        "using_expr":  "(user_id = auth.uid())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can update own player",
+        "table_name":  "live_quiz_players",
+        "using_expr":  "(user_id = auth.uid())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Anyone can view questions",
+        "table_name":  "live_quiz_questions",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16484,16485"
+    },
+    {
+        "name":  "Host can create questions",
+        "table_name":  "live_quiz_questions",
+        "using_expr":  null,
+        "with_check":  "(session_id IN ( SELECT s.id\n   FROM live_quiz_sessions s\n  WHERE (s.host_user_id = auth.uid())))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Host can update questions",
+        "table_name":  "live_quiz_questions",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM live_quiz_sessions\n  WHERE ((live_quiz_sessions.id = live_quiz_questions.session_id) AND (live_quiz_sessions.host_user_id = auth.uid()))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Anyone can view sessions",
+        "table_name":  "live_quiz_sessions",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16484,16485"
+    },
+    {
+        "name":  "Authenticated can create own sessions",
+        "table_name":  "live_quiz_sessions",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = host_user_id)",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Host can delete own sessions",
+        "table_name":  "live_quiz_sessions",
+        "using_expr":  "(host_user_id = auth.uid())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Host can update own sessions",
+        "table_name":  "live_quiz_sessions",
+        "using_expr":  "(host_user_id = auth.uid())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Allow read for owners and shared documents via chat",
+        "table_name":  "notes",
+        "using_expr":  "((user_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM ((social_chat_message_resources r\n     JOIN social_chat_messages m ON ((m.id = r.message_id)))\n     JOIN social_chat_sessions s ON ((s.id = m.session_id)))\n  WHERE ((r.resource_id = notes.id) AND ((r.resource_type)::text = \u0027documents\u0027::text) AND ((((s.chat_type)::text = \u0027p2p\u0027::text) AND ((s.user_id1 = auth.uid()) OR (s.user_id2 = auth.uid()))) OR (((s.chat_type)::text = \u0027group\u0027::text) AND (EXISTS ( SELECT 1\n           FROM social_group_members gm\n          WHERE ((gm.group_id = s.group_id) AND (gm.user_id = auth.uid()) AND (gm.status = \u0027active\u0027::text))))))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Allow read for owners and shared via chat",
+        "table_name":  "notes",
+        "using_expr":  "((user_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM ((social_chat_message_resources r\n     JOIN social_chat_messages m ON ((m.id = r.message_id)))\n     JOIN social_chat_sessions s ON ((s.id = m.session_id)))\n  WHERE ((r.resource_id = notes.id) AND ((r.resource_type)::text = \u0027note\u0027::text) AND ((((s.chat_type)::text = \u0027p2p\u0027::text) AND ((s.user_id1 = auth.uid()) OR (s.user_id2 = auth.uid()))) OR (((s.chat_type)::text = \u0027group\u0027::text) AND (EXISTS ( SELECT 1\n           FROM social_group_members gm\n          WHERE ((gm.group_id = s.group_id) AND (gm.user_id = auth.uid()) AND (gm.status = \u0027active\u0027::text))))))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can create own notes",
+        "table_name":  "notes",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can delete own notes",
+        "table_name":  "notes",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update own notes",
+        "table_name":  "notes",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view own notes",
+        "table_name":  "notes",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "notes_select_own_or_course",
+        "table_name":  "notes",
+        "using_expr":  "((auth.uid() = user_id) OR (EXISTS ( SELECT 1\n   FROM (course_resources cr\n     JOIN course_enrollments ce ON ((ce.course_id = cr.course_id)))\n  WHERE ((cr.resource_id = notes.id) AND (cr.resource_type = \u0027note\u0027::text) AND (ce.user_id = auth.uid()) AND (ce.status = ANY (ARRAY[\u0027active\u0027::text, \u0027completed\u0027::text]))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "notes_update_own",
+        "table_name":  "notes",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_notes",
+        "table_name":  "notes",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_notes",
+        "table_name":  "notes",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_notes",
+        "table_name":  "notes",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_notes",
+        "table_name":  "notes",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can insert own preferences",
+        "table_name":  "notification_preferences",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update own preferences",
+        "table_name":  "notification_preferences",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view own preferences",
+        "table_name":  "notification_preferences",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "notification_prefs_update_own",
+        "table_name":  "notification_preferences",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can delete own subscriptions",
+        "table_name":  "notification_subscriptions",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can insert own subscriptions",
+        "table_name":  "notification_subscriptions",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update their own subscriptions",
+        "table_name":  "notification_subscriptions",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view own subscriptions",
+        "table_name":  "notification_subscriptions",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "notification_subs_update_own",
+        "table_name":  "notification_subscriptions",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "notifications_delete_own",
+        "table_name":  "notifications",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "notifications_insert_own",
+        "table_name":  "notifications",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "notifications_select_own",
+        "table_name":  "notifications",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "notifications_update_own",
+        "table_name":  "notifications",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_notifications",
+        "table_name":  "notifications",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = auth.uid()) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_notifications",
+        "table_name":  "notifications",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = auth.uid()) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_notifications",
+        "table_name":  "notifications",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = auth.uid()) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_notifications",
+        "table_name":  "notifications",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = auth.uid()) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = auth.uid()) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "admin_view_all_reads",
+        "table_name":  "platform_update_reads",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE (admin_users.user_id = auth.uid())))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "users_manage_own_reads",
+        "table_name":  "platform_update_reads",
+        "using_expr":  "(user_id = auth.uid())",
+        "with_check":  "(user_id = auth.uid())",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "admin_full_access_platform_updates",
+        "table_name":  "platform_updates",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE (admin_users.user_id = auth.uid())))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE (admin_users.user_id = auth.uid())))",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "users_read_published_updates",
+        "table_name":  "platform_updates",
+        "using_expr":  "((auth.role() = \u0027authenticated\u0027::text) AND (status = \u0027published\u0027::text))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Uploader can insert podcast chunks",
+        "table_name":  "podcast_chunks",
+        "using_expr":  null,
+        "with_check":  "((auth.uid() = uploader_user_id) OR (uploader_user_id IS NULL))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Uploader can update podcast chunks",
+        "table_name":  "podcast_chunks",
+        "using_expr":  "((auth.uid() = uploader_user_id) OR (uploader_user_id IS NULL))",
+        "with_check":  "((auth.uid() = uploader_user_id) OR (uploader_user_id IS NULL))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "podcast_chunks_insert_own",
+        "table_name":  "podcast_chunks",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = uploader_user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "podcast_chunks_select_own",
+        "table_name":  "podcast_chunks",
+        "using_expr":  "(auth.uid() = uploader_user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "podcast_chunks_update_own",
+        "table_name":  "podcast_chunks",
+        "using_expr":  "(auth.uid() = uploader_user_id)",
+        "with_check":  "(auth.uid() = uploader_user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "podcast_cohosts_delete_own",
+        "table_name":  "podcast_cohosts",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "podcast_cohosts_insert_own",
+        "table_name":  "podcast_cohosts",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "podcast_cohosts_select_auth",
+        "table_name":  "podcast_cohosts",
+        "using_expr":  "(auth.role() = \u0027authenticated\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Admins can manage credit packs",
+        "table_name":  "podcast_credit_packs",
+        "using_expr":  "is_admin(auth.uid())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Anyone can read active credit packs",
+        "table_name":  "podcast_credit_packs",
+        "using_expr":  "(is_active = true)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Admins can read all transactions",
+        "table_name":  "podcast_credit_transactions",
+        "using_expr":  "is_admin(auth.uid())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can read own transactions",
+        "table_name":  "podcast_credit_transactions",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Admins can read all credits",
+        "table_name":  "podcast_credits",
+        "using_expr":  "is_admin(auth.uid())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Service role manages credits",
+        "table_name":  "podcast_credits",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can read own credits",
+        "table_name":  "podcast_credits",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Co-hosts can send invitations",
+        "table_name":  "podcast_invites",
+        "using_expr":  null,
+        "with_check":  "((inviter_id = auth.uid()) AND check_user_is_cohost(podcast_id, auth.uid()))",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Invitees can update their invitation status",
+        "table_name":  "podcast_invites",
+        "using_expr":  "(invitee_id = auth.uid())",
+        "with_check":  "((invitee_id = auth.uid()) AND (status = ANY (ARRAY[\u0027accepted\u0027::text, \u0027declined\u0027::text])))",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Owner or co-host can invite",
+        "table_name":  "podcast_invites",
+        "using_expr":  null,
+        "with_check":  "((EXISTS ( SELECT 1\n   FROM ai_podcasts\n  WHERE ((ai_podcasts.id = podcast_invites.podcast_id) AND (ai_podcasts.user_id = auth.uid())))) OR check_user_is_cohost(podcast_id, auth.uid()))",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Podcast owners and co-hosts can send invitations",
+        "table_name":  "podcast_invites",
+        "using_expr":  null,
+        "with_check":  "((inviter_id = auth.uid()) AND (EXISTS ( SELECT 1\n   FROM ai_podcasts\n  WHERE ((ai_podcasts.id = podcast_invites.podcast_id) AND (ai_podcasts.user_id = auth.uid())))))",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can respond to invites",
+        "table_name":  "podcast_invites",
+        "using_expr":  "((invitee_id = auth.uid()) OR (invitee_email = (( SELECT users.email\n   FROM auth.users\n  WHERE (users.id = auth.uid())))::text))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view their invites",
+        "table_name":  "podcast_invites",
+        "using_expr":  "((invitee_id = auth.uid()) OR (invitee_email = (( SELECT users.email\n   FROM auth.users\n  WHERE (users.id = auth.uid())))::text))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "podcast_invites_insert_own",
+        "table_name":  "podcast_invites",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = inviter_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "podcast_invites_select_own",
+        "table_name":  "podcast_invites",
+        "using_expr":  "((auth.uid() = inviter_id) OR (auth.uid() = invitee_id))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "podcast_invites_update_own",
+        "table_name":  "podcast_invites",
+        "using_expr":  "((auth.uid() = inviter_id) OR (auth.uid() = invitee_id))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "podcast_owners_and_cohosts_can_send_invitations",
+        "table_name":  "podcast_invites",
+        "using_expr":  null,
+        "with_check":  "((inviter_id = ( SELECT auth.uid() AS uid)) AND ((EXISTS ( SELECT 1\n   FROM ai_podcasts p\n  WHERE ((p.id = podcast_invites.podcast_id) AND (p.user_id = ( SELECT auth.uid() AS uid))))) OR check_user_is_cohost(podcast_id, ( SELECT auth.uid() AS uid))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can join as listeners",
+        "table_name":  "podcast_listeners",
+        "using_expr":  null,
+        "with_check":  "(user_id = auth.uid())",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update their listener status",
+        "table_name":  "podcast_listeners",
+        "using_expr":  "(user_id = auth.uid())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view podcast listeners",
+        "table_name":  "podcast_listeners",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM ai_podcasts p\n  WHERE ((p.id = podcast_listeners.podcast_id) AND ((p.is_public = true) OR (p.user_id = auth.uid())))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Owners can manage podcast members",
+        "table_name":  "podcast_members",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM ai_podcasts p\n  WHERE ((p.id = podcast_members.podcast_id) AND (p.user_id = auth.uid()))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM ai_podcasts p\n  WHERE ((p.id = podcast_members.podcast_id) AND (p.user_id = auth.uid()))))",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Podcast owner can manage members",
+        "table_name":  "podcast_members",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM ai_podcasts\n  WHERE ((ai_podcasts.id = podcast_members.podcast_id) AND (ai_podcasts.user_id = auth.uid()))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view podcast members",
+        "table_name":  "podcast_members",
+        "using_expr":  "((user_id = ( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1\n   FROM ai_podcasts p\n  WHERE ((p.id = podcast_members.podcast_id) AND ((p.is_public = true) OR (p.user_id = ( SELECT auth.uid() AS uid)))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can view their own membership",
+        "table_name":  "podcast_members",
+        "using_expr":  "(user_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "podcast_members_delete_own",
+        "table_name":  "podcast_members",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "podcast_members_insert_own",
+        "table_name":  "podcast_members",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "podcast_members_select_auth",
+        "table_name":  "podcast_members",
+        "using_expr":  "(auth.role() = \u0027authenticated\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Hosts can update requests",
+        "table_name":  "podcast_participation_requests",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM ai_podcasts p\n  WHERE ((p.id = podcast_participation_requests.podcast_id) AND (p.user_id = auth.uid()))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Hosts can view podcast requests",
+        "table_name":  "podcast_participation_requests",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM ai_podcasts p\n  WHERE ((p.id = podcast_participation_requests.podcast_id) AND (p.user_id = auth.uid()))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can insert own requests",
+        "table_name":  "podcast_participation_requests",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can view own requests",
+        "table_name":  "podcast_participation_requests",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Mod access on recordings",
+        "table_name":  "podcast_recordings",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM ai_podcasts p\n  WHERE ((p.id = podcast_recordings.podcast_id) AND (p.user_id = auth.uid()))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Owner can manage own recordings",
+        "table_name":  "podcast_recordings",
+        "using_expr":  "((auth.uid() = user_id) OR (user_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM ai_podcasts p\n  WHERE ((p.id = podcast_recordings.podcast_id) AND (p.user_id = auth.uid())))))",
+        "with_check":  "((auth.uid() = user_id) OR (user_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM ai_podcasts p\n  WHERE ((p.id = podcast_recordings.podcast_id) AND (p.user_id = auth.uid())))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "podcast_recordings_delete_own",
+        "table_name":  "podcast_recordings",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "podcast_recordings_insert_own",
+        "table_name":  "podcast_recordings",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "podcast_recordings_select_own",
+        "table_name":  "podcast_recordings",
+        "using_expr":  "((auth.uid() = user_id) OR (EXISTS ( SELECT 1\n   FROM ai_podcasts p\n  WHERE ((p.id = podcast_recordings.podcast_id) AND ((p.user_id = auth.uid()) OR (p.is_public = true))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "podcast_recordings_update_own",
+        "table_name":  "podcast_recordings",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can share podcasts",
+        "table_name":  "podcast_shares",
+        "using_expr":  null,
+        "with_check":  "(user_id = auth.uid())",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view podcast shares",
+        "table_name":  "podcast_shares",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM ai_podcasts p\n  WHERE ((p.id = podcast_shares.podcast_id) AND ((p.user_id = auth.uid()) OR (p.is_public = true)))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can insert own profile",
+        "table_name":  "profiles",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update own profile",
+        "table_name":  "profiles",
+        "using_expr":  "(auth.uid() = id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view own profile",
+        "table_name":  "profiles",
+        "using_expr":  "(auth.uid() = id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "profiles_delete_own",
+        "table_name":  "profiles",
+        "using_expr":  "(auth.uid() = id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "profiles_select_authenticated",
+        "table_name":  "profiles",
+        "using_expr":  "(auth.role() = \u0027authenticated\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "profiles_update_admin",
+        "table_name":  "profiles",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE ((admin_users.user_id = auth.uid()) AND (admin_users.is_active = true))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "profiles_update_own",
+        "table_name":  "profiles",
+        "using_expr":  "(auth.uid() = id)",
+        "with_check":  "(auth.uid() = id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "profiles_update_own_restricted",
+        "table_name":  "profiles",
+        "using_expr":  "(auth.uid() = id)",
+        "with_check":  "((auth.uid() = id) AND ((NOT (user_role IS DISTINCT FROM current_user_role())) OR (user_role = \u0027student\u0027::text)))",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_profiles",
+        "table_name":  "profiles",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_profiles",
+        "table_name":  "profiles",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_profiles",
+        "table_name":  "profiles",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_profiles",
+        "table_name":  "profiles",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can insert own quiz attempts",
+        "table_name":  "quiz_attempts",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view own quiz attempts",
+        "table_name":  "quiz_attempts",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "quiz_attempts_update_own",
+        "table_name":  "quiz_attempts",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can create own quizzes",
+        "table_name":  "quizzes",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can delete own quizzes",
+        "table_name":  "quizzes",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update own quizzes",
+        "table_name":  "quizzes",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view own quizzes",
+        "table_name":  "quizzes",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "quizzes_update_own",
+        "table_name":  "quizzes",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_quizzes",
+        "table_name":  "quizzes",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_quizzes",
+        "table_name":  "quizzes",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_quizzes",
+        "table_name":  "quizzes",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_quizzes",
+        "table_name":  "quizzes",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Block client inserts on referrals",
+        "table_name":  "referrals",
+        "using_expr":  null,
+        "with_check":  "false",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Block client updates on referrals",
+        "table_name":  "referrals",
+        "using_expr":  "false",
+        "with_check":  "false",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can view referrals they made",
+        "table_name":  "referrals",
+        "using_expr":  "(auth.uid() = referrer_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view referrals they received",
+        "table_name":  "referrals",
+        "using_expr":  "(auth.uid() = referee_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "rvr_insert_own",
+        "table_name":  "role_verification_requests",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "rvr_select_admin",
+        "table_name":  "role_verification_requests",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE ((admin_users.user_id = auth.uid()) AND (admin_users.is_active = true))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "rvr_select_own",
+        "table_name":  "role_verification_requests",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "rvr_update_admin",
+        "table_name":  "role_verification_requests",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE ((admin_users.user_id = auth.uid()) AND (admin_users.is_active = true))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "rvr_update_own",
+        "table_name":  "role_verification_requests",
+        "using_expr":  "((auth.uid() = user_id) AND (status = \u0027pending\u0027::text))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can create own schedule items",
+        "table_name":  "schedule_items",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can delete own schedule items",
+        "table_name":  "schedule_items",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update own schedule items",
+        "table_name":  "schedule_items",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view own schedule",
+        "table_name":  "schedule_items",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "schedule_items_update_own",
+        "table_name":  "schedule_items",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_schedule_items",
+        "table_name":  "schedule_items",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_schedule_items",
+        "table_name":  "schedule_items",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_schedule_items",
+        "table_name":  "schedule_items",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_schedule_items",
+        "table_name":  "schedule_items",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can manage own schedule reminders",
+        "table_name":  "schedule_reminders",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM schedule_items\n  WHERE ((schedule_items.id = schedule_reminders.schedule_id) AND (schedule_items.user_id = auth.uid()))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view own schedule reminders",
+        "table_name":  "schedule_reminders",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM schedule_items\n  WHERE ((schedule_items.id = schedule_reminders.schedule_id) AND (schedule_items.user_id = auth.uid()))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view their own audit logs",
+        "table_name":  "schema_agent_audit",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "schema_agent_audit_select_own",
+        "table_name":  "schema_agent_audit",
+        "using_expr":  "((auth.uid() = user_id) OR is_admin())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Allow public read access",
+        "table_name":  "social_bookmarks",
+        "using_expr":  "(auth.role() = \u0027authenticated\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable delete for own bookmarks",
+        "table_name":  "social_bookmarks",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable insert for authenticated users",
+        "table_name":  "social_bookmarks",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable read access for all users",
+        "table_name":  "social_bookmarks",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_bookmarks_select_own",
+        "table_name":  "social_bookmarks",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_social_bookmarks",
+        "table_name":  "social_bookmarks",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_bookmarks",
+        "table_name":  "social_bookmarks",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_bookmarks",
+        "table_name":  "social_bookmarks",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_bookmarks",
+        "table_name":  "social_bookmarks",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can delete their own media",
+        "table_name":  "social_chat_message_media",
+        "using_expr":  "(message_id IN ( SELECT social_chat_messages.id\n   FROM social_chat_messages\n  WHERE (social_chat_messages.sender_id = auth.uid())))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can update their own media",
+        "table_name":  "social_chat_message_media",
+        "using_expr":  "(message_id IN ( SELECT social_chat_messages.id\n   FROM social_chat_messages\n  WHERE (social_chat_messages.sender_id = auth.uid())))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can view media in their chat sessions",
+        "table_name":  "social_chat_message_media",
+        "using_expr":  "(message_id IN ( SELECT cm.id\n   FROM (social_chat_messages cm\n     JOIN social_chat_sessions cs ON ((cm.session_id = cs.id)))\n  WHERE ((cs.user_id1 = auth.uid()) OR (cs.user_id2 = auth.uid()) OR ((cs.group_id IS NOT NULL) AND (EXISTS ( SELECT 1\n           FROM social_group_members\n          WHERE ((social_group_members.group_id = cs.group_id) AND (social_group_members.user_id = auth.uid()) AND (social_group_members.status = \u0027active\u0027::text))))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_chat_message_media_insert",
+        "table_name":  "social_chat_message_media",
+        "using_expr":  null,
+        "with_check":  "(message_id IN ( SELECT social_chat_messages.id\n   FROM social_chat_messages\n  WHERE (social_chat_messages.sender_id = ( SELECT auth.uid() AS uid))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_delete_social_chat_message_media",
+        "table_name":  "social_chat_message_media",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_chat_message_media",
+        "table_name":  "social_chat_message_media",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_chat_message_media",
+        "table_name":  "social_chat_message_media",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_chat_message_media",
+        "table_name":  "social_chat_message_media",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "reads_delete_owner",
+        "table_name":  "social_chat_message_reads",
+        "using_expr":  "(user_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "reads_insert_owner",
+        "table_name":  "social_chat_message_reads",
+        "using_expr":  null,
+        "with_check":  "(user_id = ( SELECT auth.uid() AS uid))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "reads_select_admin",
+        "table_name":  "social_chat_message_reads",
+        "using_expr":  "((auth.jwt() -\u003e\u003e \u0027user_role\u0027::text) = \u0027admin\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "reads_select_owner",
+        "table_name":  "social_chat_message_reads",
+        "using_expr":  "(user_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "reads_update_owner",
+        "table_name":  "social_chat_message_reads",
+        "using_expr":  "(user_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  "(user_id = ( SELECT auth.uid() AS uid))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_chat_reads_insert_own",
+        "table_name":  "social_chat_message_reads",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_chat_reads_select_own",
+        "table_name":  "social_chat_message_reads",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_chat_reads_update_own",
+        "table_name":  "social_chat_message_reads",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can add resources to messages they sent",
+        "table_name":  "social_chat_message_resources",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM social_chat_messages\n  WHERE ((social_chat_messages.id = social_chat_message_resources.message_id) AND (social_chat_messages.sender_id = auth.uid()))))",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view message resources in their chats",
+        "table_name":  "social_chat_message_resources",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM (social_chat_messages cm\n     JOIN social_chat_sessions cs ON ((cm.session_id = cs.id)))\n  WHERE ((cm.id = social_chat_message_resources.message_id) AND ((cs.user_id1 = auth.uid()) OR (cs.user_id2 = auth.uid()) OR (EXISTS ( SELECT 1\n           FROM social_group_members\n          WHERE ((social_group_members.group_id = cs.group_id) AND (social_group_members.user_id = auth.uid()) AND (social_group_members.status = \u0027active\u0027::text))))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can delete their own messages",
+        "table_name":  "social_chat_messages",
+        "using_expr":  "(sender_id = auth.uid())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can insert messages",
+        "table_name":  "social_chat_messages",
+        "using_expr":  null,
+        "with_check":  "((sender_id = auth.uid()) AND (session_id IN ( SELECT social_chat_sessions.id\n   FROM social_chat_sessions\n  WHERE ((social_chat_sessions.user_id1 = auth.uid()) OR (social_chat_sessions.user_id2 = auth.uid()) OR (((social_chat_sessions.chat_type)::text = \u0027group\u0027::text) AND (social_chat_sessions.group_id IN ( SELECT social_group_members.group_id\n           FROM social_group_members\n          WHERE ((social_group_members.user_id = auth.uid()) AND (social_group_members.status = \u0027active\u0027::text)))))))))",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can send chat messages",
+        "table_name":  "social_chat_messages",
+        "using_expr":  null,
+        "with_check":  "((sender_id = auth.uid()) AND (((group_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM social_group_members\n  WHERE ((social_group_members.group_id = social_chat_messages.group_id) AND (social_group_members.user_id = auth.uid()) AND (social_group_members.status = \u0027active\u0027::text))))) OR ((session_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM social_chat_sessions cs\n  WHERE ((cs.id = social_chat_messages.session_id) AND ((cs.user_id1 = auth.uid()) OR (cs.user_id2 = auth.uid()) OR (EXISTS ( SELECT 1\n           FROM social_group_members\n          WHERE ((social_group_members.group_id = cs.group_id) AND (social_group_members.user_id = auth.uid()) AND (social_group_members.status = \u0027active\u0027::text)))))))))))",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update their own messages",
+        "table_name":  "social_chat_messages",
+        "using_expr":  "(sender_id = auth.uid())",
+        "with_check":  "(sender_id = auth.uid())",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view chat messages",
+        "table_name":  "social_chat_messages",
+        "using_expr":  "(((group_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM social_group_members\n  WHERE ((social_group_members.group_id = social_chat_messages.group_id) AND (social_group_members.user_id = auth.uid()) AND (social_group_members.status = \u0027active\u0027::text))))) OR ((session_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM social_chat_sessions cs\n  WHERE ((cs.id = social_chat_messages.session_id) AND ((cs.user_id1 = auth.uid()) OR (cs.user_id2 = auth.uid()) OR (EXISTS ( SELECT 1\n           FROM social_group_members\n          WHERE ((social_group_members.group_id = cs.group_id) AND (social_group_members.user_id = auth.uid()) AND (social_group_members.status = \u0027active\u0027::text))))))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view their chat messages",
+        "table_name":  "social_chat_messages",
+        "using_expr":  "(session_id IN ( SELECT social_chat_sessions.id\n   FROM social_chat_sessions\n  WHERE ((social_chat_sessions.user_id1 = auth.uid()) OR (social_chat_sessions.user_id2 = auth.uid()) OR (((social_chat_sessions.chat_type)::text = \u0027group\u0027::text) AND (social_chat_sessions.group_id IN ( SELECT social_group_members.group_id\n           FROM social_group_members\n          WHERE ((social_group_members.user_id = auth.uid()) AND (social_group_members.status = \u0027active\u0027::text))))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "group members can read social chat messages",
+        "table_name":  "social_chat_messages",
+        "using_expr":  "((sender_id = ( SELECT auth.uid() AS uid)) OR ((group_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM social_group_members gm\n  WHERE ((gm.group_id = social_chat_messages.group_id) AND (gm.user_id = ( SELECT auth.uid() AS uid)) AND (gm.status = \u0027active\u0027::text))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_chat_messages_delete",
+        "table_name":  "social_chat_messages",
+        "using_expr":  "(sender_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_chat_messages_delete_own",
+        "table_name":  "social_chat_messages",
+        "using_expr":  "(auth.uid() = sender_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_chat_messages_insert",
+        "table_name":  "social_chat_messages",
+        "using_expr":  null,
+        "with_check":  "(sender_id = ( SELECT auth.uid() AS uid))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_chat_messages_insert_own",
+        "table_name":  "social_chat_messages",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = sender_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_chat_messages_select",
+        "table_name":  "social_chat_messages",
+        "using_expr":  "(sender_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_chat_messages_select_participant",
+        "table_name":  "social_chat_messages",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM social_chat_sessions s\n  WHERE ((s.id = social_chat_messages.session_id) AND ((s.user_id1 = auth.uid()) OR (s.user_id2 = auth.uid()) OR (EXISTS ( SELECT 1\n           FROM social_group_members gm\n          WHERE ((gm.group_id = s.group_id) AND (gm.user_id = auth.uid()) AND (gm.status = \u0027active\u0027::text))))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_chat_messages_update",
+        "table_name":  "social_chat_messages",
+        "using_expr":  "(sender_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  "(sender_id = ( SELECT auth.uid() AS uid))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_chat_messages_update_own",
+        "table_name":  "social_chat_messages",
+        "using_expr":  "(auth.uid() = sender_id)",
+        "with_check":  "(auth.uid() = sender_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_social_chat_messages",
+        "table_name":  "social_chat_messages",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_chat_messages",
+        "table_name":  "social_chat_messages",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_chat_messages",
+        "table_name":  "social_chat_messages",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_chat_messages",
+        "table_name":  "social_chat_messages",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can create p2p sessions",
+        "table_name":  "social_chat_sessions",
+        "using_expr":  null,
+        "with_check":  "(((chat_type)::text = \u0027p2p\u0027::text) AND ((auth.uid() = user_id1) OR (auth.uid() = user_id2)))",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can create sessions",
+        "table_name":  "social_chat_sessions",
+        "using_expr":  null,
+        "with_check":  "((((chat_type)::text = \u0027p2p\u0027::text) AND ((user_id1 = auth.uid()) OR (user_id2 = auth.uid()))) OR (((chat_type)::text = \u0027group\u0027::text) AND (group_id IN ( SELECT social_group_members.group_id\n   FROM social_group_members\n  WHERE ((social_group_members.user_id = auth.uid()) AND (social_group_members.status = \u0027active\u0027::text))))))",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update their own sessions",
+        "table_name":  "social_chat_sessions",
+        "using_expr":  "((auth.uid() = user_id1) OR (auth.uid() = user_id2) OR (EXISTS ( SELECT 1\n   FROM social_group_members\n  WHERE ((social_group_members.group_id = social_chat_sessions.group_id) AND (social_group_members.user_id = auth.uid()) AND (social_group_members.role = ANY (ARRAY[\u0027admin\u0027::text, \u0027moderator\u0027::text]))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update their sessions",
+        "table_name":  "social_chat_sessions",
+        "using_expr":  "((user_id1 = auth.uid()) OR (user_id2 = auth.uid()) OR (((chat_type)::text = \u0027group\u0027::text) AND (group_id IN ( SELECT social_group_members.group_id\n   FROM social_group_members\n  WHERE ((social_group_members.user_id = auth.uid()) AND (social_group_members.status = \u0027active\u0027::text))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view their own chat sessions",
+        "table_name":  "social_chat_sessions",
+        "using_expr":  "((auth.uid() = user_id1) OR (auth.uid() = user_id2) OR (EXISTS ( SELECT 1\n   FROM social_group_members\n  WHERE ((social_group_members.group_id = social_chat_sessions.group_id) AND (social_group_members.user_id = auth.uid()) AND (social_group_members.status = \u0027active\u0027::text)))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view their sessions",
+        "table_name":  "social_chat_sessions",
+        "using_expr":  "((user_id1 = auth.uid()) OR (user_id2 = auth.uid()) OR (((chat_type)::text = \u0027group\u0027::text) AND (group_id IN ( SELECT social_group_members.group_id\n   FROM social_group_members\n  WHERE ((social_group_members.user_id = auth.uid()) AND (social_group_members.status = \u0027active\u0027::text))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_chat_sessions_insert_participant",
+        "table_name":  "social_chat_sessions",
+        "using_expr":  null,
+        "with_check":  "((auth.uid() = user_id1) OR (auth.uid() = user_id2))",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_chat_sessions_select_participant",
+        "table_name":  "social_chat_sessions",
+        "using_expr":  "((auth.uid() = user_id1) OR (auth.uid() = user_id2) OR (EXISTS ( SELECT 1\n   FROM social_group_members gm\n  WHERE ((gm.group_id = social_chat_sessions.group_id) AND (gm.user_id = auth.uid()) AND (gm.status = \u0027active\u0027::text)))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_chat_sessions_update_participant",
+        "table_name":  "social_chat_sessions",
+        "using_expr":  "((auth.uid() = user_id1) OR (auth.uid() = user_id2))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_comment_media_delete",
+        "table_name":  "social_comment_media",
+        "using_expr":  "(comment_id IN ( SELECT social_comments.id\n   FROM social_comments\n  WHERE (social_comments.author_id = ( SELECT auth.uid() AS uid))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_comment_media_insert",
+        "table_name":  "social_comment_media",
+        "using_expr":  null,
+        "with_check":  "(comment_id IN ( SELECT social_comments.id\n   FROM social_comments\n  WHERE (social_comments.author_id = ( SELECT auth.uid() AS uid))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_comment_media_select",
+        "table_name":  "social_comment_media",
+        "using_expr":  "(comment_id IN ( SELECT social_comments.id\n   FROM social_comments\n  WHERE (social_comments.author_id = ( SELECT auth.uid() AS uid))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_comment_media_update",
+        "table_name":  "social_comment_media",
+        "using_expr":  "(comment_id IN ( SELECT social_comments.id\n   FROM social_comments\n  WHERE (social_comments.author_id = ( SELECT auth.uid() AS uid))))",
+        "with_check":  "(comment_id IN ( SELECT social_comments.id\n   FROM social_comments\n  WHERE (social_comments.author_id = ( SELECT auth.uid() AS uid))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_delete_social_comment_media",
+        "table_name":  "social_comment_media",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_comment_media",
+        "table_name":  "social_comment_media",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_comment_media",
+        "table_name":  "social_comment_media",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_comment_media",
+        "table_name":  "social_comment_media",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Enable delete for comment authors",
+        "table_name":  "social_comments",
+        "using_expr":  "(auth.uid() = author_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable insert for authenticated users",
+        "table_name":  "social_comments",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() IS NOT NULL)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable read access for all users",
+        "table_name":  "social_comments",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable update for comment authors",
+        "table_name":  "social_comments",
+        "using_expr":  "(auth.uid() = author_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_comments_delete",
+        "table_name":  "social_comments",
+        "using_expr":  "(author_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_comments_insert",
+        "table_name":  "social_comments",
+        "using_expr":  null,
+        "with_check":  "(author_id = ( SELECT auth.uid() AS uid))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_comments_insert_own",
+        "table_name":  "social_comments",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = author_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_comments_select",
+        "table_name":  "social_comments",
+        "using_expr":  "(author_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_comments_select_auth",
+        "table_name":  "social_comments",
+        "using_expr":  "(auth.role() = \u0027authenticated\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_comments_update",
+        "table_name":  "social_comments",
+        "using_expr":  "(author_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  "(author_id = ( SELECT auth.uid() AS uid))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_comments_update_own",
+        "table_name":  "social_comments",
+        "using_expr":  "(auth.uid() = author_id)",
+        "with_check":  "(auth.uid() = author_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_social_comments",
+        "table_name":  "social_comments",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_comments",
+        "table_name":  "social_comments",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_comments",
+        "table_name":  "social_comments",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_comments",
+        "table_name":  "social_comments",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "group members can read social_event_attendees",
+        "table_name":  "social_event_attendees",
+        "using_expr":  "((event_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM social_events se\n  WHERE ((se.id = social_event_attendees.event_id) AND ((se.organizer_id = ( SELECT auth.uid() AS uid)) OR ((se.group_id IS NOT NULL) AND (EXISTS ( SELECT 1\n           FROM social_group_members gm\n          WHERE ((gm.group_id = se.group_id) AND (gm.user_id = ( SELECT auth.uid() AS uid)) AND (gm.status = \u0027active\u0027::text))))))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_event_attendees_delete",
+        "table_name":  "social_event_attendees",
+        "using_expr":  "(user_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_event_attendees_insert",
+        "table_name":  "social_event_attendees",
+        "using_expr":  null,
+        "with_check":  "(user_id = ( SELECT auth.uid() AS uid))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_event_attendees_select",
+        "table_name":  "social_event_attendees",
+        "using_expr":  "(user_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_event_attendees_update",
+        "table_name":  "social_event_attendees",
+        "using_expr":  "(user_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  "(user_id = ( SELECT auth.uid() AS uid))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_delete_social_event_attendees",
+        "table_name":  "social_event_attendees",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_event_attendees",
+        "table_name":  "social_event_attendees",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_event_attendees",
+        "table_name":  "social_event_attendees",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_event_attendees",
+        "table_name":  "social_event_attendees",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "group members can read social events",
+        "table_name":  "social_events",
+        "using_expr":  "((organizer_id = ( SELECT auth.uid() AS uid)) OR ((group_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM social_group_members gm\n  WHERE ((gm.group_id = social_events.group_id) AND (gm.user_id = ( SELECT auth.uid() AS uid)) AND (gm.status = \u0027active\u0027::text))))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_events_delete",
+        "table_name":  "social_events",
+        "using_expr":  "(organizer_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_events_delete_creator",
+        "table_name":  "social_events",
+        "using_expr":  "(auth.uid() = organizer_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_events_insert",
+        "table_name":  "social_events",
+        "using_expr":  null,
+        "with_check":  "(organizer_id = ( SELECT auth.uid() AS uid))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_events_insert_auth",
+        "table_name":  "social_events",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = organizer_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_events_select",
+        "table_name":  "social_events",
+        "using_expr":  "(organizer_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_events_select_auth",
+        "table_name":  "social_events",
+        "using_expr":  "(auth.role() = \u0027authenticated\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_events_update",
+        "table_name":  "social_events",
+        "using_expr":  "(organizer_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  "(organizer_id = ( SELECT auth.uid() AS uid))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_events_update_creator",
+        "table_name":  "social_events",
+        "using_expr":  "(auth.uid() = organizer_id)",
+        "with_check":  "(auth.uid() = organizer_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_social_events",
+        "table_name":  "social_events",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_events",
+        "table_name":  "social_events",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_events",
+        "table_name":  "social_events",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_events",
+        "table_name":  "social_events",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Enable delete for own follows",
+        "table_name":  "social_follows",
+        "using_expr":  "(auth.uid() = follower_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable insert for authenticated users",
+        "table_name":  "social_follows",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = follower_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable read access for all users",
+        "table_name":  "social_follows",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_follows_select_auth",
+        "table_name":  "social_follows",
+        "using_expr":  "(auth.role() = \u0027authenticated\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_social_follows",
+        "table_name":  "social_follows",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_follows",
+        "table_name":  "social_follows",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_follows",
+        "table_name":  "social_follows",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_follows",
+        "table_name":  "social_follows",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Enable delete for own membership",
+        "table_name":  "social_group_members",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable insert for authenticated users",
+        "table_name":  "social_group_members",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable read access for all users",
+        "table_name":  "social_group_members",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable update for own membership",
+        "table_name":  "social_group_members",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_group_members_select_auth",
+        "table_name":  "social_group_members",
+        "using_expr":  "(auth.role() = \u0027authenticated\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_group_members_update_own",
+        "table_name":  "social_group_members",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_social_group_members",
+        "table_name":  "social_group_members",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_group_members",
+        "table_name":  "social_group_members",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_group_members",
+        "table_name":  "social_group_members",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_group_members",
+        "table_name":  "social_group_members",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Enable delete for group creators",
+        "table_name":  "social_groups",
+        "using_expr":  "(auth.uid() = created_by)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable insert for authenticated users",
+        "table_name":  "social_groups",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() IS NOT NULL)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable read access for all users",
+        "table_name":  "social_groups",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable update for group creators",
+        "table_name":  "social_groups",
+        "using_expr":  "(auth.uid() = created_by)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_groups_insert_auth",
+        "table_name":  "social_groups",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = created_by)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_groups_select_auth",
+        "table_name":  "social_groups",
+        "using_expr":  "(auth.role() = \u0027authenticated\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_groups_update_creator",
+        "table_name":  "social_groups",
+        "using_expr":  "(auth.uid() = created_by)",
+        "with_check":  "(auth.uid() = created_by)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_social_groups",
+        "table_name":  "social_groups",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_groups",
+        "table_name":  "social_groups",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_groups",
+        "table_name":  "social_groups",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_groups",
+        "table_name":  "social_groups",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_hashtags_insert_auth",
+        "table_name":  "social_hashtags",
+        "using_expr":  null,
+        "with_check":  "(auth.role() = \u0027authenticated\u0027::text)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_hashtags_select_auth",
+        "table_name":  "social_hashtags",
+        "using_expr":  "(auth.role() = \u0027authenticated\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_social_hashtags",
+        "table_name":  "social_hashtags",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_hashtags",
+        "table_name":  "social_hashtags",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_hashtags",
+        "table_name":  "social_hashtags",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_hashtags",
+        "table_name":  "social_hashtags",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Allow public read access",
+        "table_name":  "social_likes",
+        "using_expr":  "(auth.role() = \u0027authenticated\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable delete for own likes",
+        "table_name":  "social_likes",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable insert for authenticated users",
+        "table_name":  "social_likes",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable read access for all users",
+        "table_name":  "social_likes",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_social_likes",
+        "table_name":  "social_likes",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_likes",
+        "table_name":  "social_likes",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_likes",
+        "table_name":  "social_likes",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_likes",
+        "table_name":  "social_likes",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Enable insert for authenticated users",
+        "table_name":  "social_media",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() IS NOT NULL)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable read access for all users",
+        "table_name":  "social_media",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_social_media",
+        "table_name":  "social_media",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_media",
+        "table_name":  "social_media",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_media",
+        "table_name":  "social_media",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_media",
+        "table_name":  "social_media",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Enable insert for authenticated users",
+        "table_name":  "social_notifications",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() IS NOT NULL)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable read access for own notifications",
+        "table_name":  "social_notifications",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable update for own notifications",
+        "table_name":  "social_notifications",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_notifications_delete_own",
+        "table_name":  "social_notifications",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_notifications_update_own",
+        "table_name":  "social_notifications",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_social_notifications",
+        "table_name":  "social_notifications",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_notifications",
+        "table_name":  "social_notifications",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_notifications",
+        "table_name":  "social_notifications",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_notifications",
+        "table_name":  "social_notifications",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Enable insert for authenticated users",
+        "table_name":  "social_post_hashtags",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() IS NOT NULL)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable read access for all users",
+        "table_name":  "social_post_hashtags",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_social_post_hashtags",
+        "table_name":  "social_post_hashtags",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_post_hashtags",
+        "table_name":  "social_post_hashtags",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_post_hashtags",
+        "table_name":  "social_post_hashtags",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_post_hashtags",
+        "table_name":  "social_post_hashtags",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Enable insert for authenticated users",
+        "table_name":  "social_post_tags",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() IS NOT NULL)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable read access for all users",
+        "table_name":  "social_post_tags",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_social_post_tags",
+        "table_name":  "social_post_tags",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_post_tags",
+        "table_name":  "social_post_tags",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_post_tags",
+        "table_name":  "social_post_tags",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_post_tags",
+        "table_name":  "social_post_tags",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Allow public read access",
+        "table_name":  "social_post_views",
+        "using_expr":  "(auth.role() = \u0027authenticated\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can insert their own post views",
+        "table_name":  "social_post_views",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view their own post views",
+        "table_name":  "social_post_views",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_social_post_views",
+        "table_name":  "social_post_views",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_post_views",
+        "table_name":  "social_post_views",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_post_views",
+        "table_name":  "social_post_views",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_post_views",
+        "table_name":  "social_post_views",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_posts_delete_own",
+        "table_name":  "social_posts",
+        "using_expr":  "(auth.uid() = author_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_posts_insert_own",
+        "table_name":  "social_posts",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = author_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_posts_select_auth",
+        "table_name":  "social_posts",
+        "using_expr":  "(auth.role() = \u0027authenticated\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_posts_update_own",
+        "table_name":  "social_posts",
+        "using_expr":  "(auth.uid() = author_id)",
+        "with_check":  "(auth.uid() = author_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_social_posts",
+        "table_name":  "social_posts",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_posts",
+        "table_name":  "social_posts",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_posts",
+        "table_name":  "social_posts",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_posts",
+        "table_name":  "social_posts",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_reports_delete_admin",
+        "table_name":  "social_reports",
+        "using_expr":  "((auth.jwt() -\u003e\u003e \u0027role\u0027::text) = \u0027admin\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_reports_insert",
+        "table_name":  "social_reports",
+        "using_expr":  null,
+        "with_check":  "(reporter_id = ( SELECT auth.uid() AS uid))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_reports_insert_auth",
+        "table_name":  "social_reports",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = reporter_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_reports_select_admin",
+        "table_name":  "social_reports",
+        "using_expr":  "((auth.jwt() -\u003e\u003e \u0027role\u0027::text) = \u0027admin\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_reports_select_own",
+        "table_name":  "social_reports",
+        "using_expr":  "((auth.uid() = reporter_id) OR is_admin())",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_reports_select_reporter",
+        "table_name":  "social_reports",
+        "using_expr":  "(reporter_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_reports_update_admin",
+        "table_name":  "social_reports",
+        "using_expr":  "((auth.jwt() -\u003e\u003e \u0027role\u0027::text) = \u0027admin\u0027::text)",
+        "with_check":  "((auth.jwt() -\u003e\u003e \u0027role\u0027::text) = \u0027admin\u0027::text)",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_delete_social_reports",
+        "table_name":  "social_reports",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_reports",
+        "table_name":  "social_reports",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_reports",
+        "table_name":  "social_reports",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_reports",
+        "table_name":  "social_reports",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_shares_delete",
+        "table_name":  "social_shares",
+        "using_expr":  "(user_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_shares_delete_own",
+        "table_name":  "social_shares",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_shares_insert",
+        "table_name":  "social_shares",
+        "using_expr":  null,
+        "with_check":  "(user_id = ( SELECT auth.uid() AS uid))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_shares_insert_own",
+        "table_name":  "social_shares",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_shares_select",
+        "table_name":  "social_shares",
+        "using_expr":  "(user_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "social_shares_select_auth",
+        "table_name":  "social_shares",
+        "using_expr":  "(auth.role() = \u0027authenticated\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_shares_update",
+        "table_name":  "social_shares",
+        "using_expr":  "(user_id = ( SELECT auth.uid() AS uid))",
+        "with_check":  "(user_id = ( SELECT auth.uid() AS uid))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_delete_social_shares",
+        "table_name":  "social_shares",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_shares",
+        "table_name":  "social_shares",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_shares",
+        "table_name":  "social_shares",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_shares",
+        "table_name":  "social_shares",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Enable insert for authenticated users",
+        "table_name":  "social_tags",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() IS NOT NULL)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Enable read access for all users",
+        "table_name":  "social_tags",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_social_tags",
+        "table_name":  "social_tags",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_tags",
+        "table_name":  "social_tags",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_tags",
+        "table_name":  "social_tags",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_tags",
+        "table_name":  "social_tags",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Service role full access on signals",
+        "table_name":  "social_user_signals",
+        "using_expr":  "(auth.role() = \u0027service_role\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can manage own signals",
+        "table_name":  "social_user_signals",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_users_insert_own",
+        "table_name":  "social_users",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_users_select_auth",
+        "table_name":  "social_users",
+        "using_expr":  "(auth.role() = \u0027authenticated\u0027::text)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "social_users_update_own",
+        "table_name":  "social_users",
+        "using_expr":  "(auth.uid() = id)",
+        "with_check":  "(auth.uid() = id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "super_admin_delete_social_users",
+        "table_name":  "social_users",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_insert_social_users",
+        "table_name":  "social_users",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_select_social_users",
+        "table_name":  "social_users",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "super_admin_update_social_users",
+        "table_name":  "social_users",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users au\n  WHERE ((au.user_id = ( SELECT auth.uid() AS uid)) AND (au.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Admins can manage subjects",
+        "table_name":  "subjects",
+        "using_expr":  "is_admin()",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Anyone can read active subjects",
+        "table_name":  "subjects",
+        "using_expr":  "(is_active = true)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Admins can manage subscriptions",
+        "table_name":  "subscriptions",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE ((admin_users.user_id = ( SELECT auth.uid() AS uid)) AND (admin_users.is_active = true))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE ((admin_users.user_id = ( SELECT auth.uid() AS uid)) AND (admin_users.is_active = true))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can insert their own subscription",
+        "table_name":  "subscriptions",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update their own subscription",
+        "table_name":  "subscriptions",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view their own subscription",
+        "table_name":  "subscriptions",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Admins can read system error logs",
+        "table_name":  "system_error_logs",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE ((admin_users.user_id = auth.uid()) AND (admin_users.is_active = true))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Admins can update system error logs",
+        "table_name":  "system_error_logs",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE ((admin_users.user_id = auth.uid()) AND (admin_users.is_active = true))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Service role can insert system error logs",
+        "table_name":  "system_error_logs",
+        "using_expr":  null,
+        "with_check":  "true",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Admins can view system settings",
+        "table_name":  "system_settings",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE ((admin_users.user_id = auth.uid()) AND ((admin_users.role = \u0027super_admin\u0027::admin_role) OR (admin_users.role = \u0027admin\u0027::admin_role)))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Service role can manage settings",
+        "table_name":  "system_settings",
+        "using_expr":  "true",
+        "with_check":  "true",
+        "polpermissive":  true,
+        "roles":  "16486"
+    },
+    {
+        "name":  "Super admins can delete settings",
+        "table_name":  "system_settings",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE ((admin_users.user_id = auth.uid()) AND (admin_users.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Super admins can insert settings",
+        "table_name":  "system_settings",
+        "using_expr":  null,
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE ((admin_users.user_id = auth.uid()) AND (admin_users.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Super admins can update settings",
+        "table_name":  "system_settings",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE ((admin_users.user_id = auth.uid()) AND (admin_users.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE ((admin_users.user_id = auth.uid()) AND (admin_users.role = \u0027super_admin\u0027::admin_role))))",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Super admins can update system settings",
+        "table_name":  "system_settings",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE ((admin_users.user_id = auth.uid()) AND (admin_users.role = \u0027super_admin\u0027::admin_role))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Super admins can view settings",
+        "table_name":  "system_settings",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE ((admin_users.user_id = auth.uid()) AND (admin_users.role = ANY (ARRAY[\u0027super_admin\u0027::admin_role, \u0027admin\u0027::admin_role, \u0027moderator\u0027::admin_role])))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "admins_view_all_activity",
+        "table_name":  "user_activity_tracking",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM admin_users\n  WHERE (admin_users.user_id = ( SELECT auth.uid() AS uid))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "system_update_activity",
+        "table_name":  "user_activity_tracking",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "users_view_own_activity",
+        "table_name":  "user_activity_tracking",
+        "using_expr":  "(( SELECT auth.uid() AS uid) = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "user_daily_activity_insert_own",
+        "table_name":  "user_daily_activity",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "user_daily_activity_select_own",
+        "table_name":  "user_daily_activity",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "user_daily_activity_update_own",
+        "table_name":  "user_daily_activity",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Admins can read all education profiles",
+        "table_name":  "user_education_profiles",
+        "using_expr":  "is_admin()",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can insert own education profile",
+        "table_name":  "user_education_profiles",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update own education profile",
+        "table_name":  "user_education_profiles",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view own education profile",
+        "table_name":  "user_education_profiles",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "user_learning_goals_delete_own",
+        "table_name":  "user_learning_goals",
+        "using_expr":  "(( SELECT auth.uid() AS uid) = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "user_learning_goals_insert_own",
+        "table_name":  "user_learning_goals",
+        "using_expr":  null,
+        "with_check":  "(( SELECT auth.uid() AS uid) = user_id)",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "user_learning_goals_select_own",
+        "table_name":  "user_learning_goals",
+        "using_expr":  "(( SELECT auth.uid() AS uid) = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "user_learning_goals_update_own",
+        "table_name":  "user_learning_goals",
+        "using_expr":  "(( SELECT auth.uid() AS uid) = user_id)",
+        "with_check":  "(( SELECT auth.uid() AS uid) = user_id)",
+        "polpermissive":  true,
+        "roles":  "16485"
+    },
+    {
+        "name":  "Users can insert own stats",
+        "table_name":  "user_stats",
+        "using_expr":  null,
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can update own stats",
+        "table_name":  "user_stats",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view leaderboard stats",
+        "table_name":  "user_stats",
+        "using_expr":  "true",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can view own stats",
+        "table_name":  "user_stats",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "user_stats_update_own",
+        "table_name":  "user_stats",
+        "using_expr":  "(auth.uid() = user_id)",
+        "with_check":  "(auth.uid() = user_id)",
+        "polpermissive":  true,
+        "roles":  "0"
+    },
+    {
+        "name":  "Users can manage own subjects",
+        "table_name":  "user_subjects",
+        "using_expr":  "(EXISTS ( SELECT 1\n   FROM user_education_profiles uep\n  WHERE ((uep.id = user_subjects.user_education_profile_id) AND (uep.user_id = auth.uid()))))",
+        "with_check":  null,
+        "polpermissive":  true,
+        "roles":  "0"
+    }
+]

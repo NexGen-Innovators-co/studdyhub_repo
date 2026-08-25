@@ -48,22 +48,33 @@ export class SubscriptionValidator {
   }
 
   /**
-   * Get user's subscription data
+   * Get user's subscription data.
+   * The real `subscriptions` table stores the plan in `plan_type`
+   * ('free' | 'scholar' | 'genius') — map it to `subscription_tier` for the
+   * rest of this validator. Inactive/expired subscriptions resolve to 'free'.
    */
   async getUserSubscription(userId: string): Promise<SubscriptionData> {
     const { data, error } = await this.supabase
       .from('subscriptions')
       .select('*')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
-    if (error) {
+    if (error || !data) {
       // console.error('Error fetching subscription:', error);
       // Default to free tier
       return { subscription_tier: 'free' };
     }
 
-    return data || { subscription_tier: 'free' };
+    const plan = (data.plan_type as string) || 'free';
+    const active = (data.status as string) !== 'canceled';
+    const tier = !active
+      ? 'free'
+      : plan === 'genius' || plan === 'scholar'
+        ? (plan as 'genius' | 'scholar')
+        : 'free';
+
+    return { ...data, subscription_tier: tier };
   }
 
   /**
@@ -245,13 +256,10 @@ export class SubscriptionValidator {
       return {
         tier: 'genius',
         modelChain: [
-          'gemini-2.5-pro',
-          'gemini-3-pro-preview',
-          'gemini-2.5-flash',
-          'gemini-2.0-flash',
-          'gemini-2.0-flash-lite',
+          'gemini-3.6-flash',
+          'gemini-3.5-flash',
         ],
-        streamingChain: ['gemini-2.5-pro', 'gemini-3-pro-preview', 'gemini-2.5-flash'],
+        streamingChain: ['gemini-3.6-flash', 'gemini-3.5-flash'],
         displayLabel: 'Gemini Pro',
       };
     }
@@ -263,37 +271,29 @@ export class SubscriptionValidator {
         return {
           tier: 'genius',
           modelChain: [
-            'gemini-2.5-pro',
-            'gemini-3-pro-preview',
-            'gemini-2.5-flash',
-            'gemini-2.0-flash',
-            'gemini-2.0-flash-lite',
+            'gemini-3.6-flash',
+            'gemini-3.5-flash',
           ],
-          streamingChain: ['gemini-2.5-pro', 'gemini-3-pro-preview', 'gemini-2.5-flash'],
+          streamingChain: ['gemini-3.6-flash', 'gemini-3.5-flash'],
           displayLabel: 'Gemini Pro',
         };
       case 'scholar':
         return {
           tier: 'scholar',
           modelChain: [
-            'gemini-2.5-flash',
-            'gemini-3-pro-preview',
-            'gemini-2.0-flash',
-            'gemini-2.0-flash-lite',
-            'gemini-2.5-pro',
+            'gemini-3.5-flash',
+            'gemini-3.6-flash',
           ],
-          streamingChain: ['gemini-2.5-flash', 'gemini-3-pro-preview', 'gemini-2.0-flash'],
+          streamingChain: ['gemini-3.5-flash', 'gemini-3.6-flash'],
           displayLabel: 'Gemini 2.5 Flash',
         };
       default:
         return {
           tier: 'free',
           modelChain: [
-            'gemini-2.0-flash',
-            'gemini-2.0-flash-lite',
-            'gemini-2.5-flash',
+            'gemini-3.5-flash',
           ],
-          streamingChain: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-flash'],
+          streamingChain: ['gemini-3.5-flash'],
           displayLabel: 'Gemini Flash',
         };
     }

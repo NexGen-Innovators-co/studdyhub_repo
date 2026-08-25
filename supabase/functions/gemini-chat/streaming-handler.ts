@@ -1,7 +1,7 @@
 // streaming-handler.ts - Server-Sent Events streaming for agentic thinking
 
 export interface StreamEvent {
-  type: 'thinking_step' | 'content_chunk' | 'done' | 'error' | 'heartbeat';
+  type: 'thinking_step' | 'content_chunk' | 'done' | 'error' | 'heartbeat' | 'confirmation_required';
   data: any;
 }
 
@@ -82,6 +82,26 @@ export class StreamingHandler {
     this.sendEvent({
       type: 'content_chunk',
       data: { content }
+    });
+  }
+
+  /** Emit a structured request for the client to confirm (or decline/customize) a proposed action. */
+  sendConfirmationRequired(payload: any) {
+    this.sendEvent({
+      type: 'confirmation_required',
+      data: payload
+    });
+  }
+
+  /**
+   * Emit a SINGLE batched confirmation covering MULTIPLE pending actions. The client
+   * resolves the whole batch with one reply; the legacy per-action
+   * `confirmation_required` event is left untouched for older app builds.
+   */
+  sendConfirmationBatchRequired(payload: any) {
+    this.sendEvent({
+      type: 'confirmation_batch_required',
+      data: payload
     });
   }
 

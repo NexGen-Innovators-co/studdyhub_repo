@@ -1,0 +1,737 @@
+[
+    {
+        "tablename":  "achievements",
+        "indexname":  "achievements_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX achievements_pkey ON public.achievements USING btree (id)"
+    },
+    {
+        "tablename":  "admin_activity_logs",
+        "indexname":  "admin_activity_logs_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX admin_activity_logs_pkey ON public.admin_activity_logs USING btree (id)"
+    },
+    {
+        "tablename":  "admin_system_settings",
+        "indexname":  "admin_system_settings_key_key",
+        "indexdef":  "CREATE UNIQUE INDEX admin_system_settings_key_key ON public.admin_system_settings USING btree (key)"
+    },
+    {
+        "tablename":  "admin_system_settings",
+        "indexname":  "admin_system_settings_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX admin_system_settings_pkey ON public.admin_system_settings USING btree (id)"
+    },
+    {
+        "tablename":  "admin_users",
+        "indexname":  "admin_users_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX admin_users_pkey ON public.admin_users USING btree (id)"
+    },
+    {
+        "tablename":  "admin_users",
+        "indexname":  "admin_users_user_id_key",
+        "indexdef":  "CREATE UNIQUE INDEX admin_users_user_id_key ON public.admin_users USING btree (user_id)"
+    },
+    {
+        "tablename":  "ai_podcasts",
+        "indexname":  "ai_podcasts_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX ai_podcasts_pkey ON public.ai_podcasts USING btree (id)"
+    },
+    {
+        "tablename":  "ai_user_memory",
+        "indexname":  "ai_user_memory_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX ai_user_memory_pkey ON public.ai_user_memory USING btree (id)"
+    },
+    {
+        "tablename":  "app_ratings",
+        "indexname":  "app_ratings_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX app_ratings_pkey ON public.app_ratings USING btree (id)"
+    },
+    {
+        "tablename":  "app_ratings",
+        "indexname":  "app_ratings_user_id_key",
+        "indexdef":  "CREATE UNIQUE INDEX app_ratings_user_id_key ON public.app_ratings USING btree (user_id)"
+    },
+    {
+        "tablename":  "app_stats",
+        "indexname":  "app_stats_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX app_stats_pkey ON public.app_stats USING btree (id)"
+    },
+    {
+        "tablename":  "app_testimonials",
+        "indexname":  "app_testimonials_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX app_testimonials_pkey ON public.app_testimonials USING btree (id)"
+    },
+    {
+        "tablename":  "app_testimonials",
+        "indexname":  "app_testimonials_user_id_key",
+        "indexdef":  "CREATE UNIQUE INDEX app_testimonials_user_id_key ON public.app_testimonials USING btree (user_id)"
+    },
+    {
+        "tablename":  "audio_processing_results",
+        "indexname":  "audio_processing_results_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX audio_processing_results_pkey ON public.audio_processing_results USING btree (id)"
+    },
+    {
+        "tablename":  "audio_segments",
+        "indexname":  "audio_segments_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX audio_segments_pkey ON public.audio_segments USING btree (id)"
+    },
+    {
+        "tablename":  "badges",
+        "indexname":  "badges_name_key",
+        "indexdef":  "CREATE UNIQUE INDEX badges_name_key ON public.badges USING btree (name)"
+    },
+    {
+        "tablename":  "badges",
+        "indexname":  "badges_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX badges_pkey ON public.badges USING btree (id)"
+    },
+    {
+        "tablename":  "calendar_integrations",
+        "indexname":  "calendar_integrations_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX calendar_integrations_pkey ON public.calendar_integrations USING btree (id)"
+    },
+    {
+        "tablename":  "chat_messages",
+        "indexname":  "chat_messages_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX chat_messages_pkey ON public.chat_messages USING btree (id)"
+    },
+    {
+        "tablename":  "chat_sessions",
+        "indexname":  "chat_sessions_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX chat_sessions_pkey ON public.chat_sessions USING btree (id)"
+    },
+    {
+        "tablename":  "class_recordings",
+        "indexname":  "class_recordings_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX class_recordings_pkey ON public.class_recordings USING btree (id)"
+    },
+    {
+        "tablename":  "content_moderation_log",
+        "indexname":  "content_moderation_log_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX content_moderation_log_pkey ON public.content_moderation_log USING btree (id)"
+    },
+    {
+        "tablename":  "content_moderation_queue",
+        "indexname":  "content_moderation_queue_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX content_moderation_queue_pkey ON public.content_moderation_queue USING btree (id)"
+    },
+    {
+        "tablename":  "countries",
+        "indexname":  "countries_code_key",
+        "indexdef":  "CREATE UNIQUE INDEX countries_code_key ON public.countries USING btree (code)"
+    },
+    {
+        "tablename":  "countries",
+        "indexname":  "countries_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX countries_pkey ON public.countries USING btree (id)"
+    },
+    {
+        "tablename":  "course_enrollments",
+        "indexname":  "course_enrollments_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX course_enrollments_pkey ON public.course_enrollments USING btree (id)"
+    },
+    {
+        "tablename":  "course_materials",
+        "indexname":  "course_materials_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX course_materials_pkey ON public.course_materials USING btree (id)"
+    },
+    {
+        "tablename":  "course_progress",
+        "indexname":  "course_progress_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX course_progress_pkey ON public.course_progress USING btree (id)"
+    },
+    {
+        "tablename":  "course_resources",
+        "indexname":  "course_resources_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX course_resources_pkey ON public.course_resources USING btree (id)"
+    },
+    {
+        "tablename":  "courses",
+        "indexname":  "courses_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX courses_pkey ON public.courses USING btree (id)"
+    },
+    {
+        "tablename":  "curricula",
+        "indexname":  "curricula_code_key",
+        "indexdef":  "CREATE UNIQUE INDEX curricula_code_key ON public.curricula USING btree (code)"
+    },
+    {
+        "tablename":  "curricula",
+        "indexname":  "curricula_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX curricula_pkey ON public.curricula USING btree (id)"
+    },
+    {
+        "tablename":  "daily_notification_log",
+        "indexname":  "daily_notification_log_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX daily_notification_log_pkey ON public.daily_notification_log USING btree (id)"
+    },
+    {
+        "tablename":  "daily_notification_log",
+        "indexname":  "idx_daily_notification_log_category",
+        "indexdef":  "CREATE INDEX idx_daily_notification_log_category ON public.daily_notification_log USING btree (category, opened_by_user)"
+    },
+    {
+        "tablename":  "daily_notification_log",
+        "indexname":  "idx_daily_notification_log_created",
+        "indexdef":  "CREATE INDEX idx_daily_notification_log_created ON public.daily_notification_log USING btree (created_at DESC)"
+    },
+    {
+        "tablename":  "daily_notification_log",
+        "indexname":  "idx_daily_notification_log_user",
+        "indexdef":  "CREATE INDEX idx_daily_notification_log_user ON public.daily_notification_log USING btree (user_id, created_at DESC)"
+    },
+    {
+        "tablename":  "daily_notification_log",
+        "indexname":  "idx_daily_notification_log_user_category",
+        "indexdef":  "CREATE INDEX idx_daily_notification_log_user_category ON public.daily_notification_log USING btree (user_id, category, created_at DESC)"
+    },
+    {
+        "tablename":  "document_folder_items",
+        "indexname":  "document_folder_items_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX document_folder_items_pkey ON public.document_folder_items USING btree (id)"
+    },
+    {
+        "tablename":  "document_folders",
+        "indexname":  "document_folders_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX document_folders_pkey ON public.document_folders USING btree (id)"
+    },
+    {
+        "tablename":  "documents",
+        "indexname":  "documents_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX documents_pkey ON public.documents USING btree (id)"
+    },
+    {
+        "tablename":  "education_levels",
+        "indexname":  "education_levels_code_key",
+        "indexdef":  "CREATE UNIQUE INDEX education_levels_code_key ON public.education_levels USING btree (code)"
+    },
+    {
+        "tablename":  "education_levels",
+        "indexname":  "education_levels_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX education_levels_pkey ON public.education_levels USING btree (id)"
+    },
+    {
+        "tablename":  "error_logs",
+        "indexname":  "error_logs_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX error_logs_pkey ON public.error_logs USING btree (id)"
+    },
+    {
+        "tablename":  "examinations",
+        "indexname":  "examinations_code_key",
+        "indexdef":  "CREATE UNIQUE INDEX examinations_code_key ON public.examinations USING btree (code)"
+    },
+    {
+        "tablename":  "examinations",
+        "indexname":  "examinations_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX examinations_pkey ON public.examinations USING btree (id)"
+    },
+    {
+        "tablename":  "failed_chunks",
+        "indexname":  "failed_chunks_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX failed_chunks_pkey ON public.failed_chunks USING btree (id)"
+    },
+    {
+        "tablename":  "flashcards",
+        "indexname":  "flashcards_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX flashcards_pkey ON public.flashcards USING btree (id)"
+    },
+    {
+        "tablename":  "game_progress",
+        "indexname":  "game_progress_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX game_progress_pkey ON public.game_progress USING btree (id)"
+    },
+    {
+        "tablename":  "game_progress",
+        "indexname":  "game_progress_user_game_unique",
+        "indexdef":  "CREATE UNIQUE INDEX game_progress_user_game_unique ON public.game_progress USING btree (user_id, game_key)"
+    },
+    {
+        "tablename":  "game_progress",
+        "indexname":  "idx_game_progress_user_id",
+        "indexdef":  "CREATE INDEX idx_game_progress_user_id ON public.game_progress USING btree (user_id)"
+    },
+    {
+        "tablename":  "institution_invites",
+        "indexname":  "institution_invites_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX institution_invites_pkey ON public.institution_invites USING btree (id)"
+    },
+    {
+        "tablename":  "institution_invites",
+        "indexname":  "institution_invites_token_key",
+        "indexdef":  "CREATE UNIQUE INDEX institution_invites_token_key ON public.institution_invites USING btree (token)"
+    },
+    {
+        "tablename":  "institution_members",
+        "indexname":  "institution_members_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX institution_members_pkey ON public.institution_members USING btree (id)"
+    },
+    {
+        "tablename":  "institutions",
+        "indexname":  "institutions_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX institutions_pkey ON public.institutions USING btree (id)"
+    },
+    {
+        "tablename":  "institutions",
+        "indexname":  "institutions_slug_key",
+        "indexdef":  "CREATE UNIQUE INDEX institutions_slug_key ON public.institutions USING btree (slug)"
+    },
+    {
+        "tablename":  "kid_roadmap_steps",
+        "indexname":  "idx_kid_roadmap_steps_user",
+        "indexdef":  "CREATE INDEX idx_kid_roadmap_steps_user ON public.kid_roadmap_steps USING btree (user_id, week, day)"
+    },
+    {
+        "tablename":  "kid_roadmap_steps",
+        "indexname":  "kid_roadmap_steps_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX kid_roadmap_steps_pkey ON public.kid_roadmap_steps USING btree (id)"
+    },
+    {
+        "tablename":  "learning_topic_connections",
+        "indexname":  "learning_topic_connections_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX learning_topic_connections_pkey ON public.learning_topic_connections USING btree (id)"
+    },
+    {
+        "tablename":  "live_quiz_answers",
+        "indexname":  "live_quiz_answers_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX live_quiz_answers_pkey ON public.live_quiz_answers USING btree (id)"
+    },
+    {
+        "tablename":  "live_quiz_answers",
+        "indexname":  "live_quiz_answers_question_user_key",
+        "indexdef":  "CREATE UNIQUE INDEX live_quiz_answers_question_user_key ON public.live_quiz_answers USING btree (question_id, user_id)"
+    },
+    {
+        "tablename":  "live_quiz_players",
+        "indexname":  "live_quiz_players_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX live_quiz_players_pkey ON public.live_quiz_players USING btree (id)"
+    },
+    {
+        "tablename":  "live_quiz_questions",
+        "indexname":  "live_quiz_questions_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX live_quiz_questions_pkey ON public.live_quiz_questions USING btree (id)"
+    },
+    {
+        "tablename":  "live_quiz_sessions",
+        "indexname":  "idx_live_quiz_sessions_public_lobby",
+        "indexdef":  "CREATE INDEX idx_live_quiz_sessions_public_lobby ON public.live_quiz_sessions USING btree (game_key, status) WHERE (is_public = true)"
+    },
+    {
+        "tablename":  "live_quiz_sessions",
+        "indexname":  "live_quiz_sessions_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX live_quiz_sessions_pkey ON public.live_quiz_sessions USING btree (id)"
+    },
+    {
+        "tablename":  "notes",
+        "indexname":  "notes_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX notes_pkey ON public.notes USING btree (id)"
+    },
+    {
+        "tablename":  "notification_preferences",
+        "indexname":  "notification_preferences_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX notification_preferences_pkey ON public.notification_preferences USING btree (user_id)"
+    },
+    {
+        "tablename":  "notification_subscriptions",
+        "indexname":  "notification_subscriptions_endpoint_key",
+        "indexdef":  "CREATE UNIQUE INDEX notification_subscriptions_endpoint_key ON public.notification_subscriptions USING btree (endpoint)"
+    },
+    {
+        "tablename":  "notification_subscriptions",
+        "indexname":  "notification_subscriptions_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX notification_subscriptions_pkey ON public.notification_subscriptions USING btree (id)"
+    },
+    {
+        "tablename":  "notifications",
+        "indexname":  "notifications_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX notifications_pkey ON public.notifications USING btree (id)"
+    },
+    {
+        "tablename":  "platform_update_reads",
+        "indexname":  "platform_update_reads_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX platform_update_reads_pkey ON public.platform_update_reads USING btree (id)"
+    },
+    {
+        "tablename":  "platform_updates",
+        "indexname":  "platform_updates_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX platform_updates_pkey ON public.platform_updates USING btree (id)"
+    },
+    {
+        "tablename":  "player_question_progress",
+        "indexname":  "player_question_progress_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX player_question_progress_pkey ON public.player_question_progress USING btree (id)"
+    },
+    {
+        "tablename":  "podcast_chunks",
+        "indexname":  "podcast_chunks_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX podcast_chunks_pkey ON public.podcast_chunks USING btree (id)"
+    },
+    {
+        "tablename":  "podcast_cohosts",
+        "indexname":  "podcast_cohosts_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX podcast_cohosts_pkey ON public.podcast_cohosts USING btree (id)"
+    },
+    {
+        "tablename":  "podcast_credit_packs",
+        "indexname":  "podcast_credit_packs_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX podcast_credit_packs_pkey ON public.podcast_credit_packs USING btree (id)"
+    },
+    {
+        "tablename":  "podcast_credit_transactions",
+        "indexname":  "podcast_credit_transactions_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX podcast_credit_transactions_pkey ON public.podcast_credit_transactions USING btree (id)"
+    },
+    {
+        "tablename":  "podcast_credits",
+        "indexname":  "podcast_credits_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX podcast_credits_pkey ON public.podcast_credits USING btree (id)"
+    },
+    {
+        "tablename":  "podcast_credits",
+        "indexname":  "podcast_credits_user_id_key",
+        "indexdef":  "CREATE UNIQUE INDEX podcast_credits_user_id_key ON public.podcast_credits USING btree (user_id)"
+    },
+    {
+        "tablename":  "podcast_invites",
+        "indexname":  "podcast_invites_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX podcast_invites_pkey ON public.podcast_invites USING btree (id)"
+    },
+    {
+        "tablename":  "podcast_listeners",
+        "indexname":  "podcast_listeners_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX podcast_listeners_pkey ON public.podcast_listeners USING btree (id)"
+    },
+    {
+        "tablename":  "podcast_members",
+        "indexname":  "podcast_members_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX podcast_members_pkey ON public.podcast_members USING btree (id)"
+    },
+    {
+        "tablename":  "podcast_participation_requests",
+        "indexname":  "podcast_participation_requests_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX podcast_participation_requests_pkey ON public.podcast_participation_requests USING btree (id)"
+    },
+    {
+        "tablename":  "podcast_recordings",
+        "indexname":  "podcast_recordings_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX podcast_recordings_pkey ON public.podcast_recordings USING btree (id)"
+    },
+    {
+        "tablename":  "podcast_shares",
+        "indexname":  "podcast_shares_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX podcast_shares_pkey ON public.podcast_shares USING btree (id)"
+    },
+    {
+        "tablename":  "profiles",
+        "indexname":  "profiles_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id)"
+    },
+    {
+        "tablename":  "profiles",
+        "indexname":  "profiles_referral_code_key",
+        "indexdef":  "CREATE UNIQUE INDEX profiles_referral_code_key ON public.profiles USING btree (referral_code)"
+    },
+    {
+        "tablename":  "quiz_attempts",
+        "indexname":  "quiz_attempts_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX quiz_attempts_pkey ON public.quiz_attempts USING btree (id)"
+    },
+    {
+        "tablename":  "quizzes",
+        "indexname":  "quizzes_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX quizzes_pkey ON public.quizzes USING btree (id)"
+    },
+    {
+        "tablename":  "referrals",
+        "indexname":  "referrals_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX referrals_pkey ON public.referrals USING btree (id)"
+    },
+    {
+        "tablename":  "referrals",
+        "indexname":  "referrals_referee_id_key",
+        "indexdef":  "CREATE UNIQUE INDEX referrals_referee_id_key ON public.referrals USING btree (referee_id)"
+    },
+    {
+        "tablename":  "role_verification_requests",
+        "indexname":  "idx_rvr_created_at",
+        "indexdef":  "CREATE INDEX idx_rvr_created_at ON public.role_verification_requests USING btree (created_at DESC)"
+    },
+    {
+        "tablename":  "role_verification_requests",
+        "indexname":  "idx_rvr_status",
+        "indexdef":  "CREATE INDEX idx_rvr_status ON public.role_verification_requests USING btree (status)"
+    },
+    {
+        "tablename":  "role_verification_requests",
+        "indexname":  "idx_rvr_user_id",
+        "indexdef":  "CREATE INDEX idx_rvr_user_id ON public.role_verification_requests USING btree (user_id)"
+    },
+    {
+        "tablename":  "role_verification_requests",
+        "indexname":  "role_verification_requests_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX role_verification_requests_pkey ON public.role_verification_requests USING btree (id)"
+    },
+    {
+        "tablename":  "schedule_items",
+        "indexname":  "schedule_items_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX schedule_items_pkey ON public.schedule_items USING btree (id)"
+    },
+    {
+        "tablename":  "schedule_reminders",
+        "indexname":  "schedule_reminders_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX schedule_reminders_pkey ON public.schedule_reminders USING btree (id)"
+    },
+    {
+        "tablename":  "schema_agent_audit",
+        "indexname":  "schema_agent_audit_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX schema_agent_audit_pkey ON public.schema_agent_audit USING btree (id)"
+    },
+    {
+        "tablename":  "social_bookmarks",
+        "indexname":  "social_bookmarks_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_bookmarks_pkey ON public.social_bookmarks USING btree (id)"
+    },
+    {
+        "tablename":  "social_chat_message_media",
+        "indexname":  "social_chat_message_media_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_chat_message_media_pkey ON public.social_chat_message_media USING btree (id)"
+    },
+    {
+        "tablename":  "social_chat_message_reads",
+        "indexname":  "social_chat_message_reads_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_chat_message_reads_pkey ON public.social_chat_message_reads USING btree (id)"
+    },
+    {
+        "tablename":  "social_chat_message_resources",
+        "indexname":  "social_chat_message_resources_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_chat_message_resources_pkey ON public.social_chat_message_resources USING btree (id)"
+    },
+    {
+        "tablename":  "social_chat_messages",
+        "indexname":  "social_chat_messages_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_chat_messages_pkey ON public.social_chat_messages USING btree (id)"
+    },
+    {
+        "tablename":  "social_chat_sessions",
+        "indexname":  "social_chat_sessions_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_chat_sessions_pkey ON public.social_chat_sessions USING btree (id)"
+    },
+    {
+        "tablename":  "social_comment_media",
+        "indexname":  "social_comment_media_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_comment_media_pkey ON public.social_comment_media USING btree (id)"
+    },
+    {
+        "tablename":  "social_comments",
+        "indexname":  "social_comments_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_comments_pkey ON public.social_comments USING btree (id)"
+    },
+    {
+        "tablename":  "social_event_attendees",
+        "indexname":  "social_event_attendees_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_event_attendees_pkey ON public.social_event_attendees USING btree (id)"
+    },
+    {
+        "tablename":  "social_events",
+        "indexname":  "social_events_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_events_pkey ON public.social_events USING btree (id)"
+    },
+    {
+        "tablename":  "social_follows",
+        "indexname":  "social_follows_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_follows_pkey ON public.social_follows USING btree (id)"
+    },
+    {
+        "tablename":  "social_group_members",
+        "indexname":  "social_group_members_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_group_members_pkey ON public.social_group_members USING btree (id)"
+    },
+    {
+        "tablename":  "social_groups",
+        "indexname":  "social_groups_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_groups_pkey ON public.social_groups USING btree (id)"
+    },
+    {
+        "tablename":  "social_hashtags",
+        "indexname":  "social_hashtags_name_key",
+        "indexdef":  "CREATE UNIQUE INDEX social_hashtags_name_key ON public.social_hashtags USING btree (name)"
+    },
+    {
+        "tablename":  "social_hashtags",
+        "indexname":  "social_hashtags_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_hashtags_pkey ON public.social_hashtags USING btree (id)"
+    },
+    {
+        "tablename":  "social_likes",
+        "indexname":  "social_likes_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_likes_pkey ON public.social_likes USING btree (id)"
+    },
+    {
+        "tablename":  "social_media",
+        "indexname":  "social_media_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_media_pkey ON public.social_media USING btree (id)"
+    },
+    {
+        "tablename":  "social_notifications",
+        "indexname":  "social_notifications_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_notifications_pkey ON public.social_notifications USING btree (id)"
+    },
+    {
+        "tablename":  "social_post_hashtags",
+        "indexname":  "social_post_hashtags_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_post_hashtags_pkey ON public.social_post_hashtags USING btree (id)"
+    },
+    {
+        "tablename":  "social_post_tags",
+        "indexname":  "social_post_tags_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_post_tags_pkey ON public.social_post_tags USING btree (id)"
+    },
+    {
+        "tablename":  "social_post_views",
+        "indexname":  "social_post_views_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_post_views_pkey ON public.social_post_views USING btree (id)"
+    },
+    {
+        "tablename":  "social_posts",
+        "indexname":  "social_posts_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_posts_pkey ON public.social_posts USING btree (id)"
+    },
+    {
+        "tablename":  "social_reports",
+        "indexname":  "social_reports_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_reports_pkey ON public.social_reports USING btree (id)"
+    },
+    {
+        "tablename":  "social_shares",
+        "indexname":  "social_shares_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_shares_pkey ON public.social_shares USING btree (id)"
+    },
+    {
+        "tablename":  "social_tags",
+        "indexname":  "social_tags_name_key",
+        "indexdef":  "CREATE UNIQUE INDEX social_tags_name_key ON public.social_tags USING btree (name)"
+    },
+    {
+        "tablename":  "social_tags",
+        "indexname":  "social_tags_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_tags_pkey ON public.social_tags USING btree (id)"
+    },
+    {
+        "tablename":  "social_user_signals",
+        "indexname":  "social_user_signals_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_user_signals_pkey ON public.social_user_signals USING btree (id)"
+    },
+    {
+        "tablename":  "social_users",
+        "indexname":  "social_users_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX social_users_pkey ON public.social_users USING btree (id)"
+    },
+    {
+        "tablename":  "social_users",
+        "indexname":  "social_users_username_key",
+        "indexdef":  "CREATE UNIQUE INDEX social_users_username_key ON public.social_users USING btree (username)"
+    },
+    {
+        "tablename":  "subjects",
+        "indexname":  "subjects_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX subjects_pkey ON public.subjects USING btree (id)"
+    },
+    {
+        "tablename":  "subscriptions",
+        "indexname":  "subscriptions_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX subscriptions_pkey ON public.subscriptions USING btree (id)"
+    },
+    {
+        "tablename":  "subscriptions",
+        "indexname":  "subscriptions_user_id_key",
+        "indexdef":  "CREATE UNIQUE INDEX subscriptions_user_id_key ON public.subscriptions USING btree (user_id)"
+    },
+    {
+        "tablename":  "system_error_logs",
+        "indexname":  "system_error_logs_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX system_error_logs_pkey ON public.system_error_logs USING btree (id)"
+    },
+    {
+        "tablename":  "system_settings",
+        "indexname":  "system_settings_key_key",
+        "indexdef":  "CREATE UNIQUE INDEX system_settings_key_key ON public.system_settings USING btree (key)"
+    },
+    {
+        "tablename":  "system_settings",
+        "indexname":  "system_settings_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX system_settings_pkey ON public.system_settings USING btree (id)"
+    },
+    {
+        "tablename":  "user_activity_tracking",
+        "indexname":  "idx_user_activity_tracking_engagement_tier",
+        "indexdef":  "CREATE INDEX idx_user_activity_tracking_engagement_tier ON public.user_activity_tracking USING btree (engagement_tier, last_active DESC)"
+    },
+    {
+        "tablename":  "user_activity_tracking",
+        "indexname":  "idx_user_activity_tracking_last_active",
+        "indexdef":  "CREATE INDEX idx_user_activity_tracking_last_active ON public.user_activity_tracking USING btree (last_active DESC)"
+    },
+    {
+        "tablename":  "user_activity_tracking",
+        "indexname":  "idx_user_activity_tracking_user_id",
+        "indexdef":  "CREATE INDEX idx_user_activity_tracking_user_id ON public.user_activity_tracking USING btree (user_id)"
+    },
+    {
+        "tablename":  "user_activity_tracking",
+        "indexname":  "user_activity_tracking_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX user_activity_tracking_pkey ON public.user_activity_tracking USING btree (id)"
+    },
+    {
+        "tablename":  "user_activity_tracking",
+        "indexname":  "user_activity_tracking_user_id_key",
+        "indexdef":  "CREATE UNIQUE INDEX user_activity_tracking_user_id_key ON public.user_activity_tracking USING btree (user_id)"
+    },
+    {
+        "tablename":  "user_daily_activity",
+        "indexname":  "user_daily_activity_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX user_daily_activity_pkey ON public.user_daily_activity USING btree (id)"
+    },
+    {
+        "tablename":  "user_daily_activity",
+        "indexname":  "user_daily_activity_user_id_activity_date_activity_type_key",
+        "indexdef":  "CREATE UNIQUE INDEX user_daily_activity_user_id_activity_date_activity_type_key ON public.user_daily_activity USING btree (user_id, activity_date, activity_type)"
+    },
+    {
+        "tablename":  "user_education_profiles",
+        "indexname":  "user_education_profiles_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX user_education_profiles_pkey ON public.user_education_profiles USING btree (id)"
+    },
+    {
+        "tablename":  "user_education_profiles",
+        "indexname":  "user_education_profiles_user_id_key",
+        "indexdef":  "CREATE UNIQUE INDEX user_education_profiles_user_id_key ON public.user_education_profiles USING btree (user_id)"
+    },
+    {
+        "tablename":  "user_learning_goals",
+        "indexname":  "idx_user_learning_goals_user_id",
+        "indexdef":  "CREATE INDEX idx_user_learning_goals_user_id ON public.user_learning_goals USING btree (user_id)"
+    },
+    {
+        "tablename":  "user_learning_goals",
+        "indexname":  "user_learning_goals_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX user_learning_goals_pkey ON public.user_learning_goals USING btree (id)"
+    },
+    {
+        "tablename":  "user_session_digests",
+        "indexname":  "idx_usd_user_created",
+        "indexdef":  "CREATE INDEX idx_usd_user_created ON public.user_session_digests USING btree (user_id, created_at DESC)"
+    },
+    {
+        "tablename":  "user_session_digests",
+        "indexname":  "user_session_digests_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX user_session_digests_pkey ON public.user_session_digests USING btree (id)"
+    },
+    {
+        "tablename":  "user_stats",
+        "indexname":  "user_stats_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX user_stats_pkey ON public.user_stats USING btree (user_id)"
+    },
+    {
+        "tablename":  "user_subjects",
+        "indexname":  "user_subjects_pkey",
+        "indexdef":  "CREATE UNIQUE INDEX user_subjects_pkey ON public.user_subjects USING btree (id)"
+    }
+]

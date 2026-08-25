@@ -1,0 +1,430 @@
+[
+    {
+        "table_name":  "achievements",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "admin_activity_logs",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "admin_system_settings",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "admin_users",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "ai_user_memory",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "app_ratings",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "app_stats",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "app_testimonials",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "audio_processing_results",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "audio_segments",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "badges",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "calendar_integrations",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "chat_messages",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "chat_sessions",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "class_recordings",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "content_moderation_log",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "content_moderation_queue",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "countries",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "course_enrollments",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "course_materials",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "course_progress",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "course_resources",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "courses",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "curricula",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "daily_notification_log",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "document_folder_items",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "document_folders",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "documents",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "education_levels",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "error_logs",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "examinations",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "failed_chunks",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "flashcards",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "game_progress",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "institution_invites",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "institution_members",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "institutions",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "learning_topic_connections",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "live_quiz_answers",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "live_quiz_questions",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "notes",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "notification_preferences",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "notification_subscriptions",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "notifications",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "platform_update_reads",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "platform_updates",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "player_question_progress",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "podcast_chunks",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "podcast_cohosts",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "podcast_credit_packs",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "podcast_credit_transactions",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "podcast_credits",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "podcast_invites",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "podcast_listeners",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "podcast_members",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "podcast_participation_requests",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "podcast_recordings",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "podcast_shares",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "profiles",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "quiz_attempts",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "quizzes",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "referrals",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "role_verification_requests",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "schedule_items",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "schedule_reminders",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "schema_agent_audit",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_bookmarks",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_chat_message_media",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_chat_message_reads",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_chat_message_resources",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_chat_messages",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_chat_sessions",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_comment_media",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_comments",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_event_attendees",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_events",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_follows",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_group_members",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_groups",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_hashtags",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_likes",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_media",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_notifications",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_post_hashtags",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_post_tags",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_post_views",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_posts",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_reports",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_shares",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_tags",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_user_signals",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "social_users",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "subjects",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "subscriptions",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "system_error_logs",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "system_settings",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "user_daily_activity",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "user_learning_goals",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "user_session_digests",
+        "rls_enabled":  false
+    },
+    {
+        "table_name":  "user_stats",
+        "rls_enabled":  true
+    },
+    {
+        "table_name":  "user_subjects",
+        "rls_enabled":  true
+    }
+]

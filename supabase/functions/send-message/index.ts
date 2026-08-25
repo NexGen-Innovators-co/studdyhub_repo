@@ -41,10 +41,10 @@ serve(async (req) => {
 
     // Parse request body
     const body = await req.json();
-    const { chat_session_id, message_content, attachments = null } = body;
+    const { session_id, message_content } = body;
 
     // Validate inputs
-    if (!chat_session_id) {
+    if (!session_id) {
       return createErrorResponse('Chat session ID is required', 400);
     }
 
@@ -59,30 +59,50 @@ serve(async (req) => {
     // Initialize Supabase client
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Verify user is part of this chat session
+    // Verify user is a participant of this social chat session
+    // (real schema: social_chat_sessions holds user_id1/user_id2 for 1:1 chats)
     const { data: session, error: sessionError } = await supabase
-      .from('chat_sessions')
-      .select('id, user_id')
-      .eq('id', chat_session_id)
-      .single();
+      .from('social_chat_sessions')
+      .select('id, user_id1, user_id2, group_id')
+      .eq('id', session_id)
+      .maybeSingle();
 
     if (sessionError || !session) {
       return createErrorResponse('Chat session not found', 404);
     }
 
-    if (session.user_id !== userId) {
+    const isParticipant =
+      session.user_id1 === userId ||
+      session.user_id2 === userId ||
+      !!session.group_id; // group membership validated below via social_group_members
+
+    if (!isParticipant) {
       return createErrorResponse('Unauthorized: You do not have access to this chat session', 403);
     }
 
-    // Create the message
+    // For group chats, confirm the sender is a group member.
+    // (real schema: social_group_members.status defaults to 'active'; join-leave-group
+    // inserts members without setting status, so membership is the check that matters)
+    if (session.group_id) {
+      const { data: member } = await supabase
+        .from('social_group_members')
+        .select('id')
+        .eq('group_id', session.group_id)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (!member) {
+        return createErrorResponse('Unauthorized: You are not a member of this group', 403);
+      }
+    }
+
+    // Create the message (real schema: social_chat_messages)
     const { data: message, error: messageError } = await supabase
-      .from('chat_messages')
+      .from('social_chat_messages')
       .insert({
-        chat_session_id,
-        user_id: userId,
-        message_content,
-        attachments: attachments || null,
-        created_at: new Date().toISOString(),
+        session_id,
+        group_id: session.group_id || null,
+        sender_id: userId,
+        content: message_content.trim(),
         is_read: false
       })
       .select('*')
@@ -96,21 +116,22 @@ serve(async (req) => {
     // Notify other participants (Fire and Forget)
     (async () => {
       try {
-        // Fetch participants (excluding sender)
-        // Try 'chat_session_members' or 'chat_session_participants' - guessing participants based on context
-        const { data: participants } = await supabase
-          .from('chat_session_participants') 
-          .select('user_id')
-          .eq('session_id', chat_session_id)
-          .neq('user_id', userId);
-        
-        // If table name is different (e.g. social_group_members for group chats?), this might fail.
-        // But for direct messages, usually there is a mapping table.
-        // Assuming 'chat_session_participants' exists.
+        let recipientIds: string[] = [];
+        if (session.group_id) {
+          // Group chat: notify all group members except sender
+          const { data: members } = await supabase
+            .from('social_group_members')
+            .select('user_id')
+            .eq('group_id', session.group_id)
+            .neq('user_id', userId);
+          recipientIds = (members || []).map((m: any) => m.user_id);
+        } else {
+          // 1:1 chat: the other participant
+          const otherId = session.user_id1 === userId ? session.user_id2 : session.user_id1;
+          if (otherId) recipientIds = [otherId];
+        }
 
-        if (participants && participants.length > 0) {
-           const recipientIds = participants.map((p: any) => p.user_id);
-           
+        if (recipientIds.length > 0) {
            // Get sender name
            const { data: sender } = await supabase.from('social_users').select('display_name').eq('id', userId).single();
            const senderName = sender?.display_name || 'Someone';
@@ -126,10 +147,10 @@ serve(async (req) => {
                   message: preview,
                   // Deep link directly into chat session
                   data: {
-                    chat_session_id: chat_session_id,
+                    chat_session_id: session_id,
                     actor_id: userId,
                   },
-                  action_url: `/chat/${chat_session_id}`
+                  action_url: `/chat/${session_id}`
               }
            });
         }

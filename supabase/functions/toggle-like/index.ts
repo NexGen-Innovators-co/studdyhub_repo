@@ -49,7 +49,8 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } else {
-      // Like — verify social_users record exists, then insert
+      // Like — ensure the social_users record exists (self-heal instead of 400ing
+      // when a client hasn't created its profile row yet), then insert.
       const { data: socialUser, error: socialUserError } = await supabase
         .from('social_users')
         .select('id, display_name, avatar_url')
@@ -57,7 +58,28 @@ serve(async (req) => {
         .single();
 
       if (socialUserError || !socialUser) {
-        return createErrorResponse('Social profile not found. Please refresh the page.', 400);
+        // Pull the display name from the profiles table and create the social profile
+        // on the fly so a fresh/partial client never gets blocked from liking a post.
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name, email')
+          .eq('id', userId)
+          .single();
+        const displayName = (profile?.full_name || profile?.email?.split('@')[0] || 'Scholar').slice(0, 50);
+        const cleanName = displayName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        const suffix = userId.slice(-4);
+        const username = (cleanName && cleanName.length >= 2 ? cleanName : 'scholar') + '_' + suffix;
+        await supabase
+          .from('social_users')
+          .upsert(
+            {
+              id: userId,
+              username,
+              display_name: displayName,
+              status: 'active',
+            },
+            { onConflict: 'id' }
+          );
       }
 
       // Idempotent like: if already exists, return success instead of throwing unique constraint error

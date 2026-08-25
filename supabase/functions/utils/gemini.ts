@@ -7,11 +7,13 @@ const AI_PROVIDER_MODE = (Deno.env.get('AI_PROVIDER_MODE') || 'hf_only').toLower
 const USE_PAID_MODELS = AI_PROVIDER_MODE === 'paid';
 
 const MODEL_CHAIN = [
+  'gemini-3.7-flash',
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
   'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
-  'gemini-2.5-pro',
-  'gemini-3-pro-preview',
+  'gemini-2.5-pro'
 ];
 
 const MAX_RETRIES = 5;
@@ -29,6 +31,127 @@ interface GeminiResult {
   text?: string;
   error?: string;
   model?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MULTI-PROVIDER FALLBACK CHAIN (mirrors gemini-chat's cascade)
+// Provider order: xAI → Groq → SambaNova → OpenRouter.
+// (Hugging Face is attempted first by callHfChat in hf_only mode; this chain
+// is the resilient escape hatch when that router is down / rate-limited.)
+// ─────────────────────────────────────────────────────────────────────────────
+function buildFallbackProviders(): Array<{ name: string; url: string; key: string; models: string[] }> {
+  const rawGroq = Deno.env.get('GROQ_API_KEY') || '';
+  const rawXai = Deno.env.get('XAI_API_KEY') || Deno.env.get('GROK_API_KEY') || Deno.env.get('GROK_API_TOKEN') || '';
+  // Detect key formats: Groq keys start with 'gsk_', xAI keys start with 'xai-'
+  const groqApiKey = rawGroq.startsWith('gsk_') ? rawGroq : (rawXai.startsWith('gsk_') ? rawXai : rawGroq);
+  const xaiApiKey = rawXai.startsWith('xai-') ? rawXai : (rawGroq.startsWith('xai-') ? rawGroq : rawXai);
+  const sambaNovaApiKey = Deno.env.get('SAMBANOVA_API_KEY') || '';
+  const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY') || '';
+
+  const providers: Array<{ name: string; url: string; key: string; models: string[] }> = [];
+
+  if (xaiApiKey) {
+    providers.push({
+      name: 'xAI',
+      url: 'https://api.x.ai/v1/chat/completions',
+      key: xaiApiKey,
+      models: ['grok-3', 'grok-3-mini'],
+    });
+  }
+
+  if (groqApiKey) {
+    providers.push({
+      name: 'Groq',
+      url: 'https://api.groq.com/openai/v1/chat/completions',
+      key: groqApiKey,
+      // Separate per-model daily buckets — worth trying even when one is TPD-exhausted.
+      models: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.3-70b-versatile', 'qwen/qwen3.6-27b', 'groq/compound', 'llama-3.1-8b-instant'],
+    });
+  }
+
+  if (sambaNovaApiKey) {
+    providers.push({
+      name: 'SambaNova',
+      url: 'https://api.sambanova.ai/v1/chat/completions',
+      key: sambaNovaApiKey,
+      // Free tier: 200K tokens/day PER MODEL, no card required — separate quota from Groq.
+      models: ['Meta-Llama-3.3-70B-Instruct', 'DeepSeek-V3.1', 'gpt-oss-120b'],
+    });
+  }
+
+  if (openRouterApiKey) {
+    providers.push({
+      name: 'OpenRouter',
+      url: 'https://openrouter.ai/api/v1/chat/completions',
+      key: openRouterApiKey,
+      // Free catalog rotates — verified 2026-08-06 against openrouter.ai/models?max_price=0
+      models: ['nvidia/nemotron-3-ultra-550b-a55b:free', 'inclusionai/ling-3.0-flash:free', 'google/gemma-4-31b-it:free', 'poolside/laguna-s-2.1:free', 'openrouter/free'],
+    });
+  }
+
+  return providers;
+}
+
+async function callOpenAIStyleFallback(
+  prompt: string,
+  systemInstruction: string | undefined,
+  maxTokens: number,
+  temperature: number,
+): Promise<{ success: boolean; content?: string; modelUsed?: string; error?: string }> {
+  const messages: Array<{ role: string; content: string }> = [];
+  if (systemInstruction) {
+    messages.push({ role: 'system', content: systemInstruction });
+  }
+  messages.push({ role: 'user', content: prompt });
+
+  const providers = buildFallbackProviders();
+  if (providers.length === 0) {
+    return { success: false, error: 'NO_FALLBACK_PROVIDERS_CONFIGURED' };
+  }
+
+  for (const p of providers) {
+    for (const model of p.models) {
+      try {
+        console.log(`[MultiFallback:utils-gemini] [${p.name}] Trying model: ${model}`);
+        const start = Date.now();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (p.key) headers['Authorization'] = `Bearer ${p.key}`;
+
+        const body: any = {
+          model,
+          messages,
+          max_tokens: Math.min(maxTokens, 4096),
+          temperature,
+        };
+        if (p.name === 'OpenRouter') {
+          body.transforms = ['middle-out'];
+        }
+
+        const resp = await fetch(p.url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        });
+
+        const duration = Date.now() - start;
+        if (resp.ok) {
+          const data = await resp.json();
+          const content = data.choices?.[0]?.message?.content;
+          if (content) {
+            console.log(`[MultiFallback:utils-gemini] [${p.name}_SUCCESS] Succeeded with model=${model} in ${duration}ms. Content length: ${content.length}`);
+            return { success: true, content, modelUsed: `${p.name.toLowerCase()}/${model}` };
+          }
+        } else {
+          const err = await resp.text();
+          console.warn(`[MultiFallback:utils-gemini] [${p.name}_FAILURE] ${model} status=${resp.status} in ${duration}ms: ${err.substring(0, 200)}`);
+        }
+      } catch (err) {
+        console.error(`[MultiFallback:utils-gemini] [${p.name}_EXCEPTION] Exception with model=${model}:`, err);
+      }
+    }
+  }
+
+  return { success: false, error: 'ALL_FALLBACK_PROVIDERS_FAILED' };
 }
 
 /**
@@ -55,6 +178,14 @@ export async function callGemini(
 
     if (hfResult.success && hfResult.text) {
       return { success: true, text: hfResult.text, model: hfResult.model || 'huggingface' };
+    }
+
+    // Hugging Face router failed (rate limit / outage / ALL_HF_MODELS_FAILED).
+    // Cascade to the multi-provider chain instead of giving up — mirrors gemini-chat.
+    console.warn(`[utils-gemini] HF-only attempt failed (${hfResult.error || 'HF_ONLY_FAILED'}). Cascading to xAI → Groq → SambaNova → OpenRouter...`);
+    const fallback = await callOpenAIStyleFallback(prompt, systemInstruction, maxOutputTokens, temperature);
+    if (fallback.success && fallback.content) {
+      return { success: true, text: fallback.content, model: fallback.modelUsed || 'fallback-provider' };
     }
 
     return { success: false, error: hfResult.error || 'HF_ONLY_FAILED' };

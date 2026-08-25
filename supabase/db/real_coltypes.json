@@ -1,0 +1,6524 @@
+[
+    {
+        "table_name":  "achievements",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "achievements",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "achievements",
+        "column_name":  "badge_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "achievements",
+        "column_name":  "earned_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  4
+    },
+    {
+        "table_name":  "admin_activity_logs",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "admin_activity_logs",
+        "column_name":  "admin_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "admin_activity_logs",
+        "column_name":  "action",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "admin_activity_logs",
+        "column_name":  "target_type",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "admin_activity_logs",
+        "column_name":  "target_id",
+        "data_type":  "uuid",
+        "attnum":  5
+    },
+    {
+        "table_name":  "admin_activity_logs",
+        "column_name":  "details",
+        "data_type":  "jsonb",
+        "attnum":  6
+    },
+    {
+        "table_name":  "admin_activity_logs",
+        "column_name":  "ip_address",
+        "data_type":  "inet",
+        "attnum":  7
+    },
+    {
+        "table_name":  "admin_activity_logs",
+        "column_name":  "user_agent",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "admin_activity_logs",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "admin_system_settings",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "admin_system_settings",
+        "column_name":  "key",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "admin_system_settings",
+        "column_name":  "value",
+        "data_type":  "jsonb",
+        "attnum":  3
+    },
+    {
+        "table_name":  "admin_system_settings",
+        "column_name":  "description",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "admin_system_settings",
+        "column_name":  "category",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "admin_system_settings",
+        "column_name":  "is_public",
+        "data_type":  "boolean",
+        "attnum":  6
+    },
+    {
+        "table_name":  "admin_system_settings",
+        "column_name":  "updated_by",
+        "data_type":  "uuid",
+        "attnum":  7
+    },
+    {
+        "table_name":  "admin_system_settings",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "admin_system_settings",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "admin_users",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "admin_users",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "admin_users",
+        "column_name":  "email",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "admin_users",
+        "column_name":  "role",
+        "data_type":  "admin_role",
+        "attnum":  4
+    },
+    {
+        "table_name":  "admin_users",
+        "column_name":  "permissions",
+        "data_type":  "jsonb",
+        "attnum":  5
+    },
+    {
+        "table_name":  "admin_users",
+        "column_name":  "is_active",
+        "data_type":  "boolean",
+        "attnum":  6
+    },
+    {
+        "table_name":  "admin_users",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "admin_users",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "admin_users",
+        "column_name":  "last_login",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "admin_users",
+        "column_name":  "created_by",
+        "data_type":  "uuid",
+        "attnum":  10
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "title",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "sources",
+        "data_type":  "text[]",
+        "attnum":  4
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "script",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "audio_segments",
+        "data_type":  "jsonb",
+        "attnum":  6
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "duration_minutes",
+        "data_type":  "integer",
+        "attnum":  7
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "style",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  9
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "error_message",
+        "data_type":  "text",
+        "attnum":  10
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  11
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "is_public",
+        "data_type":  "boolean",
+        "attnum":  13
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "is_live",
+        "data_type":  "boolean",
+        "attnum":  14
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "live_started_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  15
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "cover_image_url",
+        "data_type":  "text",
+        "attnum":  16
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "description",
+        "data_type":  "text",
+        "attnum":  17
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "tags",
+        "data_type":  "text[]",
+        "attnum":  18
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "listen_count",
+        "data_type":  "integer",
+        "attnum":  19
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "share_count",
+        "data_type":  "integer",
+        "attnum":  20
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "podcast_type",
+        "data_type":  "text",
+        "attnum":  21
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "visual_assets",
+        "data_type":  "jsonb",
+        "attnum":  22
+    },
+    {
+        "table_name":  "ai_user_memory",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "ai_user_memory",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "ai_user_memory",
+        "column_name":  "fact_type",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "ai_user_memory",
+        "column_name":  "fact_key",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "ai_user_memory",
+        "column_name":  "fact_value",
+        "data_type":  "jsonb",
+        "attnum":  5
+    },
+    {
+        "table_name":  "ai_user_memory",
+        "column_name":  "confidence_score",
+        "data_type":  "numeric",
+        "attnum":  6
+    },
+    {
+        "table_name":  "ai_user_memory",
+        "column_name":  "source_session_id",
+        "data_type":  "uuid",
+        "attnum":  7
+    },
+    {
+        "table_name":  "ai_user_memory",
+        "column_name":  "last_referenced",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "ai_user_memory",
+        "column_name":  "referenced_count",
+        "data_type":  "integer",
+        "attnum":  9
+    },
+    {
+        "table_name":  "ai_user_memory",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "app_ratings",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "app_ratings",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "app_ratings",
+        "column_name":  "rating",
+        "data_type":  "smallint",
+        "attnum":  3
+    },
+    {
+        "table_name":  "app_ratings",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  4
+    },
+    {
+        "table_name":  "app_ratings",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "app_stats",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "app_stats",
+        "column_name":  "active_users",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "app_stats",
+        "column_name":  "notes_processed",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "app_stats",
+        "column_name":  "uptime",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "app_stats",
+        "column_name":  "user_rating",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "app_stats",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "app_testimonials",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "app_testimonials",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "app_testimonials",
+        "column_name":  "content",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "app_testimonials",
+        "column_name":  "rating",
+        "data_type":  "smallint",
+        "attnum":  4
+    },
+    {
+        "table_name":  "app_testimonials",
+        "column_name":  "is_approved",
+        "data_type":  "boolean",
+        "attnum":  5
+    },
+    {
+        "table_name":  "app_testimonials",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "app_testimonials",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "audio_processing_results",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "audio_processing_results",
+        "column_name":  "file_url",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "audio_processing_results",
+        "column_name":  "transcript",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "audio_processing_results",
+        "column_name":  "summary",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "audio_processing_results",
+        "column_name":  "translated_content",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "audio_processing_results",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "audio_processing_results",
+        "column_name":  "error_message",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "audio_processing_results",
+        "column_name":  "target_language",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "audio_processing_results",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "audio_processing_results",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "audio_processing_results",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  11
+    },
+    {
+        "table_name":  "audio_processing_results",
+        "column_name":  "document_id",
+        "data_type":  "uuid",
+        "attnum":  12
+    },
+    {
+        "table_name":  "audio_segments",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "audio_segments",
+        "column_name":  "podcast_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "audio_segments",
+        "column_name":  "segment_index",
+        "data_type":  "integer",
+        "attnum":  3
+    },
+    {
+        "table_name":  "audio_segments",
+        "column_name":  "audio_url",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "audio_segments",
+        "column_name":  "storage_path",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "audio_segments",
+        "column_name":  "transcript",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "audio_segments",
+        "column_name":  "summary",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "audio_segments",
+        "column_name":  "mime_type",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "audio_segments",
+        "column_name":  "duration_seconds",
+        "data_type":  "integer",
+        "attnum":  9
+    },
+    {
+        "table_name":  "audio_segments",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "audio_segments",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  11
+    },
+    {
+        "table_name":  "badges",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "badges",
+        "column_name":  "name",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "badges",
+        "column_name":  "description",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "badges",
+        "column_name":  "icon",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "badges",
+        "column_name":  "requirement_type",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "badges",
+        "column_name":  "requirement_value",
+        "data_type":  "integer",
+        "attnum":  6
+    },
+    {
+        "table_name":  "badges",
+        "column_name":  "xp_reward",
+        "data_type":  "integer",
+        "attnum":  7
+    },
+    {
+        "table_name":  "badges",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "calendar_integrations",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "calendar_integrations",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "calendar_integrations",
+        "column_name":  "provider",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "calendar_integrations",
+        "column_name":  "access_token",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "calendar_integrations",
+        "column_name":  "refresh_token",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "calendar_integrations",
+        "column_name":  "expires_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "calendar_integrations",
+        "column_name":  "calendar_id",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "calendar_integrations",
+        "column_name":  "sync_enabled",
+        "data_type":  "boolean",
+        "attnum":  8
+    },
+    {
+        "table_name":  "calendar_integrations",
+        "column_name":  "last_synced_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "calendar_integrations",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "calendar_integrations",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  11
+    },
+    {
+        "table_name":  "chat_messages",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "chat_messages",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "chat_messages",
+        "column_name":  "content",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "chat_messages",
+        "column_name":  "role",
+        "data_type":  "message_role",
+        "attnum":  4
+    },
+    {
+        "table_name":  "chat_messages",
+        "column_name":  "timestamp",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "chat_messages",
+        "column_name":  "session_id",
+        "data_type":  "uuid",
+        "attnum":  6
+    },
+    {
+        "table_name":  "chat_messages",
+        "column_name":  "is_error",
+        "data_type":  "boolean",
+        "attnum":  7
+    },
+    {
+        "table_name":  "chat_messages",
+        "column_name":  "image_url",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "chat_messages",
+        "column_name":  "attached_document_ids",
+        "data_type":  "uuid[]",
+        "attnum":  9
+    },
+    {
+        "table_name":  "chat_messages",
+        "column_name":  "attached_note_ids",
+        "data_type":  "uuid[]",
+        "attnum":  10
+    },
+    {
+        "table_name":  "chat_messages",
+        "column_name":  "image_mime_type",
+        "data_type":  "text",
+        "attnum":  11
+    },
+    {
+        "table_name":  "chat_messages",
+        "column_name":  "has_been_displayed",
+        "data_type":  "boolean",
+        "attnum":  12
+    },
+    {
+        "table_name":  "chat_messages",
+        "column_name":  "conversation_context",
+        "data_type":  "jsonb",
+        "attnum":  13
+    },
+    {
+        "table_name":  "chat_messages",
+        "column_name":  "files_metadata",
+        "data_type":  "jsonb[]",
+        "attnum":  14
+    },
+    {
+        "table_name":  "chat_messages",
+        "column_name":  "thinking_steps",
+        "data_type":  "jsonb",
+        "attnum":  15
+    },
+    {
+        "table_name":  "chat_sessions",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "chat_sessions",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "chat_sessions",
+        "column_name":  "title",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "chat_sessions",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  4
+    },
+    {
+        "table_name":  "chat_sessions",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "chat_sessions",
+        "column_name":  "document_ids",
+        "data_type":  "text[]",
+        "attnum":  6
+    },
+    {
+        "table_name":  "chat_sessions",
+        "column_name":  "last_message_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "chat_sessions",
+        "column_name":  "message_count",
+        "data_type":  "integer",
+        "attnum":  8
+    },
+    {
+        "table_name":  "chat_sessions",
+        "column_name":  "context_summary",
+        "data_type":  "text",
+        "attnum":  9
+    },
+    {
+        "table_name":  "chat_sessions",
+        "column_name":  "last_summary_update",
+        "data_type":  "integer",
+        "attnum":  10
+    },
+    {
+        "table_name":  "chat_sessions",
+        "column_name":  "memory_strategy",
+        "data_type":  "text",
+        "attnum":  11
+    },
+    {
+        "table_name":  "chat_sessions",
+        "column_name":  "context_size_bytes",
+        "data_type":  "integer",
+        "attnum":  12
+    },
+    {
+        "table_name":  "chat_sessions",
+        "column_name":  "default_folder_id",
+        "data_type":  "uuid",
+        "attnum":  13
+    },
+    {
+        "table_name":  "chat_sessions",
+        "column_name":  "token_count",
+        "data_type":  "integer",
+        "attnum":  14
+    },
+    {
+        "table_name":  "class_recordings",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "class_recordings",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "class_recordings",
+        "column_name":  "title",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "class_recordings",
+        "column_name":  "audio_url",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "class_recordings",
+        "column_name":  "transcript",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "class_recordings",
+        "column_name":  "summary",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "class_recordings",
+        "column_name":  "duration",
+        "data_type":  "integer",
+        "attnum":  7
+    },
+    {
+        "table_name":  "class_recordings",
+        "column_name":  "subject",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "class_recordings",
+        "column_name":  "date",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "class_recordings",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "class_recordings",
+        "column_name":  "document_id",
+        "data_type":  "uuid",
+        "attnum":  11
+    },
+    {
+        "table_name":  "class_recordings",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "class_recordings",
+        "column_name":  "processing_status",
+        "data_type":  "text",
+        "attnum":  13
+    },
+    {
+        "table_name":  "class_recordings",
+        "column_name":  "processing_error",
+        "data_type":  "text",
+        "attnum":  14
+    },
+    {
+        "table_name":  "content_moderation_log",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "content_moderation_log",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "content_moderation_log",
+        "column_name":  "content_preview",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "content_moderation_log",
+        "column_name":  "content_type",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "content_moderation_log",
+        "column_name":  "decision",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "content_moderation_log",
+        "column_name":  "reason",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "content_moderation_log",
+        "column_name":  "confidence",
+        "data_type":  "double precision",
+        "attnum":  7
+    },
+    {
+        "table_name":  "content_moderation_log",
+        "column_name":  "ai_analysis",
+        "data_type":  "jsonb",
+        "attnum":  8
+    },
+    {
+        "table_name":  "content_moderation_log",
+        "column_name":  "educational_score",
+        "data_type":  "double precision",
+        "attnum":  9
+    },
+    {
+        "table_name":  "content_moderation_log",
+        "column_name":  "category",
+        "data_type":  "text",
+        "attnum":  10
+    },
+    {
+        "table_name":  "content_moderation_log",
+        "column_name":  "topics",
+        "data_type":  "text[]",
+        "attnum":  11
+    },
+    {
+        "table_name":  "content_moderation_log",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "content_moderation_queue",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "content_moderation_queue",
+        "column_name":  "content_type",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "content_moderation_queue",
+        "column_name":  "content_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "content_moderation_queue",
+        "column_name":  "reported_by",
+        "data_type":  "uuid",
+        "attnum":  4
+    },
+    {
+        "table_name":  "content_moderation_queue",
+        "column_name":  "reason",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "content_moderation_queue",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "content_moderation_queue",
+        "column_name":  "moderator_id",
+        "data_type":  "uuid",
+        "attnum":  7
+    },
+    {
+        "table_name":  "content_moderation_queue",
+        "column_name":  "moderator_notes",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "content_moderation_queue",
+        "column_name":  "priority",
+        "data_type":  "integer",
+        "attnum":  9
+    },
+    {
+        "table_name":  "content_moderation_queue",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "content_moderation_queue",
+        "column_name":  "resolved_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  11
+    },
+    {
+        "table_name":  "countries",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "countries",
+        "column_name":  "code",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "countries",
+        "column_name":  "name",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "countries",
+        "column_name":  "flag_emoji",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "countries",
+        "column_name":  "official_languages",
+        "data_type":  "text[]",
+        "attnum":  5
+    },
+    {
+        "table_name":  "countries",
+        "column_name":  "metadata",
+        "data_type":  "jsonb",
+        "attnum":  6
+    },
+    {
+        "table_name":  "countries",
+        "column_name":  "is_active",
+        "data_type":  "boolean",
+        "attnum":  7
+    },
+    {
+        "table_name":  "countries",
+        "column_name":  "sort_order",
+        "data_type":  "integer",
+        "attnum":  8
+    },
+    {
+        "table_name":  "countries",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "course_enrollments",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "course_enrollments",
+        "column_name":  "course_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "course_enrollments",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "course_enrollments",
+        "column_name":  "enrolled_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  4
+    },
+    {
+        "table_name":  "course_enrollments",
+        "column_name":  "progress_percent",
+        "data_type":  "integer",
+        "attnum":  5
+    },
+    {
+        "table_name":  "course_enrollments",
+        "column_name":  "last_accessed_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "course_enrollments",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "course_materials",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "course_materials",
+        "column_name":  "course_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "course_materials",
+        "column_name":  "document_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "course_materials",
+        "column_name":  "title",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "course_materials",
+        "column_name":  "description",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "course_materials",
+        "column_name":  "category",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "course_materials",
+        "column_name":  "downloads_count",
+        "data_type":  "integer",
+        "attnum":  7
+    },
+    {
+        "table_name":  "course_materials",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "course_progress",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "course_progress",
+        "column_name":  "enrollment_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "course_progress",
+        "column_name":  "resource_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "course_progress",
+        "column_name":  "completed",
+        "data_type":  "boolean",
+        "attnum":  4
+    },
+    {
+        "table_name":  "course_progress",
+        "column_name":  "completed_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "course_progress",
+        "column_name":  "score",
+        "data_type":  "integer",
+        "attnum":  6
+    },
+    {
+        "table_name":  "course_progress",
+        "column_name":  "time_spent_seconds",
+        "data_type":  "integer",
+        "attnum":  7
+    },
+    {
+        "table_name":  "course_progress",
+        "column_name":  "last_accessed_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "course_resources",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "course_resources",
+        "column_name":  "course_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "course_resources",
+        "column_name":  "resource_type",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "course_resources",
+        "column_name":  "resource_id",
+        "data_type":  "uuid",
+        "attnum":  4
+    },
+    {
+        "table_name":  "course_resources",
+        "column_name":  "title",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "course_resources",
+        "column_name":  "description",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "course_resources",
+        "column_name":  "category",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "course_resources",
+        "column_name":  "sort_order",
+        "data_type":  "integer",
+        "attnum":  8
+    },
+    {
+        "table_name":  "course_resources",
+        "column_name":  "is_required",
+        "data_type":  "boolean",
+        "attnum":  9
+    },
+    {
+        "table_name":  "course_resources",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "course_resources",
+        "column_name":  "created_by",
+        "data_type":  "uuid",
+        "attnum":  11
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "code",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "title",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "description",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "level",
+        "data_type":  "integer",
+        "attnum":  5
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "semester",
+        "data_type":  "integer",
+        "attnum":  6
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "department",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "school_name",
+        "data_type":  "text",
+        "attnum":  9
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "institution_id",
+        "data_type":  "uuid",
+        "attnum":  10
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "created_by",
+        "data_type":  "uuid",
+        "attnum":  11
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "visibility",
+        "data_type":  "text",
+        "attnum":  12
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "is_published",
+        "data_type":  "boolean",
+        "attnum":  13
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "country_id",
+        "data_type":  "uuid",
+        "attnum":  14
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "education_level_id",
+        "data_type":  "uuid",
+        "attnum":  15
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "curriculum_id",
+        "data_type":  "uuid",
+        "attnum":  16
+    },
+    {
+        "table_name":  "curricula",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "curricula",
+        "column_name":  "country_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "curricula",
+        "column_name":  "education_level_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "curricula",
+        "column_name":  "code",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "curricula",
+        "column_name":  "name",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "curricula",
+        "column_name":  "description",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "curricula",
+        "column_name":  "governing_body",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "curricula",
+        "column_name":  "metadata",
+        "data_type":  "jsonb",
+        "attnum":  8
+    },
+    {
+        "table_name":  "curricula",
+        "column_name":  "is_active",
+        "data_type":  "boolean",
+        "attnum":  9
+    },
+    {
+        "table_name":  "curricula",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "daily_notification_log",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "daily_notification_log",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "daily_notification_log",
+        "column_name":  "notification_type",
+        "data_type":  "character varying(100)",
+        "attnum":  3
+    },
+    {
+        "table_name":  "daily_notification_log",
+        "column_name":  "category",
+        "data_type":  "integer",
+        "attnum":  4
+    },
+    {
+        "table_name":  "daily_notification_log",
+        "column_name":  "scheduled_send_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "daily_notification_log",
+        "column_name":  "actually_sent_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "daily_notification_log",
+        "column_name":  "opened_by_user",
+        "data_type":  "boolean",
+        "attnum":  7
+    },
+    {
+        "table_name":  "daily_notification_log",
+        "column_name":  "opened_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "daily_notification_log",
+        "column_name":  "deep_link_clicked",
+        "data_type":  "boolean",
+        "attnum":  9
+    },
+    {
+        "table_name":  "daily_notification_log",
+        "column_name":  "deep_link_clicked_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "daily_notification_log",
+        "column_name":  "action_taken",
+        "data_type":  "boolean",
+        "attnum":  11
+    },
+    {
+        "table_name":  "daily_notification_log",
+        "column_name":  "action_taken_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "daily_notification_log",
+        "column_name":  "personalization_data",
+        "data_type":  "jsonb",
+        "attnum":  13
+    },
+    {
+        "table_name":  "daily_notification_log",
+        "column_name":  "message_template",
+        "data_type":  "character varying(500)",
+        "attnum":  14
+    },
+    {
+        "table_name":  "daily_notification_log",
+        "column_name":  "deep_link_url",
+        "data_type":  "text",
+        "attnum":  15
+    },
+    {
+        "table_name":  "daily_notification_log",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  16
+    },
+    {
+        "table_name":  "document_folder_items",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "document_folder_items",
+        "column_name":  "folder_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "document_folder_items",
+        "column_name":  "document_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "document_folder_items",
+        "column_name":  "added_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  4
+    },
+    {
+        "table_name":  "document_folders",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "document_folders",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "document_folders",
+        "column_name":  "name",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "document_folders",
+        "column_name":  "parent_folder_id",
+        "data_type":  "uuid",
+        "attnum":  4
+    },
+    {
+        "table_name":  "document_folders",
+        "column_name":  "color",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "document_folders",
+        "column_name":  "description",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "document_folders",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "document_folders",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "title",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "file_name",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "file_url",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "file_type",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "file_size",
+        "data_type":  "integer",
+        "attnum":  7
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "content_extracted",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "type",
+        "data_type":  "text",
+        "attnum":  11
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "processing_error",
+        "data_type":  "text",
+        "attnum":  12
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "processing_status",
+        "data_type":  "text",
+        "attnum":  13
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "processing_started_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  14
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "processing_completed_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  15
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "processing_metadata",
+        "data_type":  "jsonb",
+        "attnum":  16
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "extraction_model_used",
+        "data_type":  "text",
+        "attnum":  17
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "total_processing_time_ms",
+        "data_type":  "integer",
+        "attnum":  18
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "folder_ids",
+        "data_type":  "uuid[]",
+        "attnum":  19
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "extraction_progress",
+        "data_type":  "integer",
+        "attnum":  20
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "continuation_attempt",
+        "data_type":  "integer",
+        "attnum":  21
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "current_chunk",
+        "data_type":  "integer",
+        "attnum":  22
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "total_chunks",
+        "data_type":  "integer",
+        "attnum":  23
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "extraction_warning",
+        "data_type":  "text",
+        "attnum":  24
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "is_public",
+        "data_type":  "boolean",
+        "attnum":  25
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "folder_id",
+        "data_type":  "uuid",
+        "attnum":  26
+    },
+    {
+        "table_name":  "education_levels",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "education_levels",
+        "column_name":  "country_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "education_levels",
+        "column_name":  "code",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "education_levels",
+        "column_name":  "name",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "education_levels",
+        "column_name":  "short_name",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "education_levels",
+        "column_name":  "category",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "education_levels",
+        "column_name":  "sort_order",
+        "data_type":  "integer",
+        "attnum":  7
+    },
+    {
+        "table_name":  "education_levels",
+        "column_name":  "typical_start_age",
+        "data_type":  "integer",
+        "attnum":  8
+    },
+    {
+        "table_name":  "education_levels",
+        "column_name":  "typical_duration_years",
+        "data_type":  "integer",
+        "attnum":  9
+    },
+    {
+        "table_name":  "education_levels",
+        "column_name":  "metadata",
+        "data_type":  "jsonb",
+        "attnum":  10
+    },
+    {
+        "table_name":  "education_levels",
+        "column_name":  "is_active",
+        "data_type":  "boolean",
+        "attnum":  11
+    },
+    {
+        "table_name":  "education_levels",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "error_logs",
+        "column_name":  "id",
+        "data_type":  "integer",
+        "attnum":  1
+    },
+    {
+        "table_name":  "error_logs",
+        "column_name":  "error_message",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "error_logs",
+        "column_name":  "error_time",
+        "data_type":  "timestamp without time zone",
+        "attnum":  3
+    },
+    {
+        "table_name":  "examinations",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "examinations",
+        "column_name":  "curriculum_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "examinations",
+        "column_name":  "code",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "examinations",
+        "column_name":  "name",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "examinations",
+        "column_name":  "typical_date",
+        "data_type":  "date",
+        "attnum":  5
+    },
+    {
+        "table_name":  "examinations",
+        "column_name":  "recurrence",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "examinations",
+        "column_name":  "metadata",
+        "data_type":  "jsonb",
+        "attnum":  7
+    },
+    {
+        "table_name":  "examinations",
+        "column_name":  "is_active",
+        "data_type":  "boolean",
+        "attnum":  8
+    },
+    {
+        "table_name":  "examinations",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "failed_chunks",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "failed_chunks",
+        "column_name":  "document_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "failed_chunks",
+        "column_name":  "chunk_index",
+        "data_type":  "integer",
+        "attnum":  3
+    },
+    {
+        "table_name":  "failed_chunks",
+        "column_name":  "chunk_base64",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "failed_chunks",
+        "column_name":  "file_type",
+        "data_type":  "character varying",
+        "attnum":  5
+    },
+    {
+        "table_name":  "failed_chunks",
+        "column_name":  "error_message",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "failed_chunks",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "flashcards",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "flashcards",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "flashcards",
+        "column_name":  "note_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "flashcards",
+        "column_name":  "front",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "flashcards",
+        "column_name":  "back",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "flashcards",
+        "column_name":  "category",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "flashcards",
+        "column_name":  "difficulty",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "flashcards",
+        "column_name":  "hint",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "flashcards",
+        "column_name":  "review_count",
+        "data_type":  "integer",
+        "attnum":  9
+    },
+    {
+        "table_name":  "flashcards",
+        "column_name":  "last_reviewed_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "flashcards",
+        "column_name":  "next_review_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  11
+    },
+    {
+        "table_name":  "flashcards",
+        "column_name":  "ease_factor",
+        "data_type":  "numeric",
+        "attnum":  12
+    },
+    {
+        "table_name":  "flashcards",
+        "column_name":  "interval_days",
+        "data_type":  "integer",
+        "attnum":  13
+    },
+    {
+        "table_name":  "flashcards",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  14
+    },
+    {
+        "table_name":  "flashcards",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  15
+    },
+    {
+        "table_name":  "game_progress",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "game_progress",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "game_progress",
+        "column_name":  "game_key",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "game_progress",
+        "column_name":  "unlocked_level",
+        "data_type":  "integer",
+        "attnum":  4
+    },
+    {
+        "table_name":  "game_progress",
+        "column_name":  "stars_by_level",
+        "data_type":  "jsonb",
+        "attnum":  5
+    },
+    {
+        "table_name":  "game_progress",
+        "column_name":  "best_scores",
+        "data_type":  "jsonb",
+        "attnum":  6
+    },
+    {
+        "table_name":  "game_progress",
+        "column_name":  "total_xp_earned",
+        "data_type":  "integer",
+        "attnum":  7
+    },
+    {
+        "table_name":  "game_progress",
+        "column_name":  "last_played_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "game_progress",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "game_progress",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "institution_invites",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "institution_invites",
+        "column_name":  "institution_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "institution_invites",
+        "column_name":  "email",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "institution_invites",
+        "column_name":  "role",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "institution_invites",
+        "column_name":  "invited_by",
+        "data_type":  "uuid",
+        "attnum":  5
+    },
+    {
+        "table_name":  "institution_invites",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "institution_invites",
+        "column_name":  "token",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "institution_invites",
+        "column_name":  "expires_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "institution_invites",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "institution_members",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "institution_members",
+        "column_name":  "institution_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "institution_members",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "institution_members",
+        "column_name":  "role",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "institution_members",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "institution_members",
+        "column_name":  "title",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "institution_members",
+        "column_name":  "department",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "institution_members",
+        "column_name":  "invited_by",
+        "data_type":  "uuid",
+        "attnum":  8
+    },
+    {
+        "table_name":  "institution_members",
+        "column_name":  "invite_code",
+        "data_type":  "text",
+        "attnum":  9
+    },
+    {
+        "table_name":  "institution_members",
+        "column_name":  "joined_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "institution_members",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  11
+    },
+    {
+        "table_name":  "institution_members",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "name",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "slug",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "type",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "country_id",
+        "data_type":  "uuid",
+        "attnum":  5
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "education_level_id",
+        "data_type":  "uuid",
+        "attnum":  6
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "address",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "city",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "region",
+        "data_type":  "text",
+        "attnum":  9
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "website",
+        "data_type":  "text",
+        "attnum":  10
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "logo_url",
+        "data_type":  "text",
+        "attnum":  11
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "description",
+        "data_type":  "text",
+        "attnum":  12
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "verification_status",
+        "data_type":  "text",
+        "attnum":  13
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "verified_by",
+        "data_type":  "uuid",
+        "attnum":  14
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "verified_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  15
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "settings",
+        "data_type":  "jsonb",
+        "attnum":  16
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "metadata",
+        "data_type":  "jsonb",
+        "attnum":  17
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "is_active",
+        "data_type":  "boolean",
+        "attnum":  18
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  19
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  20
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "column_name":  "subject_code",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "column_name":  "subject_name",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "column_name":  "week",
+        "data_type":  "integer",
+        "attnum":  5
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "column_name":  "day",
+        "data_type":  "integer",
+        "attnum":  6
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "column_name":  "step_index",
+        "data_type":  "integer",
+        "attnum":  7
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "column_name":  "title",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "column_name":  "step_type",
+        "data_type":  "text",
+        "attnum":  9
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "column_name":  "ref_id",
+        "data_type":  "text",
+        "attnum":  10
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "column_name":  "xp_reward",
+        "data_type":  "integer",
+        "attnum":  11
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "column_name":  "is_completed",
+        "data_type":  "boolean",
+        "attnum":  12
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "column_name":  "due_date",
+        "data_type":  "timestamp with time zone",
+        "attnum":  13
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "column_name":  "completed_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  14
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  15
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  16
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "column_name":  "lesson_json",
+        "data_type":  "text",
+        "attnum":  17
+    },
+    {
+        "table_name":  "learning_topic_connections",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "learning_topic_connections",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "learning_topic_connections",
+        "column_name":  "from_session_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "learning_topic_connections",
+        "column_name":  "to_session_id",
+        "data_type":  "uuid",
+        "attnum":  4
+    },
+    {
+        "table_name":  "learning_topic_connections",
+        "column_name":  "topic",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "learning_topic_connections",
+        "column_name":  "connection_strength",
+        "data_type":  "numeric",
+        "attnum":  6
+    },
+    {
+        "table_name":  "learning_topic_connections",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "live_quiz_answers",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "live_quiz_answers",
+        "column_name":  "session_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "live_quiz_answers",
+        "column_name":  "question_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "live_quiz_answers",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  4
+    },
+    {
+        "table_name":  "live_quiz_answers",
+        "column_name":  "answer_index",
+        "data_type":  "integer",
+        "attnum":  5
+    },
+    {
+        "table_name":  "live_quiz_answers",
+        "column_name":  "answered_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "live_quiz_answers",
+        "column_name":  "is_correct",
+        "data_type":  "boolean",
+        "attnum":  7
+    },
+    {
+        "table_name":  "live_quiz_answers",
+        "column_name":  "points_awarded",
+        "data_type":  "integer",
+        "attnum":  8
+    },
+    {
+        "table_name":  "live_quiz_answers",
+        "column_name":  "selected_option",
+        "data_type":  "integer",
+        "attnum":  9
+    },
+    {
+        "table_name":  "live_quiz_answers",
+        "column_name":  "time_taken",
+        "data_type":  "integer",
+        "attnum":  10
+    },
+    {
+        "table_name":  "live_quiz_answers",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  11
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "session_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "display_name",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "join_time",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "score",
+        "data_type":  "integer",
+        "attnum":  6
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "is_host",
+        "data_type":  "boolean",
+        "attnum":  7
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "last_answered_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "is_playing",
+        "data_type":  "boolean",
+        "attnum":  9
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "is_mediator",
+        "data_type":  "boolean",
+        "attnum":  10
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "current_question_idx",
+        "data_type":  "integer",
+        "attnum":  11
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "individual_start_time",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "individual_end_time",
+        "data_type":  "timestamp with time zone",
+        "attnum":  13
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "questions_attempted",
+        "data_type":  "integer",
+        "attnum":  14
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "questions_correct",
+        "data_type":  "integer",
+        "attnum":  15
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "total_time_spent",
+        "data_type":  "integer",
+        "attnum":  16
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "status",
+        "data_type":  "character varying",
+        "attnum":  17
+    },
+    {
+        "table_name":  "live_quiz_questions",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "live_quiz_questions",
+        "column_name":  "session_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "live_quiz_questions",
+        "column_name":  "question_index",
+        "data_type":  "integer",
+        "attnum":  3
+    },
+    {
+        "table_name":  "live_quiz_questions",
+        "column_name":  "question_text",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "live_quiz_questions",
+        "column_name":  "options",
+        "data_type":  "jsonb",
+        "attnum":  5
+    },
+    {
+        "table_name":  "live_quiz_questions",
+        "column_name":  "correct_answer",
+        "data_type":  "integer",
+        "attnum":  6
+    },
+    {
+        "table_name":  "live_quiz_questions",
+        "column_name":  "explanation",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "live_quiz_questions",
+        "column_name":  "start_time",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "live_quiz_questions",
+        "column_name":  "end_time",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "live_quiz_questions",
+        "column_name":  "time_limit",
+        "data_type":  "integer",
+        "attnum":  10
+    },
+    {
+        "table_name":  "live_quiz_questions",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  11
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "quiz_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "host_user_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "start_time",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "end_time",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "join_code",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "host_role",
+        "data_type":  "text",
+        "attnum":  10
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "advance_mode",
+        "data_type":  "text",
+        "attnum":  11
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "config",
+        "data_type":  "jsonb",
+        "attnum":  12
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "quiz_mode",
+        "data_type":  "character varying",
+        "attnum":  13
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "scheduled_start_time",
+        "data_type":  "timestamp with time zone",
+        "attnum":  14
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "allow_late_join",
+        "data_type":  "boolean",
+        "attnum":  15
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "game_key",
+        "data_type":  "text",
+        "attnum":  16
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "is_public",
+        "data_type":  "boolean",
+        "attnum":  17
+    },
+    {
+        "table_name":  "notes",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "notes",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "notes",
+        "column_name":  "title",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "notes",
+        "column_name":  "content",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "notes",
+        "column_name":  "category",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "notes",
+        "column_name":  "tags",
+        "data_type":  "text[]",
+        "attnum":  6
+    },
+    {
+        "table_name":  "notes",
+        "column_name":  "ai_summary",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "notes",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "notes",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "notes",
+        "column_name":  "document_id",
+        "data_type":  "uuid",
+        "attnum":  10
+    },
+    {
+        "table_name":  "notification_preferences",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "notification_preferences",
+        "column_name":  "push_notifications",
+        "data_type":  "boolean",
+        "attnum":  2
+    },
+    {
+        "table_name":  "notification_preferences",
+        "column_name":  "email_notifications",
+        "data_type":  "boolean",
+        "attnum":  3
+    },
+    {
+        "table_name":  "notification_preferences",
+        "column_name":  "schedule_reminders",
+        "data_type":  "boolean",
+        "attnum":  4
+    },
+    {
+        "table_name":  "notification_preferences",
+        "column_name":  "quiz_reminders",
+        "data_type":  "boolean",
+        "attnum":  5
+    },
+    {
+        "table_name":  "notification_preferences",
+        "column_name":  "assignment_reminders",
+        "data_type":  "boolean",
+        "attnum":  6
+    },
+    {
+        "table_name":  "notification_preferences",
+        "column_name":  "social_notifications",
+        "data_type":  "boolean",
+        "attnum":  7
+    },
+    {
+        "table_name":  "notification_preferences",
+        "column_name":  "quiet_hours_enabled",
+        "data_type":  "boolean",
+        "attnum":  8
+    },
+    {
+        "table_name":  "notification_preferences",
+        "column_name":  "quiet_hours_start",
+        "data_type":  "time without time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "notification_preferences",
+        "column_name":  "quiet_hours_end",
+        "data_type":  "time without time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "notification_preferences",
+        "column_name":  "reminder_time",
+        "data_type":  "integer",
+        "attnum":  11
+    },
+    {
+        "table_name":  "notification_preferences",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "notification_preferences",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  13
+    },
+    {
+        "table_name":  "notification_preferences",
+        "column_name":  "daily_categories",
+        "data_type":  "jsonb",
+        "attnum":  14
+    },
+    {
+        "table_name":  "notification_preferences",
+        "column_name":  "preferred_notification_times",
+        "data_type":  "jsonb",
+        "attnum":  15
+    },
+    {
+        "table_name":  "notification_preferences",
+        "column_name":  "max_notifications_per_day",
+        "data_type":  "integer",
+        "attnum":  16
+    },
+    {
+        "table_name":  "notification_preferences",
+        "column_name":  "user_timezone",
+        "data_type":  "character varying",
+        "attnum":  17
+    },
+    {
+        "table_name":  "notification_subscriptions",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "notification_subscriptions",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "notification_subscriptions",
+        "column_name":  "endpoint",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "notification_subscriptions",
+        "column_name":  "p256dh",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "notification_subscriptions",
+        "column_name":  "auth",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "notification_subscriptions",
+        "column_name":  "device_type",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "notification_subscriptions",
+        "column_name":  "browser",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "notification_subscriptions",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "notification_subscriptions",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "notifications",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "notifications",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "notifications",
+        "column_name":  "type",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "notifications",
+        "column_name":  "title",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "notifications",
+        "column_name":  "message",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "notifications",
+        "column_name":  "data",
+        "data_type":  "jsonb",
+        "attnum":  6
+    },
+    {
+        "table_name":  "notifications",
+        "column_name":  "read",
+        "data_type":  "boolean",
+        "attnum":  7
+    },
+    {
+        "table_name":  "notifications",
+        "column_name":  "read_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "notifications",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "notifications",
+        "column_name":  "expires_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "platform_update_reads",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "platform_update_reads",
+        "column_name":  "update_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "platform_update_reads",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "platform_update_reads",
+        "column_name":  "read_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  4
+    },
+    {
+        "table_name":  "platform_update_reads",
+        "column_name":  "dismissed",
+        "data_type":  "boolean",
+        "attnum":  5
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "title",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "summary",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "content",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "update_type",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "priority",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "video_url",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "documentation_url",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "image_url",
+        "data_type":  "text",
+        "attnum":  9
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "version_tag",
+        "data_type":  "text",
+        "attnum":  10
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  11
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "scheduled_for",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "published_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  13
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "expires_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  14
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "created_by",
+        "data_type":  "uuid",
+        "attnum":  15
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "updated_by",
+        "data_type":  "uuid",
+        "attnum":  16
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  17
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  18
+    },
+    {
+        "table_name":  "player_question_progress",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "player_question_progress",
+        "column_name":  "session_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "player_question_progress",
+        "column_name":  "player_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "player_question_progress",
+        "column_name":  "question_id",
+        "data_type":  "uuid",
+        "attnum":  4
+    },
+    {
+        "table_name":  "player_question_progress",
+        "column_name":  "question_index",
+        "data_type":  "integer",
+        "attnum":  5
+    },
+    {
+        "table_name":  "player_question_progress",
+        "column_name":  "selected_option",
+        "data_type":  "integer",
+        "attnum":  6
+    },
+    {
+        "table_name":  "player_question_progress",
+        "column_name":  "is_correct",
+        "data_type":  "boolean",
+        "attnum":  7
+    },
+    {
+        "table_name":  "player_question_progress",
+        "column_name":  "points_awarded",
+        "data_type":  "integer",
+        "attnum":  8
+    },
+    {
+        "table_name":  "player_question_progress",
+        "column_name":  "time_spent",
+        "data_type":  "integer",
+        "attnum":  9
+    },
+    {
+        "table_name":  "player_question_progress",
+        "column_name":  "started_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "player_question_progress",
+        "column_name":  "answered_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  11
+    },
+    {
+        "table_name":  "player_question_progress",
+        "column_name":  "status",
+        "data_type":  "character varying",
+        "attnum":  12
+    },
+    {
+        "table_name":  "player_question_progress",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  13
+    },
+    {
+        "table_name":  "podcast_chunks",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "podcast_chunks",
+        "column_name":  "podcast_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "podcast_chunks",
+        "column_name":  "upload_session_id",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "podcast_chunks",
+        "column_name":  "chunk_index",
+        "data_type":  "integer",
+        "attnum":  4
+    },
+    {
+        "table_name":  "podcast_chunks",
+        "column_name":  "total_chunks",
+        "data_type":  "integer",
+        "attnum":  5
+    },
+    {
+        "table_name":  "podcast_chunks",
+        "column_name":  "storage_path",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "podcast_chunks",
+        "column_name":  "file_size",
+        "data_type":  "integer",
+        "attnum":  7
+    },
+    {
+        "table_name":  "podcast_chunks",
+        "column_name":  "mime_type",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "podcast_chunks",
+        "column_name":  "checksum",
+        "data_type":  "text",
+        "attnum":  9
+    },
+    {
+        "table_name":  "podcast_chunks",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  10
+    },
+    {
+        "table_name":  "podcast_chunks",
+        "column_name":  "uploader_user_id",
+        "data_type":  "uuid",
+        "attnum":  11
+    },
+    {
+        "table_name":  "podcast_chunks",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "podcast_chunks",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  13
+    },
+    {
+        "table_name":  "podcast_cohosts",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "podcast_cohosts",
+        "column_name":  "podcast_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "podcast_cohosts",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "podcast_cohosts",
+        "column_name":  "permissions",
+        "data_type":  "text[]",
+        "attnum":  4
+    },
+    {
+        "table_name":  "podcast_cohosts",
+        "column_name":  "is_active",
+        "data_type":  "boolean",
+        "attnum":  5
+    },
+    {
+        "table_name":  "podcast_cohosts",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "podcast_cohosts",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "podcast_credit_packs",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "podcast_credit_packs",
+        "column_name":  "name",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "podcast_credit_packs",
+        "column_name":  "credits",
+        "data_type":  "integer",
+        "attnum":  3
+    },
+    {
+        "table_name":  "podcast_credit_packs",
+        "column_name":  "price_ghs",
+        "data_type":  "numeric",
+        "attnum":  4
+    },
+    {
+        "table_name":  "podcast_credit_packs",
+        "column_name":  "price_display",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "podcast_credit_packs",
+        "column_name":  "is_active",
+        "data_type":  "boolean",
+        "attnum":  6
+    },
+    {
+        "table_name":  "podcast_credit_packs",
+        "column_name":  "sort_order",
+        "data_type":  "integer",
+        "attnum":  7
+    },
+    {
+        "table_name":  "podcast_credit_packs",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "podcast_credit_transactions",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "podcast_credit_transactions",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "podcast_credit_transactions",
+        "column_name":  "amount",
+        "data_type":  "integer",
+        "attnum":  3
+    },
+    {
+        "table_name":  "podcast_credit_transactions",
+        "column_name":  "balance_after",
+        "data_type":  "integer",
+        "attnum":  4
+    },
+    {
+        "table_name":  "podcast_credit_transactions",
+        "column_name":  "transaction_type",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "podcast_credit_transactions",
+        "column_name":  "description",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "podcast_credit_transactions",
+        "column_name":  "reference_id",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "podcast_credit_transactions",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "podcast_credits",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "podcast_credits",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "podcast_credits",
+        "column_name":  "balance",
+        "data_type":  "integer",
+        "attnum":  3
+    },
+    {
+        "table_name":  "podcast_credits",
+        "column_name":  "lifetime_purchased",
+        "data_type":  "integer",
+        "attnum":  4
+    },
+    {
+        "table_name":  "podcast_credits",
+        "column_name":  "lifetime_earned",
+        "data_type":  "integer",
+        "attnum":  5
+    },
+    {
+        "table_name":  "podcast_credits",
+        "column_name":  "lifetime_spent",
+        "data_type":  "integer",
+        "attnum":  6
+    },
+    {
+        "table_name":  "podcast_credits",
+        "column_name":  "last_monthly_grant_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "podcast_credits",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "podcast_credits",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "podcast_invites",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "podcast_invites",
+        "column_name":  "podcast_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "podcast_invites",
+        "column_name":  "inviter_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "podcast_invites",
+        "column_name":  "invitee_id",
+        "data_type":  "uuid",
+        "attnum":  4
+    },
+    {
+        "table_name":  "podcast_invites",
+        "column_name":  "invitee_email",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "podcast_invites",
+        "column_name":  "role",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "podcast_invites",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "podcast_invites",
+        "column_name":  "message",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "podcast_invites",
+        "column_name":  "expires_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "podcast_invites",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "podcast_invites",
+        "column_name":  "responded_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  11
+    },
+    {
+        "table_name":  "podcast_listeners",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "podcast_listeners",
+        "column_name":  "podcast_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "podcast_listeners",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "podcast_listeners",
+        "column_name":  "joined_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  4
+    },
+    {
+        "table_name":  "podcast_listeners",
+        "column_name":  "left_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "podcast_listeners",
+        "column_name":  "is_active",
+        "data_type":  "boolean",
+        "attnum":  6
+    },
+    {
+        "table_name":  "podcast_listeners",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "podcast_listeners",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "podcast_members",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "podcast_members",
+        "column_name":  "podcast_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "podcast_members",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "podcast_members",
+        "column_name":  "role",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "podcast_members",
+        "column_name":  "joined_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "podcast_members",
+        "column_name":  "invited_by",
+        "data_type":  "uuid",
+        "attnum":  6
+    },
+    {
+        "table_name":  "podcast_members",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "podcast_participation_requests",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "podcast_participation_requests",
+        "column_name":  "podcast_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "podcast_participation_requests",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "podcast_participation_requests",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "podcast_participation_requests",
+        "column_name":  "request_type",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "podcast_participation_requests",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "podcast_participation_requests",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "podcast_participation_requests",
+        "column_name":  "responded_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "podcast_participation_requests",
+        "column_name":  "responder_id",
+        "data_type":  "uuid",
+        "attnum":  9
+    },
+    {
+        "table_name":  "podcast_recordings",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "podcast_recordings",
+        "column_name":  "podcast_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "podcast_recordings",
+        "column_name":  "session_id",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "podcast_recordings",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  4
+    },
+    {
+        "table_name":  "podcast_recordings",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "podcast_recordings",
+        "column_name":  "started_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "podcast_recordings",
+        "column_name":  "ended_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "podcast_recordings",
+        "column_name":  "duration_seconds",
+        "data_type":  "integer",
+        "attnum":  8
+    },
+    {
+        "table_name":  "podcast_recordings",
+        "column_name":  "final_audio_url",
+        "data_type":  "text",
+        "attnum":  9
+    },
+    {
+        "table_name":  "podcast_recordings",
+        "column_name":  "storage_path",
+        "data_type":  "text",
+        "attnum":  10
+    },
+    {
+        "table_name":  "podcast_recordings",
+        "column_name":  "metadata",
+        "data_type":  "jsonb",
+        "attnum":  11
+    },
+    {
+        "table_name":  "podcast_recordings",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "podcast_recordings",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  13
+    },
+    {
+        "table_name":  "podcast_shares",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "podcast_shares",
+        "column_name":  "podcast_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "podcast_shares",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "podcast_shares",
+        "column_name":  "share_type",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "podcast_shares",
+        "column_name":  "platform",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "podcast_shares",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "email",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "full_name",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "avatar_url",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "learning_style",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "learning_preferences",
+        "data_type":  "jsonb",
+        "attnum":  8
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "username",
+        "data_type":  "text",
+        "attnum":  9
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "quiz_preferences",
+        "data_type":  "jsonb",
+        "attnum":  10
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "is_public",
+        "data_type":  "boolean",
+        "attnum":  11
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "referral_code",
+        "data_type":  "text",
+        "attnum":  12
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "referral_count",
+        "data_type":  "integer",
+        "attnum":  13
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "points_balance",
+        "data_type":  "integer",
+        "attnum":  14
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "bonus_ai_credits",
+        "data_type":  "integer",
+        "attnum":  15
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "school",
+        "data_type":  "text",
+        "attnum":  16
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "personal_context",
+        "data_type":  "text",
+        "attnum":  17
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "user_role",
+        "data_type":  "text",
+        "attnum":  18
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "role_verified_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  19
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "onboarding_completed",
+        "data_type":  "boolean",
+        "attnum":  20
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "role_verification_status",
+        "data_type":  "text",
+        "attnum":  21
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "role_verified_by",
+        "data_type":  "uuid",
+        "attnum":  22
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "role_rejection_reason",
+        "data_type":  "text",
+        "attnum":  23
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "institution_id",
+        "data_type":  "uuid",
+        "attnum":  24
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "academic_level",
+        "data_type":  "text",
+        "attnum":  25
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "academic_tier",
+        "data_type":  "text",
+        "attnum":  26
+    },
+    {
+        "table_name":  "quiz_attempts",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "quiz_attempts",
+        "column_name":  "quiz_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "quiz_attempts",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "quiz_attempts",
+        "column_name":  "score",
+        "data_type":  "integer",
+        "attnum":  4
+    },
+    {
+        "table_name":  "quiz_attempts",
+        "column_name":  "total_questions",
+        "data_type":  "integer",
+        "attnum":  5
+    },
+    {
+        "table_name":  "quiz_attempts",
+        "column_name":  "percentage",
+        "data_type":  "integer",
+        "attnum":  6
+    },
+    {
+        "table_name":  "quiz_attempts",
+        "column_name":  "time_taken_seconds",
+        "data_type":  "integer",
+        "attnum":  7
+    },
+    {
+        "table_name":  "quiz_attempts",
+        "column_name":  "answers",
+        "data_type":  "jsonb",
+        "attnum":  8
+    },
+    {
+        "table_name":  "quiz_attempts",
+        "column_name":  "xp_earned",
+        "data_type":  "integer",
+        "attnum":  9
+    },
+    {
+        "table_name":  "quiz_attempts",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "quiz_attempts",
+        "column_name":  "live_results",
+        "data_type":  "jsonb",
+        "attnum":  11
+    },
+    {
+        "table_name":  "quizzes",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "quizzes",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "quizzes",
+        "column_name":  "class_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "quizzes",
+        "column_name":  "title",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "quizzes",
+        "column_name":  "questions",
+        "data_type":  "jsonb",
+        "attnum":  5
+    },
+    {
+        "table_name":  "quizzes",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "quizzes",
+        "column_name":  "source_type",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "referrals",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "referrals",
+        "column_name":  "referrer_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "referrals",
+        "column_name":  "referee_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "referrals",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "referrals",
+        "column_name":  "reward_granted",
+        "data_type":  "boolean",
+        "attnum":  5
+    },
+    {
+        "table_name":  "referrals",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "role_verification_requests",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "role_verification_requests",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "role_verification_requests",
+        "column_name":  "requested_role",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "role_verification_requests",
+        "column_name":  "institution_id",
+        "data_type":  "uuid",
+        "attnum":  4
+    },
+    {
+        "table_name":  "role_verification_requests",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "role_verification_requests",
+        "column_name":  "documents",
+        "data_type":  "jsonb",
+        "attnum":  6
+    },
+    {
+        "table_name":  "role_verification_requests",
+        "column_name":  "qualifications",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "role_verification_requests",
+        "column_name":  "years_experience",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "role_verification_requests",
+        "column_name":  "specializations",
+        "data_type":  "text[]",
+        "attnum":  9
+    },
+    {
+        "table_name":  "role_verification_requests",
+        "column_name":  "additional_notes",
+        "data_type":  "text",
+        "attnum":  10
+    },
+    {
+        "table_name":  "role_verification_requests",
+        "column_name":  "reviewed_by",
+        "data_type":  "uuid",
+        "attnum":  11
+    },
+    {
+        "table_name":  "role_verification_requests",
+        "column_name":  "reviewed_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "role_verification_requests",
+        "column_name":  "review_notes",
+        "data_type":  "text",
+        "attnum":  13
+    },
+    {
+        "table_name":  "role_verification_requests",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  14
+    },
+    {
+        "table_name":  "role_verification_requests",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  15
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "title",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "subject",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "type",
+        "data_type":  "schedule_item_type",
+        "attnum":  5
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "start_time",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "end_time",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "location",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "description",
+        "data_type":  "text",
+        "attnum":  9
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "color",
+        "data_type":  "text",
+        "attnum":  10
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  11
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "calendar_event_id",
+        "data_type":  "text",
+        "attnum":  12
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "is_recurring",
+        "data_type":  "boolean",
+        "attnum":  13
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "recurrence_pattern",
+        "data_type":  "text",
+        "attnum":  14
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "recurrence_interval",
+        "data_type":  "integer",
+        "attnum":  15
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "recurrence_days",
+        "data_type":  "integer[]",
+        "attnum":  16
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "recurrence_end_date",
+        "data_type":  "timestamp with time zone",
+        "attnum":  17
+    },
+    {
+        "table_name":  "schedule_reminders",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "schedule_reminders",
+        "column_name":  "schedule_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "schedule_reminders",
+        "column_name":  "reminder_minutes",
+        "data_type":  "integer",
+        "attnum":  3
+    },
+    {
+        "table_name":  "schedule_reminders",
+        "column_name":  "notification_sent",
+        "data_type":  "boolean",
+        "attnum":  4
+    },
+    {
+        "table_name":  "schedule_reminders",
+        "column_name":  "notification_sent_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "schedule_reminders",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "schema_agent_audit",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "schema_agent_audit",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "schema_agent_audit",
+        "column_name":  "operation",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "schema_agent_audit",
+        "column_name":  "table_name",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "schema_agent_audit",
+        "column_name":  "query_intent",
+        "data_type":  "jsonb",
+        "attnum":  5
+    },
+    {
+        "table_name":  "schema_agent_audit",
+        "column_name":  "success",
+        "data_type":  "boolean",
+        "attnum":  6
+    },
+    {
+        "table_name":  "schema_agent_audit",
+        "column_name":  "error_message",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "schema_agent_audit",
+        "column_name":  "execution_time_ms",
+        "data_type":  "integer",
+        "attnum":  8
+    },
+    {
+        "table_name":  "schema_agent_audit",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "social_bookmarks",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_bookmarks",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_bookmarks",
+        "column_name":  "post_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_bookmarks",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_chat_message_media",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_chat_message_media",
+        "column_name":  "message_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_chat_message_media",
+        "column_name":  "type",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_chat_message_media",
+        "column_name":  "url",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_chat_message_media",
+        "column_name":  "filename",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_chat_message_media",
+        "column_name":  "size_bytes",
+        "data_type":  "bigint",
+        "attnum":  6
+    },
+    {
+        "table_name":  "social_chat_message_media",
+        "column_name":  "mime_type",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "social_chat_message_media",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "social_chat_message_reads",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_chat_message_reads",
+        "column_name":  "message_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_chat_message_reads",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_chat_message_reads",
+        "column_name":  "read_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_chat_message_reads",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_chat_message_resources",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_chat_message_resources",
+        "column_name":  "message_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_chat_message_resources",
+        "column_name":  "resource_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_chat_message_resources",
+        "column_name":  "resource_type",
+        "data_type":  "character varying",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_chat_message_resources",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_chat_messages",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_chat_messages",
+        "column_name":  "group_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_chat_messages",
+        "column_name":  "sender_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_chat_messages",
+        "column_name":  "content",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_chat_messages",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_chat_messages",
+        "column_name":  "session_id",
+        "data_type":  "uuid",
+        "attnum":  6
+    },
+    {
+        "table_name":  "social_chat_messages",
+        "column_name":  "is_read",
+        "data_type":  "boolean",
+        "attnum":  7
+    },
+    {
+        "table_name":  "social_chat_messages",
+        "column_name":  "read_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "social_chat_messages",
+        "column_name":  "is_edited",
+        "data_type":  "boolean",
+        "attnum":  9
+    },
+    {
+        "table_name":  "social_chat_messages",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "social_chat_sessions",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_chat_sessions",
+        "column_name":  "chat_type",
+        "data_type":  "character varying",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_chat_sessions",
+        "column_name":  "group_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_chat_sessions",
+        "column_name":  "user_id1",
+        "data_type":  "uuid",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_chat_sessions",
+        "column_name":  "user_id2",
+        "data_type":  "uuid",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_chat_sessions",
+        "column_name":  "last_message_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "social_chat_sessions",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "social_chat_sessions",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "social_comment_media",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_comment_media",
+        "column_name":  "comment_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_comment_media",
+        "column_name":  "type",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_comment_media",
+        "column_name":  "url",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_comment_media",
+        "column_name":  "filename",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_comment_media",
+        "column_name":  "size_bytes",
+        "data_type":  "bigint",
+        "attnum":  6
+    },
+    {
+        "table_name":  "social_comment_media",
+        "column_name":  "mime_type",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "social_comment_media",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "social_comments",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_comments",
+        "column_name":  "post_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_comments",
+        "column_name":  "author_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_comments",
+        "column_name":  "content",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_comments",
+        "column_name":  "parent_comment_id",
+        "data_type":  "uuid",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_comments",
+        "column_name":  "likes_count",
+        "data_type":  "integer",
+        "attnum":  6
+    },
+    {
+        "table_name":  "social_comments",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "social_comments",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "social_event_attendees",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_event_attendees",
+        "column_name":  "event_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_event_attendees",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_event_attendees",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_event_attendees",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_events",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_events",
+        "column_name":  "title",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_events",
+        "column_name":  "description",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_events",
+        "column_name":  "group_id",
+        "data_type":  "uuid",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_events",
+        "column_name":  "organizer_id",
+        "data_type":  "uuid",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_events",
+        "column_name":  "start_date",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "social_events",
+        "column_name":  "end_date",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "social_events",
+        "column_name":  "location",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "social_events",
+        "column_name":  "is_online",
+        "data_type":  "boolean",
+        "attnum":  9
+    },
+    {
+        "table_name":  "social_events",
+        "column_name":  "max_attendees",
+        "data_type":  "integer",
+        "attnum":  10
+    },
+    {
+        "table_name":  "social_events",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  11
+    },
+    {
+        "table_name":  "social_events",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "social_follows",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_follows",
+        "column_name":  "follower_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_follows",
+        "column_name":  "following_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_follows",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_group_members",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_group_members",
+        "column_name":  "group_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_group_members",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_group_members",
+        "column_name":  "role",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_group_members",
+        "column_name":  "joined_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_group_members",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "social_groups",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_groups",
+        "column_name":  "name",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_groups",
+        "column_name":  "description",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_groups",
+        "column_name":  "avatar_url",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_groups",
+        "column_name":  "cover_image_url",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_groups",
+        "column_name":  "category",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "social_groups",
+        "column_name":  "privacy",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "social_groups",
+        "column_name":  "members_count",
+        "data_type":  "integer",
+        "attnum":  8
+    },
+    {
+        "table_name":  "social_groups",
+        "column_name":  "posts_count",
+        "data_type":  "integer",
+        "attnum":  9
+    },
+    {
+        "table_name":  "social_groups",
+        "column_name":  "created_by",
+        "data_type":  "uuid",
+        "attnum":  10
+    },
+    {
+        "table_name":  "social_groups",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  11
+    },
+    {
+        "table_name":  "social_groups",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "social_hashtags",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_hashtags",
+        "column_name":  "name",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_hashtags",
+        "column_name":  "posts_count",
+        "data_type":  "integer",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_hashtags",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_likes",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_likes",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_likes",
+        "column_name":  "post_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_likes",
+        "column_name":  "comment_id",
+        "data_type":  "uuid",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_likes",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_media",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_media",
+        "column_name":  "post_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_media",
+        "column_name":  "type",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_media",
+        "column_name":  "url",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_media",
+        "column_name":  "thumbnail_url",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_media",
+        "column_name":  "filename",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "social_media",
+        "column_name":  "size_bytes",
+        "data_type":  "bigint",
+        "attnum":  7
+    },
+    {
+        "table_name":  "social_media",
+        "column_name":  "mime_type",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "social_media",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "social_notifications",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_notifications",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_notifications",
+        "column_name":  "type",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_notifications",
+        "column_name":  "title",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_notifications",
+        "column_name":  "message",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_notifications",
+        "column_name":  "data",
+        "data_type":  "jsonb",
+        "attnum":  6
+    },
+    {
+        "table_name":  "social_notifications",
+        "column_name":  "is_read",
+        "data_type":  "boolean",
+        "attnum":  7
+    },
+    {
+        "table_name":  "social_notifications",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "social_notifications",
+        "column_name":  "actor_id",
+        "data_type":  "uuid",
+        "attnum":  9
+    },
+    {
+        "table_name":  "social_notifications",
+        "column_name":  "post_id",
+        "data_type":  "uuid",
+        "attnum":  10
+    },
+    {
+        "table_name":  "social_post_hashtags",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_post_hashtags",
+        "column_name":  "post_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_post_hashtags",
+        "column_name":  "hashtag_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_post_hashtags",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_post_tags",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_post_tags",
+        "column_name":  "post_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_post_tags",
+        "column_name":  "tag_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_post_tags",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_post_views",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_post_views",
+        "column_name":  "post_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_post_views",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_post_views",
+        "column_name":  "viewed_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "author_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "content",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "privacy",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "group_id",
+        "data_type":  "uuid",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "likes_count",
+        "data_type":  "integer",
+        "attnum":  6
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "comments_count",
+        "data_type":  "integer",
+        "attnum":  7
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "shares_count",
+        "data_type":  "integer",
+        "attnum":  8
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "bookmarks_count",
+        "data_type":  "integer",
+        "attnum":  9
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  10
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  11
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "views_count",
+        "data_type":  "integer",
+        "attnum":  12
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "metadata",
+        "data_type":  "jsonb",
+        "attnum":  13
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "ai_categories",
+        "data_type":  "text[]",
+        "attnum":  14
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "ai_sentiment",
+        "data_type":  "text",
+        "attnum":  15
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "ai_quality_score",
+        "data_type":  "smallint",
+        "attnum":  16
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "reporter_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "reported_user_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "post_id",
+        "data_type":  "uuid",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "comment_id",
+        "data_type":  "uuid",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "group_id",
+        "data_type":  "uuid",
+        "attnum":  6
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "reason",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "description",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  9
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "moderator_id",
+        "data_type":  "uuid",
+        "attnum":  10
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  11
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "social_shares",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_shares",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_shares",
+        "column_name":  "original_post_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_shares",
+        "column_name":  "share_text",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_shares",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_tags",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_tags",
+        "column_name":  "name",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_tags",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_user_signals",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_user_signals",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_user_signals",
+        "column_name":  "post_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_user_signals",
+        "column_name":  "signal_type",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_user_signals",
+        "column_name":  "signal_value",
+        "data_type":  "real",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_user_signals",
+        "column_name":  "categories",
+        "data_type":  "text[]",
+        "attnum":  6
+    },
+    {
+        "table_name":  "social_user_signals",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "username",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "display_name",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "avatar_url",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "bio",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "interests",
+        "data_type":  "text[]",
+        "attnum":  6
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "is_verified",
+        "data_type":  "boolean",
+        "attnum":  7
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "is_contributor",
+        "data_type":  "boolean",
+        "attnum":  8
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "followers_count",
+        "data_type":  "integer",
+        "attnum":  9
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "following_count",
+        "data_type":  "integer",
+        "attnum":  10
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "posts_count",
+        "data_type":  "integer",
+        "attnum":  11
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "last_active",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  13
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  14
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "email",
+        "data_type":  "text",
+        "attnum":  15
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "is_public",
+        "data_type":  "boolean",
+        "attnum":  16
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "ai_preferred_categories",
+        "data_type":  "jsonb",
+        "attnum":  17
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "ai_preferred_authors",
+        "data_type":  "text[]",
+        "attnum":  18
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "ai_profile_updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  19
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "status",
+        "data_type":  "social_user_status",
+        "attnum":  20
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "last_login_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  21
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "last_logout_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  22
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "current_session_started_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  23
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "is_online",
+        "data_type":  "boolean",
+        "attnum":  24
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "verification_metrics",
+        "data_type":  "jsonb",
+        "attnum":  25
+    },
+    {
+        "table_name":  "subjects",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "subjects",
+        "column_name":  "curriculum_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "subjects",
+        "column_name":  "code",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "subjects",
+        "column_name":  "name",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "subjects",
+        "column_name":  "category",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "subjects",
+        "column_name":  "sort_order",
+        "data_type":  "integer",
+        "attnum":  6
+    },
+    {
+        "table_name":  "subjects",
+        "column_name":  "metadata",
+        "data_type":  "jsonb",
+        "attnum":  7
+    },
+    {
+        "table_name":  "subjects",
+        "column_name":  "is_active",
+        "data_type":  "boolean",
+        "attnum":  8
+    },
+    {
+        "table_name":  "subjects",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "subscriptions",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "subscriptions",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "subscriptions",
+        "column_name":  "plan_type",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "subscriptions",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "subscriptions",
+        "column_name":  "current_period_end",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "subscriptions",
+        "column_name":  "paystack_sub_code",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "subscriptions",
+        "column_name":  "paystack_customer_code",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "subscriptions",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "subscriptions",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "system_error_logs",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "system_error_logs",
+        "column_name":  "severity",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "system_error_logs",
+        "column_name":  "source",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "system_error_logs",
+        "column_name":  "component",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "system_error_logs",
+        "column_name":  "error_code",
+        "data_type":  "text",
+        "attnum":  5
+    },
+    {
+        "table_name":  "system_error_logs",
+        "column_name":  "message",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "system_error_logs",
+        "column_name":  "details",
+        "data_type":  "jsonb",
+        "attnum":  7
+    },
+    {
+        "table_name":  "system_error_logs",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  8
+    },
+    {
+        "table_name":  "system_error_logs",
+        "column_name":  "request_id",
+        "data_type":  "text",
+        "attnum":  9
+    },
+    {
+        "table_name":  "system_error_logs",
+        "column_name":  "status",
+        "data_type":  "text",
+        "attnum":  10
+    },
+    {
+        "table_name":  "system_error_logs",
+        "column_name":  "resolved_by",
+        "data_type":  "uuid",
+        "attnum":  11
+    },
+    {
+        "table_name":  "system_error_logs",
+        "column_name":  "resolved_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "system_error_logs",
+        "column_name":  "resolution_notes",
+        "data_type":  "text",
+        "attnum":  13
+    },
+    {
+        "table_name":  "system_error_logs",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  14
+    },
+    {
+        "table_name":  "system_error_logs",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  15
+    },
+    {
+        "table_name":  "system_settings",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "system_settings",
+        "column_name":  "key",
+        "data_type":  "text",
+        "attnum":  2
+    },
+    {
+        "table_name":  "system_settings",
+        "column_name":  "value",
+        "data_type":  "jsonb",
+        "attnum":  3
+    },
+    {
+        "table_name":  "system_settings",
+        "column_name":  "description",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "system_settings",
+        "column_name":  "updated_by",
+        "data_type":  "uuid",
+        "attnum":  5
+    },
+    {
+        "table_name":  "system_settings",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "system_settings",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "last_active",
+        "data_type":  "timestamp with time zone",
+        "attnum":  3
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "last_chat_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  4
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "last_note_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "last_quiz_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "last_post_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "last_group_interaction_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "last_podcast_play_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "chat_sessions_count",
+        "data_type":  "integer",
+        "attnum":  10
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "notes_count",
+        "data_type":  "integer",
+        "attnum":  11
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "documents_count",
+        "data_type":  "integer",
+        "attnum":  12
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "quiz_attempts_count",
+        "data_type":  "integer",
+        "attnum":  13
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "quiz_streak",
+        "data_type":  "integer",
+        "attnum":  14
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "posts_count",
+        "data_type":  "integer",
+        "attnum":  15
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "group_interactions_count",
+        "data_type":  "integer",
+        "attnum":  16
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "engagement_tier",
+        "data_type":  "character varying(20)",
+        "attnum":  17
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  18
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  19
+    },
+    {
+        "table_name":  "user_daily_activity",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "user_daily_activity",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "user_daily_activity",
+        "column_name":  "activity_date",
+        "data_type":  "date",
+        "attnum":  3
+    },
+    {
+        "table_name":  "user_daily_activity",
+        "column_name":  "activity_type",
+        "data_type":  "character varying(50)",
+        "attnum":  4
+    },
+    {
+        "table_name":  "user_daily_activity",
+        "column_name":  "action_count",
+        "data_type":  "integer",
+        "attnum":  5
+    },
+    {
+        "table_name":  "user_daily_activity",
+        "column_name":  "xp_earned",
+        "data_type":  "integer",
+        "attnum":  6
+    },
+    {
+        "table_name":  "user_daily_activity",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  7
+    },
+    {
+        "table_name":  "user_daily_activity",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "column_name":  "country_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "column_name":  "education_level_id",
+        "data_type":  "uuid",
+        "attnum":  4
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "column_name":  "curriculum_id",
+        "data_type":  "uuid",
+        "attnum":  5
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "column_name":  "target_examination_id",
+        "data_type":  "uuid",
+        "attnum":  6
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "column_name":  "institution_name",
+        "data_type":  "text",
+        "attnum":  7
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "column_name":  "year_or_grade",
+        "data_type":  "text",
+        "attnum":  8
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "column_name":  "expected_completion",
+        "data_type":  "date",
+        "attnum":  9
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "column_name":  "goals",
+        "data_type":  "jsonb",
+        "attnum":  10
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "column_name":  "metadata",
+        "data_type":  "jsonb",
+        "attnum":  11
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  13
+    },
+    {
+        "table_name":  "user_learning_goals",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "user_learning_goals",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "user_learning_goals",
+        "column_name":  "goal_text",
+        "data_type":  "text",
+        "attnum":  3
+    },
+    {
+        "table_name":  "user_learning_goals",
+        "column_name":  "target_date",
+        "data_type":  "timestamp with time zone",
+        "attnum":  4
+    },
+    {
+        "table_name":  "user_learning_goals",
+        "column_name":  "progress",
+        "data_type":  "integer",
+        "attnum":  5
+    },
+    {
+        "table_name":  "user_learning_goals",
+        "column_name":  "category",
+        "data_type":  "text",
+        "attnum":  6
+    },
+    {
+        "table_name":  "user_learning_goals",
+        "column_name":  "is_completed",
+        "data_type":  "boolean",
+        "attnum":  7
+    },
+    {
+        "table_name":  "user_learning_goals",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  8
+    },
+    {
+        "table_name":  "user_learning_goals",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  9
+    },
+    {
+        "table_name":  "user_session_digests",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "user_session_digests",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "user_session_digests",
+        "column_name":  "session_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "user_session_digests",
+        "column_name":  "summary",
+        "data_type":  "text",
+        "attnum":  4
+    },
+    {
+        "table_name":  "user_session_digests",
+        "column_name":  "topics",
+        "data_type":  "text[]",
+        "attnum":  5
+    },
+    {
+        "table_name":  "user_session_digests",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  6
+    },
+    {
+        "table_name":  "user_stats",
+        "column_name":  "user_id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "user_stats",
+        "column_name":  "total_xp",
+        "data_type":  "integer",
+        "attnum":  2
+    },
+    {
+        "table_name":  "user_stats",
+        "column_name":  "level",
+        "data_type":  "integer",
+        "attnum":  3
+    },
+    {
+        "table_name":  "user_stats",
+        "column_name":  "current_streak",
+        "data_type":  "integer",
+        "attnum":  4
+    },
+    {
+        "table_name":  "user_stats",
+        "column_name":  "longest_streak",
+        "data_type":  "integer",
+        "attnum":  5
+    },
+    {
+        "table_name":  "user_stats",
+        "column_name":  "total_quizzes_attempted",
+        "data_type":  "integer",
+        "attnum":  6
+    },
+    {
+        "table_name":  "user_stats",
+        "column_name":  "total_quizzes_completed",
+        "data_type":  "integer",
+        "attnum":  7
+    },
+    {
+        "table_name":  "user_stats",
+        "column_name":  "average_score",
+        "data_type":  "numeric",
+        "attnum":  8
+    },
+    {
+        "table_name":  "user_stats",
+        "column_name":  "total_study_time_seconds",
+        "data_type":  "integer",
+        "attnum":  9
+    },
+    {
+        "table_name":  "user_stats",
+        "column_name":  "badges_earned",
+        "data_type":  "text[]",
+        "attnum":  10
+    },
+    {
+        "table_name":  "user_stats",
+        "column_name":  "last_activity_date",
+        "data_type":  "timestamp with time zone",
+        "attnum":  11
+    },
+    {
+        "table_name":  "user_stats",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  12
+    },
+    {
+        "table_name":  "user_stats",
+        "column_name":  "updated_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  13
+    },
+    {
+        "table_name":  "user_stats",
+        "column_name":  "weak_areas",
+        "data_type":  "text[]",
+        "attnum":  14
+    },
+    {
+        "table_name":  "user_stats",
+        "column_name":  "streak_freezes",
+        "data_type":  "integer",
+        "attnum":  15
+    },
+    {
+        "table_name":  "user_stats",
+        "column_name":  "last_daily_quest_claimed_date",
+        "data_type":  "text",
+        "attnum":  16
+    },
+    {
+        "table_name":  "user_subjects",
+        "column_name":  "id",
+        "data_type":  "uuid",
+        "attnum":  1
+    },
+    {
+        "table_name":  "user_subjects",
+        "column_name":  "user_education_profile_id",
+        "data_type":  "uuid",
+        "attnum":  2
+    },
+    {
+        "table_name":  "user_subjects",
+        "column_name":  "subject_id",
+        "data_type":  "uuid",
+        "attnum":  3
+    },
+    {
+        "table_name":  "user_subjects",
+        "column_name":  "is_primary",
+        "data_type":  "boolean",
+        "attnum":  4
+    },
+    {
+        "table_name":  "user_subjects",
+        "column_name":  "created_at",
+        "data_type":  "timestamp with time zone",
+        "attnum":  5
+    }
+]

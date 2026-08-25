@@ -3,6 +3,14 @@ import * as XLSX  from 'https://esm.sh/xlsx@0.18.5';
 import JSZIP      from 'https://esm.sh/jszip@3.10.1';
 import xml2js     from 'https://esm.sh/xml2js@0.5.0';
 
+// pdf.js must be imported statically. Supabase bundles each function into an eszip at deploy
+// time, so only statically-analysable specifiers are included; a runtime `await import(url)`
+// of the worker resolves over HTTP locally but fails in production with "Module not found".
+// `external=canvas` keeps esm.sh from pulling pdf.js's optional native canvas binding, which
+// resolves to a canvas.node binary esm.sh does not host and breaks the deploy outright.
+import * as pdfjs from 'https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.mjs?target=denonext&external=canvas';
+import * as pdfjsWorkerModule from 'https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.worker.mjs?target=denonext&external=canvas';
+
 import { ENHANCED_PROCESSING_CONFIG } from '../config.ts';
 
 // ============================================================================
@@ -11,14 +19,21 @@ import { ENHANCED_PROCESSING_CONFIG } from '../config.ts';
 
 let _pdfGetDocument: any = null;
 
-async function getPdfGetDocument() {
+function getPdfGetDocument() {
   if (!_pdfGetDocument) {
-    const mod = await import('https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.mjs');
-    // Deno Deploy has no Worker API — explicitly disable the worker so pdf.js
-    // runs synchronously in the main thread. Without this, every call throws
-    // "No GlobalWorkerOptions.workerSrc specified" and falls back to Gemini.
-    mod.GlobalWorkerOptions.workerSrc = null;
-    _pdfGetDocument = mod.getDocument;
+    // pdf.js's fake-worker path checks globalThis.pdfjsWorker.WorkerMessageHandler BEFORE it
+    // tries to dynamically import workerSrc. Publishing the statically-imported worker module
+    // there is what keeps it in-process on Deno Deploy:
+    //   - workerSrc = null/''  -> falsy -> 'No "GlobalWorkerOptions.workerSrc" specified'
+    //   - workerSrc = <url>    -> runtime import not in the eszip bundle -> 'Module not found'
+    //   - workerPort = module  -> not a MessagePort -> 'e.addEventListener is not a function'
+    const g = globalThis as any;
+    if (!g.pdfjsWorker) {
+      g.pdfjsWorker = (pdfjsWorkerModule as any).WorkerMessageHandler
+        ? pdfjsWorkerModule
+        : { WorkerMessageHandler: (pdfjsWorkerModule as any).default?.WorkerMessageHandler };
+    }
+    _pdfGetDocument = pdfjs.getDocument;
   }
   return _pdfGetDocument;
 }
@@ -51,11 +66,12 @@ async function extractPdfTextWithGemini(
 
   const base64 = uint8ToBase64(buffer);
 
+  // Cheapest/highest-quota models first: PDF text extraction is a mechanical task, so
+  // spending a scarce preview-model quota on it just starves the chain. gemini-2.5-flash-lite
+  // was removed — it now 404s ("no longer available to new users").
   const models = [
-    'gemini-3-pro-preview',
-    'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
-  ];
+    'gemini-3.5-flash',
+    'gemini-3.6-flash',];
 
   const prompt =
     `Extract ALL text content from this PDF document. ` +
@@ -167,6 +183,12 @@ async function _extractPdfTextWithPdfjs(
     data: buffer,
     disableWorker: true,
     isEvalSupported: false,
+    // Deno Deploy has no worker/canvas/font-file access. Without these, pdf.js tries
+    // to fetch standard fonts and cmaps through worker plumbing and throws before any
+    // text comes back.
+    useWorkerFetch: false,
+    useSystemFonts: false,
+    disableFontFace: true,
   }).promise;
   const totalPages = pdf.numPages;
   const toPage     = Math.min(

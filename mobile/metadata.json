@@ -1,0 +1,8 @@
+{
+  "name": "studdyhub-ai-mobile",
+  "description": "Imported from GitHub: Twenethomas/studdyhub-ai-mobile",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,14 @@
+[
+    {
+        "table_name":  "chat_session_memory_stats"
+    },
+    {
+        "table_name":  "chat_session_summaries"
+    },
+    {
+        "table_name":  "flashcard_stats"
+    },
+    {
+        "table_name":  "system_error_summary"
+    }
+]

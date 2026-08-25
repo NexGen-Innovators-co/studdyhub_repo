@@ -28,6 +28,14 @@ function getUserIdFromRequest(req: Request): string | null {
   }
 }
 
+// Helper: Normalize the correct-answer index from any question format used across platforms.
+// Mobile apps persist quizzes with the `correct` key; the web uses `correct_answer` / `correctAnswer`.
+function extractCorrectAnswer(q: any): number {
+  const raw = q.correct_answer ?? q.correctAnswer ?? q.correct_option ?? q.correct ?? q.correctIndex;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
 // Helper: Insert questions for a session
 async function insertLiveQuizQuestions(supabase: any, sessionId: string, questions: any[]) {
   const questionInserts = questions.map((q, idx) => ({
@@ -35,7 +43,7 @@ async function insertLiveQuizQuestions(supabase: any, sessionId: string, questio
     question_index: idx,
     question_text: q.question_text || q.question,
     options: q.options,
-    correct_answer: q.correct_answer ?? q.correctAnswer ?? q.correct_option,
+    correct_answer: extractCorrectAnswer(q),
     explanation: q.explanation || null,
     time_limit: q.time_limit || 30,
     status: 'pending'
@@ -44,44 +52,12 @@ async function insertLiveQuizQuestions(supabase: any, sessionId: string, questio
   return await supabase.from('live_quiz_questions').insert(questionInserts);
 }
 
-// Helper: Mark unanswered questions as incorrect
+// Helper: Mark unanswered questions as incorrect (bulk, idempotent RPC)
 async function markUnansweredAsIncorrect(supabase: any, sessionId: string, questionId: string) {
-  const now = new Date().toISOString();
-  
-  // Get all players who are playing
-  const { data: players } = await supabase
-    .from('live_quiz_players')
-    .select('user_id')
-    .eq('session_id', sessionId)
-    .eq('is_playing', true);
-
-  if (!players || players.length === 0) return;
-
-  for (const player of players) {
-    // Check if player answered this question
-    const { data: existingAnswer } = await supabase
-      .from('live_quiz_answers')
-      .select('id')
-      .eq('question_id', questionId)
-      .eq('user_id', player.user_id)
-      .maybeSingle();
-
-    if (!existingAnswer) {
-      // Record zero-point answer for unanswered question
-      await supabase
-        .from('live_quiz_answers')
-        .insert({
-          session_id: sessionId,
-          question_id: questionId,
-          user_id: player.user_id,
-          answer_index: -1,
-          is_correct: false,
-          points_awarded: 0,
-          answered_at: now,
-          status: 'timeout'
-        });
-    }
-  }
+  await supabase.rpc('mark_unanswered_as_incorrect', {
+    p_session_id: sessionId,
+    p_question_id: questionId,
+  });
 }
 
 serve(async (req) => {
@@ -483,8 +459,43 @@ serve(async (req) => {
     }
 
     // Route based on action
+    if (action === 'find-public-lobby') {
+      // Explorer Speed Race: find an open public quick-match lobby for a game.
+      const { game_key } = body;
+      if (!game_key) {
+        return new Response(JSON.stringify({ error: 'game_key is required' }), { status: 400, headers: corsHeaders });
+      }
+      const MAX_PUBLIC_PLAYERS = 8;
+      const { data: sessions } = await supabase
+        .from('live_quiz_sessions')
+        .select('*')
+        .eq('game_key', game_key)
+        .eq('is_public', true)
+        .eq('status', 'waiting')
+        .order('created_at', { ascending: true })
+        .limit(5);
+      if (!sessions || sessions.length === 0) {
+        return new Response(JSON.stringify({ found: false }), { status: 200, headers: corsHeaders });
+      }
+      for (const session of sessions) {
+        const { data: players, error: pErr } = await supabase
+          .from('live_quiz_players')
+          .select('id')
+          .eq('session_id', session.id)
+          .eq('is_playing', true);
+        if (pErr) continue;
+        if ((players || []).length < MAX_PUBLIC_PLAYERS) {
+          return new Response(
+            JSON.stringify({ found: true, session, join_code: session.join_code }),
+            { status: 200, headers: corsHeaders }
+          );
+        }
+      }
+      return new Response(JSON.stringify({ found: false }), { status: 200, headers: corsHeaders });
+    }
+
     if (action === 'create-session') {
-      const { quiz_id, questions, host_role, advance_mode, question_time_limit, scheduled_start_time, allow_late_join } = body;
+      const { quiz_id, questions, host_role, advance_mode, question_time_limit, scheduled_start_time, allow_late_join, game_key, is_public } = body;
 
       if (!quiz_id && !questions) {
         return new Response(
@@ -515,7 +526,7 @@ serve(async (req) => {
             questions: questions.map((q, idx) => ({
               question: q.question_text,
               options: q.options,
-              correct_answer: q.correct_answer,
+              correct_answer: extractCorrectAnswer(q),
               explanation: q.explanation || '',
             })),
           })
@@ -546,6 +557,8 @@ serve(async (req) => {
           quiz_mode: body.quiz_mode || 'synchronized',
           scheduled_start_time: scheduled_start_time || null,
           allow_late_join: finalAllowLateJoin,
+          game_key: game_key || null,
+          is_public: !!is_public,
           config: {
             question_time_limit: finalTimeLimit,
             auto_advance: finalAdvanceMode === 'auto',
@@ -925,8 +938,11 @@ serve(async (req) => {
         );
       }
 
-      // Check if question is still open
-      if (question.end_time && new Date(question.end_time) < new Date()) {
+      // Check if question is still open — with a short grace window so answers that
+      // arrive a few hundred ms after the deadline due to network latency are still
+      // accepted instead of being unfairly dropped (Kahoot-style).
+      const GRACE_MS = 500;
+      if (question.end_time && (new Date(question.end_time).getTime() + GRACE_MS) < Date.now()) {
         return new Response(
           JSON.stringify({ error: 'Question is closed' }),
           { status: 409, headers: corsHeaders }
@@ -949,15 +965,21 @@ serve(async (req) => {
         );
       }
 
-      // Calculate correctness and points
+      // Calculate correctness and points — SERVER-AUTHORITATIVE timing. The response
+      // time is measured from the question's server start_time to when the answer is
+      // received; the client-reported time_taken is never trusted for scoring.
       const isCorrect = answer_index === question.correct_answer;
       
       let pointsAwarded = 0;
+      // Server-authoritative response time, measured from the question's start_time. Hoisted
+      // out of the isCorrect branch so incorrect answers (and the timeout-update path) also
+      // record a real time_taken instead of crashing on an out-of-scope variable.
+      let timeTaken = 0;
       if (isCorrect) {
         const basePoints = 100;
-        const timeTaken = time_taken || (question.start_time
-          ? Math.floor((Date.now() - new Date(question.start_time).getTime()) / 1000)
-          : 0);
+        timeTaken = question.start_time
+          ? Math.max(0, Math.floor((Date.now() - new Date(question.start_time).getTime()) / 1000))
+          : 0;
         const timeLimit = question.time_limit || 30;
         const timeBonus = Math.max(0, Math.floor((timeLimit - timeTaken) * 2));
         pointsAwarded = basePoints + timeBonus;
@@ -973,7 +995,7 @@ serve(async (req) => {
             is_correct: isCorrect,
             points_awarded: pointsAwarded,
             answered_at: new Date().toISOString(),
-            time_taken: time_taken,
+            time_taken: timeTaken,
             status: 'answered'
           })
           .eq('id', existingAnswer.id);
@@ -997,9 +1019,9 @@ serve(async (req) => {
             is_correct: isCorrect,
             points_awarded: pointsAwarded,
             answered_at: new Date().toISOString(),
-            time_taken: time_taken,
+            time_taken: timeTaken,
             status: 'answered'
-          });
+          }, { ignoreDuplicates: true });
 
         if (answerError) {
           // console.error('Answer submission error:', answerError);
@@ -1087,67 +1109,27 @@ serve(async (req) => {
         );
       }
 
-      // Find current question
-      const now = new Date();
-      const currentQuestion = questions.find(
-        (q) => q.start_time && (!q.end_time || new Date(q.end_time) > now)
-      );
+      // Single authoritative, idempotent advance (host-triggered, Kahoot-style).
+      const { data: advResult } = await supabase.rpc('advance_live_quiz', {
+        p_session_id: session_id,
+        p_force: true,
+      });
 
-      if (currentQuestion) {
-        // Mark unanswered questions as incorrect
-        await markUnansweredAsIncorrect(supabase, session_id, currentQuestion.id);
-
-        // Close current question
-        await supabase
-          .from('live_quiz_questions')
-          .update({ 
-            end_time: now.toISOString(),
-            status: 'completed'
-          })
-          .eq('id', currentQuestion.id);
-
-        const nextIndex = currentQuestion.question_index + 1;
-        
-        if (nextIndex < questions.length) {
-          // Start next question
-          const timeLimit = questions[nextIndex].time_limit || 30;
-          const endTime = new Date(now.getTime() + timeLimit * 1000);
-          await supabase
-            .from('live_quiz_questions')
-            .update({
-              start_time: now.toISOString(),
-              end_time: endTime.toISOString(),
-              status: 'active'
-            })
-            .eq('session_id', session_id)
-            .eq('question_index', nextIndex);
-
-          return new Response(
-            JSON.stringify({ 
-              success: true, 
-              next_question_index: nextIndex,
-              end_time: endTime.toISOString()
-            }),
-            { status: 200, headers: corsHeaders }
-          );
-        } else {
-          // No more questions - end session
-          await supabase
-            .from('live_quiz_sessions')
-            .update({
-              status: 'completed',
-              end_time: now.toISOString(),
-            })
-            .eq('id', session_id);
-
-          return new Response(
-            JSON.stringify({ 
-              success: true, 
-              session_completed: true 
-            }),
-            { status: 200, headers: corsHeaders }
-          );
-        }
+      if (advResult?.session_completed) {
+        return new Response(
+          JSON.stringify({ success: true, session_completed: true }),
+          { status: 200, headers: corsHeaders }
+        );
+      }
+      if (advResult?.advanced) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            next_question_index: advResult.next_question_index,
+            end_time: advResult.next_question_end_time,
+          }),
+          { status: 200, headers: corsHeaders }
+        );
       }
 
       return new Response(
@@ -1179,82 +1161,27 @@ serve(async (req) => {
         );
       }
 
-      // Get all questions
-      const { data: questions } = await supabase
-        .from('live_quiz_questions')
-        .select('*')
-        .eq('session_id', session_id)
-        .order('question_index');
+      // Single authoritative, idempotent advance (Kahoot-style).
+      const { data: advResult } = await supabase.rpc('advance_live_quiz', {
+        p_session_id: session_id,
+        p_force: false,
+      });
 
-      if (!questions || questions.length === 0) {
+      if (advResult?.session_completed) {
         return new Response(
-          JSON.stringify({ error: 'No questions found' }),
-          { status: 404, headers: corsHeaders }
+          JSON.stringify({ success: true, session_completed: true }),
+          { status: 200, headers: corsHeaders }
         );
       }
-
-      // Find current question
-      const now = new Date();
-      const currentQuestion = questions.find(
-        (q) => q.start_time && (!q.end_time || new Date(q.end_time) > now)
-      );
-
-      if (currentQuestion) {
-        // Mark unanswered questions as incorrect
-        await markUnansweredAsIncorrect(supabase, session_id, currentQuestion.id);
-
-        // Close current question
-        await supabase
-          .from('live_quiz_questions')
-          .update({ 
-            end_time: now.toISOString(),
-            status: 'completed'
-          })
-          .eq('id', currentQuestion.id);
-
-        const nextIndex = currentQuestion.question_index + 1;
-        
-        if (nextIndex < questions.length) {
-          // Start next question
-          const timeLimit = questions[nextIndex].time_limit || 30;
-          const endTime = new Date(now.getTime() + timeLimit * 1000);
-          
-          await supabase
-            .from('live_quiz_questions')
-            .update({
-              start_time: now.toISOString(),
-              end_time: endTime.toISOString(),
-              status: 'active'
-            })
-            .eq('session_id', session_id)
-            .eq('question_index', nextIndex);
-
-          return new Response(
-            JSON.stringify({ 
-              success: true, 
-              next_question_index: nextIndex,
-              end_time: endTime.toISOString()
-            }),
-            { status: 200, headers: corsHeaders }
-          );
-        } else {
-          // No more questions - end session
-          await supabase
-            .from('live_quiz_sessions')
-            .update({
-              status: 'completed',
-              end_time: now.toISOString(),
-            })
-            .eq('id', session_id);
-
-          return new Response(
-            JSON.stringify({ 
-              success: true, 
-              session_completed: true 
-            }),
-            { status: 200, headers: corsHeaders }
-          );
-        }
+      if (advResult?.advanced) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            next_question_index: advResult.next_question_index,
+            end_time: advResult.next_question_end_time,
+          }),
+          { status: 200, headers: corsHeaders }
+        );
       }
 
       return new Response(
@@ -1286,158 +1213,39 @@ serve(async (req) => {
     );
   }
 
-  // Get current question
-  const { data: currentQuestion } = await supabase
-    .from('live_quiz_questions')
-    .select('*')
-    .eq('session_id', session_id)
-    .not('start_time', 'is', null)
-    .is('end_time', null)
-    .order('question_index', { ascending: false })
-    .limit(1)
-    .maybeSingle(); // Use maybeSingle instead of single
+  // Only auto-advance in auto mode; manual (host-paced) sessions must not move on by
+  // themselves just because a client happens to poll the timeout endpoint.
+  if (session.status !== 'in_progress' || session.advance_mode !== 'auto') {
+    return new Response(
+      JSON.stringify({ timeout: false }),
+      { status: 200, headers: corsHeaders }
+    );
+  }
 
-  if (currentQuestion) {
-    const now = new Date();
-    const endTime = new Date(currentQuestion.end_time || 0);
-    
-    // Add logging to debug
-    // console.log(`Timeout check - Now: ${now}, End: ${endTime}, Advance mode: ${session.advance_mode}`);
-    
-    if (now > endTime) {
-      // console.log(`Question ${currentQuestion.id} has timed out`);
-      
-      // Mark unanswered questions as incorrect
-      await markUnansweredAsIncorrect(supabase, session_id, currentQuestion.id);
+  // Single authoritative, idempotent timeout check + advance (Kahoot-style).
+  // The advance_live_quiz RPC only advances when the active question is actually due,
+  // and concurrent callers can never double-advance or skip a question.
+  const { data: advResult } = await supabase.rpc('advance_live_quiz', {
+    p_session_id: session_id,
+    p_force: false,
+  });
 
-      // Update question status to completed (not timeout)
-      await supabase
-        .from('live_quiz_questions')
-        .update({
-          end_time: now.toISOString(),
-          status: 'completed'
-        })
-        .eq('id', currentQuestion.id);
-
-      // Check if we should auto-advance
-      if (session.advance_mode === 'auto') {
-        // console.log('Auto-advance mode enabled, attempting to advance...');
-        
-        // Get all questions to find next one
-        const { data: allQuestions } = await supabase
-          .from('live_quiz_questions')
-          .select('*')
-          .eq('session_id', session_id)
-          .order('question_index');
-
-        if (allQuestions && allQuestions.length > 0) {
-          const nextIndex = currentQuestion.question_index + 1;
-          
-          if (nextIndex < allQuestions.length) {
-            // Start next question
-            const timeLimit = allQuestions[nextIndex].time_limit || 30;
-            const nextEndTime = new Date(now.getTime() + timeLimit * 1000);
-            
-            // console.log(`Starting next question ${nextIndex} with ${timeLimit}s limit`);
-            
-            await supabase
-              .from('live_quiz_questions')
-              .update({
-                start_time: now.toISOString(),
-                end_time: nextEndTime.toISOString(),
-                status: 'active'
-              })
-              .eq('session_id', session_id)
-              .eq('question_index', nextIndex);
-
-            // Return success with next question info
-            return new Response(
-              JSON.stringify({ 
-                timeout: true,
-                question_id: currentQuestion.id,
-                auto_advanced: true,
-                next_question_index: nextIndex,
-                next_question_end_time: nextEndTime.toISOString()
-              }),
-              { status: 200, headers: corsHeaders }
-            );
-          } else {
-            // No more questions - end session
-            // console.log('No more questions, ending session');
-            await supabase
-              .from('live_quiz_sessions')
-              .update({
-                status: 'completed',
-                end_time: now.toISOString(),
-              })
-              .eq('id', session_id);
-
-            return new Response(
-              JSON.stringify({ 
-                timeout: true,
-                session_completed: true
-              }),
-              { status: 200, headers: corsHeaders }
-            );
-          }
-        }
-      }
-
-      return new Response(
-        JSON.stringify({ 
-          timeout: true,
-          question_id: currentQuestion.id,
-          auto_advanced: false
-        }),
-        { status: 200, headers: corsHeaders }
-      );
-    }
-  } else {
-    // No active question found, check if we need to start one
-    // console.log('No active question found, checking if we should start one');
-    
-    const { data: sessionForCheck } = await supabase
-      .from('live_quiz_sessions')
-      .select('status')
-      .eq('id', session_id)
-      .single();
-
-    if (sessionForCheck?.status === 'in_progress') {
-      // Session is in progress but no active question
-      // Try to find the next pending question
-      const { data: pendingQuestions } = await supabase
-        .from('live_quiz_questions')
-        .select('*')
-        .eq('session_id', session_id)
-        .eq('status', 'pending')
-        .order('question_index')
-        .limit(1);
-
-      if (pendingQuestions && pendingQuestions.length > 0) {
-        const nextQuestion = pendingQuestions[0];
-        const now = new Date();
-        const timeLimit = nextQuestion.time_limit || 30;
-        const endTime = new Date(now.getTime() + timeLimit * 1000);
-        
-        await supabase
-          .from('live_quiz_questions')
-          .update({
-            start_time: now.toISOString(),
-            end_time: endTime.toISOString(),
-            status: 'active'
-          })
-          .eq('id', nextQuestion.id);
-
-        return new Response(
-          JSON.stringify({ 
-            timeout: false,
-            started_new_question: true,
-            question_id: nextQuestion.id
-          }),
-          { status: 200, headers: corsHeaders }
-        );
-      }
-    }
+  if (advResult?.session_completed) {
+    return new Response(
+      JSON.stringify({ timeout: true, session_completed: true }),
+      { status: 200, headers: corsHeaders }
+    );
+  }
+  if (advResult?.advanced) {
+    return new Response(
+      JSON.stringify({
+        timeout: true,
+        auto_advanced: true,
+        next_question_index: advResult.next_question_index,
+        next_question_end_time: advResult.next_question_end_time,
+      }),
+      { status: 200, headers: corsHeaders }
+    );
   }
 
   return new Response(
@@ -1572,55 +1380,27 @@ serve(async (req) => {
     currentQuestion = recentQuestion;
   }
 
-  // Check if auto-advance should have happened
+  // Auto-advance: single authoritative, idempotent path via the advance_live_quiz RPC
+  // (Kahoot-style). Concurrent polls can never double-advance or skip a question.
   let needs_advance = false;
-  if (currentQuestion && session.advance_mode === 'auto') {
-    const questionEndTime = new Date(currentQuestion.end_time || 0);
-    const currentTime = new Date();
-    
-    if (currentTime > questionEndTime && currentQuestion.status !== 'completed') {
-      needs_advance = true;
-      
-      // Auto-advance the question
-      await supabase
+  if (session.status === 'in_progress' && session.advance_mode === 'auto') {
+    const { data: advResult } = await supabase.rpc('advance_live_quiz', {
+      p_session_id: session_id,
+      p_force: false,
+    });
+    needs_advance = !!(advResult && (advResult.advanced || advResult.session_completed));
+    if (needs_advance) {
+      // Re-read the active question after any advance
+      const { data: freshActive } = await supabase
         .from('live_quiz_questions')
-        .update({
-          status: 'completed',
-          end_time: currentTime.toISOString()
-        })
-        .eq('id', currentQuestion.id);
-      
-      // Mark unanswered
-      await markUnansweredAsIncorrect(supabase, session_id, currentQuestion.id);
-      
-      // Find and start next question
-      const nextIndex = currentQuestion.question_index + 1;
-      const nextQuestion = questions?.find(q => q.question_index === nextIndex);
-      
-      if (nextQuestion) {
-        const timeLimit = nextQuestion.time_limit || 30;
-        const nextEndTime = new Date(currentTime.getTime() + timeLimit * 1000);
-        
-        await supabase
-          .from('live_quiz_questions')
-          .update({
-            start_time: currentTime.toISOString(),
-            end_time: nextEndTime.toISOString(),
-            status: 'active'
-          })
-          .eq('id', nextQuestion.id);
-        
-        currentQuestion = nextQuestion;
-      } else if (nextIndex >= (questions?.length || 0)) {
-        // End session if no more questions
-        await supabase
-          .from('live_quiz_sessions')
-          .update({
-            status: 'completed',
-            end_time: currentTime.toISOString(),
-          })
-          .eq('id', session_id);
-      }
+        .select('*')
+        .eq('session_id', session_id)
+        .not('start_time', 'is', null)
+        .or(`end_time.is.null,end_time.gt.${new Date().toISOString()}`)
+        .order('question_index', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      currentQuestion = freshActive || null;
     }
   }
 
@@ -1735,98 +1515,25 @@ serve(async (req) => {
     }
   }
 
-  // Check for auto-advance if session is in progress
+  // Auto-advance: single authoritative, idempotent path via the advance_live_quiz RPC
+  // (Kahoot-style). Concurrent polls can never double-advance or skip a question.
   let currentQuestion = null;
   
   if (session.status === 'in_progress') {
-    // Find active question
-    const activeQuestion = questions?.find(q => 
-      q.start_time && (!q.end_time || new Date(q.end_time) > now)
-    );
-    
-    if (activeQuestion) {
-      currentQuestion = activeQuestion;
-      
-      // Check if question should auto-advance
-      if (session.advance_mode === 'auto' && activeQuestion.end_time) {
-        const endTime = new Date(activeQuestion.end_time);
-        if (now > endTime) {
-          // Question timed out, auto-advance
-          // console.log(`Question ${activeQuestion.id} timed out, auto-advancing...`);
-          
-          // Mark as completed
-          await supabase
-            .from('live_quiz_questions')
-            .update({
-              end_time: now.toISOString(),
-              status: 'completed'
-            })
-            .eq('id', activeQuestion.id);
-          
-          // Mark unanswered
-          await markUnansweredAsIncorrect(supabase, session_id, activeQuestion.id);
-          
-          // Find next question
-          const nextIndex = activeQuestion.question_index + 1;
-          const nextQuestion = questions?.find(q => q.question_index === nextIndex);
-          
-          if (nextQuestion) {
-            const timeLimit = nextQuestion.time_limit || 30;
-            const nextEndTime = new Date(now.getTime() + timeLimit * 1000);
-            
-            await supabase
-              .from('live_quiz_questions')
-              .update({
-                start_time: now.toISOString(),
-                end_time: nextEndTime.toISOString(),
-                status: 'active'
-              })
-              .eq('session_id', session_id)
-              .eq('question_index', nextIndex);
-            
-            currentQuestion = {
-              ...nextQuestion,
-              start_time: now.toISOString(),
-              end_time: nextEndTime.toISOString(),
-              status: 'active'
-            };
-          } else {
-            // No more questions - end session
-            await supabase
-              .from('live_quiz_sessions')
-              .update({
-                status: 'completed',
-                end_time: now.toISOString(),
-              })
-              .eq('id', session_id);
-          }
-        }
-      }
-    } else {
-      // No active question, find pending one
-      const pendingQuestion = questions?.find(q => q.status === 'pending');
-      if (pendingQuestion && session.advance_mode === 'auto') {
-        // Start the pending question
-        const timeLimit = pendingQuestion.time_limit || 30;
-        const endTime = new Date(now.getTime() + timeLimit * 1000);
-        
-        await supabase
-          .from('live_quiz_questions')
-          .update({
-            start_time: now.toISOString(),
-            end_time: endTime.toISOString(),
-            status: 'active'
-          })
-          .eq('id', pendingQuestion.id);
-        
-        currentQuestion = {
-          ...pendingQuestion,
-          start_time: now.toISOString(),
-          end_time: endTime.toISOString(),
-          status: 'active'
-        };
-      }
+    if (session.advance_mode === 'auto') {
+      await supabase.rpc('advance_live_quiz', { p_session_id: session_id, p_force: false });
     }
+    // Re-read the active question after any possible advance
+    const { data: freshActive } = await supabase
+      .from('live_quiz_questions')
+      .select('*')
+      .eq('session_id', session_id)
+      .not('start_time', 'is', null)
+      .or(`end_time.is.null,end_time.gt.${now.toISOString()}`)
+      .order('question_index', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    currentQuestion = freshActive || null;
   }
 
   const playersWithAvatars = (players || []).map((p: any) => {

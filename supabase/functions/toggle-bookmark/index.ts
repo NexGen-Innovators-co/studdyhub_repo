@@ -43,27 +43,18 @@ serve(async (req) => {
 
       if (error) throw error;
 
-      // Decrement bookmarks_count
-      await supabase.rpc('decrement_counter', {
-        table_name: 'social_posts',
-        column_name: 'bookmarks_count',
-        row_id: post_id,
-      }).then(null, () => {
-        // Fallback: manual decrement if RPC doesn't exist
-        return supabase
+      // Decrement social_posts.bookmarks_count (counter is a plain column — no RPC exists)
+      const { data: post } = await supabase
+        .from('social_posts')
+        .select('bookmarks_count')
+        .eq('id', post_id)
+        .single();
+      if (post) {
+        await supabase
           .from('social_posts')
-          .select('bookmarks_count')
-          .eq('id', post_id)
-          .single()
-          .then(({ data }) => {
-            if (data) {
-              return supabase
-                .from('social_posts')
-                .update({ bookmarks_count: Math.max(0, (data.bookmarks_count || 0) - 1) })
-                .eq('id', post_id);
-            }
-          });
-      });
+          .update({ bookmarks_count: Math.max(0, (post.bookmarks_count || 0) - 1) })
+          .eq('id', post_id);
+      }
 
       return new Response(
         JSON.stringify({ success: true, is_bookmarked: false }),
@@ -77,27 +68,18 @@ serve(async (req) => {
 
       if (error) throw error;
 
-      // Increment bookmarks_count
-      await supabase.rpc('increment_counter', {
-        table_name: 'social_posts',
-        column_name: 'bookmarks_count',
-        row_id: post_id,
-      }).then(null, () => {
-        // Fallback: manual increment if RPC doesn't exist
-        return supabase
+      // Increment social_posts.bookmarks_count (counter is a plain column — no RPC exists)
+      const { data: post } = await supabase
+        .from('social_posts')
+        .select('bookmarks_count')
+        .eq('id', post_id)
+        .single();
+      if (post) {
+        await supabase
           .from('social_posts')
-          .select('bookmarks_count')
-          .eq('id', post_id)
-          .single()
-          .then(({ data }) => {
-            if (data) {
-              return supabase
-                .from('social_posts')
-                .update({ bookmarks_count: (data.bookmarks_count || 0) + 1 })
-                .eq('id', post_id);
-            }
-          });
-      });
+          .update({ bookmarks_count: (post.bookmarks_count || 0) + 1 })
+          .eq('id', post_id);
+      }
 
       return new Response(
         JSON.stringify({ success: true, is_bookmarked: true }),

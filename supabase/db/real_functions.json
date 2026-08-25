@@ -1,0 +1,1682 @@
+[
+    {
+        "name":  "_social_chat_message_reads_propagate",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "_social_group_members_propagate",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "_social_groups_recalc_members_count_for",
+        "args":  "p_group_id uuid",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "add_podcast_credits",
+        "args":  "p_user_id uuid, p_amount integer, p_type text, p_reference_id text, p_description text",
+        "returns":  "jsonb",
+        "prokind":  "f"
+    },
+    {
+        "name":  "admin_verify_institution",
+        "args":  "_institution_id uuid, _status text, _admin_id uuid",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "admin_verify_user",
+        "args":  "p_user_id uuid",
+        "returns":  "jsonb",
+        "prokind":  "f"
+    },
+    {
+        "name":  "advance_due_live_quizzes",
+        "args":  "",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "advance_live_quiz",
+        "args":  "p_session_id uuid, p_force boolean",
+        "returns":  "jsonb",
+        "prokind":  "f"
+    },
+    {
+        "name":  "apply_code_night_promo",
+        "args":  "p_user_id uuid, p_promo_code text",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "approve_group_member",
+        "args":  "p_membership_id uuid, p_group_id uuid, p_user_id uuid, p_approver_id uuid",
+        "returns":  "jsonb",
+        "prokind":  "f"
+    },
+    {
+        "name":  "approve_role_request",
+        "args":  "_request_id uuid, _admin_id uuid, _review_notes text",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "archive_expired_updates",
+        "args":  "",
+        "returns":  "integer",
+        "prokind":  "f"
+    },
+    {
+        "name":  "array_to_halfvec",
+        "args":  "numeric[], integer, boolean",
+        "returns":  "halfvec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "array_to_halfvec",
+        "args":  "integer[], integer, boolean",
+        "returns":  "halfvec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "array_to_halfvec",
+        "args":  "real[], integer, boolean",
+        "returns":  "halfvec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "array_to_halfvec",
+        "args":  "double precision[], integer, boolean",
+        "returns":  "halfvec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "array_to_sparsevec",
+        "args":  "integer[], integer, boolean",
+        "returns":  "sparsevec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "array_to_sparsevec",
+        "args":  "numeric[], integer, boolean",
+        "returns":  "sparsevec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "array_to_sparsevec",
+        "args":  "double precision[], integer, boolean",
+        "returns":  "sparsevec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "array_to_sparsevec",
+        "args":  "real[], integer, boolean",
+        "returns":  "sparsevec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "array_to_vector",
+        "args":  "integer[], integer, boolean",
+        "returns":  "vector",
+        "prokind":  "f"
+    },
+    {
+        "name":  "array_to_vector",
+        "args":  "double precision[], integer, boolean",
+        "returns":  "vector",
+        "prokind":  "f"
+    },
+    {
+        "name":  "array_to_vector",
+        "args":  "numeric[], integer, boolean",
+        "returns":  "vector",
+        "prokind":  "f"
+    },
+    {
+        "name":  "array_to_vector",
+        "args":  "real[], integer, boolean",
+        "returns":  "vector",
+        "prokind":  "f"
+    },
+    {
+        "name":  "assign_referral_code",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "avg",
+        "args":  "halfvec",
+        "returns":  "halfvec",
+        "prokind":  "a"
+    },
+    {
+        "name":  "avg",
+        "args":  "vector",
+        "returns":  "vector",
+        "prokind":  "a"
+    },
+    {
+        "name":  "backfill_podcast_credits_for_all_users",
+        "args":  "",
+        "returns":  "jsonb",
+        "prokind":  "f"
+    },
+    {
+        "name":  "binary_quantize",
+        "args":  "vector",
+        "returns":  "bit",
+        "prokind":  "f"
+    },
+    {
+        "name":  "binary_quantize",
+        "args":  "halfvec",
+        "returns":  "bit",
+        "prokind":  "f"
+    },
+    {
+        "name":  "build_where_clause",
+        "args":  "conditions jsonb",
+        "returns":  "text",
+        "prokind":  "f"
+    },
+    {
+        "name":  "calculate_course_progress",
+        "args":  "p_enrollment_id uuid",
+        "returns":  "integer",
+        "prokind":  "f"
+    },
+    {
+        "name":  "calculate_engagement_tier",
+        "args":  "last_active timestamp with time zone",
+        "returns":  "character varying",
+        "prokind":  "f"
+    },
+    {
+        "name":  "check_creator_verification_eligibility",
+        "args":  "p_user_id uuid",
+        "returns":  "TABLE(eligible boolean, posts_count integer, followers_count integer, account_age_days integer, engagement_rate double precision, last_active_days integer, violation_count integer, metrics jsonb)",
+        "prokind":  "f"
+    },
+    {
+        "name":  "check_podcast_permissions",
+        "args":  "p_podcast_id uuid, p_user_id uuid",
+        "returns":  "TABLE(is_host boolean, is_cohost boolean, can_speak boolean, can_moderate boolean)",
+        "prokind":  "f"
+    },
+    {
+        "name":  "check_user_is_cohost",
+        "args":  "p_podcast_id uuid, p_user_id uuid",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "cleanup_old_notifications",
+        "args":  "",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "cleanup_old_podcast_chunks",
+        "args":  "retention_days integer",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "cleanup_old_system_error_logs",
+        "args":  "",
+        "returns":  "integer",
+        "prokind":  "f"
+    },
+    {
+        "name":  "cleanup_podcast_cohosts",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "complete_onboarding",
+        "args":  "_full_name text, _school text, _avatar_url text, _learning_style text, _learning_prefs jsonb, _user_role text, _personal_context text",
+        "returns":  "json",
+        "prokind":  "f"
+    },
+    {
+        "name":  "complete_onboarding",
+        "args":  "_full_name text, _institution_id uuid, _school text, _avatar_url text, _learning_style text, _learning_prefs jsonb, _user_role text, _personal_context text",
+        "returns":  "json",
+        "prokind":  "f"
+    },
+    {
+        "name":  "complete_onboarding",
+        "args":  "_email text, _full_name text, _institution_id uuid, _school text, _avatar_url text, _learning_style text, _learning_prefs jsonb, _user_role text, _personal_context text",
+        "returns":  "json",
+        "prokind":  "f"
+    },
+    {
+        "name":  "cosine_distance",
+        "args":  "vector, vector",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "cosine_distance",
+        "args":  "sparsevec, sparsevec",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "cosine_distance",
+        "args":  "halfvec, halfvec",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "create_social_user_profile",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "current_user_role",
+        "args":  "",
+        "returns":  "text",
+        "prokind":  "f"
+    },
+    {
+        "name":  "deduct_podcast_credits",
+        "args":  "p_user_id uuid, p_amount integer, p_type text, p_reference_id text, p_description text",
+        "returns":  "jsonb",
+        "prokind":  "f"
+    },
+    {
+        "name":  "expire_old_podcast_invites",
+        "args":  "",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "generate_referral_code",
+        "args":  "",
+        "returns":  "text",
+        "prokind":  "f"
+    },
+    {
+        "name":  "generate_unique_username",
+        "args":  "p_email text",
+        "returns":  "text",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_active_countries",
+        "args":  "",
+        "returns":  "jsonb",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_app_rating_stats",
+        "args":  "",
+        "returns":  "json",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_approved_testimonials",
+        "args":  "p_limit integer",
+        "returns":  "json",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_due_flashcards",
+        "args":  "p_user_id uuid, p_limit integer",
+        "returns":  "TABLE(id uuid, front text, back text, category text, difficulty text, hint text, review_count integer, ease_factor numeric)",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_education_framework",
+        "args":  "p_country_code text",
+        "returns":  "jsonb",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_folder_documents_recursive",
+        "args":  "p_folder_id uuid, p_user_id uuid",
+        "returns":  "TABLE(id uuid, title text, file_name text, file_type text, type text, content_extracted text, processing_status text)",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_learning_velocity",
+        "args":  "p_user_id uuid, p_weeks integer",
+        "returns":  "TABLE(week text, items bigint)",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_or_create_group_chat_session",
+        "args":  "p_group_id uuid",
+        "returns":  "uuid",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_question_stats",
+        "args":  "p_question_id uuid",
+        "returns":  "TABLE(total_answers bigint, correct_answers bigint, option_0_count bigint, option_1_count bigint, option_2_count bigint, option_3_count bigint, avg_time_taken numeric)",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_schema_tables",
+        "args":  "",
+        "returns":  "TABLE(table_name text, table_type text)",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_session_leaderboard",
+        "args":  "p_session_id uuid",
+        "returns":  "TABLE(user_id uuid, display_name text, score integer, is_host boolean, rank bigint)",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_session_unread_count",
+        "args":  "p_session_id uuid, p_user_id uuid",
+        "returns":  "integer",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_suggested_users",
+        "args":  "p_user_id uuid, p_exclude_ids uuid[], p_limit integer, p_offset integer",
+        "returns":  "TABLE(id uuid, username text, display_name text, avatar_url text, bio text, interests text[], followers_count integer, following_count integer, posts_count integer, is_verified boolean, last_active timestamp with time zone, created_at timestamp with time zone, recommendation_score numeric)",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_table_columns",
+        "args":  "table_name text",
+        "returns":  "TABLE(name text, type text, nullable boolean, is_primary_key boolean, is_foreign_key boolean, default_value text)",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_table_policies",
+        "args":  "table_name text",
+        "returns":  "TABLE(name text, operation text, using_expression text, check_expression text)",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_table_relationships",
+        "args":  "table_name text",
+        "returns":  "TABLE(from_table text, to_table text, from_column text, to_column text, constraint_name text)",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_user_activity_history",
+        "args":  "p_user_id uuid, p_start_date timestamp with time zone, p_interval text",
+        "returns":  "TABLE(period timestamp with time zone, notes_count bigint, recordings_count bigint, documents_count bigint, quizzes_count bigint, messages_count bigint)",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_user_activity_stats",
+        "args":  "p_user_id uuid, p_days integer",
+        "returns":  "TABLE(date text, notes bigint, recordings bigint, documents bigint, messages bigint, total bigint)",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_user_stats_with_achievements",
+        "args":  "user_uuid uuid",
+        "returns":  "TABLE(user_id uuid, total_xp integer, level integer, current_streak integer, longest_streak integer, total_quizzes_attempted integer, total_quizzes_completed integer, average_score numeric, total_study_time_seconds integer, badges_earned text[], last_activity_date timestamp with time zone, achievements_count bigint)",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_user_streak",
+        "args":  "p_user_id uuid",
+        "returns":  "TABLE(current_streak integer, max_streak integer)",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_user_unread_count",
+        "args":  "p_user_id uuid",
+        "returns":  "integer",
+        "prokind":  "f"
+    },
+    {
+        "name":  "get_xp_for_level",
+        "args":  "level_num integer",
+        "returns":  "integer",
+        "prokind":  "f"
+    },
+    {
+        "name":  "grant_monthly_podcast_credits",
+        "args":  "p_user_id uuid, p_tier text",
+        "returns":  "jsonb",
+        "prokind":  "f"
+    },
+    {
+        "name":  "guard_log_admin_activity",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec",
+        "args":  "halfvec, integer, boolean",
+        "returns":  "halfvec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_accum",
+        "args":  "double precision[], halfvec",
+        "returns":  "double precision[]",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_add",
+        "args":  "halfvec, halfvec",
+        "returns":  "halfvec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_avg",
+        "args":  "double precision[]",
+        "returns":  "halfvec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_cmp",
+        "args":  "halfvec, halfvec",
+        "returns":  "integer",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_combine",
+        "args":  "double precision[], double precision[]",
+        "returns":  "double precision[]",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_concat",
+        "args":  "halfvec, halfvec",
+        "returns":  "halfvec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_eq",
+        "args":  "halfvec, halfvec",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_ge",
+        "args":  "halfvec, halfvec",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_gt",
+        "args":  "halfvec, halfvec",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_in",
+        "args":  "cstring, oid, integer",
+        "returns":  "halfvec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_l2_squared_distance",
+        "args":  "halfvec, halfvec",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_le",
+        "args":  "halfvec, halfvec",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_lt",
+        "args":  "halfvec, halfvec",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_mul",
+        "args":  "halfvec, halfvec",
+        "returns":  "halfvec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_ne",
+        "args":  "halfvec, halfvec",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_negative_inner_product",
+        "args":  "halfvec, halfvec",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_out",
+        "args":  "halfvec",
+        "returns":  "cstring",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_recv",
+        "args":  "internal, oid, integer",
+        "returns":  "halfvec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_send",
+        "args":  "halfvec",
+        "returns":  "bytea",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_spherical_distance",
+        "args":  "halfvec, halfvec",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_sub",
+        "args":  "halfvec, halfvec",
+        "returns":  "halfvec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_to_float4",
+        "args":  "halfvec, integer, boolean",
+        "returns":  "real[]",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_to_sparsevec",
+        "args":  "halfvec, integer, boolean",
+        "returns":  "sparsevec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_to_vector",
+        "args":  "halfvec, integer, boolean",
+        "returns":  "vector",
+        "prokind":  "f"
+    },
+    {
+        "name":  "halfvec_typmod_in",
+        "args":  "cstring[]",
+        "returns":  "integer",
+        "prokind":  "f"
+    },
+    {
+        "name":  "hamming_distance",
+        "args":  "bit, bit",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "handle_new_comment_notification",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "handle_new_like_notification",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "handle_new_user",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "handle_new_user_debug",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "handle_new_user_inner",
+        "args":  "p_new jsonb",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "handle_new_user_promo",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "handle_user_update",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "hnsw_bit_support",
+        "args":  "internal",
+        "returns":  "internal",
+        "prokind":  "f"
+    },
+    {
+        "name":  "hnsw_halfvec_support",
+        "args":  "internal",
+        "returns":  "internal",
+        "prokind":  "f"
+    },
+    {
+        "name":  "hnsw_sparsevec_support",
+        "args":  "internal",
+        "returns":  "internal",
+        "prokind":  "f"
+    },
+    {
+        "name":  "hnswhandler",
+        "args":  "internal",
+        "returns":  "index_am_handler",
+        "prokind":  "f"
+    },
+    {
+        "name":  "increment_hashtag_count",
+        "args":  "p_hashtag_id uuid",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "increment_podcast_listen_count",
+        "args":  "podcast_id uuid",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "increment_podcast_share_count",
+        "args":  "podcast_id uuid",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "increment_post_shares",
+        "args":  "p_post_id uuid",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "increment_post_views",
+        "args":  "p_post_id uuid",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "initialize_user_activity_tracking",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "inner_product",
+        "args":  "vector, vector",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "inner_product",
+        "args":  "sparsevec, sparsevec",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "inner_product",
+        "args":  "halfvec, halfvec",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "invoke_daily_notifications_engine",
+        "args":  "",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "invoke_document_processor_watchdog",
+        "args":  "",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "invoke_scheduled_notifications_dispatcher",
+        "args":  "",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "is_admin",
+        "args":  "",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "is_admin",
+        "args":  "_user_id uuid, _min_role admin_role",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "is_course_owner",
+        "args":  "_user_id uuid, _course_id uuid",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "is_educator",
+        "args":  "_user_id uuid",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "is_institution_member",
+        "args":  "_user_id uuid, _institution_id uuid, _min_role text",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "is_podcast_cohost",
+        "args":  "p_podcast_id uuid, p_user_id uuid",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "ivfflat_bit_support",
+        "args":  "internal",
+        "returns":  "internal",
+        "prokind":  "f"
+    },
+    {
+        "name":  "ivfflat_halfvec_support",
+        "args":  "internal",
+        "returns":  "internal",
+        "prokind":  "f"
+    },
+    {
+        "name":  "ivfflathandler",
+        "args":  "internal",
+        "returns":  "index_am_handler",
+        "prokind":  "f"
+    },
+    {
+        "name":  "jaccard_distance",
+        "args":  "bit, bit",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "l1_distance",
+        "args":  "sparsevec, sparsevec",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "l1_distance",
+        "args":  "vector, vector",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "l1_distance",
+        "args":  "halfvec, halfvec",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "l2_distance",
+        "args":  "sparsevec, sparsevec",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "l2_distance",
+        "args":  "vector, vector",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "l2_distance",
+        "args":  "halfvec, halfvec",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "l2_norm",
+        "args":  "halfvec",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "l2_norm",
+        "args":  "sparsevec",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "l2_normalize",
+        "args":  "vector",
+        "returns":  "vector",
+        "prokind":  "f"
+    },
+    {
+        "name":  "l2_normalize",
+        "args":  "halfvec",
+        "returns":  "halfvec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "l2_normalize",
+        "args":  "sparsevec",
+        "returns":  "sparsevec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "log_admin_activity",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "log_admin_activity",
+        "args":  "_action text, _target_type text, _target_id uuid, _details jsonb",
+        "returns":  "uuid",
+        "prokind":  "f"
+    },
+    {
+        "name":  "log_schema_query",
+        "args":  "p_user_id uuid, p_operation text, p_table_name text, p_query_intent jsonb, p_success boolean, p_error_message text, p_execution_time_ms integer",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "log_system_error",
+        "args":  "p_severity text, p_source text, p_component text, p_error_code text, p_message text, p_details jsonb, p_user_id uuid, p_request_id text",
+        "returns":  "uuid",
+        "prokind":  "f"
+    },
+    {
+        "name":  "log_user_activity",
+        "args":  "p_user_id uuid, p_activity_type character varying, p_xp_earned integer",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "mark_all_notifications_read",
+        "args":  "",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "mark_notification_read",
+        "args":  "notification_id uuid",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "mark_session_messages_read",
+        "args":  "p_session_id uuid, p_user_id uuid",
+        "returns":  "integer",
+        "prokind":  "f"
+    },
+    {
+        "name":  "mark_unanswered_as_incorrect",
+        "args":  "p_session_id uuid, p_question_id uuid",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "notify_chat_message",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "notify_comment_like",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "notify_comment_mention",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "notify_group_invite",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "notify_group_message",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "notify_new_follower",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "notify_post_comment",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "notify_post_like",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "notify_post_mention",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "notify_post_share",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "process_referral_reward",
+        "args":  "p_referee_id uuid, p_referral_code text",
+        "returns":  "jsonb",
+        "prokind":  "f"
+    },
+    {
+        "name":  "publish_scheduled_updates",
+        "args":  "",
+        "returns":  "integer",
+        "prokind":  "f"
+    },
+    {
+        "name":  "purge_user_data",
+        "args":  "p_user_id uuid",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "record_bookmark_signal",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "record_comment_signal",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "record_like_signal",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "record_share_signal",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "record_view_signal",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "reject_role_request",
+        "args":  "_request_id uuid, _admin_id uuid, _reason text, _review_notes text",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "remove_like_signal",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "review_flashcard",
+        "args":  "p_flashcard_id uuid, p_user_id uuid, p_quality integer",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "rls_auto_enable",
+        "args":  "",
+        "returns":  "event_trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "send_push_notification",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sparsevec",
+        "args":  "sparsevec, integer, boolean",
+        "returns":  "sparsevec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sparsevec_cmp",
+        "args":  "sparsevec, sparsevec",
+        "returns":  "integer",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sparsevec_eq",
+        "args":  "sparsevec, sparsevec",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sparsevec_ge",
+        "args":  "sparsevec, sparsevec",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sparsevec_gt",
+        "args":  "sparsevec, sparsevec",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sparsevec_in",
+        "args":  "cstring, oid, integer",
+        "returns":  "sparsevec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sparsevec_l2_squared_distance",
+        "args":  "sparsevec, sparsevec",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sparsevec_le",
+        "args":  "sparsevec, sparsevec",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sparsevec_lt",
+        "args":  "sparsevec, sparsevec",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sparsevec_ne",
+        "args":  "sparsevec, sparsevec",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sparsevec_negative_inner_product",
+        "args":  "sparsevec, sparsevec",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sparsevec_out",
+        "args":  "sparsevec",
+        "returns":  "cstring",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sparsevec_recv",
+        "args":  "internal, oid, integer",
+        "returns":  "sparsevec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sparsevec_send",
+        "args":  "sparsevec",
+        "returns":  "bytea",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sparsevec_to_halfvec",
+        "args":  "sparsevec, integer, boolean",
+        "returns":  "halfvec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sparsevec_to_vector",
+        "args":  "sparsevec, integer, boolean",
+        "returns":  "vector",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sparsevec_typmod_in",
+        "args":  "cstring[]",
+        "returns":  "integer",
+        "prokind":  "f"
+    },
+    {
+        "name":  "submit_role_request",
+        "args":  "_user_id uuid, _requested_role text, _institution_id uuid, _qualifications text, _years_experience text, _specializations text[], _additional_notes text, _documents jsonb",
+        "returns":  "uuid",
+        "prokind":  "f"
+    },
+    {
+        "name":  "subvector",
+        "args":  "vector, integer, integer",
+        "returns":  "vector",
+        "prokind":  "f"
+    },
+    {
+        "name":  "subvector",
+        "args":  "halfvec, integer, integer",
+        "returns":  "halfvec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sum",
+        "args":  "vector",
+        "returns":  "vector",
+        "prokind":  "a"
+    },
+    {
+        "name":  "sum",
+        "args":  "halfvec",
+        "returns":  "halfvec",
+        "prokind":  "a"
+    },
+    {
+        "name":  "sync_institution_to_education_profile",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sync_last_active_on_login",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sync_profile_to_social",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "sync_social_to_profile",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "touch_game_progress_updated_at",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "touch_profile_active",
+        "args":  "",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "touch_user_activity",
+        "args":  "p_user_id uuid",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "touch_user_learning_goals_updated_at",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "track_user_login",
+        "args":  "p_user_id uuid",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "track_user_logout",
+        "args":  "p_user_id uuid",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "trigger_recalculate_course_progress",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "trigger_update_enrollment_last_accessed",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_activity_on_chat_create",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_activity_on_document_create",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_activity_on_group_interaction",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_activity_on_note_create",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_activity_on_post_create",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_activity_on_quiz_attempt",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_all_engagement_tiers",
+        "args":  "",
+        "returns":  "TABLE(updated_count integer)",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_app_stats_function",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_chat_message_timestamp",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_chat_session_message_count",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_chat_session_timestamp",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_comment_counts",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_comment_likes_count",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_comment_replies_count",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_context_size",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_creator_verification_status",
+        "args":  "",
+        "returns":  "TABLE(users_checked integer, newly_verified integer, newly_unverified integer)",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_engagement_tier",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_flashcard_updated_at",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_follow_counts",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_goal_progress",
+        "args":  "goal_id uuid, new_progress integer",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_group_member_counts",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_hashtag_counts",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_like_counts",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_likes_count",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_platform_updates_updated_at",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_post_comments_count",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_post_counts",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_post_likes_count",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_post_reposts_count",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_session_last_message",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_social_user_counts",
+        "args":  "p_user_id uuid, p_followers_delta integer, p_following_delta integer",
+        "returns":  "void",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_system_error_logs_updated_at",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_timestamp",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_updated_at",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "update_updated_at_column",
+        "args":  "",
+        "returns":  "trigger",
+        "prokind":  "f"
+    },
+    {
+        "name":  "upsert_notification_subscription",
+        "args":  "p_endpoint text, p_p256dh text, p_auth text, p_device_type text, p_browser text",
+        "returns":  "json",
+        "prokind":  "f"
+    },
+    {
+        "name":  "user_institution_ids",
+        "args":  "_user_id uuid",
+        "returns":  "SETOF uuid",
+        "prokind":  "f"
+    },
+    {
+        "name":  "validate_and_execute_query",
+        "args":  "p_user_id uuid, p_operation text, p_table_name text, p_columns jsonb, p_conditions jsonb, p_data jsonb, p_limit integer",
+        "returns":  "jsonb",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector",
+        "args":  "vector, integer, boolean",
+        "returns":  "vector",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_accum",
+        "args":  "double precision[], vector",
+        "returns":  "double precision[]",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_add",
+        "args":  "vector, vector",
+        "returns":  "vector",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_avg",
+        "args":  "double precision[]",
+        "returns":  "vector",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_cmp",
+        "args":  "vector, vector",
+        "returns":  "integer",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_combine",
+        "args":  "double precision[], double precision[]",
+        "returns":  "double precision[]",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_concat",
+        "args":  "vector, vector",
+        "returns":  "vector",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_dims",
+        "args":  "halfvec",
+        "returns":  "integer",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_dims",
+        "args":  "vector",
+        "returns":  "integer",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_eq",
+        "args":  "vector, vector",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_ge",
+        "args":  "vector, vector",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_gt",
+        "args":  "vector, vector",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_in",
+        "args":  "cstring, oid, integer",
+        "returns":  "vector",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_l2_squared_distance",
+        "args":  "vector, vector",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_le",
+        "args":  "vector, vector",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_lt",
+        "args":  "vector, vector",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_mul",
+        "args":  "vector, vector",
+        "returns":  "vector",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_ne",
+        "args":  "vector, vector",
+        "returns":  "boolean",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_negative_inner_product",
+        "args":  "vector, vector",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_norm",
+        "args":  "vector",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_out",
+        "args":  "vector",
+        "returns":  "cstring",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_recv",
+        "args":  "internal, oid, integer",
+        "returns":  "vector",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_send",
+        "args":  "vector",
+        "returns":  "bytea",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_spherical_distance",
+        "args":  "vector, vector",
+        "returns":  "double precision",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_sub",
+        "args":  "vector, vector",
+        "returns":  "vector",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_to_float4",
+        "args":  "vector, integer, boolean",
+        "returns":  "real[]",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_to_halfvec",
+        "args":  "vector, integer, boolean",
+        "returns":  "halfvec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_to_sparsevec",
+        "args":  "vector, integer, boolean",
+        "returns":  "sparsevec",
+        "prokind":  "f"
+    },
+    {
+        "name":  "vector_typmod_in",
+        "args":  "cstring[]",
+        "returns":  "integer",
+        "prokind":  "f"
+    }
+]

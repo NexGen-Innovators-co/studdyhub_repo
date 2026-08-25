@@ -118,17 +118,16 @@ serve(async (req: Request) => {
     // Check user's subscription tier (skip for admins)
     if (!isAdmin) {
       const { data: userSub, error: subError } = await supabase
-        .from("users")
-        .select("subscription_tier")
-        .eq("id", userId)
-        .single();
+        .from("subscriptions")
+        .select("plan_type, status")
+        .eq("user_id", userId)
+        .maybeSingle();
 
-      if (subError || !userSub) {
-        return createErrorResponse("User not found", 404);
-      }
+      const planType = subError || !userSub ? "free" : (userSub.plan_type || "free");
+      const active = subError || !userSub ? false : (userSub.status !== "canceled");
 
       // Check if user can like posts (Scholar+ tier only)
-      if (userSub.subscription_tier === "free") {
+      if (!active || planType === "free") {
         return createErrorResponse(
           "Liking posts is only available for Scholar and Genius plans. Upgrade to interact with posts!",
           403
@@ -150,7 +149,7 @@ serve(async (req: Request) => {
     if (isLiked) {
       // Remove like
       const { error: deleteError } = await supabase
-        .from("social_post_likes")
+        .from("social_likes")
         .delete()
         .eq("post_id", postId)
         .eq("user_id", userId);
@@ -167,7 +166,7 @@ serve(async (req: Request) => {
     } else {
       // Add like
       const { data: like, error: insertError } = await supabase
-        .from("social_post_likes")
+        .from("social_likes")
         .insert({
           post_id: postId,
           user_id: userId,

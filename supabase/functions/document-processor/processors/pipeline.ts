@@ -54,7 +54,7 @@ export async function enhancedFileProcessing(file: any, geminiApiKey: string): P
     file.processing_status     = 'processing';
     file.processing_started_at = new Date().toISOString();
     file.extraction_model_used = fileConfig.strategy === 'vision_analysis' || fileConfig.strategy === 'transcription' || fileConfig.strategy === 'frame_analysis'
-      ? 'gemini-2.0-flash'
+      ? 'gemini-3.5-flash'
       : 'local';
 
     switch (fileConfig.strategy) {

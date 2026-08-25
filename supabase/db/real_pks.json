@@ -1,0 +1,430 @@
+[
+    {
+        "table_name":  "achievements",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "admin_activity_logs",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "admin_system_settings",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "admin_users",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "ai_podcasts",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "ai_user_memory",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "app_ratings",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "app_stats",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "app_testimonials",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "audio_processing_results",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "audio_segments",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "badges",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "calendar_integrations",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "chat_messages",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "chat_sessions",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "class_recordings",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "content_moderation_log",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "content_moderation_queue",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "countries",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "course_enrollments",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "course_materials",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "course_progress",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "course_resources",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "courses",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "curricula",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "daily_notification_log",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "document_folder_items",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "document_folders",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "documents",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "education_levels",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "error_logs",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "examinations",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "failed_chunks",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "flashcards",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "game_progress",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "institution_invites",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "institution_members",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "institutions",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "kid_roadmap_steps",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "learning_topic_connections",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "live_quiz_answers",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "live_quiz_players",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "live_quiz_questions",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "live_quiz_sessions",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "notes",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "notification_preferences",
+        "column_name":  "user_id"
+    },
+    {
+        "table_name":  "notification_subscriptions",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "notifications",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "platform_update_reads",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "platform_updates",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "player_question_progress",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "podcast_chunks",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "podcast_cohosts",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "podcast_credit_packs",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "podcast_credit_transactions",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "podcast_credits",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "podcast_invites",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "podcast_listeners",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "podcast_members",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "podcast_participation_requests",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "podcast_recordings",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "podcast_shares",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "profiles",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "quiz_attempts",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "quizzes",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "referrals",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "role_verification_requests",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "schedule_items",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "schedule_reminders",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "schema_agent_audit",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_bookmarks",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_chat_message_media",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_chat_message_reads",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_chat_message_resources",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_chat_messages",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_chat_sessions",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_comment_media",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_comments",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_event_attendees",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_events",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_follows",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_group_members",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_groups",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_hashtags",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_likes",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_media",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_notifications",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_post_hashtags",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_post_tags",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_post_views",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_posts",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_reports",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_shares",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_tags",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_user_signals",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "social_users",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "subjects",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "subscriptions",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "system_error_logs",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "system_settings",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "user_activity_tracking",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "user_daily_activity",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "user_education_profiles",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "user_learning_goals",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "user_session_digests",
+        "column_name":  "id"
+    },
+    {
+        "table_name":  "user_stats",
+        "column_name":  "user_id"
+    },
+    {
+        "table_name":  "user_subjects",
+        "column_name":  "id"
+    }
+]

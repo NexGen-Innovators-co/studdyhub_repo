@@ -60,7 +60,7 @@ The system builds explicit reasoning steps:
 ### 4. **Comprehensive Memory Management**
 
 #### **Working Memory** (Current Session)
-- Recent 20 messages from current conversation
+- Recent messages from current conversation (bounded by `MAX_CONVERSATION_HISTORY`, default 500; live in every turn)
 - Active topics being discussed
 - Referenced items (documents/notes)
 
@@ -144,14 +144,21 @@ Every response undergoes quality assessment:
 {
   MAX_INPUT_TOKENS: 2M,        // Full context window
   MAX_OUTPUT_TOKENS: 8192,     // Balanced quality/length
-  MAX_CONVERSATION_HISTORY: 100, // Complete history
-  CONTEXT_MEMORY_WINDOW: 20,   // Comprehensive context
-  SUMMARY_THRESHOLD: 15,       // Balanced summarization
+  MAX_CONVERSATION_HISTORY: 500, // Complete history
+  SUMMARY_THRESHOLD: 10,       // Balanced summarization
   RETRY_ATTEMPTS: 3,           // High reliability
   RELEVANCE_SCORING: true,     // Smart ranking
   RELEVANCE_TOP_K: 10          // More relevant items
 }
 ```
+
+> Note: Long-term memory (`ai_user_memory`) is persisted from BOTH the streaming
+> and non-streaming paths. The self-verification phase (`verifyResponse`) runs as
+> a post-generation guard, and dynamic tool selection (`selectTools`) shapes the
+> ReAct planner's available tools (including the safe `CALCULATOR` arithmetic
+> action). Write actions (INSERT/UPDATE/DELETE) are gated by a server-side
+> confirmation ledger: `confirmed: true` is only honored for a genuinely pending
+> action when the user's current message is an explicit confirmation.
 
 ## Processing Flow
 

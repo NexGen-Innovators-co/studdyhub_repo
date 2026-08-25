@@ -1,31 +1,68 @@
-# Logs
-logs
+# ===========================
+# Global
+# ===========================
+node_modules/
+dist/
+dist-ssr/
+*.local
+.env
+.env*.local
 *.log
+logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-*.local
-.env
+.vercel
+.temp
+.DS_Store
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-.vercel
-.env*.local
-.temp
+*.iml
+
+# ===========================
+# Web (Vite + React)
+# ===========================
+web/node_modules/
+web/dist/
+web/.env.local
+web/.env*.local
+web/bun.lockb
+web/tsconfig.tsbuildinfo
+web/.eslintcache
+web/.DS_Store
+
+# ===========================
+# Mobile (Android / Kotlin)
+# ===========================
+mobile/build/
+mobile/app/build/
+mobile/.gradle/
+mobile/local.properties
+mobile/captures/
+mobile/debug.keystore
+mobile/app/google-services.json
+mobile/.idea/
+mobile/.DS_Store
+.externalNativeBuild/
+.cxx/
+
+# ===========================
+# Supabase
+# ===========================
+/supabase/.temp
 
 # Database exports with secrets
 scripts/all_rls_triggers_func.json
+
+# Misc
+func_analysis.json

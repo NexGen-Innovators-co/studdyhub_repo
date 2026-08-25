@@ -771,11 +771,8 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
  * Enhanced Gemini API caller with model-chain retries
  */ async function callEnhancedGeminiAPI(contents, geminiApiKey) {
     const MODEL_CHAIN = [
-        'gemini-2.5-flash',
-        'gemini-2.0-flash',
-        'gemini-2.0-flash-lite',
-        'gemini-2.5-pro',
-        'gemini-3-pro-preview'
+        'gemini-3.5-flash',
+        'gemini-3.6-flash'
     ];
 
     const requestBody = {
@@ -898,7 +895,7 @@ ${chunk}`;
  */ async function extractPdfTextWithPdfjs(buffer) {
     try {
         // Lazy-load pdf.js legacy build (no worker needed)
-        const mod = await import('https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.mjs');
+        const mod = await import('npm:pdfjs-dist@4.0.379/legacy/build/pdf.mjs');
         mod.GlobalWorkerOptions.workerSrc = '';
         const loadingTask = mod.getDocument({ data: buffer });
         const pdf = await loadingTask.promise;
@@ -1556,7 +1553,7 @@ This is an archive file that contains compressed data. Without extraction capabi
         file.processing_status = 'processing';
         file.processing_started_at = new Date().toISOString();
         startTime = Date.now();
-        file.extraction_model_used = 'gemini-2.0-flash';
+        file.extraction_model_used = 'gemini-3.5-flash';
         switch (fileConfig.strategy) {
             case 'chunk_text':
                 await processTextFileWithChunking(file, geminiApiKey);

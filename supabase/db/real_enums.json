@@ -1,0 +1,102 @@
+[
+    {
+        "name":  "admin_role",
+        "label":  "super_admin"
+    },
+    {
+        "name":  "admin_role",
+        "label":  "admin"
+    },
+    {
+        "name":  "admin_role",
+        "label":  "moderator"
+    },
+    {
+        "name":  "message_role",
+        "label":  "user"
+    },
+    {
+        "name":  "message_role",
+        "label":  "assistant"
+    },
+    {
+        "name":  "note_category",
+        "label":  "general"
+    },
+    {
+        "name":  "note_category",
+        "label":  "math"
+    },
+    {
+        "name":  "note_category",
+        "label":  "science"
+    },
+    {
+        "name":  "note_category",
+        "label":  "history"
+    },
+    {
+        "name":  "note_category",
+        "label":  "language"
+    },
+    {
+        "name":  "note_category",
+        "label":  "other"
+    },
+    {
+        "name":  "notification_category",
+        "label":  "study_planning"
+    },
+    {
+        "name":  "notification_category",
+        "label":  "quiz_challenge"
+    },
+    {
+        "name":  "notification_category",
+        "label":  "group_nudge"
+    },
+    {
+        "name":  "notification_category",
+        "label":  "podcast_discovery"
+    },
+    {
+        "name":  "notification_category",
+        "label":  "progress_tracking"
+    },
+    {
+        "name":  "schedule_item_type",
+        "label":  "class"
+    },
+    {
+        "name":  "schedule_item_type",
+        "label":  "study"
+    },
+    {
+        "name":  "schedule_item_type",
+        "label":  "assignment"
+    },
+    {
+        "name":  "schedule_item_type",
+        "label":  "exam"
+    },
+    {
+        "name":  "schedule_item_type",
+        "label":  "other"
+    },
+    {
+        "name":  "social_user_status",
+        "label":  "active"
+    },
+    {
+        "name":  "social_user_status",
+        "label":  "suspended"
+    },
+    {
+        "name":  "social_user_status",
+        "label":  "banned"
+    },
+    {
+        "name":  "social_user_status",
+        "label":  "deactivated"
+    }
+]
