@@ -142,7 +142,7 @@ serve(async (req) => {
             user_id: userId,
             content_preview: content.substring(0, 200),
             content_type: 'post',
-            decision: 'pending_review',
+            decision: 'rejected',
             reason: 'No AI API key configured',
             confidence: 0
           });
@@ -209,7 +209,7 @@ Respond with ONLY valid JSON (no markdown, no code blocks):
                     user_id: userId,
                     content_preview: content.substring(0, 200),
                     content_type: 'post',
-                    decision: analysis.isEducational ? 'approved' : 'pending_review',
+                    decision: analysis.isEducational ? 'approved' : 'rejected',
                     reason: analysis.reason || 'AI analysis complete',
                     confidence: analysis.confidence || 0.5,
                     educational_score: analysis.isEducational ? 0.8 : 0.3
@@ -312,7 +312,7 @@ Respond with ONLY valid JSON (no markdown, no code blocks):
                     user_id: userId,
                     content_preview: content.substring(0, 200),
                     content_type: 'post',
-                    decision: analysis.isEducational ? 'approved' : 'pending_review',
+                    decision: analysis.isEducational ? 'approved' : 'rejected',
                     reason: (analysis.reason || 'AI analysis complete') + ' [OpenRouter]',
                     confidence: analysis.confidence || 0.5,
                     educational_score: analysis.isEducational ? 0.8 : 0.3
@@ -338,7 +338,7 @@ Respond with ONLY valid JSON (no markdown, no code blocks):
             user_id: userId,
             content_preview: content.substring(0, 200),
             content_type: 'post',
-            decision: 'pending_review',
+            decision: 'rejected',
             reason: `AI analysis failed: ${lastGeminiError}`,
             confidence: 0
           });

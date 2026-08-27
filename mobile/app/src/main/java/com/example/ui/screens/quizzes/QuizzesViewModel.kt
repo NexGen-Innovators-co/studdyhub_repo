@@ -1606,6 +1606,12 @@ class QuizzesViewModel(private val repository: StuddyHubRepository) : ViewModel(
                 } else {
                     _userMessage.value = "Session finished — saved to your History. 🎉"
                 }
+
+                // 3. Auto-complete roadmap step if this speed race was tied to a game key
+                val gameKey = current.speedGameKey
+                if (!gameKey.isNullOrBlank()) {
+                    runCatching { repository.completeRoadmapStepForGame(gameKey) }
+                }
             } catch (e: Exception) {
                 android.util.Log.e("QuizzesViewModel", "Error finishing live session", e)
                 _userMessage.value = "Session finished — saved to your History. 🎉"

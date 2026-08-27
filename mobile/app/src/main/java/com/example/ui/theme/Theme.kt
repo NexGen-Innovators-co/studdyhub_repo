@@ -51,6 +51,7 @@ fun StuddyHubTheme(
             AcademicTier.EXPLORER -> if (darkTheme) ExplorerDarkColors else ExplorerLightColors
             AcademicTier.ACHIEVER -> if (darkTheme) AchieverDarkColors else AchieverLightColors
             AcademicTier.SCHOLAR -> if (darkTheme) ScholarDarkColors else ScholarLightColors
+            AcademicTier.ALL -> if (darkTheme) ExplorerDarkColors else ExplorerLightColors
         }
         androidx.compose.runtime.CompositionLocalProvider(
             LocalAcademicTier provides tier,

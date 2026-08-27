@@ -115,6 +115,7 @@ fun OllieMascot(
                         AcademicTier.EXPLORER -> Color(0xFFF59E0B)
                         AcademicTier.ACHIEVER -> Color(0xFF4F46E5)
                         AcademicTier.SCHOLAR -> Color(0xFF0F172A)
+                        AcademicTier.ALL -> Color(0xFFF59E0B)
                     }
                 ),
                 shadowElevation = if (mood == OllieMood.CELEBRATING) 8.dp else 4.dp,

@@ -269,51 +269,25 @@ export const AppHeader: React.FC<{
   const isMobileDevice = () =>
     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-  // Install App Button Component
+  const GITHUB_RELEASES_URL = 'https://github.com/NexGen-Innovators-co/studdyhub_repo/releases/latest';
+
+  // Download APK Button Component
   const InstallAppButton = () => {
-    if (isPwaInstalled) {
-      return (
+    return (
+      <a
+        href={GITHUB_RELEASES_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
         <Button
           variant="outline"
           size="sm"
-          className="hidden md:inline-flex bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-green-200 dark:border-emerald-800 text-green-700 dark:text-emerald-200 rounded-full cursor-default"
-          disabled
+          className="hidden md:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200 rounded-full hover:scale-105 active:scale-95 transition-all duration-300"
         >
-          <CheckCircle className="h-4 w-4 mr-2" />
-          Installed
+          <Download className="h-4 w-4 mr-2" />
+          Download APK
         </Button>
-      );
-    }
-
-    if (!showInstallPrompt) return null;
-
-    return (
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handleInstallApp}
-        disabled={isInstalling}
-        className={`hidden md:inline-flex rounded-full transition-all duration-300 ${
-          isInstalling ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95'
-        } bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200`}
-      >
-        {isInstalling ? (
-          <>
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            Installing...
-          </>
-        ) : isMobileDevice() ? (
-          <>
-            <Smartphone className="h-4 w-4 mr-2" />
-            Add to Home
-          </>
-        ) : (
-          <>
-            <Download className="h-4 w-4 mr-2" />
-            Install App
-          </>
-        )}
-      </Button>
+      </a>
     );
   };
 
@@ -472,22 +446,20 @@ export const AppHeader: React.FC<{
 
       {/* Mobile Menu Button */}
       <div className="flex items-center md:hidden gap-1">
-        {showInstallPrompt && !isPwaInstalled && (
+        <a
+          href={GITHUB_RELEASES_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           <Button
             variant="outline"
             size="icon"
-            onClick={handleInstallApp}
-            disabled={isInstalling}
             className="rounded-full min-w-[44px] min-h-[44px] w-11 h-11"
-            aria-label="Install app"
+            aria-label="Download APK"
           >
-            {isInstalling ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <Smartphone className="h-5 w-5" />
-            )}
+            <Download className="h-5 w-5" />
           </Button>
-        )}
+        </a>
         <Button
           variant="ghost"
           size="icon"
@@ -513,26 +485,17 @@ export const AppHeader: React.FC<{
       {isMenuOpen && (
         <div className="absolute top-full left-0 w-full bg-white dark:bg-gray-900 shadow-lg md:hidden">
           <nav className="flex flex-col gap-1 p-6">
-            {/* Install App in Mobile Menu */}
-            {showInstallPrompt && !isPwaInstalled && (
-              <Button
-                onClick={() => { handleInstallApp(); setIsMenuOpen(false); }}
-                disabled={isInstalling}
-                className="w-full mb-2 min-h-[44px]"
-              >
-                {isInstalling ? (
-                  <>
-                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                    Installing...
-                  </>
-                ) : (
-                  <>
-                    <Smartphone className="h-5 w-5 mr-2" />
-                    Install App
-                  </>
-                )}
-              </Button>
-            )}
+            {/* Download APK in Mobile Menu */}
+            <a
+              href={GITHUB_RELEASES_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setIsMenuOpen(false)}
+              className="w-full mb-2 min-h-[44px] flex items-center justify-center gap-2 px-4 py-3 rounded-md bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-200 font-medium"
+            >
+              <Download className="h-5 w-5" />
+              Download APK
+            </a>
 
             <a
               href="/#features"

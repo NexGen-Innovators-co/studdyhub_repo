@@ -503,40 +503,24 @@ export const Header: React.FC<HeaderProps> = ({
   // captured or carried over from AppHeader via window.__pwaPrompt).
   const hasInstallPrompt = !isPwaInstalled && (!!localPromptRef.current || !!getPwaPrompt());
 
+  const GITHUB_RELEASES_URL = 'https://github.com/NexGen-Innovators-co/studdyhub_repo/releases/latest';
+
   const InstallAppButton = () => {
-    if (isPwaInstalled) {
-      return (
+    return (
+      <a
+        href={GITHUB_RELEASES_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
         <Button
           variant="outline"
           size="sm"
-          className="hidden md:inline-flex bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-green-200 dark:border-emerald-800 hover:from-green-500/20 hover:to-emerald-500/20 text-green-700 dark:text-emerald-200 rounded-full cursor-default text-xs sm:text-sm"
-          disabled
+          className="hidden md:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200 rounded-full text-xs sm:text-sm"
         >
-          <CheckCircle className="h-4 w-4 mr-2 flex-shrink-0" />
-          <span className="hidden xl:inline">Installed</span>
-        </Button>
-      );
-    }
-    if (!hasInstallPrompt) return null;
-    return (
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handleInstallApp}
-        disabled={isInstalling}
-        className="hidden md:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200 rounded-full text-xs sm:text-sm"
-      >
-        {isInstalling ? (
-          <Loader2 className="h-4 w-4 mr-2 animate-spin flex-shrink-0" />
-        ) : isMobileDevice() ? (
-          <Smartphone className="h-4 w-4 mr-2 flex-shrink-0" />
-        ) : (
           <Download className="h-4 w-4 mr-2 flex-shrink-0" />
-        )}
-        <span className="lg:inline hidden xl:inline">
-          {isInstalling ? 'Installing...' : isMobileDevice() ? 'Add to Home' : 'Install App'}
-        </span>
-      </Button>
+          <span className="lg:inline hidden xl:inline">Download APK</span>
+        </Button>
+      </a>
     );
   };
 
@@ -602,26 +586,18 @@ export const Header: React.FC<HeaderProps> = ({
                     </button>
                   </div>
 
-                  {/* Install App in menu */}
+                  {/* Download APK in menu */}
                   <div className="p-3 border-t border-slate-200 dark:border-slate-700">
-                    <button
-                      onClick={() => { handleInstallApp(); setIsAppMenuOpen(false); }}
-                      disabled={isInstalling || isPwaInstalled}
-                      className={`w-full px-4 py-3 flex items-center gap-3 transition-colors rounded-lg ${
-                        isPwaInstalled
-                          ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 cursor-default'
-                          : 'hover:bg-slate-100 dark:hover:bg-slate-700'
-                      }`}
+                    <a
+                      href={GITHUB_RELEASES_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setIsAppMenuOpen(false)}
+                      className="w-full px-4 py-3 flex items-center gap-3 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
                     >
-                      {isPwaInstalled ? (
-                        <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
-                      ) : isInstalling ? (
-                        <Loader2 className="h-5 w-5 animate-spin flex-shrink-0" />
-                      ) : (
-                        <Download className="h-5 w-5 flex-shrink-0" />
-                      )}
-                      <span>{isPwaInstalled ? 'App Installed' : isInstalling ? 'Installing...' : 'Install App'}</span>
-                    </button>
+                      <Download className="h-5 w-5 flex-shrink-0" />
+                      <span>Download APK</span>
+                    </a>
                   </div>
                 </div>
               )}

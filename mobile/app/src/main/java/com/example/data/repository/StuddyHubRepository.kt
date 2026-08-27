@@ -149,6 +149,7 @@ class StuddyHubRepository(private val db: StuddyHubDatabase) {
             com.example.ui.theme.AcademicTier.EXPLORER -> "Ollie"
             com.example.ui.theme.AcademicTier.ACHIEVER -> "Master Kwame"
             com.example.ui.theme.AcademicTier.SCHOLAR -> "Professor Ollie"
+            com.example.ui.theme.AcademicTier.ALL -> "Ollie"
         }
     }
 
@@ -165,6 +166,8 @@ class StuddyHubRepository(private val db: StuddyHubDatabase) {
                 "You are Master Kwame, an expert WASSCE exam coach and SHS tutor in Ghana"
             com.example.ui.theme.AcademicTier.SCHOLAR ->
                 "You are Professor Ollie, an expert AI tutor at StuddyHub"
+            com.example.ui.theme.AcademicTier.ALL ->
+                "You are Ollie, a friendly AI tutor for students at StuddyHub"
         }
     }
 
@@ -777,6 +780,8 @@ class StuddyHubRepository(private val db: StuddyHubDatabase) {
             // Offline fallback
             recordGameResultLocal(gameKey, levelIndex, score, total)
         }
+        // Auto-complete the roadmap step tied to this game
+        completeRoadmapStepForGame(gameKey)
     }
 
     /** Local-only game result — offline fallback when RPC fails. */
@@ -994,6 +999,22 @@ class StuddyHubRepository(private val db: StuddyHubDatabase) {
             } catch (e: Exception) {
                 android.util.Log.e("StuddyHubRepository", "Roadmap completion cloud push failed: ${e.message}")
             }
+        }
+    }
+
+    /**
+     * When a game level is completed, mark the corresponding roadmap step (stepType="game",
+     * refId = gameKey) as done so the home screen mission advances.
+     */
+    suspend fun completeRoadmapStepForGame(gameKey: String) {
+        try {
+            val allSteps = db.roadmapDao().getAllStepsDirect()
+            val gameStep = allSteps.firstOrNull {
+                it.stepType == "game" && it.refId == gameKey && !it.isCompleted
+            } ?: return
+            completeRoadmapStep(gameStep.id)
+        } catch (e: Exception) {
+            android.util.Log.e("StuddyHubRepository", "Auto-complete roadmap step for game failed: ${e.message}")
         }
     }
 
@@ -2584,34 +2605,59 @@ class StuddyHubRepository(private val db: StuddyHubDatabase) {
         if (rpcResult is com.example.data.remote.BackendResult.Success) {
             val data = rpcResult.data
             val currentStats = db.userStatsDao().getUserStatsDirect(userId)
-            if (currentStats != null && data.optBoolean("success", false)) {
-                db.userStatsDao().insertOrUpdate(currentStats.copy(
-                    currentStreak = data.optInt("current_streak", currentStats.currentStreak),
-                    longestStreak = data.optInt("longest_streak", currentStats.longestStreak),
-                    lastStudyDayMillis = System.currentTimeMillis(),
-                    totalStudyTimeSeconds = currentStats.totalStudyTimeSeconds + maxOf(0, studyTimeSeconds),
-                    lastActivityDate = getIsoTimestampUtc()
-                ))
+            if (data.optBoolean("success", false)) {
+                if (currentStats != null) {
+                    db.userStatsDao().insertOrUpdate(currentStats.copy(
+                        currentStreak = data.optInt("current_streak", currentStats.currentStreak),
+                        longestStreak = data.optInt("longest_streak", currentStats.longestStreak),
+                        lastStudyDayMillis = System.currentTimeMillis(),
+                        totalStudyTimeSeconds = currentStats.totalStudyTimeSeconds + maxOf(0, studyTimeSeconds),
+                        lastActivityDate = getIsoTimestampUtc()
+                    ))
+                } else {
+                    // Create user_stats if it doesn't exist yet
+                    db.userStatsDao().insertOrUpdate(UserStatsEntity(
+                        userId = userId,
+                        currentStreak = data.optInt("current_streak", 1),
+                        longestStreak = data.optInt("longest_streak", 1),
+                        lastStudyDayMillis = System.currentTimeMillis(),
+                        totalStudyTimeSeconds = maxOf(0, studyTimeSeconds),
+                        lastActivityDate = getIsoTimestampUtc()
+                    ))
+                }
             }
         } else {
             // Offline fallback: local streak calculation
-            val currentStats = db.userStatsDao().getUserStatsDirect(userId) ?: return
+            val currentStats = db.userStatsDao().getUserStatsDirect(userId)
+
             val now = System.currentTimeMillis()
             val todayStart = startOfDayMillis(now)
-            val lastDayStart = currentStats.lastStudyDayMillis.let { if (it > 0L) startOfDayMillis(it) else 0L }
-            val newStreak = when {
-                lastDayStart <= 0L -> 1
-                lastDayStart >= todayStart -> currentStats.currentStreak.coerceAtLeast(1)
-                todayStart - lastDayStart <= 24L * 3600 * 1000 -> currentStats.currentStreak + 1
-                else -> 1
+            if (currentStats != null) {
+                val lastDayStart = currentStats.lastStudyDayMillis.let { if (it > 0L) startOfDayMillis(it) else 0L }
+                val newStreak = when {
+                    lastDayStart <= 0L -> 1
+                    lastDayStart >= todayStart -> currentStats.currentStreak.coerceAtLeast(1)
+                    todayStart - lastDayStart <= 24L * 3600 * 1000 -> currentStats.currentStreak + 1
+                    else -> 1
+                }
+                db.userStatsDao().insertOrUpdate(currentStats.copy(
+                    currentStreak = newStreak,
+                    longestStreak = maxOf(currentStats.longestStreak, newStreak),
+                    lastStudyDayMillis = now,
+                    totalStudyTimeSeconds = currentStats.totalStudyTimeSeconds + maxOf(0, studyTimeSeconds),
+                    lastActivityDate = getIsoTimestampUtc(now)
+                ))
+            } else {
+                // Create user_stats if it doesn't exist yet (offline)
+                db.userStatsDao().insertOrUpdate(UserStatsEntity(
+                    userId = userId,
+                    currentStreak = 1,
+                    longestStreak = 1,
+                    lastStudyDayMillis = now,
+                    totalStudyTimeSeconds = maxOf(0, studyTimeSeconds),
+                    lastActivityDate = getIsoTimestampUtc(now)
+                ))
             }
-            db.userStatsDao().insertOrUpdate(currentStats.copy(
-                currentStreak = newStreak,
-                longestStreak = maxOf(currentStats.longestStreak, newStreak),
-                lastStudyDayMillis = now,
-                totalStudyTimeSeconds = currentStats.totalStudyTimeSeconds + maxOf(0, studyTimeSeconds),
-                lastActivityDate = getIsoTimestampUtc(now)
-            ))
         }
 
         // Persist active day for streak calendar display
@@ -3794,6 +3840,13 @@ class StuddyHubRepository(private val db: StuddyHubDatabase) {
                     "You are Professor Ollie 🎓, an intelligent academic owl tutor and university copilot at StuddyHub. You MUST start your response with your step-by-step thinking/reasoning process enclosed in a <thinking>...</thinking> tag, followed by your final answer outside of the tag."
                 } else {
                     "You are Professor Ollie 🎓, an intelligent, encouraging academic owl tutor and university copilot at StuddyHub. Speak as a wise academic owl with high scholarly rigor, comprehensive depth, clear formatting, and multi-modal synthesis."
+                }
+            }
+            com.example.ui.theme.AcademicTier.ALL -> {
+                if (isThinking) {
+                    "You are Ollie 🦉, a friendly AI tutor at StuddyHub. You MUST start your response with your step-by-step thinking/reasoning process enclosed in a <thinking>...</thinking> tag, followed by your final answer outside of the tag."
+                } else {
+                    "You are Ollie 🦉, a friendly, encouraging AI tutor at StuddyHub. Explain concepts clearly and help students learn effectively."
                 }
             }
         }

@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -27,7 +26,9 @@ data class SettingsUiState(
     val isSaving: Boolean = false,
     val userMessage: String? = null,
     val pendingSyncCount: Int = 0,
-    val failedSyncCount: Int = 0
+    val failedSyncCount: Int = 0,
+    val updateAvailable: com.example.data.remote.UpdateChecker.UpdateResult? = null,
+    val isCheckingUpdate: Boolean = false
 )
 
 class SettingsViewModel(private val repository: StuddyHubRepository) : ViewModel() {
@@ -37,11 +38,11 @@ class SettingsViewModel(private val repository: StuddyHubRepository) : ViewModel
     private val _educationGrade = MutableStateFlow("")
 
     init {
-        // Fetch the education profile's grade for Explorer class display
+        // Observe the education profile's grade reactively for Explorer class display
         viewModelScope.launch {
             try {
-                repository.educationProfile.first()?.let {
-                    _educationGrade.value = it.yearOrGrade ?: ""
+                repository.educationProfile.collect { eduProfile ->
+                    _educationGrade.value = eduProfile?.yearOrGrade ?: ""
                 }
             } catch (_: Exception) {}
         }
@@ -191,5 +192,35 @@ class SettingsViewModel(private val repository: StuddyHubRepository) : ViewModel
 
     fun clearUserMessage() {
         _userMessage.value = null
+    }
+
+    // ── Update checking ───────────────────────────────────────────────
+    private val _isCheckingUpdate = MutableStateFlow(false)
+    private val _updateAvailable = MutableStateFlow<com.example.data.remote.UpdateChecker.UpdateResult?>(null)
+
+    init {
+        // Re-expose update state into the combined uiState
+        viewModelScope.launch {
+            _isCheckingUpdate.value = true
+            try {
+                val result = com.example.data.remote.UpdateChecker.checkForUpdate()
+                _updateAvailable.value = result
+            } catch (_: Exception) {}
+            _isCheckingUpdate.value = false
+        }
+    }
+
+    val isCheckingUpdate: StateFlow<Boolean> = _isCheckingUpdate
+    val updateAvailable: StateFlow<com.example.data.remote.UpdateChecker.UpdateResult?> = _updateAvailable
+
+    fun checkForUpdate() {
+        viewModelScope.launch {
+            _isCheckingUpdate.value = true
+            try {
+                val result = com.example.data.remote.UpdateChecker.checkForUpdate()
+                _updateAvailable.value = result
+            } catch (_: Exception) {}
+            _isCheckingUpdate.value = false
+        }
     }
 }

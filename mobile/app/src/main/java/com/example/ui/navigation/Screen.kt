@@ -130,5 +130,10 @@ fun getNavigationScreensForTier(tier: com.example.ui.theme.AcademicTier): List<S
             Screen.Assistant,
             Screen.Community
         )
+        com.example.ui.theme.AcademicTier.ALL -> listOf(
+            Screen.Dashboard,
+            Screen.Ranking,
+            Screen.Profile
+        )
     }
 }

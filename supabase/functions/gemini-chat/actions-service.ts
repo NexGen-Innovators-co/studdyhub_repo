@@ -42,8 +42,6 @@ export class StuddyHubActionsService {
             'ai_podcast': 'ai_podcasts',
             'user_memory': 'ai_user_memory',
             'memory': 'ai_user_memory',
-            // user_learning_goals — the AI goal-setting flow (planner may emit
-            // singular/plural variants before it sees the real table name).
             'goal': 'user_learning_goals',
             'goals': 'user_learning_goals',
             'learning_goal': 'user_learning_goals',
@@ -56,7 +54,6 @@ export class StuddyHubActionsService {
         }
 
         // Introspection tables are not reachable through PostgREST (PGRST205).
-        // Fail fast with a hint instead of letting the planner burn a step.
         if (targetTable.startsWith('information_schema.') || targetTable.startsWith('pg_catalog.')) {
             return { success: false, error: `Table '${targetTable}' cannot be queried via the REST API. Use only tables listed in the provided DB schema.` };
         }
@@ -89,18 +86,9 @@ export class StuddyHubActionsService {
             // ignore and fallback
         }
 
-        // NOTE: Previously this function enforced a hardcoded whitelist of allowed
-        // tables. To allow the AI to return full DB_ACTIONs (so the runtime can
-        // execute them directly), we no longer enforce a fallback hardcoded
-        // whitelist. We still attempt to derive table names from
-        // DB_SCHEMA_DEFINITION above for diagnostics, but if that fails we allow
-        // the operation to proceed. Callers MUST still ensure they only pass
-        // trusted user IDs and that the model output is validated upstream.
-
         // Helper to recursively replace "auth.uid" with actual userId
         const replaceAuthUid = (obj: any): any => {
             if (typeof obj === 'string') {
-                // Handle 'auth.uid', 'auth.uid()', and potentially 'current_user'
                 const lower = obj.toLowerCase();
                 if (lower === 'auth.uid' || lower === 'auth.uid()' || lower === 'user_id') {
                     return userId;
@@ -229,9 +217,6 @@ export class StuddyHubActionsService {
                 return q;
             }
 
-            // P3-x: select/order/limit/offset/columns are query controls, never
-            // column filters. If one leaks into filters, applying .eq() corrupts
-            // the URL (PGRST100 'failed to parse order (eq.[object Object])').
             const RESERVED_QUERY_KEYS = new Set(['select', 'order', 'orderBy', 'order_by', 'limit', 'offset', 'columns']);
 
             for (const fk of Object.keys(filtersObj)) {
@@ -241,33 +226,25 @@ export class StuddyHubActionsService {
                     continue;
                 }
 
-                // Debug: log current state before applying this filter
                 try {
                     console.log('[applyFiltersToQuery] Processing filter', { key: fk, value: fv, qType: typeof q });
                 } catch (e) {
                     // ignore logging failures
                 }
 
-                // Revised builder detection: check for PostgrestQueryBuilder shape (url + fetch)
                 const isBuilder = (obj: any) => obj && obj.url && typeof obj.fetch === 'function';
                 if (!isBuilder(q)) {
                     console.error('[applyFiltersToQuery][CRITICAL] q does not match expected PostgrestQueryBuilder shape. Skipping filter application.', { fk, fv, q });
-                    // Return early to avoid throwing further errors
                     return q;
                 }
 
-                // If fv is an object with operator keys, support both "gte" and "$gte" styles
                 if (fv && typeof fv === 'object' && !Array.isArray(fv)) {
                     const ops: Record<string, any> = {};
                     for (const k of Object.keys(fv)) {
-                        // P0-2: normalize BOTH `$` and `_` operator prefixes so typos
-                    // like `{ _ilike: ... }` are handled instead of degenerating
-                    // into an equality against an object.
-                    const nk = k.startsWith('$') ? k.slice(1) : (k.startsWith('_') ? k.slice(1) : k);
+                        const nk = k.startsWith('$') ? k.slice(1) : (k.startsWith('_') ? k.slice(1) : k);
                         ops[nk] = fv[k];
                     }
 
-                    // Call builder methods without reassigning q to avoid breaking the chain
                     try { if (ops.gte !== undefined && typeof q.gte === 'function') q.gte(fk, ops.gte); } catch (e) { console.warn('[applyFiltersToQuery] gte failed', { fk, e }); }
                     try { if (ops.lte !== undefined && typeof q.lte === 'function') q.lte(fk, ops.lte); } catch (e) { console.warn('[applyFiltersToQuery] lte failed', { fk, e }); }
                     try { if (ops.gt !== undefined && typeof q.gt === 'function') q.gt(fk, ops.gt); } catch (e) { console.warn('[applyFiltersToQuery] gt failed', { fk, e }); }
@@ -291,7 +268,6 @@ export class StuddyHubActionsService {
                         } catch (e) { console.warn('[applyFiltersToQuery] eq fallback failed', { fk, e }); }
                     }
                 } else if (Array.isArray(fv)) {
-                    // Use Postgres array operators: .contains for containment
                     try {
                         if (typeof q.contains === 'function') q.contains(fk, fv);
                         else if (typeof q.eq === 'function') q.eq(fk, fv);
@@ -318,7 +294,6 @@ export class StuddyHubActionsService {
                     cleanData.user_id = userId;
                 }
 
-                // Normalization for notes table payload
                 let insertPayload = cleanData;
                 if (targetTable === 'notes') {
                     const rawContent = cleanData.content || cleanData.content_text || cleanData.content_extracted || cleanData.text || cleanData.body || '';
@@ -338,11 +313,6 @@ export class StuddyHubActionsService {
                         cleanData.content_extracted = cleanData.content;
                         delete cleanData.content;
                     }
-                    // P4-1: file_url must be a fetchable storage path. The planner
-                    // sometimes invents a placeholder (e.g. "internal_text_document")
-                    // to satisfy the NOT NULL column — upload the inline text to the
-                    // documents bucket and use the real path so viewers and signed-URL
-                    // generators don't break. Falls back to the placeholder on failure.
                     const rawFileUrl = String(cleanData.file_url || '');
                     const looksLikeRealUrl = /^https?:\/\//i.test(rawFileUrl) || /^[0-9a-fA-F-]{36}\//.test(rawFileUrl) || /^\w+\//.test(rawFileUrl);
                     if (cleanData.content_extracted && rawFileUrl && rawFileUrl !== 'internal_text_document' && !looksLikeRealUrl) {
@@ -366,7 +336,6 @@ export class StuddyHubActionsService {
                     }
                 }
 
-                // Special-case: social_posts should be created via the edge function 'create-social-post'
                 if (targetTable === 'social_posts') {
                     try {
                         console.log('[ActionsService] Routing social_posts creation to create-social-post function');
@@ -374,12 +343,10 @@ export class StuddyHubActionsService {
                             body: insertPayload
                         });
 
-                        // The edge function returns a Response-like object with .data when using supabase client
                         if (invokeRes && invokeRes.data) {
                             return { success: true, data: invokeRes.data };
                         }
 
-                        // Fallback: if the function returned an error
                         if (invokeRes && invokeRes.error) {
                             throw invokeRes.error;
                         }
@@ -403,14 +370,12 @@ export class StuddyHubActionsService {
                     return { success: false, error: 'UPDATE operation requires filters (e.g. { id: ... })' };
                 }
 
-                // If updating schedule_items by title, try to resolve a matching id first
                 if (targetTable === 'schedule_items' && cleanFilters.title && !cleanFilters.id) {
                     try {
                         const origTitle = String(cleanFilters.title || '');
                         const titleVal = origTitle.trim();
                         console.log('[ActionsService] Resolving schedule_items title to id for update:', titleVal);
 
-                        // 1) Try exact match
                         let findRes = await this.supabase
                             .from('schedule_items')
                             .select('id')
@@ -419,7 +384,6 @@ export class StuddyHubActionsService {
                             .limit(1)
                             .single();
 
-                        // 2) Try case-insensitive exact via ilike
                         if (findRes.error || !findRes.data) {
                             findRes = await this.supabase
                                 .from('schedule_items')
@@ -430,7 +394,6 @@ export class StuddyHubActionsService {
                                 .single();
                         }
 
-                        // 3) Try partial match
                         if (findRes.error || !findRes.data) {
                             findRes = await this.supabase
                                 .from('schedule_items')
@@ -441,7 +404,6 @@ export class StuddyHubActionsService {
                                 .single();
                         }
 
-                        // 4) As a last resort, try a normalized-match (strip punctuation/extra spaces)
                         if (findRes.error || !findRes.data) {
                             const normalized = titleVal.replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
                             if (normalized && normalized !== titleVal) {
@@ -459,7 +421,6 @@ export class StuddyHubActionsService {
                             cleanFilters = { id: (findRes.data as any).id };
                             console.log('[ActionsService] Resolved schedule_items title to id for update');
                         } else {
-                            // Try to fetch some candidate rows for debugging and log them
                             try {
                                 const { data: candidates } = await this.supabase
                                     .from('schedule_items')
@@ -477,10 +438,9 @@ export class StuddyHubActionsService {
                     }
                 }
 
-                // Build the update query: start with base query, apply filters, then update
-                let query = this.supabase.from(targetTable);
+                let query: any = this.supabase.from(targetTable).update(cleanData);
                 query = applyFiltersToQuery(query, cleanFilters);
-                const { data: result, error } = await query.update(cleanData).select();
+                const { data: result, error } = await query.select();
                 if (error) throw error;
                 return { success: true, data: result };
 
@@ -496,15 +456,12 @@ export class StuddyHubActionsService {
             if (error) throw error;
             return { success: true, data: { status: 'deleted' } };
         } else if (operation === 'SELECT') {
-                // ── Smart column selection ──
-                // For listing queries (limit > 1), exclude heavy text columns
-                // to avoid returning megabytes of content data.
                 const HEAVY_COLUMNS: Record<string, string[]> = {
                     notes: ['content'],
                     documents: ['content_extracted'],
                     chat_messages: ['content', 'conversation_context'],
                 };
-                const MAX_SELECT_LIMIT = 50; // hard ceiling
+                const MAX_SELECT_LIMIT = 50;
                 const effectiveLimit = Math.min(
                     (limit !== null && limit !== undefined) ? Number(limit) : 10,
                     MAX_SELECT_LIMIT
@@ -512,26 +469,20 @@ export class StuddyHubActionsService {
                 const isListing = effectiveLimit > 1;
                 const heavyCols = HEAVY_COLUMNS[targetTable] || [];
 
-                // Use select('*') for single-record fetches; exclude heavy cols for listings
                 const selectCols = '*';
                 if (isListing && heavyCols.length > 0) {
-                    // We can't do "select all EXCEPT" in PostgREST, so we
-                    // still select('*') but will strip heavy fields after fetch.
                     console.log(`[ActionsService] Listing mode for '${targetTable}': will strip [${heavyCols.join(', ')}] from results`);
                 }
 
                 let query = this.supabase.from(targetTable).select(selectCols);
                 query = applyFiltersToQuery(query, cleanFilters);
                 
-                // Apply ordering if specified
                 if (order) {
                     let column = '';
                     let ascending = true;
 
                     if (typeof order === 'string') {
-                      // Handle "created_at DESC" (space) as well as "created_at.desc"
                       let normalized = order.trim();
-                      // Convert "column DESC" → "column.desc"
                       if (normalized.includes(' ')) {
                         const parts = normalized.split(/\s+/);
                         if (parts.length === 2) {
@@ -541,7 +492,6 @@ export class StuddyHubActionsService {
                           }
                         }
                       }
-                      // Now parse the normalized version
                       if (normalized.includes('.')) {
                         const [col, dir] = normalized.split('.');
                         column = col;
@@ -565,7 +515,6 @@ export class StuddyHubActionsService {
                     }
                 }
                 
-                // Apply limit (capped at MAX_SELECT_LIMIT)
                 if (!Number.isNaN(effectiveLimit) && effectiveLimit > 0) {
                     if (query && typeof query.limit === 'function') {
                         try { query.limit(effectiveLimit); } catch (e) { console.error('[ActionsService] limit call failed', e); }
@@ -580,14 +529,11 @@ export class StuddyHubActionsService {
                     const selectError = execRes.error;
                     if (selectError) throw selectError;
 
-                    // ── Post-fetch processing ──
-                    // 1. Strip heavy columns in listing mode
                     if (isListing && heavyCols.length > 0 && Array.isArray(result)) {
                         result = result.map((row: any) => {
                             const slim = { ...row };
                             for (const col of heavyCols) {
                                 if (slim[col] && typeof slim[col] === 'string') {
-                                    // Keep a short preview (first 150 chars)
                                     slim[col] = slim[col].substring(0, 150) + (slim[col].length > 150 ? `... [${slim[col].length} chars total]` : '');
                                 }
                             }
@@ -595,15 +541,8 @@ export class StuddyHubActionsService {
                         });
                     }
 
-                    // 2. If we hit the limit, run a COUNT to report total available
                     let totalCount: number | null = null;
 
-                    // P1-2 (B5): if a title/name text filter returned 0 rows, retry
-                    // once with a case-insensitive partial ilike match (normalized), so
-                    // "human computer interaction (HCI)" finds the row titled
-                    // "Human-Computer Interaction (HCI)". The recursive call carries an
-                    // object operator filter ({ ilike: ... }), which never re-triggers
-                    // this retry, so there is no infinite loop.
                     if (Array.isArray(result) && result.length === 0) {
                         const TEXT_FILTER_KEYS = ['title', 'name', 'goal_text', 'subject'];
                         const retryKey = TEXT_FILTER_KEYS.find(k => typeof cleanFilters[k] === 'string' && String(cleanFilters[k]).trim().length > 0);
@@ -659,8 +598,6 @@ export class StuddyHubActionsService {
         } catch (error: any) {
             console.error(`[ActionsService] Error executing ${operation}:`, error);
             const msg = String(error?.message || error || '');
-            // B1: parse Postgres constraint/enum failures into a structured hint so
-            // the ReAct retry loop can correct from evidence instead of guessing.
             const constraintViolation = parseConstraintViolation(msg);
             if (constraintViolation) {
                 return { success: false, error: msg, constraintViolation };
@@ -680,7 +617,6 @@ export class StuddyHubActionsService {
                 .single();
 
             if (error || !note) {
-                // Try partial match
                 const { data: notes } = await this.supabase
                     .from('notes')
                     .select('id')
@@ -707,7 +643,6 @@ export class StuddyHubActionsService {
                 .single();
 
             if (error || !document) {
-                // Try partial match
                 const { data: documents } = await this.supabase
                     .from('documents')
                     .select('id')
@@ -842,7 +777,6 @@ export class StuddyHubActionsService {
 
             if (error) {
                 console.error('[ActionService] Error generating image:', error);
-                // Return descriptive error 
                 return { success: false, error: `Image generation failed: ${error.message || 'Unknown error'}` };
             }
 
@@ -1052,7 +986,6 @@ export class StuddyHubActionsService {
             if (!documentId) return { success: false, error: `Document "${documentTitle}" not found` };
             if (!folderId) return { success: false, error: `Folder "${folderName}" not found` };
 
-            // First, get the current folder_ids for the document
             const { data: document } = await this.supabase
                 .from('documents')
                 .select('folder_ids, title')
@@ -1109,7 +1042,6 @@ export class StuddyHubActionsService {
         recurrence_interval?: number;
     }) {
         try {
-            // Normalize recurrence_days to a consistent format (integers for weekdays)
             const normalizeRecurrenceDays = (days: any): number[] | null => {
                 if (!days) return null;
                 if (!Array.isArray(days)) return null;
@@ -1132,12 +1064,10 @@ export class StuddyHubActionsService {
                         continue;
                     }
                     const s = String(d).trim().toLowerCase();
-                    // try full name
                     if (map.hasOwnProperty(s)) {
                         normalized.push(map[s]);
                         continue;
                     }
-                    // try short names like 'mon', 'tue'
                     const short = s.slice(0, 3);
                     for (const [k, v] of Object.entries(map)) {
                         if (k.slice(0, 3) === short) {
@@ -1145,7 +1075,6 @@ export class StuddyHubActionsService {
                             break;
                         }
                     }
-                    // try numeric string
                     const n = parseInt(s, 10);
                     if (!Number.isNaN(n)) normalized.push(n);
                 }
@@ -1153,10 +1082,8 @@ export class StuddyHubActionsService {
                 return normalized.length ? normalized : null;
             };
 
-            // Validate type
             const validTypes = ['class', 'study', 'assignment', 'exam', 'other'];
             const type = validTypes.includes(scheduleData.type) ? scheduleData.type : 'study';
-            // Normalize recurrence days coming from model/actions
             const recurrenceDays = normalizeRecurrenceDays((scheduleData as any).recurrence_days);
             const { data, error } = await this.supabase
                 .from('schedule_items')
@@ -1171,7 +1098,7 @@ export class StuddyHubActionsService {
                     location: scheduleData.location || '',
                     color: scheduleData.color || '#3B82F6',
                     created_at: new Date().toISOString(),
-                    calendar_event_id: null, // Explicitly set to null as per schema
+                    calendar_event_id: null,
                     is_recurring: scheduleData.is_recurring || false,
                     recurrence_pattern: scheduleData.recurrence_pattern || null,
                     recurrence_days: recurrenceDays,
@@ -1201,18 +1128,16 @@ export class StuddyHubActionsService {
     async updateScheduleItem(userId: string, itemIdOrTitle: string, updates: any) {
         try {
             let itemId = itemIdOrTitle;
-            // If it's not a UUID, assume it's a title
             if (!itemIdOrTitle.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
                 const item = await this.getScheduleItemByTitle(userId, itemIdOrTitle);
                 if (!item) return { success: false, error: `Schedule item "${itemIdOrTitle}" not found` };
                 itemId = item.id;
             }
 
-            // Validate type if present in updates
             if (updates.type) {
                 const validTypes = ['class', 'study', 'assignment', 'exam', 'other'];
                 if (!validTypes.includes(updates.type)) {
-                    delete updates.type; // Remove invalid type or fallback? Removing is safer to keep existing.
+                    delete updates.type;
                 }
             }
 
@@ -1334,7 +1259,6 @@ export class StuddyHubActionsService {
                 return { success: false, error: error.message };
             }
 
-            // Update user stats
             await this.updateUserStats(userId, {
                 total_quizzes_attempted: 1,
                 total_quizzes_completed: 1,
@@ -1372,7 +1296,6 @@ export class StuddyHubActionsService {
                 return { success: false, error: 'Note not found' };
             }
 
-            // Generate simple flashcards from note content
             const flashcards = this.generateFlashcardsFromContent(note.content, count);
 
             const { data, error } = await this.supabase
@@ -1461,7 +1384,7 @@ export class StuddyHubActionsService {
     }
 
     async updateFlashcardReview(userId: string, flashcardId: string, reviewData: {
-        difficulty_rating: number; // 0-5 scale
+        difficulty_rating: number;
         correct: boolean;
     }) {
         try {
@@ -1476,7 +1399,6 @@ export class StuddyHubActionsService {
                 return { success: false, error: 'Flashcard not found' };
             }
 
-            // Calculate new interval using SM-2 algorithm
             const newEaseFactor = this.calculateNewEaseFactor(
                 flashcard.ease_factor || 2.5,
                 reviewData.difficulty_rating
@@ -1486,7 +1408,7 @@ export class StuddyHubActionsService {
             if (reviewData.correct) {
                 newInterval = Math.ceil((flashcard.interval_days || 1) * newEaseFactor);
             } else {
-                newInterval = 1; // Reset to 1 day if incorrect
+                newInterval = 1;
             }
 
             const nextReviewDate = new Date();
@@ -1585,9 +1507,9 @@ export class StuddyHubActionsService {
 
             let xpReward = 0;
             if (progress >= 100 && !goal.is_completed) {
-                xpReward = 50; // Bonus XP for completing goal
+                xpReward = 50;
             } else if (progress - goal.progress >= 25) {
-                xpReward = 10; // XP for significant progress
+                xpReward = 10;
             }
 
             return {
@@ -1666,14 +1588,12 @@ export class StuddyHubActionsService {
         badges_earned?: string[];
     }) {
         try {
-            // First, get current stats
             const { data: currentStats } = await this.supabase
                 .from('user_stats')
                 .select('*')
                 .eq('user_id', userId)
                 .maybeSingle();
 
-            // Prepare base stats with defaults if creating new
             const baseStats = currentStats || {
                 user_id: userId,
                 total_xp: 0,
@@ -1691,13 +1611,11 @@ export class StuddyHubActionsService {
 
             const newStats = { ...baseStats };
 
-            // Handle increments for cumulative counters
             if (updates.total_xp !== undefined) newStats.total_xp = (baseStats.total_xp || 0) + updates.total_xp;
             if (updates.total_quizzes_attempted !== undefined) newStats.total_quizzes_attempted = (baseStats.total_quizzes_attempted || 0) + updates.total_quizzes_attempted;
             if (updates.total_quizzes_completed !== undefined) newStats.total_quizzes_completed = (baseStats.total_quizzes_completed || 0) + updates.total_quizzes_completed;
             if (updates.total_study_time_seconds !== undefined) newStats.total_study_time_seconds = (baseStats.total_study_time_seconds || 0) + updates.total_study_time_seconds;
 
-            // For other fields, overwrite or merge
             if (updates.current_streak !== undefined) newStats.current_streak = updates.current_streak;
             if (updates.longest_streak !== undefined) newStats.longest_streak = updates.longest_streak;
             if (updates.average_score !== undefined) newStats.average_score = updates.average_score;
@@ -1707,11 +1625,8 @@ export class StuddyHubActionsService {
             }
 
             newStats.updated_at = new Date().toISOString();
-
-            // Calculate new level based on XP (simplified: 1000 XP per level)
             newStats.level = Math.floor(newStats.total_xp / 1000) + 1;
 
-            // Upsert
             const { data, error } = await this.supabase
                 .from('user_stats')
                 .upsert(newStats)
@@ -1780,7 +1695,6 @@ export class StuddyHubActionsService {
                 groupId = group?.id || null;
             }
 
-            // First, ensure social user exists
             const { data: socialUser } = await this.supabase
                 .from('social_users')
                 .select('id')
@@ -1839,7 +1753,6 @@ export class StuddyHubActionsService {
     // ========== ACHIEVEMENTS ==========
     async awardAchievement(userId: string, badgeName: string) {
         try {
-            // First, get badge by name
             const { data: badge } = await this.supabase
                 .from('badges')
                 .select('id, name, xp_reward')
@@ -1865,7 +1778,6 @@ export class StuddyHubActionsService {
                 return { success: false, error: error.message };
             }
 
-            // Add XP reward to user stats and update badges list
             const updates: any = {
                 badges_earned: [data.badges?.name || badgeName]
             };
@@ -1897,7 +1809,6 @@ export class StuddyHubActionsService {
         source_session_id?: string;
     }) {
         try {
-            // Check if fact already exists
             const { data: existing } = await this.supabase
                 .from('ai_user_memory')
                 .select('id, confidence_score, referenced_count')
@@ -1908,7 +1819,6 @@ export class StuddyHubActionsService {
                 .maybeSingle();
 
             if (existing) {
-                // Update existing fact
                 const { data, error } = await this.supabase
                     .from('ai_user_memory')
                     .update({
@@ -1923,7 +1833,6 @@ export class StuddyHubActionsService {
                 if (error) throw error;
                 return { success: true, memory: data };
             } else {
-                // Insert new fact
                 const { data, error } = await this.supabase
                     .from('ai_user_memory')
                     .insert({
@@ -1952,7 +1861,6 @@ export class StuddyHubActionsService {
     // ========== HELPER METHODS ==========
     private generateAISummary(content: string): string {
         if (content.length <= 200) return content;
-        // Simple summary - in production, use actual AI
         const sentences = content.split(/[.!?]+/);
         return sentences.slice(0, 2).join('. ') + (sentences.length > 2 ? '...' : '');
     }
@@ -1966,7 +1874,6 @@ export class StuddyHubActionsService {
             const words = sentence.split(' ');
 
             if (words.length > 5) {
-                // Create fill-in-the-blank style flashcard
                 const blankIndex = Math.floor(words.length / 2);
                 const front = [...words];
                 front[blankIndex] = '______';
@@ -1978,7 +1885,6 @@ export class StuddyHubActionsService {
             }
         }
 
-        // If not enough sentences, create definition cards
         if (flashcards.length < count) {
             const keyTerms = this.extractKeyTerms(content);
             for (let i = 0; i < Math.min(keyTerms.length, count - flashcards.length); i++) {
@@ -1993,7 +1899,6 @@ export class StuddyHubActionsService {
     }
 
     private extractKeyTerms(content: string): string[] {
-        // Simple key term extraction
         const words = content.toLowerCase().split(/\s+/);
         const commonWords = new Set(['the', 'and', 'for', 'with', 'this', 'that', 'have', 'from']);
         const terms = new Set<string>();
@@ -2009,12 +1914,9 @@ export class StuddyHubActionsService {
     }
 
     private calculateNewEaseFactor(currentEaseFactor: number, difficultyRating: number): number {
-        // SM-2 algorithm
         let newEF = currentEaseFactor + (0.1 - (5 - difficultyRating) * (0.08 + (5 - difficultyRating) * 0.02));
-
         if (newEF < 1.3) newEF = 1.3;
         if (newEF > 2.5) newEF = 2.5;
-
         return newEF;
     }
 
@@ -2027,9 +1929,7 @@ export class StuddyHubActionsService {
     }> {
         const lowerText = text.toLowerCase();
 
-        // Comprehensive action detection
         const actionPatterns = [
-            // IMAGE GENERATION
             {
                 pattern: /ACTION:\s*GENERATE_IMAGE\|([^|\n]+)/,
                 action: 'GENERATE_IMAGE',
@@ -2037,7 +1937,6 @@ export class StuddyHubActionsService {
                     prompt: match[1].trim()
                 })
             },
-            // NOTE ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_NOTE\|([^|]+)\|([^|]*)\|([^|]*)\|([^|]*)/,
                 action: 'CREATE_NOTE',
@@ -2074,8 +1973,6 @@ export class StuddyHubActionsService {
                     documentTitle: match[2].trim()
                 })
             },
-
-            // FOLDER ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_FOLDER\|([^|]+)\|([^|]*)\|([^|]*)\|([^|]*)/,
                 action: 'CREATE_FOLDER',
@@ -2094,8 +1991,6 @@ export class StuddyHubActionsService {
                     folderName: match[2].trim()
                 })
             },
-
-            // SCHEDULE ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_SCHEDULE\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]*)\|([^|]*)\|([^|]*)(?:\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*))?/,
                 action: 'CREATE_SCHEDULE',
@@ -2111,12 +2006,10 @@ export class StuddyHubActionsService {
                         color: match[8].trim() || '#3B82F6'
                     };
 
-                    // Add recurring params if present
                     if (match[9]) {
                         params.is_recurring = match[9].trim() === 'true';
                         params.recurrence_pattern = match[10]?.trim() !== 'null' ? match[10]?.trim() : null;
 
-                        // Parse days array if present
                         const daysStr = match[11]?.trim();
                         if (daysStr && daysStr !== 'null' && daysStr.startsWith('[')) {
                             try {
@@ -2151,8 +2044,6 @@ export class StuddyHubActionsService {
                     itemTitle: match[1].trim()
                 })
             },
-
-            // FLASHCARD ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_FLASHCARDS_FROM_NOTE\|([^|]+)\|(\d+)/,
                 action: 'CREATE_FLASHCARDS_FROM_NOTE',
@@ -2172,8 +2063,6 @@ export class StuddyHubActionsService {
                     hint: match[5].trim() || null
                 })
             },
-
-            // LEARNING GOAL ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_LEARNING_GOAL\|([^|]+)\|([^|]*)\|([^|]*)\|([^|]*)/,
                 action: 'CREATE_LEARNING_GOAL',
@@ -2192,8 +2081,6 @@ export class StuddyHubActionsService {
                     progress: parseInt(match[2].trim())
                 })
             },
-
-            // QUIZ ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_QUIZ\|([^|]+)\|(\d+)\|([^|]*)\|([^|]*)/,
                 action: 'CREATE_QUIZ',
@@ -2218,8 +2105,6 @@ export class StuddyHubActionsService {
                     xp_earned: parseInt(match[5].trim())
                 })
             },
-
-            // RECORDING ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_RECORDING\|([^|]+)\|([^|]+)\|(\d+)\|([^|]*)\|([^|]*)\|([^|]*)/,
                 action: 'CREATE_RECORDING',
@@ -2232,8 +2117,6 @@ export class StuddyHubActionsService {
                     document_title: match[6].trim()
                 })
             },
-
-            // PROFILE & STATS ACTIONS
             {
                 pattern: /ACTION:\s*UPDATE_PROFILE\|([^|]+)/,
                 action: 'UPDATE_PROFILE',
@@ -2255,8 +2138,6 @@ export class StuddyHubActionsService {
                     badgeName: match[1].trim()
                 })
             },
-
-            // SOCIAL ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_POST\|([^|]+)\|([^|]*)\|([^|]*)/,
                 action: 'CREATE_POST',
@@ -2266,8 +2147,6 @@ export class StuddyHubActionsService {
                     group_name: match[3].trim() || null
                 })
             },
-
-            // MEMORY ACTIONS
             {
                 pattern: /ACTION:\s*UPDATE_USER_MEMORY\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]*)/,
                 action: 'UPDATE_USER_MEMORY',
@@ -2280,7 +2159,6 @@ export class StuddyHubActionsService {
             }
         ];
 
-        // Store all identified actions
         const foundActions: Array<{
             action: string;
             params: Record<string, any>;
@@ -2288,14 +2166,11 @@ export class StuddyHubActionsService {
             matchedString: string;
         }> = [];
 
-        // First, check for explicit action markers with global search
         for (const pattern of actionPatterns) {
             try {
-                // Create a global, case-insensitive regex from the pattern
                 const globalRegex = new RegExp(pattern.pattern.source, 'gi');
                 let match: RegExpExecArray | null;
 
-                // Keep searching until no more matches found
                 while ((match = globalRegex.exec(text)) !== null) {
                     console.log(`[ActionParser] Found explicit action: ${pattern.action}`);
                     foundActions.push({
@@ -2310,13 +2185,10 @@ export class StuddyHubActionsService {
             }
         }
 
-        // If we found explicitly marked actions, prioritize them and return
         if (foundActions.length > 0) {
             return foundActions;
         }
 
-        // Fallback: Natural language detection (Implicit actions)
-        // Note: For now, we only detect ONE implicit action at a time to avoid false positives
         if (lowerText.includes('create a note') || lowerText.includes('make a note')) {
             return [{
                 action: 'CREATE_NOTE',
@@ -2327,7 +2199,7 @@ export class StuddyHubActionsService {
                     tags: this.extractTags(text)
                 },
                 confidence: 0.7,
-                matchedString: '' // No specific string to strip for implicit/fallback actions
+                matchedString: ''
             }];
         }
 
@@ -2405,7 +2277,6 @@ export class StuddyHubActionsService {
                 .filter(tag => tag.length > 0 && tag !== 'Tags' && tag !== 'Tag');
         }
 
-        // Also look for hashtags
         const hashtags = text.match(/#(\w+)/g);
         return hashtags ? hashtags.map(tag => tag.substring(1)) : [];
     }
@@ -2420,7 +2291,6 @@ export class StuddyHubActionsService {
         groupId?: string,
         mediaFiles?: { url: string, type: 'image' | 'video' | 'document', mimeType: string }[]
     }) {
-        // 0. Ensure social user exists
         const { data: socialUser } = await this.supabase
             .from('social_users')
             .select('id')
@@ -2446,7 +2316,6 @@ export class StuddyHubActionsService {
                 });
         }
 
-        // 1. Create Post
         const { data: post, error: postError } = await this.supabase
             .from('social_posts')
             .insert({
@@ -2462,7 +2331,6 @@ export class StuddyHubActionsService {
 
         if (postError) throw new Error(`Failed to create post: ${postError.message}`);
 
-        // 2. Attach Media (if provided)
         if (params.mediaFiles && params.mediaFiles.length > 0) {
             const mediaInserts = params.mediaFiles.map((file: any) => ({
                 post_id: post.id,
@@ -2483,27 +2351,64 @@ export class StuddyHubActionsService {
         return { success: true, message: "Social post created successfully", data: post };
     }
 
-    async engageSocial(userId: string, params: { action: 'like' | 'comment', targetId: string, content?: string }) {
-        if (params.action === 'like') {
+    async engageSocial(userId: string, params: any) {
+        const p = params || {};
+        const targetId = String(p.targetId || p.postId || p.post_id || p.id || '').trim();
+        const action = String(p.action || '').toLowerCase();
+
+        if ((action === 'like' || action === 'comment')) {
+            if (!targetId) {
+                return { success: false, error: 'Missing target post id — SELECT the post from social_posts first to get its id.' };
+            }
+            const { data: su } = await this.supabase.from('social_users').select('id').eq('id', userId).maybeSingle();
+            if (!su) {
+                const { data: profile } = await this.supabase.from('profiles').select('full_name, username, email').eq('id', userId).single();
+                await this.supabase.from('social_users').upsert({
+                    id: userId,
+                    username: profile?.username || `user_${userId.substring(0, 8)}`,
+                    display_name: profile?.full_name || 'User',
+                    email: profile?.email,
+                    status: 'active',
+                }, { onConflict: 'id' });
+            }
+        }
+
+        if (action === 'like') {
             const { error } = await this.supabase
                 .from('social_likes')
-                .insert({ user_id: userId, post_id: params.targetId });
+                .insert({ user_id: userId, post_id: targetId });
 
-            // Ignore duplicate key errors (already liked)
             if (error && error.code !== '23505') throw new Error(`Like failed: ${error.message}`);
-            return { success: true, message: "Post liked" };
+            return { success: true, message: 'Post liked', post_id: targetId };
         }
 
-        if (params.action === 'comment' && params.content) {
-            const { error } = await this.supabase.from('social_comments').insert({
+        if (action === 'comment' && p.content) {
+            const { data, error } = await this.supabase.from('social_comments').insert({
                 author_id: userId,
-                post_id: params.targetId,
-                content: params.content
-            });
+                post_id: targetId,
+                content: p.content
+            }).select().single();
             if (error) throw new Error(`Comment failed: ${error.message}`);
-            return { success: true, message: "Comment added" };
+            try {
+                const [postResult, actorResult] = await Promise.all([
+                    this.supabase.from('social_posts').select('author_id').eq('id', targetId).single(),
+                    this.supabase.from('social_users').select('display_name').eq('id', userId).single(),
+                ]);
+                if (postResult.data && postResult.data.author_id !== userId) {
+                    await this.supabase.from('social_notifications').insert({
+                        user_id: postResult.data.author_id,
+                        actor_id: userId,
+                        type: 'comment',
+                        title: 'New Comment',
+                        message: `${actorResult.data?.display_name || 'Someone'} commented on your post`,
+                        post_id: targetId,
+                        is_read: false,
+                    });
+                }
+            } catch (_) { /* never fail the comment on notification errors */ }
+            return { success: true, message: 'Comment added', comment: data };
         }
-        return { success: false, error: "Invalid action" };
+        return { success: false, error: 'Invalid action' };
     }
 
     // ==================================================================
@@ -2520,7 +2425,7 @@ export class StuddyHubActionsService {
             title: params.title,
             sources: params.sourceIds,
             style: params.style,
-            status: 'processing', // Triggers background edge function
+            status: 'processing',
             script: '',
             audio_segments: {},
             duration_minutes: 0,
@@ -2536,7 +2441,6 @@ export class StuddyHubActionsService {
     // ==================================================================
 
     async createStudyGroup(userId: string, params: { name: string, description: string, category: string }) {
-        // 1. Create Group
         const { data: group, error } = await this.supabase.from('social_groups').insert({
             name: params.name,
             description: params.description,
@@ -2547,7 +2451,6 @@ export class StuddyHubActionsService {
 
         if (error) throw new Error(`Group creation failed: ${error.message}`);
 
-        // 2. Add Creator as Admin
         await this.supabase.from('social_group_members').insert({
             group_id: group.id,
             user_id: userId,
@@ -2575,7 +2478,6 @@ export class StuddyHubActionsService {
 
         if (error) throw new Error(`Event scheduling failed: ${error.message}`);
 
-        // Auto-attend organizer
         await this.supabase.from('social_event_attendees').insert({
             event_id: data.id,
             user_id: userId,
@@ -2604,7 +2506,6 @@ export class StuddyHubActionsService {
         const { data } = await this.supabase.from('profiles').select('referral_code').eq('id', userId).single();
         if (data?.referral_code) return { success: true, code: data.referral_code };
 
-        // Generate if missing
         const newCode = `STUDY-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
         await this.supabase.from('profiles').update({ referral_code: newCode }).eq('id', userId);
         return { success: true, code: newCode };
@@ -2618,12 +2519,14 @@ export class StuddyHubActionsService {
         const trimmed = (query || '').trim();
         if (!trimmed) return { success: false, results: [], error: 'Search query is empty' };
 
-        console.log(`[ActionsService] Executing WEB_SEARCH for query: "${trimmed}"`);
+        console.log(`[searchWeb] Starting search for: "${trimmed}"`);
+        const errors: string[] = [];
 
-        // Strategy 1: Dedicated Search Provider (Tavily API if configured)
+        // 1. Try Tavily (best quality, requires API key)
         const tavilyKey = Deno.env.get('TAVILY_API_KEY');
         if (tavilyKey) {
             try {
+                console.log('[searchWeb] Trying Tavily...');
                 const res = await fetch('https://api.tavily.com/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2643,87 +2546,151 @@ export class StuddyHubActionsService {
                         snippet: r.content || r.snippet,
                         score: r.score
                     }));
-                    return { success: true, results };
+                    if (results.length) {
+                        console.log(`[searchWeb] Tavily SUCCESS: ${results.length} results`);
+                        return { success: true, results };
+                    }
+                    console.warn('[searchWeb] Tavily returned 0 results');
+                } else {
+                    const errText = (await res.text()).substring(0, 200);
+                    console.warn(`[searchWeb] Tavily HTTP ${res.status}: ${errText}`);
+                    errors.push(`Tavily: HTTP ${res.status}`);
                 }
-            } catch (err) {
-                console.warn('[ActionsService] Tavily search error:', err);
+            } catch (err: any) {
+                console.warn(`[searchWeb] Tavily exception: ${err?.message || err}`);
+                errors.push(`Tavily: ${err?.message || 'exception'}`);
             }
+        } else {
+            console.log('[searchWeb] Tavily: no API key, skipping');
         }
 
-        // Strategy 2: Gemini Grounded Search via REST
+        // 2. DuckDuckGo Instant Answer (free, good snippets)
+        try {
+            console.log('[searchWeb] Trying DuckDuckGo...');
+            const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(trimmed)}&format=json&no_html=1&skip_disambig=1`;
+            const ddgRes = await fetch(ddgUrl, { headers: { 'User-Agent': 'StuddyHub-AI/1.0' } });
+            console.log(`[searchWeb] DuckDuckGo HTTP ${ddgRes.status}`);
+            if (ddgRes.ok) {
+                const data = await ddgRes.json();
+                const abstractLen = (data.AbstractText || '').length;
+                const relatedCount = data.RelatedTopics?.length || 0;
+                console.log(`[searchWeb] DuckDuckGo response: AbstractText=${abstractLen} chars, RelatedTopics=${relatedCount}`);
+                if (data.AbstractText) {
+                    console.log(`[searchWeb] DuckDuckGo SUCCESS: using AbstractText`);
+                    return {
+                        success: true,
+                        results: [{
+                            title: data.Heading || trimmed,
+                            snippet: data.AbstractText,
+                            url: data.AbstractURL || `https://duckduckgo.com/?q=${encodeURIComponent(trimmed)}`
+                        }]
+                    };
+                }
+                if (data.RelatedTopics?.length) {
+                    const results = data.RelatedTopics.slice(0, maxResults).map((t: any) => ({
+                        title: t.Text?.split(' - ')[0] || trimmed,
+                        snippet: t.Text || '',
+                        url: t.FirstURL || '#'
+                    })).filter((r: any) => r.snippet);
+                    if (results.length) {
+                        console.log(`[searchWeb] DuckDuckGo SUCCESS: ${results.length} RelatedTopics`);
+                        return { success: true, results };
+                    }
+                }
+                console.warn('[searchWeb] DuckDuckGo: no useful data in response');
+            } else {
+                const errText = (await ddgRes.text()).substring(0, 200);
+                console.warn(`[searchWeb] DuckDuckGo HTTP ${ddgRes.status}: ${errText}`);
+            }
+            errors.push('DuckDuckGo: no results');
+        } catch (e: any) {
+            console.warn(`[searchWeb] DuckDuckGo exception: ${e?.message || e}`);
+            errors.push(`DuckDuckGo: ${e?.message || 'exception'}`);
+        }
+
+        // 3. Wikipedia API (free, extracts)
+        try {
+            console.log('[searchWeb] Trying Wikipedia...');
+            const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(trimmed)}&format=json&srlimit=${maxResults}`;
+            const wikiRes = await fetch(wikiUrl, { headers: { 'User-Agent': 'StuddyHub-AI/1.0' } });
+            console.log(`[searchWeb] Wikipedia HTTP ${wikiRes.status}`);
+            if (wikiRes.ok) {
+                const data = await wikiRes.json();
+                const pages = data.query?.search || [];
+                console.log(`[searchWeb] Wikipedia response: ${pages.length} pages`);
+                if (pages.length) {
+                    const results = pages.map((page: any) => ({
+                        title: page.title,
+                        snippet: page.snippet.replace(/<[^>]+>/g, ''),
+                        url: `https://en.wikipedia.org/wiki/${encodeURIComponent(page.title)}`
+                    }));
+                    console.log(`[searchWeb] Wikipedia SUCCESS: ${results.length} results`);
+                    return { success: true, results };
+                }
+            } else {
+                const errText = (await wikiRes.text()).substring(0, 200);
+                console.warn(`[searchWeb] Wikipedia HTTP ${wikiRes.status}: ${errText}`);
+            }
+            errors.push('Wikipedia: no results');
+        } catch (e: any) {
+            console.warn(`[searchWeb] Wikipedia exception: ${e?.message || e}`);
+            errors.push(`Wikipedia: ${e?.message || 'exception'}`);
+        }
+
+        // 4. Gemini Grounding – last resort, using summary text as snippet
         const geminiKey = Deno.env.get('GEMINI_API_KEY');
         if (geminiKey) {
-            try {
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
-                const res = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{
-                            role: 'user',
-                            parts: [{ text: `Search the web and provide the latest accurate academic information and sources for: ${trimmed}` }]
-                        }],
-                        tools: [{ googleSearch: {} }]
-                    })
-                });
-
-                if (res.ok) {
-                    const data = await res.json();
-                    const candidate = data.candidates?.[0];
-                    const contentText = candidate?.content?.parts?.map((p: any) => p.text).filter(Boolean).join('\n') || '';
-                    const groundingMetadata = candidate?.groundingMetadata || {};
-                    const webSearchSources = (groundingMetadata.groundingChunks || []).map((chunk: any) => ({
-                        title: chunk.web?.title || 'Web Source',
-                        url: chunk.web?.uri || '',
-                        snippet: contentText.substring(0, 300)
-                    })).filter((s: any) => s.url);
-
-                    if (webSearchSources.length > 0) {
-                        return { success: true, results: webSearchSources };
+            const models = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
+            for (const model of models) {
+                try {
+                    console.log(`[searchWeb] Trying Gemini ${model}...`);
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+                    const res = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ role: 'user', parts: [{ text: `Summarise the latest news about: ${trimmed}` }] }],
+                            tools: [{ googleSearch: {} }]
+                        })
+                    });
+                    console.log(`[searchWeb] Gemini ${model} HTTP ${res.status}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        const candidate = data.candidates?.[0];
+                        const summaryText = candidate?.content?.parts?.map((p: any) => p.text).join(' ') || '';
+                        console.log(`[searchWeb] Gemini ${model}: summaryText=${summaryText.length} chars`);
+                        if (summaryText) {
+                            console.log(`[searchWeb] Gemini ${model} SUCCESS: ${summaryText.substring(0, 100)}...`);
+                            return {
+                                success: true,
+                                results: [{
+                                    title: `Search results for: ${trimmed}`,
+                                    url: 'https://google.com',
+                                    snippet: summaryText.substring(0, 800)
+                                }]
+                            };
+                        }
+                    } else {
+                        const errText = (await res.text()).substring(0, 200);
+                        console.warn(`[searchWeb] Gemini ${model} HTTP ${res.status}: ${errText}`);
+                        errors.push(`Gemini ${model}: HTTP ${res.status}`);
                     }
-                    if (contentText) {
-                        return {
-                            success: true,
-                            results: [{
-                                title: `Search result for: ${trimmed}`,
-                                url: 'https://google.com',
-                                snippet: contentText.substring(0, 500)
-                            }]
-                        };
-                    }
-                }
-            } catch (geminiErr) {
-                console.warn('[ActionsService] Gemini search grounding error:', geminiErr);
-            }
-        }
-
-        // Strategy 3: Wikipedia API search fallback (completely free, zero key needed)
-        try {
-            const wikiUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(trimmed)}&limit=${maxResults}&namespace=0&format=json`;
-            const wikiRes = await fetch(wikiUrl, { headers: { 'User-Agent': 'StuddyHub-AI/1.0' } });
-            if (wikiRes.ok) {
-                const [_, titles, descriptions, urls] = await wikiRes.json();
-                const results = (titles || []).map((title: string, i: number) => ({
-                    title,
-                    snippet: descriptions?.[i] || '',
-                    url: urls?.[i] || ''
-                })).filter((r: any) => r.title && r.url);
-
-                if (results.length > 0) {
-                    return { success: true, results };
+                } catch (e: any) {
+                    console.warn(`[searchWeb] Gemini ${model} exception: ${e?.message || e}`);
+                    errors.push(`Gemini ${model}: ${e?.message || 'exception'}`);
                 }
             }
-        } catch (wikiErr) {
-            console.warn('[ActionsService] Wikipedia search fallback error:', wikiErr);
+        } else {
+            console.log('[searchWeb] Gemini: no API key, skipping');
         }
 
+        // If all fail, return informative error
+        const errorDetail = errors.length > 0 ? ` (${errors.join('; ')})` : '';
+        console.warn(`[searchWeb] All backends failed${errorDetail}`);
         return {
-            success: true,
-            results: [{
-                title: `Academic overview for: ${trimmed}`,
-                url: `https://www.google.com/search?q=${encodeURIComponent(trimmed)}`,
-                snippet: `Verified query for ${trimmed}. Grounding query processed.`
-            }]
+            success: false,
+            results: [],
+            error: `Search temporarily unavailable. Please try again in a few minutes.${errorDetail}`
         };
     }
 
@@ -2731,7 +2698,6 @@ export class StuddyHubActionsService {
         const targetUrl = (params.url || '').trim();
         if (!targetUrl) return { success: false, error: 'URL is required' };
 
-        // Call the internal fetch-web-url pipeline
         const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
         const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
         const endpoint = `${supabaseUrl}/functions/v1/fetch-web-url`;

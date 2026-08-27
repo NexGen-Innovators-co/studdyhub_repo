@@ -57,6 +57,7 @@ fun AICompanionFAB(
         AcademicTier.EXPLORER -> Triple("Ask Ollie! 🦉", Color(0xFFF59E0B), Color(0xFF92400E))
         AcademicTier.ACHIEVER -> Triple("WASSCE Coach ⚡", Color(0xFF4F46E5), Color(0xFFEEF2FF))
         AcademicTier.SCHOLAR -> Triple("Copilot 🎓", Color(0xFF0F172A), Color(0xFFE2E8F0))
+        AcademicTier.ALL -> Triple("Ask Ollie! 🦉", Color(0xFFF59E0B), Color(0xFF92400E))
     }
 
     Surface(

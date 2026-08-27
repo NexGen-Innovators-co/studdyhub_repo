@@ -234,6 +234,7 @@ fun ProfileScreen(
                                 AcademicTier.EXPLORER -> "Ready for today's fun study adventure? Let's explore together!"
                                 AcademicTier.ACHIEVER -> "Locked in for high scores! What topic are we mastering today?"
                                 AcademicTier.SCHOLAR -> "Welcome back, Scholar. Ready for deep analysis and research?"
+                                AcademicTier.ALL -> "Ready to learn today? Let's explore together!"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)

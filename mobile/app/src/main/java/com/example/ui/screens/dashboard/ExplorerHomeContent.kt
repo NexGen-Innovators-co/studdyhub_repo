@@ -462,62 +462,100 @@ fun ExplorerHomeContent(
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = if (questComplete) Color(0xFF10B981).copy(alpha = 0.15f) else Color(0xFFF59E0B).copy(alpha = 0.15f),
-                            modifier = Modifier.size(40.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(if (questComplete) "🎉" else "🎯", fontSize = 20.sp)
+                            Surface(
+                                shape = CircleShape,
+                                color = if (questComplete) Color(0xFF10B981).copy(alpha = 0.15f) else Color(0xFFF59E0B).copy(alpha = 0.15f),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(if (questComplete) "🎉" else "🎯", fontSize = 20.sp)
+                                }
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${quest.title}",
+                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    if (questClaimedToday) {
+                                        Text(
+                                            text = "Claimed (+${quest.totalPoints} 🪙)",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                            color = Color(0xFF10B981)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                LinearProgressIndicator(
+                                    progress = { questProgress.toFloat() / quest.actions.size.coerceAtLeast(1) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(CircleShape),
+                                    color = if (questComplete) Color(0xFF10B981) else Color(0xFF2563EB),
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            }
+
+                            if (questComplete && !questClaimedToday) {
+                                Button(
+                                    onClick = {
+                                        coroutineScope.launch { repo.claimDailyQuest(quest.totalPoints) }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B)),
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text("CLAIM", fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, color = Color.White)
+                                }
                             }
                         }
 
-                        Column(modifier = Modifier.weight(1f)) {
+                        // Show individual quest actions so users know what to do
+                        Spacer(modifier = Modifier.height(8.dp))
+                        quest.actions.forEachIndexed { idx, action ->
+                            val done = when (action.type) {
+                                DailyQuestType.LESSON -> todayDone >= action.target
+                                DailyQuestType.GAME -> todayGamesPlayed >= action.target
+                            }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text(
-                                    text = "Daily Goal",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    text = if (done) "✅" else "⬜",
+                                    fontSize = 14.sp
                                 )
                                 Text(
-                                    text = if (questClaimedToday) "Claimed (+${quest.totalPoints} 🪙)" else "$questProgress of ${quest.actions.size} Completed",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                    color = if (questComplete) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = action.label,
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (done) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    modifier = Modifier.weight(1f)
                                 )
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            LinearProgressIndicator(
-                                progress = { questProgress.toFloat() / quest.actions.size.coerceAtLeast(1) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(6.dp)
-                                    .clip(CircleShape),
-                                color = if (questComplete) Color(0xFF10B981) else Color(0xFF2563EB),
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        }
-
-                        if (questComplete && !questClaimedToday) {
-                            Button(
-                                onClick = {
-                                    coroutineScope.launch { repo.claimDailyQuest(quest.totalPoints) }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B)),
-                                shape = RoundedCornerShape(12.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                Text("CLAIM", fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, color = Color.White)
+                                Text(
+                                    text = "+${action.points} 🪙",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = if (done) Color(0xFF10B981) else Color(0xFFF59E0B)
+                                )
                             }
                         }
                     }

@@ -96,6 +96,7 @@ private fun AcademicTier.tutorGreetingName(): String = when (this) {
     AcademicTier.EXPLORER -> "Ollie"
     AcademicTier.ACHIEVER -> "Master Kwame"
     AcademicTier.SCHOLAR -> "Professor Ollie"
+    AcademicTier.ALL -> "Ollie"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

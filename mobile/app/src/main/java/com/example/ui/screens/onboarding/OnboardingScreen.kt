@@ -53,7 +53,10 @@ fun OnboardingScreen(
     val focusManager = LocalFocusManager.current
     var currentStep by remember { mutableIntStateOf(1) } // 1: Stage Select, 2: Focus & Customization, 3: Launch Ready
 
-    var selectedTierKey by remember { mutableStateOf(uiState.selectedTier.ifBlank { "achiever" }) }
+    var selectedTierKey by remember { mutableStateOf(
+        if (com.example.BuildConfig.BETA_MODE) "explorer"
+        else uiState.selectedTier.ifBlank { "achiever" }
+    ) }
     var nameInput by remember { mutableStateOf(uiState.userName) }
     var focusInput by remember { mutableStateOf(uiState.selectedMajor) }
     var gradeLevelInput by remember { mutableStateOf(if (uiState.selectedTier == "explorer") "Primary 4" else "") }
@@ -434,6 +437,7 @@ private fun StageSelectStep(
     onTierSelected: (String) -> Unit
 ) {
     val scrollState = rememberScrollState()
+    val isBeta = com.example.BuildConfig.BETA_MODE
 
     Column(
         modifier = Modifier
@@ -452,7 +456,7 @@ private fun StageSelectStep(
         Spacer(modifier = Modifier.height(14.dp))
 
         Text(
-            text = "Who is learning today?",
+            text = if (isBeta) "Welcome to StuddyHub Beta! 🎉" else "Who is learning today?",
             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onBackground
@@ -461,14 +465,17 @@ private fun StageSelectStep(
         Spacer(modifier = Modifier.height(6.dp))
 
         Text(
-            text = "Pick your academic stage so Professor Ollie can tailor notes, quizzes, and difficulty for you.",
+            text = if (isBeta)
+                "You're trying StuddyHub Explorer mode — fun puzzles, badges, and interactive flashcards for basic & JHS students."
+            else
+                "Pick your academic stage so Professor Ollie can tailor notes, quizzes, and difficulty for you.",
             style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
             textAlign = TextAlign.Center
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Tier Card 1: Explorer
+        // Tier Card 1: Explorer (always shown)
         StageCard(
             title = "Explorer (Basic & JHS)",
             subtitle = "Primary & Junior High School curriculum, colorful quests, fun badges & interactive flashcards.",
@@ -479,31 +486,34 @@ private fun StageSelectStep(
             onClick = { onTierSelected("explorer") }
         )
 
-        Spacer(modifier = Modifier.height(14.dp))
+        // Tier Cards 2 & 3: Only shown in non-beta builds
+        if (!isBeta) {
+            Spacer(modifier = Modifier.height(14.dp))
 
-        // Tier Card 2: Achiever
-        StageCard(
-            title = "Achiever (SHS & WASSCE)",
-            subtitle = "Senior High School exam prep, past questions, timed mock tests, and smart revision notes.",
-            icon = Icons.Default.Bolt,
-            badgeEmoji = "⚡",
-            accentColor = Color(0xFFFF9800),
-            isSelected = selectedTier == "achiever",
-            onClick = { onTierSelected("achiever") }
-        )
+            // Tier Card 2: Achiever
+            StageCard(
+                title = "Achiever (SHS & WASSCE)",
+                subtitle = "Senior High School exam prep, past questions, timed mock tests, and smart revision notes.",
+                icon = Icons.Default.Bolt,
+                badgeEmoji = "⚡",
+                accentColor = Color(0xFFFF9800),
+                isSelected = selectedTier == "achiever",
+                onClick = { onTierSelected("achiever") }
+            )
 
-        Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-        // Tier Card 3: Scholar
-        StageCard(
-            title = "Scholar (University & College)",
-            subtitle = "Undergraduate & Graduate research, lecture document processor, podcast summaries, and deep AI tutoring.",
-            icon = Icons.Default.School,
-            badgeEmoji = "🎓",
-            accentColor = Color(0xFF9C27B0),
-            isSelected = selectedTier == "scholar",
-            onClick = { onTierSelected("scholar") }
-        )
+            // Tier Card 3: Scholar
+            StageCard(
+                title = "Scholar (University & College)",
+                subtitle = "Undergraduate & Graduate research, lecture document processor, podcast summaries, and deep AI tutoring.",
+                icon = Icons.Default.School,
+                badgeEmoji = "🎓",
+                accentColor = Color(0xFF9C27B0),
+                isSelected = selectedTier == "scholar",
+                onClick = { onTierSelected("scholar") }
+            )
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
     }

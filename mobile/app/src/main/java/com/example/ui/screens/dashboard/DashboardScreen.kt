@@ -274,6 +274,43 @@ fun DashboardScreen(
                         }
                     )
                 }
+                AcademicTier.ALL -> {
+                    // ALL tier defaults to Explorer-style TopBar
+                    val currentStars = state.stats?.totalXp ?: 0
+                    TopAppBar(
+                        title = {
+                            Column {
+                                Text(
+                                    text = "Hi, Explorer 👋",
+                                    style = MaterialTheme.typography.titleLarge.copy(
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                )
+                                Text(
+                                    text = "Ready to learn today?",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
+                        },
+                        actions = {
+                            IconButton(
+                                onClick = { onNavigate(Screen.Search.route) },
+                                modifier = Modifier.testTag("global_search_button")
+                            ) {
+                                Icon(Icons.Default.Search, contentDescription = "Search Workspace")
+                            }
+                            IconButton(
+                                onClick = { onNavigate(Screen.Profile.route) },
+                                modifier = Modifier.testTag("dashboard_profile_button")
+                            ) {
+                                Icon(Icons.Default.AccountCircle, contentDescription = "Profile")
+                            }
+                        }
+                    )
+                }
             }
         },
         floatingActionButton = {
@@ -322,6 +359,12 @@ fun DashboardScreen(
                 }
                 AcademicTier.SCHOLAR -> {
                     ScholarHomeContent(
+                        state = state,
+                        onNavigate = onNavigate
+                    )
+                }
+                AcademicTier.ALL -> {
+                    ExplorerHomeContent(
                         state = state,
                         onNavigate = onNavigate
                     )

@@ -269,6 +269,7 @@ fun tierQuizTitle(): String = when (StuddyHubThemeTokens.tier) {
     AcademicTier.EXPLORER -> "Quiz Quest 🎮"
     AcademicTier.ACHIEVER -> "Exam Arena ⚡"
     AcademicTier.SCHOLAR -> "Quiz Lab 🎓"
+    AcademicTier.ALL -> "Quiz Quest 🎮"
 }
 
 /** Quiz library subtitle, branded per tier. */
@@ -278,6 +279,7 @@ fun tierQuizSubtitle(count: Int): String = when (StuddyHubThemeTokens.tier) {
     AcademicTier.EXPLORER -> "$count Quizzes Available • Play & Learn"
     AcademicTier.ACHIEVER -> "$count Quizzes Available • WASSCE Prep"
     AcademicTier.SCHOLAR -> "$count Quizzes Available • Academic Practice"
+    AcademicTier.ALL -> "$count Quizzes Available"
 }
 
 /** Flashcards screen title, branded per tier. */
@@ -287,6 +289,7 @@ fun tierFlashcardTitle(): String = when (StuddyHubThemeTokens.tier) {
     AcademicTier.EXPLORER -> "Flashcard Fun 🃏"
     AcademicTier.ACHIEVER -> "Flashcard Drill ⚡"
     AcademicTier.SCHOLAR -> "Flashcard Deck 🎓"
+    AcademicTier.ALL -> "Flashcards 🃏"
 }
 
 /** Full display name of the shared AI tutor, branded per tier (matches AIChatScreen). */
@@ -296,6 +299,7 @@ fun tierTutorDisplayName(): String = when (StuddyHubThemeTokens.tier) {
     AcademicTier.EXPLORER -> "Ollie the Wise Owl 🦉"
     AcademicTier.ACHIEVER -> "Master Kwame ⚡"
     AcademicTier.SCHOLAR -> "Professor Ollie 🎓"
+    AcademicTier.ALL -> "Ollie the Wise Owl 🦉"
 }
 
 /**
@@ -396,6 +400,38 @@ fun buildTierColorScheme(tier: AcademicTier, isDark: Boolean): ColorScheme {
                 )
             }
         }
+        AcademicTier.ALL -> {
+            // ALL tier defaults to Explorer colors for a welcoming, universal look
+            if (isDark) {
+                darkColorScheme(
+                    primary = ExplorerDarkColors.primary,
+                    onPrimary = Color(0xFF0F172A),
+                    primaryContainer = Color(0xFF1E3A8A),
+                    secondary = ExplorerDarkColors.secondary,
+                    onSecondary = Color.Black,
+                    tertiary = ExplorerDarkColors.tertiary,
+                    background = ExplorerDarkColors.surfaceBackground,
+                    surface = ExplorerDarkColors.cardBackground,
+                    surfaceVariant = Color(0xFF334155),
+                    onBackground = TextPrimaryDark,
+                    onSurface = TextPrimaryDark
+                )
+            } else {
+                lightColorScheme(
+                    primary = ExplorerLightColors.primary,
+                    onPrimary = Color.White,
+                    primaryContainer = ExplorerLightColors.pillBackground,
+                    secondary = ExplorerLightColors.secondary,
+                    onSecondary = Color.White,
+                    tertiary = ExplorerLightColors.tertiary,
+                    background = ExplorerLightColors.surfaceBackground,
+                    surface = ExplorerLightColors.cardBackground,
+                    surfaceVariant = Color(0xFFF1F5F9),
+                    onBackground = TextPrimaryLight,
+                    onSurface = TextPrimaryLight
+                )
+            }
+        }
     }
 }
 
@@ -412,6 +448,7 @@ fun ProvideTierTheme(
         AcademicTier.EXPLORER -> if (darkTheme) ExplorerDarkColors else ExplorerLightColors
         AcademicTier.ACHIEVER -> if (darkTheme) AchieverDarkColors else AchieverLightColors
         AcademicTier.SCHOLAR -> if (darkTheme) ScholarDarkColors else ScholarLightColors
+        AcademicTier.ALL -> if (darkTheme) ExplorerDarkColors else ExplorerLightColors
     }
 
     val colorScheme = buildTierColorScheme(tier, darkTheme)

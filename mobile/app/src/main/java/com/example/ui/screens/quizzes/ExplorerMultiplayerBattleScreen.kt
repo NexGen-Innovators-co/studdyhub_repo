@@ -52,11 +52,11 @@ data class ExplorerBattleTopic(
 )
 
 val EXPLORER_BATTLE_TOPICS = listOf(
-    ExplorerBattleTopic("math", "Galaxy Math 🪐", "🪐", "Fast addition, subtraction & multiplication challenges!", Color(0xFF3B82F6)),
-    ExplorerBattleTopic("science", "Science Sparks 🔬", "🔬", "Cool experiments, space, and nature secrets!", Color(0xFF10B981)),
-    ExplorerBattleTopic("animals", "Animal Kingdom 🦁", "🦁", "Wild creatures, habitats & amazing animal facts!", Color(0xFFF59E0B)),
-    ExplorerBattleTopic("world", "World Explorer 🌍", "🌍", "Continents, flags, rivers, and global wonders!", Color(0xFF8B5CF6)),
-    ExplorerBattleTopic("spelling", "Word Master ⚡", "⚡", "Fun vocabulary, rhymes & word puzzles!", Color(0xFFEC4899))
+    ExplorerBattleTopic("maths_quest", "Galaxy Math 🪐", "🪐", "Fast addition, subtraction & multiplication challenges!", Color(0xFF3B82F6)),
+    ExplorerBattleTopic("science_explorer", "Science Sparks 🔬", "🔬", "Cool experiments, space, and nature secrets!", Color(0xFF10B981)),
+    ExplorerBattleTopic("kente_quiz", "Heritage Bowl 🧶", "🧶", "Ghanaian history, culture & national pride!", Color(0xFFF59E0B)),
+    ExplorerBattleTopic("ananse_riddles", "Ananse Riddles 🕷️", "🕷️", "Logic puzzles & brain teasers!", Color(0xFF8B5CF6)),
+    ExplorerBattleTopic("spelling_bee", "Word Master 🐝", "🐝", "Fun vocabulary, rhymes & spelling!", Color(0xFFEC4899))
 )
 
 @OptIn(ExperimentalMaterial3Api::class)

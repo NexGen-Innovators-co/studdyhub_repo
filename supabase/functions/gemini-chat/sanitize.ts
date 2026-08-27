@@ -45,31 +45,35 @@ export function sanitizeAssistantOutput(text: string | null | undefined): string
   if (!text) return '';
   let out = text;
 
-  // 1. Block internal prompt leaks
+  // ── Step 1: strip all thinking/thought tags BEFORE checking for leaks ──
+  // This prevents reasoning that contains internal prompt fragments from
+  // triggering the leak block.
+  out = out.replace(/<(?:thinking|think|thought)>[\s\S]*?<\/(?:thinking|think|thought)>/gi, '');
+  // Also strip unclosed tags (common with Groq/Qwen models)
+  out = out.replace(/<(?:thinking|think|thought)>\s*/gi, '').trim();
+
+  // ── Step 2: block any remaining internal prompt leaks (outside thinking) ──
   if (containsInternalPromptLeak(out)) {
     console.warn('[HISTORY_DIAG] BLOCKED a response that leaked internal system-prompt text.');
     return '';
   }
 
-  // 2. Remove all <thinking> tags and other known artifacts
-  out = out.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
+  // ── Step 3: remove other known artifacts ──
   out = out.replace(/<!--\s*thinking[\s\S]*?-->/gi, '');
 
-  // 3. Remove raw DB_ACTION plain-text command blocks (e.g. DB_ACTION: INSERT \n TABLE: notes ...)
+  // ── Step 4: remove raw DB_ACTION plain-text command blocks ──
   out = out.replace(/DB_ACTION:\s*(?:INSERT|UPDATE|DELETE|SELECT)[\s\S]*?(?=(?:\n\s*\n\s*[A-Z#*]|$))/gi, '');
   out = out.replace(/TABLE:\s*[a-z0-9_]+\s*\n\s*DATA:\s*\{[\s\S]*?\}/gi, '');
 
-  // 4. Remove JSON blocks that look like action plans or finalResponse objects
+  // ── Step 5: remove JSON blocks that look like action plans ──
   out = removeActionJsonBlocks(out);
 
-  // 4. Clean up extra whitespace and empty braces/arrays
+  // ── Step 6: clean up extra whitespace and empty braces/arrays ──
   out = out.replace(/\n{3,}/g, '\n\n').trim();
   out = out.replace(/\(\s*\)/g, '');
   out = out.replace(/\[\s*\]/g, '');
 
-  // 5. P1-1: wipe truncated JSON fragments — unbalanced closing braces with
-  // residue tokens (e.g. `",\n "filters": ... }]}`) that survive the balanced-
-  // block removal above and would otherwise leak into the visible answer.
+  // ── Step 7: wipe truncated JSON fragments ──
   const opens = (out.match(/[\{\[]/g) || []).length;
   const closes = (out.match(/[\}\]]/g) || []).length;
   if (closes > opens) {
@@ -80,7 +84,7 @@ export function sanitizeAssistantOutput(text: string | null | undefined): string
     }
   }
 
-  // 5. If only punctuation/braces remain, return empty
+  // ── Step 8: if only punctuation/braces remain, return empty ──
   if (/^\s*[{}\[\],:"'\s]*$/.test(out)) return '';
 
   return out;
@@ -276,6 +280,8 @@ export function extractAndParseJSON(rawContent: string): any {
   // Remove markdown code fences and <thinking> tags
   text = text.replace(/```(?:json|action)?\s*/gi, '').replace(/```\s*$/g, '').trim();
   text = text.replace(/<(?:thinking|thought)>[\s\S]*?<\/(?:thinking|thought)>/gi, '').trim();
+  // Also strip unclosed thinking/think blocks — just remove the opening tag
+  text = text.replace(/<(?:thinking|think|thought)>\s*/gi, '').trim();
 
   // 1. Try to parse the whole cleaned text
   try {
@@ -576,6 +582,38 @@ export function buildPrefetchedContextSummary(relevantContext: any[]): string {
       ? ` (${(ctx.relevanceScore * 100).toFixed(0)}% relevant)`
       : '';
     return `- [${type}] ${title}${score}`;
+  });  return 'The following was already retrieved and does not need to be re-queried:\n' + items.join('\n');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YOUTUBE URL DETECTION & FORMATTING
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Detects bare YouTube URLs in the response and wraps them in a markdown link
+ * with a 🎬 prefix so the client can render them as embedded video players.
+ *
+ * Converts:
+ *   https://youtube.com/watch?v=dQw4w9WgXcQ
+ *   https://youtu.be/dQw4w9WgXcQ
+ * into:
+ *   [🎬 Watch Video](https://youtube.com/watch?v=dQw4w9WgXcQ)
+ *
+ * Already-formatted markdown links are left untouched.
+ */
+export function formatYouTubeUrls(text: string): string {
+  if (!text) return text;
+  // Match bare YouTube URLs (not already inside markdown link syntax)
+  const ytRegex = /(?<!\]\()https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})[^\s)\]]*/g;
+  return text.replace(ytRegex, (match) => {
+    // If this URL is already inside a markdown link [...](url), skip it
+    return `[🎬 Watch Video](${match})`;
   });
-  return 'The following was already retrieved and does not need to be re-queried:\n' + items.join('\n');
+}
+
+/**
+ * Wraps multiple YouTube URLs in a response with video embed markers.
+ * Used by the streaming handler before saving the final response.
+ */
+export function enhanceYouTubeLinks(text: string): string {
+  return formatYouTubeUrls(text);
 }

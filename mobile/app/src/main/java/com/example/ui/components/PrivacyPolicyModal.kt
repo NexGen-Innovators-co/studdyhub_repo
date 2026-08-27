@@ -110,7 +110,7 @@ fun PrivacyPolicyModal(
 
                     PrivacySection(
                         title = "6. Contact Our Data Protection Officer",
-                        body = "For any inquiries regarding data protection, access requests, or compliance, please reach out to us at privacy@studdyhub.app or support@studdyhub.app."
+                        body = "For any inquiries regarding data protection, access requests, or compliance, please reach out to us at studdyhubai@gmail.com ."
                     )
                 }
 

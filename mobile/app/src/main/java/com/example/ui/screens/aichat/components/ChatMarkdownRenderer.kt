@@ -132,6 +132,7 @@ fun ChatMarkdownRenderer(
                     else ChatSlideDeckBlock(block)
                 is ChatBlock.TableBlock -> MarkdownTableBlock(block)
                 is ChatBlock.ImageBlock -> MarkdownImageBlock(block)
+                is ChatBlock.YouTubeBlock -> YouTubeEmbedBlock(block)
                 is ChatBlock.LaTeXBlock ->
                     if (streaming) DiagramStreamingPlaceholder("Math") else LaTeXMathBlock(block)
                 is ChatBlock.Paragraph -> ChatParagraphBlock(block, streaming)
@@ -153,12 +154,26 @@ sealed class ChatBlock {
     data class SlidesBlock(val json: String) : ChatBlock()
     data class TableBlock(val rows: List<List<String>>) : ChatBlock()
     data class ImageBlock(val alt: String, val url: String) : ChatBlock()
+    data class YouTubeBlock(val videoId: String, val title: String) : ChatBlock()
     data class LaTeXBlock(val math: String) : ChatBlock()
     data class Paragraph(val text: String) : ChatBlock()
 }
 
 // IMAGE REGEX
 val IMAGE_REGEX = Regex("!\\[(.*?)\\]\\((.*?)\\)")
+
+// YOUTUBE URL REGEX
+val YOUTUBE_URL_REGEX = Regex("(?:https?://)?(?:www\\.)?(?:youtube\\.com/watch\\?v=|youtu\\.be/)([a-zA-Z0-9_-]{11})")
+
+// Matches markdown image links that wrap YouTube: [![alt](thumb)](https://youtube.com/watch?v=ID)
+val YOUTUBE_IMAGE_LINK_REGEX = Regex(
+    """\[!\[([^]]*)\]\([^)]*img\.youtube\.com[^)]*\)\]\(https?://(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})[^)]*\)"""
+)
+
+// Matches markdown links that point to YouTube: [text](https://youtube.com/watch?v=ID)
+val YOUTUBE_MARKDOWN_LINK_REGEX = Regex(
+    """\[([^]]+)\]\(https?://(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})[^)]*\)"""
+)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Paragraph with clickable links
@@ -2289,6 +2304,150 @@ private fun MarkdownImageBlock(image: ChatBlock.ImageBlock) {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// YouTube Video Embed
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun YouTubeEmbedBlock(yt: ChatBlock.YouTubeBlock) {
+    val embedUrl = "https://www.youtube.com/embed/${yt.videoId}?autoplay=0&rel=0"
+    val watchUrl = "https://www.youtube.com/watch?v=${yt.videoId}"
+    val thumbnailUrl = "https://img.youtube.com/vi/${yt.videoId}/hqdefault.jpg"
+    val context = LocalContext.current
+    var isLoaded by remember { mutableStateOf(false) }
+
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Black),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .border(1.dp, tierPrimary().copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+    ) {
+        Column {
+            // Embedded player indicator badge
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(tierPrimary().copy(alpha = 0.15f))
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "▶", fontSize = 12.sp, color = tierPrimary())
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "YouTube Video",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = tierPrimary()
+                )
+            }
+            // YouTube iframe embed
+            AndroidView(
+                factory = { ctx ->
+                    WebView(ctx).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.useWideViewPort = true
+                        settings.loadWithOverviewMode = true
+                        settings.mediaPlaybackRequiresUserGesture = false
+                        setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                        overScrollMode = View.OVER_SCROLL_NEVER
+                        webViewClient = object : android.webkit.WebViewClient() {
+                            override fun shouldOverrideUrlLoading(
+                                view: android.webkit.WebView?,
+                                request: WebResourceRequest?
+                            ): Boolean {
+                                val url = request?.url?.toString() ?: return false
+                                return openUrlExternally(view, url)
+                            }
+                            @Suppress("DEPRECATION")
+                            override fun shouldOverrideUrlLoading(
+                                view: android.webkit.WebView?,
+                                url: String?
+                            ): Boolean {
+                                return openUrlExternally(view, url)
+                            }
+                            override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
+                                super.onPageFinished(view, url)
+                                isLoaded = true
+                            }
+                        }
+                        loadDataWithBaseURL(
+                            null,
+                            """<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+  iframe { width: 100%; aspect-ratio: 16/9; border: none; border-radius: 8px; }
+</style>
+</head>
+<body>
+  <iframe
+    src="$embedUrl"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen>
+  </iframe>
+</body>
+</html>""",
+                            "text/html",
+                            "utf-8",
+                            null
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(8.dp))
+            )
+            // Title bar (always shown)
+            if (yt.title.isNotBlank() && yt.title != "YouTube Video") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.7f))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = "🎬", fontSize = 14.sp)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = yt.title,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.9f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            // Watch on YouTube fallback link (always visible below the embed)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF1a1a1a))
+                    .clickable {
+                        try {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(watchUrl)))
+                        } catch (_: Exception) {}
+                    }
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "▶", fontSize = 10.sp, color = Color(0xFFFF0000))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Open in YouTube app",
+                    style = MaterialTheme.typography.labelSmall.copy(color = Color.White.copy(alpha = 0.7f))
+                )
+            }
+        }
+    }
+}
+
 // Inline formatting (bold, italic, inline code, inline latex, links)
 // Colors are parameters because this helper runs outside composition (remember { } and
 // non-composable callers); composable callers pass the tier colors in.
@@ -2511,6 +2670,37 @@ fun parseChatMarkdownBlocks(text: String): List<ChatBlock> {
                 i++
                 continue
             }
+        }
+
+        // 4b. YouTube Video Block (standalone URL or markdown link)
+        // Check for markdown image link wrapping YouTube first: [![alt](thumb)](https://youtube.com/watch?v=ID)
+        val ytImageLinkMatch = YOUTUBE_IMAGE_LINK_REGEX.find(line)
+        if (ytImageLinkMatch != null) {
+            val videoId = ytImageLinkMatch.groupValues[1]
+            val title = line.replace(YOUTUBE_IMAGE_LINK_REGEX, "").replace(Regex("[\\[\\]()]"), "").trim()
+                .ifEmpty { "YouTube Video" }
+            blocks.add(ChatBlock.YouTubeBlock(videoId, title))
+            i++
+            continue
+        }
+        // Check for markdown link to YouTube: [text](https://youtube.com/watch?v=ID)
+        val ytLinkMatch = YOUTUBE_MARKDOWN_LINK_REGEX.find(line)
+        if (ytLinkMatch != null) {
+            val videoId = ytLinkMatch.groupValues[2]
+            val title = ytLinkMatch.groupValues[1].trim().ifEmpty { "YouTube Video" }
+            blocks.add(ChatBlock.YouTubeBlock(videoId, title))
+            i++
+            continue
+        }
+        // Check for standalone YouTube URL
+        val ytMatch = YOUTUBE_URL_REGEX.find(line)
+        if (ytMatch != null) {
+            val videoId = ytMatch.groupValues[1]
+            val title = line.replace(YOUTUBE_URL_REGEX, "").replace(Regex("[\\[\\]()]"), "").trim()
+                .ifEmpty { "YouTube Video" }
+            blocks.add(ChatBlock.YouTubeBlock(videoId, title))
+            i++
+            continue
         }
 
         // 5. Table parsing

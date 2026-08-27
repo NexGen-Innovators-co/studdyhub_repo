@@ -335,6 +335,10 @@ CREATE TABLE public.app_stats (
   uptime text NOT NULL DEFAULT '99.9%'::text,
   user_rating text NOT NULL DEFAULT '4.9/5'::text,
   updated_at timestamp with time zone DEFAULT now(),
+  total_users text NOT NULL DEFAULT '0'::text,
+  quizzes_taken text NOT NULL DEFAULT '0'::text,
+  documents_uploaded text NOT NULL DEFAULT '0'::text,
+  podcasts_generated text NOT NULL DEFAULT '0'::text,
   CONSTRAINT app_stats_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.social_users (

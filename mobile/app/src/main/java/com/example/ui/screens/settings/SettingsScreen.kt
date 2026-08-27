@@ -241,6 +241,88 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(4.dp))
 
         // ════════════════════════════════════════════════════════════════════
+        // BETA MODE BANNER
+        // ════════════════════════════════════════════════════════════════════
+        if (com.example.BuildConfig.BETA_MODE) {
+            val updateResult by viewModel.updateAvailable.collectAsStateWithLifecycle()
+            val isChecking by viewModel.isCheckingUpdate.collectAsStateWithLifecycle()
+            val settingsCtx = LocalContext.current
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1a237e).copy(alpha = 0.12f)),
+                border = BorderStroke(1.dp, Color(0xFF1a237e).copy(alpha = 0.3f))
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "🧪", fontSize = 18.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "StuddyHub Beta",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = Color(0xFF1a237e))
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF1a237e).copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "v${com.example.BuildConfig.VERSION_NAME}",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = Color(0xFF1a237e))
+                            )
+                        }
+                    }
+                    Text(
+                        text = "You're testing Explorer mode for basic & JHS students. Some features are restricted during beta.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    // Update check row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isChecking) {
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = Color(0xFF1a237e))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Checking for updates...", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        } else if (updateResult != null) {
+                            Text("\u2B07 New version available: ${updateResult!!.versionName}",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, color = Color(0xFF1a237e)),
+                                modifier = Modifier.weight(1f))
+                            Button(
+                                onClick = {
+                                    updateResult!!.downloadUrl?.let { url ->
+                                        try { settingsCtx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: Exception) {}
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1a237e)),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Text("Update", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            Text("\u2714 Up to date", style = MaterialTheme.typography.labelSmall, color = Color(0xFF1a237e).copy(alpha = 0.7f))
+                            Spacer(modifier = Modifier.weight(1f))
+                            TextButton(
+                                onClick = { viewModel.checkForUpdate() },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                modifier = Modifier.height(28.dp)
+                            ) {
+                                Text("Check", fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+
+        // ════════════════════════════════════════════════════════════════════
         // SAVE BUTTON — appears when user has unsaved changes
         // ════════════════════════════════════════════════════════════════════
         if (hasChanges) {
@@ -453,7 +535,8 @@ fun SettingsScreen(
                 }
             }
 
-            // Parent / Guardian Switch
+            // Parent / Guardian Switch (hidden in beta mode — tier is locked to Explorer)
+            if (!com.example.BuildConfig.BETA_MODE) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
@@ -490,6 +573,7 @@ fun SettingsScreen(
                     }
                 }
             }
+            } // end beta check
         } else {
             // ════════════════════════════════════════════════════════════════════
             // STANDARD MODE — Learning Mode (Achiever & Scholar)
@@ -776,16 +860,16 @@ fun SettingsScreen(
                         Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
                     }
                 }
-                Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { try { helpCtx.startActivity(Intent(Intent.ACTION_SENDTO).apply { data = Uri.parse("mailto:support@studdyhub.app"); putExtra(Intent.EXTRA_SUBJECT, "StuddyHub Support") }) } catch (_: Exception) {} }.padding(vertical = 10.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { try { helpCtx.startActivity(Intent(Intent.ACTION_SENDTO).apply { data = Uri.parse("mailto:studdyhubai@gmail.com"); putExtra(Intent.EXTRA_SUBJECT, "StuddyHub Support") }) } catch (_: Exception) {} }.padding(vertical = 10.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Contact Support", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium))
-                        Text("support@studdyhub.app", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                        Text("studdyhubai@gmail.com", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
                     }
                     Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
                 }
-                Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { try { helpCtx.startActivity(Intent(Intent.ACTION_SENDTO).apply { data = Uri.parse("mailto:support@studdyhub.app"); putExtra(Intent.EXTRA_SUBJECT, "Feature Request"); putExtra(Intent.EXTRA_TEXT, "I'd like to suggest: ") }) } catch (_: Exception) {} }.padding(vertical = 10.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { try { helpCtx.startActivity(Intent(Intent.ACTION_SENDTO).apply { data = Uri.parse("mailto:studdyhubai@gmail.com"); putExtra(Intent.EXTRA_SUBJECT, "Feature Request"); putExtra(Intent.EXTRA_TEXT, "I'd like to suggest: ") }) } catch (_: Exception) {} }.padding(vertical = 10.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Lightbulb, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(10.dp))
                     Text("Suggest a Feature", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium), modifier = Modifier.weight(1f))

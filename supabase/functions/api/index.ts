@@ -502,6 +502,23 @@ serve(async (req: Request) => {
         }
       }
 
+      // social_likes.user_id and social_comments.author_id FK into social_users.
+      // A user can have a profiles row but no social profile yet, which makes
+      // every like/comment fail with FK 23503. Self-heal the row on demand —
+      // same approach as the toggle-like edge function.
+      const ensureSocialUser = async () => {
+        const { data: su } = await supabase.from("social_users").select("id").eq("id", userId).maybeSingle();
+        if (su) return;
+        const { data: profile } = await supabase.from("profiles").select("full_name, username, email").eq("id", userId).single();
+        await supabase.from("social_users").upsert({
+          id: userId,
+          username: profile?.username || `user_${userId.substring(0, 8)}`,
+          display_name: profile?.full_name || "User",
+          email: profile?.email,
+          status: "active",
+        }, { onConflict: "id" });
+      };
+
       // ── Likes ──
       if (sub === "likes") {
         if (method === "GET") {
@@ -514,9 +531,28 @@ serve(async (req: Request) => {
         }
         if (method === "POST") {
           const body = await req.json().catch(() => ({}));
-          const { data, error } = await supabase.from("social_likes").upsert({ post_id: body.post_id, user_id: userId }, { onConflict: "post_id,user_id" }).select();
-          if (error) throw error;
-          return ok(data?.[0] || body, 201);
+          await ensureSocialUser();
+          const payload = { post_id: body.post_id, user_id: userId };
+          // Idempotent like. On databases where the (post_id,user_id) unique
+          // constraint hasn't been applied yet, ON CONFLICT fails with 42P10 —
+          // fall back to check-then-insert so liking works either way.
+          let data: any = null;
+          const up = await supabase.from("social_likes").upsert(payload, { onConflict: "post_id,user_id" }).select();
+          if (up.error && (up.error as any).code === "42P10") {
+            const existing = await supabase.from("social_likes").select("*").eq("post_id", payload.post_id).eq("user_id", userId).maybeSingle();
+            if (existing.data) {
+              data = existing.data;
+            } else {
+              const ins = await supabase.from("social_likes").insert(payload).select();
+              if (ins.error) throw ins.error;
+              data = ins.data?.[0] ?? null;
+            }
+          } else if (up.error) {
+            throw up.error;
+          } else {
+            data = up.data?.[0] ?? null;
+          }
+          return ok(data || body, 201);
         }
         if (method === "DELETE") {
           const postId = getParam(url, "post_id");
@@ -539,9 +575,25 @@ serve(async (req: Request) => {
         }
         if (method === "POST") {
           const body = await req.json().catch(() => ({}));
-          const { data, error } = await supabase.from("social_bookmarks").upsert({ post_id: body.post_id, user_id: userId }, { onConflict: "post_id,user_id" }).select();
-          if (error) throw error;
-          return ok(data?.[0] || body, 201);
+          const payload = { post_id: body.post_id, user_id: userId };
+          // Same 42P10 resilience as likes (see comment there).
+          let data: any = null;
+          const up = await supabase.from("social_bookmarks").upsert(payload, { onConflict: "post_id,user_id" }).select();
+          if (up.error && (up.error as any).code === "42P10") {
+            const existing = await supabase.from("social_bookmarks").select("*").eq("post_id", payload.post_id).eq("user_id", userId).maybeSingle();
+            if (existing.data) {
+              data = existing.data;
+            } else {
+              const ins = await supabase.from("social_bookmarks").insert(payload).select();
+              if (ins.error) throw ins.error;
+              data = ins.data?.[0] ?? null;
+            }
+          } else if (up.error) {
+            throw up.error;
+          } else {
+            data = up.data?.[0] ?? null;
+          }
+          return ok(data || body, 201);
         }
         if (method === "DELETE") {
           const postId = getParam(url, "post_id");
@@ -563,9 +615,31 @@ serve(async (req: Request) => {
         }
         if (method === "POST") {
           const body = await req.json().catch(() => ({}));
-          const comment = { id: body.id || crypto.randomUUID(), post_id: body.post_id, user_id: userId, content: body.content || "" };
+          // social_comments' author column is author_id (renamed from user_id in
+          // migration 20260314) — inserting user_id here failed every gateway
+          // comment with PGRST204 "column not found".
+          await ensureSocialUser();
+          const comment = { id: body.id || crypto.randomUUID(), post_id: body.post_id, author_id: userId, content: body.content || "" };
           const { data, error } = await supabase.from("social_comments").insert(comment).select().single();
           if (error) throw error;
+          // Notification parity with comment-on-post (fire-and-forget, never fails the comment)
+          try {
+            const [postResult, actorResult] = await Promise.all([
+              supabase.from("social_posts").select("author_id").eq("id", body.post_id).single(),
+              supabase.from("social_users").select("display_name").eq("id", userId).single(),
+            ]);
+            if (postResult.data && postResult.data.author_id !== userId) {
+              await supabase.from("social_notifications").insert({
+                user_id: postResult.data.author_id,
+                actor_id: userId,
+                type: "comment",
+                title: "New Comment",
+                message: `${actorResult.data?.display_name || "Someone"} commented on your post`,
+                post_id: body.post_id,
+                is_read: false,
+              });
+            }
+          } catch (_) { /* ignore notification failures */ }
           return ok(data, 201);
         }
       }

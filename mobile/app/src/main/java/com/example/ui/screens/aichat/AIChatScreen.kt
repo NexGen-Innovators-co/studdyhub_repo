@@ -234,21 +234,25 @@ fun AIChatScreen(
         AcademicTier.EXPLORER -> R.drawable.img_prof_ollie_1786717163116
         AcademicTier.ACHIEVER -> R.drawable.img_ghana_student_1786717174359
         AcademicTier.SCHOLAR -> R.drawable.img_prof_ollie_1786717163116
+        AcademicTier.ALL -> R.drawable.img_prof_ollie_1786717163116
     }
     val tutorTitle = when (currentTier) {
         AcademicTier.EXPLORER -> "Ollie The Wise Owl 🦉"
         AcademicTier.ACHIEVER -> "Master Kwame ⚡"
         AcademicTier.SCHOLAR -> "Professor Ollie 🎓"
+        AcademicTier.ALL -> "Ollie The Wise Owl 🦉"
     }
     val tutorShortName = when (currentTier) {
         AcademicTier.EXPLORER -> "Ollie"
         AcademicTier.ACHIEVER -> "Master Kwame"
         AcademicTier.SCHOLAR -> "Professor Ollie"
+        AcademicTier.ALL -> "Ollie"
     }
     val tutorTag = when (currentTier) {
         AcademicTier.EXPLORER -> "BASIC & JHS STUDY BUDDY"
         AcademicTier.ACHIEVER -> "WASSCE EXAM STRATEGIST"
         AcademicTier.SCHOLAR -> "ACADEMIC COPILOT"
+        AcademicTier.ALL -> "STUDY BUDDY"
     }
     val tutorAccentColor = when (currentTier) {
         AcademicTier.EXPLORER -> Color(0xFFF59E0B)
@@ -256,16 +260,19 @@ fun AIChatScreen(
         // Deliberate brand accent for Scholar's chat; kept explicit (indigo) so the
         // tutor accent stays bright on the deep-slate Scholar palette.
         AcademicTier.SCHOLAR -> Color(0xFF4F46E5)
+        AcademicTier.ALL -> Color(0xFFF59E0B)
     }
     val welcomeTitle = when (currentTier) {
         AcademicTier.EXPLORER -> "Ask Ollie! 🦉"
         AcademicTier.ACHIEVER -> "Master Kwame • WASSCE Coach ⚡"
         AcademicTier.SCHOLAR -> "Ask Professor Ollie 🎓"
+        AcademicTier.ALL -> "Ask Ollie! 🦉"
     }
     val welcomeDescription = when (currentTier) {
         AcademicTier.EXPLORER -> "Akwaaba! I'm Ollie, your wise study friend. Ask me about your homework, science, maths, or Ghanaian stories!"
         AcademicTier.ACHIEVER -> "Welcome Candidate! Ready to ace your WASSCE? Ask for marking scheme breakdowns, formula mnemonics, or step-by-step past questions!"
         AcademicTier.SCHOLAR -> "Wise choices! I can read your attached documents and study notes. Type a question or attach your study files below to get started!"
+        AcademicTier.ALL -> "Akwaaba! I'm Ollie, your wise study friend. Ask me about your homework, science, maths, or any topic!"
     }
     val quickSuggestionChips = when (currentTier) {
         AcademicTier.EXPLORER -> listOf(
@@ -288,6 +295,12 @@ fun AIChatScreen(
                 "🎙️ Synthesize podcast audio breakdown"
             )
         }
+        AcademicTier.ALL -> listOf(
+            "🌟 Tell me an Ananse math riddle!",
+            "🍕 Explain fractions with pizza & chocolate",
+            "🌍 Why is the sky blue?",
+            "🏰 Tell me about the Ashanti Kingdom"
+        )
     }
 
     // Auto-scroll only when the user is already at/near the bottom, and jump instantly instead
@@ -2168,6 +2181,7 @@ fun OllieTypingBubble() {
         AcademicTier.EXPLORER -> "Ollie"
         AcademicTier.ACHIEVER -> "Master Kwame"
         AcademicTier.SCHOLAR -> "Professor Ollie"
+        AcademicTier.ALL -> "Ollie"
     }
     val infiniteTransition = rememberInfiniteTransition(label = "typing")
     val alpha1 by infiniteTransition.animateFloat(

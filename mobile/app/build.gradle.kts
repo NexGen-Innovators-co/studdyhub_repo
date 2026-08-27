@@ -17,19 +17,22 @@ android {
     applicationId = "com.aistudio.studdyhub.app"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 2
+    versionName = "1.0-beta.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    // Beta mode flag — when true, locks onboarding & settings to Explorer tier only
+    buildConfigField("boolean", "BETA_MODE", "true")
   }
 
   signingConfigs {
     create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
+      val keystorePath = rootProject.findProperty("KEYSTORE_PATH") as? String ?: "${rootDir}/my-upload-key.jks"
       storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
+      storePassword = rootProject.findProperty("STORE_PASSWORD") as? String ?: ""
       keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
+      keyPassword = rootProject.findProperty("KEY_PASSWORD") as? String ?: ""
     }
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")

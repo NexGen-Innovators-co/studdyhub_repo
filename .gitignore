@@ -50,7 +50,9 @@ mobile/.gradle/
 mobile/local.properties
 mobile/captures/
 mobile/debug.keystore
+mobile/*.jks
 mobile/app/google-services.json
+mobile/studdyhub_logs*.txt
 mobile/.idea/
 mobile/.DS_Store
 .externalNativeBuild/

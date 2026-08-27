@@ -1473,17 +1473,16 @@ fun LiveQuizSessionRunner(
     var showHostRanking by remember(session.currentQuestionIndex) { mutableStateOf(false) }
     val isMediatorHost = session.isHost && session.config.hostRole == "mediator"
 
-    // Match start countdown overlay alert (3.. 2.. 1.. GO!)
-    var matchStartCountdown by remember(session.pin) { mutableIntStateOf(if (session.phase == LiveQuizPhase.QUESTION && session.currentQuestionIndex == 0) 3 else 0) }
+    // Match start "GO!" flash — brief non-blocking toast (no overlay, so the timer
+    // starts immediately and the user can read the first question right away).
+    var showGoFlash by remember(session.pin) { mutableStateOf(session.phase == LiveQuizPhase.QUESTION && session.currentQuestionIndex == 0) }
 
     LaunchedEffect(session.phase) {
         if (session.phase == LiveQuizPhase.QUESTION && session.currentQuestionIndex == 0) {
-            matchStartCountdown = 3
+            showGoFlash = true
             TactileSoundSystem.playCelebrationBeep()
-            while (matchStartCountdown > 0) {
-                delay(900L)
-                matchStartCountdown--
-            }
+            delay(1200L)
+            showGoFlash = false
         }
     }
 
@@ -1493,8 +1492,6 @@ fun LiveQuizSessionRunner(
     // eliminates the "some players get the question early, others get interrupted" unfairness.
     LaunchedEffect(session.phase, session.currentQuestionIndex, session.currentQuestionEndTime, answerSubmitted) {
         if (session.phase == LiveQuizPhase.QUESTION && !answerSubmitted) {
-            // Wait for the match start countdown (3..2..1..GO!) to finish before ticking
-            while (matchStartCountdown > 0) { delay(100L) }
             val endTime = session.currentQuestionEndTime
             if (endTime != null && endTime > 0L) {
                 // Tick off the wall-clock distance to the server deadline.
@@ -2138,42 +2135,38 @@ fun LiveQuizSessionRunner(
                 }
             }
 
-            // ── Animated Match Start Countdown Alert Overlay ──
-            if (matchStartCountdown > 0) {
-                Surface(
-                    color = Color.Black.copy(alpha = 0.85f),
-                    modifier = Modifier.fillMaxSize()
+            // ── Non-blocking "GO!" flash (does not eat into question time) ──
+            if (showGoFlash) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color(0xFF22C55E).copy(alpha = 0.95f),
+                        shadowElevation = 8.dp
                     ) {
                         Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                            modifier = Modifier.padding(horizontal = 32.dp, vertical = 20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "⚔️ MATCH STARTING ⚔️",
+                                text = "⚔️ MATCH ON! ⚔️",
                                 style = MaterialTheme.typography.titleLarge.copy(
                                     fontWeight = FontWeight.Black,
-                                    color = Color(0xFFFFD700),
+                                    color = Color.White,
                                     letterSpacing = 2.sp
                                 )
                             )
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = if (matchStartCountdown == 1) "GO! 🚀" else "$matchStartCountdown",
+                                text = "🚀 GO!",
                                 style = MaterialTheme.typography.displayLarge.copy(
                                     fontWeight = FontWeight.Black,
-                                    fontSize = 72.sp,
-                                    color = if (matchStartCountdown == 1) Color(0xFF22C55E) else Color.White
-                                )
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = "Get ready for Question 1!",
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    color = Color.White.copy(alpha = 0.8f)
+                                    fontSize = 48.sp,
+                                    color = Color.White
                                 )
                             )
                         }

@@ -95,8 +95,8 @@ CREATE TABLE public.profiles (
   role_verified_by uuid,
   role_rejection_reason text,
   institution_id uuid,
-  academic_level text DEFAULT 'Undergraduate'::text,
-  academic_tier text DEFAULT 'achiever'::text,
+  academic_level text,
+  academic_tier text CHECK (academic_tier IS NULL OR (academic_tier = ANY (ARRAY['explorer'::text, 'achiever'::text, 'scholar'::text]))),
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id),
   CONSTRAINT profiles_institution_id_fkey FOREIGN KEY (institution_id) REFERENCES public.institutions(id),
@@ -335,6 +335,10 @@ CREATE TABLE public.app_stats (
   uptime text NOT NULL DEFAULT '99.9%'::text,
   user_rating text NOT NULL DEFAULT '4.9/5'::text,
   updated_at timestamp with time zone DEFAULT now(),
+  total_users text NOT NULL DEFAULT '0'::text,
+  quizzes_taken text NOT NULL DEFAULT '0'::text,
+  documents_uploaded text NOT NULL DEFAULT '0'::text,
+  podcasts_generated text NOT NULL DEFAULT '0'::text,
   CONSTRAINT app_stats_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.social_users (
@@ -758,6 +762,7 @@ CREATE TABLE public.user_stats (
   weak_areas ARRAY DEFAULT '{}'::text[],
   streak_freezes integer NOT NULL DEFAULT 0,
   last_daily_quest_claimed_date text NOT NULL DEFAULT ''::text,
+  hasclaimedfirstquestbonus integer NOT NULL DEFAULT 0,
   CONSTRAINT user_stats_pkey PRIMARY KEY (user_id),
   CONSTRAINT user_stats_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );

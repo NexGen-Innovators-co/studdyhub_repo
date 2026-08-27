@@ -10,6 +10,7 @@ export class StreamingHandler {
   private controller: ReadableStreamDefaultController;
   private closed = false;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private disconnectCallbacks: Array<() => void> = [];
 
   constructor(controller: ReadableStreamDefaultController) {
     this.encoder = new TextEncoder();
@@ -18,6 +19,17 @@ export class StreamingHandler {
 
   get isClosed(): boolean {
     return this.closed;
+  }
+
+  /** Register a callback to be invoked when the client disconnects mid-stream. */
+  onClientDisconnect(cb: () => void) {
+    this.disconnectCallbacks.push(cb);
+  }
+
+  private notifyDisconnect() {
+    for (const cb of this.disconnectCallbacks) {
+      try { cb(); } catch { /* ignore */ }
+    }
   }
 
   sendEvent(event: StreamEvent) {
@@ -29,6 +41,7 @@ export class StreamingHandler {
       // Stream was closed by the client disconnecting
       this.closed = true;
       this.stopHeartbeat();
+      this.notifyDisconnect();
     }
   }
 
@@ -123,6 +136,7 @@ export class StreamingHandler {
     if (this.closed) return;
     this.stopHeartbeat();
     this.closed = true;
+    this.notifyDisconnect();
     try {
       this.controller.close();
     } catch (_) {
