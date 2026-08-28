@@ -503,14 +503,13 @@ export const Header: React.FC<HeaderProps> = ({
   // captured or carried over from AppHeader via window.__pwaPrompt).
   const hasInstallPrompt = !isPwaInstalled && (!!localPromptRef.current || !!getPwaPrompt());
 
-  const GITHUB_RELEASES_URL = 'https://github.com/NexGen-Innovators-co/studdyhub_repo/releases/latest';
+  const APK_DOWNLOAD_URL = '/StuddyHub-v1.0-beta.1.apk';
 
   const InstallAppButton = () => {
     return (
       <a
-        href={GITHUB_RELEASES_URL}
-        target="_blank"
-        rel="noopener noreferrer"
+        href={APK_DOWNLOAD_URL}
+        download="StuddyHub-v1.0-beta.1.apk"
       >
         <Button
           variant="outline"
@@ -518,7 +517,7 @@ export const Header: React.FC<HeaderProps> = ({
           className="hidden md:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200 rounded-full text-xs sm:text-sm"
         >
           <Download className="h-4 w-4 mr-2 flex-shrink-0" />
-          <span className="lg:inline hidden xl:inline">Download APK</span>
+          <span className="lg:inline hidden xl:inline">Download App</span>
         </Button>
       </a>
     );
@@ -586,17 +585,16 @@ export const Header: React.FC<HeaderProps> = ({
                     </button>
                   </div>
 
-                  {/* Download APK in menu */}
+                  {/* Download App in menu */}
                   <div className="p-3 border-t border-slate-200 dark:border-slate-700">
                     <a
-                      href={GITHUB_RELEASES_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      href={APK_DOWNLOAD_URL}
+                      download="StuddyHub-v1.0-beta.1.apk"
                       onClick={() => setIsAppMenuOpen(false)}
                       className="w-full px-4 py-3 flex items-center gap-3 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
                     >
                       <Download className="h-5 w-5 flex-shrink-0" />
-                      <span>Download APK</span>
+                      <span>Download App</span>
                     </a>
                   </div>
                 </div>

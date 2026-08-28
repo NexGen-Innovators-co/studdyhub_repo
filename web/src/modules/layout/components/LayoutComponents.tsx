@@ -243,23 +243,26 @@ export const AppHeader: React.FC<{
   const showInstallInstructions = () => {
     toast(
       <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-        <h3 className="font-bold text-lg mb-2">Install StuddyHub on Mobile</h3>
+        <h3 className="font-bold text-lg mb-2">Install StuddyHub on Your Phone</h3>
         <div className="space-y-2 text-sm">
           <p className="flex items-center gap-2">
-            <Smartphone className="h-4 w-4 text-blue-500" />
-            <strong>iOS (Safari):</strong> Tap Share → Add to Home Screen
+            <Smartphone className="h-4 w-4 text-green-500" />
+            <strong>Android:</strong> Tap the button below to download, then open the file
           </p>
           <p className="flex items-center gap-2">
-            <Smartphone className="h-4 w-4 text-green-500" />
-            <strong>Android (Chrome):</strong> Tap Menu → Install App
+            <Smartphone className="h-4 w-4 text-blue-500" />
+            <strong>iPhone:</strong> Tap Share → Add to Home Screen
           </p>
         </div>
-        <Button
-          onClick={() => window.open('https://studdyhub.vercel.app/install-guide', '_blank')}
-          className="w-full mt-3"
+        <a
+          href={APK_DOWNLOAD_URL}
+          download="StuddyHub-v1.0-beta.1.apk"
         >
-          View Detailed Guide
-        </Button>
+          <Button className="w-full mt-3">
+            <Download className="h-4 w-4 mr-2" />
+            Download App
+          </Button>
+        </a>
       </div>,
       { duration: 10000, position: 'bottom-center' }
     );
@@ -269,15 +272,14 @@ export const AppHeader: React.FC<{
   const isMobileDevice = () =>
     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-  const GITHUB_RELEASES_URL = 'https://github.com/NexGen-Innovators-co/studdyhub_repo/releases/latest';
+  const APK_DOWNLOAD_URL = '/StuddyHub-v1.0-beta.1.apk';
 
   // Download APK Button Component
   const InstallAppButton = () => {
     return (
       <a
-        href={GITHUB_RELEASES_URL}
-        target="_blank"
-        rel="noopener noreferrer"
+        href={APK_DOWNLOAD_URL}
+        download="StuddyHub-v1.0-beta.1.apk"
       >
         <Button
           variant="outline"
@@ -285,7 +287,7 @@ export const AppHeader: React.FC<{
           className="hidden md:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200 rounded-full hover:scale-105 active:scale-95 transition-all duration-300"
         >
           <Download className="h-4 w-4 mr-2" />
-          Download APK
+          Download App
         </Button>
       </a>
     );
@@ -447,15 +449,14 @@ export const AppHeader: React.FC<{
       {/* Mobile Menu Button */}
       <div className="flex items-center md:hidden gap-1">
         <a
-          href={GITHUB_RELEASES_URL}
-          target="_blank"
-          rel="noopener noreferrer"
+          href={APK_DOWNLOAD_URL}
+          download="StuddyHub-v1.0-beta.1.apk"
         >
           <Button
             variant="outline"
             size="icon"
             className="rounded-full min-w-[44px] min-h-[44px] w-11 h-11"
-            aria-label="Download APK"
+            aria-label="Download App"
           >
             <Download className="h-5 w-5" />
           </Button>
@@ -487,14 +488,13 @@ export const AppHeader: React.FC<{
           <nav className="flex flex-col gap-1 p-6">
             {/* Download APK in Mobile Menu */}
             <a
-              href={GITHUB_RELEASES_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+              href={APK_DOWNLOAD_URL}
+              download="StuddyHub-v1.0-beta.1.apk"
               onClick={() => setIsMenuOpen(false)}
               className="w-full mb-2 min-h-[44px] flex items-center justify-center gap-2 px-4 py-3 rounded-md bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-200 font-medium"
             >
               <Download className="h-5 w-5" />
-              Download APK
+              Download App
             </a>
 
             <a
