@@ -517,7 +517,7 @@ export const Header: React.FC<HeaderProps> = ({
 
     if (device === 'android') {
       return (
-        <a href={GITHUB_RELEASES_URL} target="_blank" rel="noopener noreferrer">
+        <a href={APK_DOWNLOAD_URL} download="StuddyHub-v1.0-beta.1.apk">
           <Button
             variant="outline"
             size="sm"
@@ -615,9 +615,8 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="p-3 border-t border-slate-200 dark:border-slate-700">
                     {detectDevice() === 'android' ? (
                       <a
-                        href={GITHUB_RELEASES_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        href={APK_DOWNLOAD_URL}
+                        download="StuddyHub-v1.0-beta.1.apk"
                         onClick={() => setIsAppMenuOpen(false)}
                         className="w-full px-4 py-3 flex items-center gap-3 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
                       >
