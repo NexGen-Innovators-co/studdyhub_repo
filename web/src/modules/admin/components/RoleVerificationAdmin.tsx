@@ -176,36 +176,38 @@ const RoleVerificationAdmin: React.FC = () => {
 
     try {
       // Try RPC first (atomic, handles both tables)
-      await apiClient.rpc('approve_role_request', {
-        _request_id: selectedRequest.id,
-        _admin_id: user.id,
-        _review_notes: reviewNotes || null,
-      });
-    } catch (_rpcError: any) {
-      console.warn('RPC approve_role_request failed, falling back to direct updates:', _rpcError.message);
-      // Fallback: update both tables directly
       try {
-        await apiClient.patch(`role-verification-requests/${selectedRequest.id}`, {
-            status: 'approved',
-            reviewed_by: user.id,
-            reviewed_at: new Date().toISOString(),
-            review_notes: reviewNotes || null,
-            updated_at: new Date().toISOString(),
-          });
-      } catch (reqErr: any) {
-        throw reqErr;
-      }
+        await apiClient.rpc('approve_role_request', {
+          _request_id: selectedRequest.id,
+          _admin_id: user.id,
+          _review_notes: reviewNotes || null,
+        });
+      } catch (_rpcError: any) {
+        console.warn('RPC approve_role_request failed, falling back to direct updates:', _rpcError.message);
+        // Fallback: update both tables directly
+        try {
+          await apiClient.patch(`role-verification-requests/${selectedRequest.id}`, {
+              status: 'approved',
+              reviewed_by: user.id,
+              reviewed_at: new Date().toISOString(),
+              review_notes: reviewNotes || null,
+              updated_at: new Date().toISOString(),
+            });
+        } catch (reqErr: any) {
+          throw reqErr;
+        }
 
-      try {
-        await apiClient.patch(`profiles/${selectedRequest.user_id}`, {
-            user_role: selectedRequest.requested_role,
-            role_verification_status: 'verified',
-            role_verified_at: new Date().toISOString(),
-            role_verified_by: user.id,
-            role_rejection_reason: null,
-          } as any);
-      } catch (profErr: any) {
-        console.warn('Profile update failed (may need admin RLS policy):', profErr.message);
+        try {
+          await apiClient.patch(`profiles/${selectedRequest.user_id}`, {
+              user_role: selectedRequest.requested_role,
+              role_verification_status: 'verified',
+              role_verified_at: new Date().toISOString(),
+              role_verified_by: user.id,
+              role_rejection_reason: null,
+            } as any);
+        } catch (profErr: any) {
+          console.warn('Profile update failed (may need admin RLS policy):', profErr.message);
+        }
       }
 
       toast.success(`Approved ${selectedRequest.profile?.full_name || 'user'} as ${ROLE_LABELS[selectedRequest.requested_role] || selectedRequest.requested_role}`);
