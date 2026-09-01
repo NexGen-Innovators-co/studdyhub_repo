@@ -1,58 +1,44 @@
 import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 
 export const addPodcastListener = async (podcastId: string, userId: string | null) => {
   if (!userId) return null;
   const now = new Date().toISOString();
 
   // Check if listener row already exists to avoid duplicates
-  const { data: existing } = await supabase
-    .from('podcast_listeners')
-    .select('id')
-    .eq('podcast_id', podcastId)
-    .eq('user_id', userId)
-    .maybeSingle();
+  const existing = await apiClient.get('/v1/podcast-listeners', { select: 'id', podcast_id: podcastId, user_id: userId }) as any;
 
   if (existing) {
     // Reactivate existing row
-    const { data, error } = await supabase
-      .from('podcast_listeners')
-      .update({ is_active: true, joined_at: now })
-      .eq('id', existing.id)
-      .select()
-      .single();
-    if (error) throw error;
+    const data = await apiClient.patch(`/v1/podcast-listeners/${existing.id}`, { is_active: true, joined_at: now });
     return data;
   }
 
-  const { data, error } = await supabase.from('podcast_listeners').insert({ podcast_id: podcastId, user_id: userId, joined_at: now, is_active: true }).select().single();
-  if (error) throw error;
+  const data = await apiClient.post('/v1/podcast-listeners', { podcast_id: podcastId, user_id: userId, joined_at: now, is_active: true });
   return data;
 };
 
 export const removePodcastListener = async (podcastId: string, userId: string | null) => {
   if (!userId) return null;
   const now = new Date().toISOString();
-  const { data, error } = await supabase.from('podcast_listeners').update({ is_active: false, left_at: now }).eq('podcast_id', podcastId).eq('user_id', userId).select().maybeSingle();
-  if (error) throw error;
+  const data = await apiClient.patch(`/v1/podcast-listeners?podcast_id=${podcastId}&user_id=${userId}`, { is_active: false, left_at: now });
   return data;
 };
 
 export const createParticipationRequest = async (podcastId: string, userId: string | null, requestType: 'speak' | 'cohost') => {
   if (!userId) return null;
   const now = new Date().toISOString();
-  const { data, error } = await supabase.from('podcast_participation_requests').insert({ podcast_id: podcastId, user_id: userId, request_type: requestType, status: 'pending', created_at: now }).select().single();
-  if (error) throw error;
+  const data = await apiClient.post('/v1/podcast-participation-requests', { podcast_id: podcastId, user_id: userId, request_type: requestType, status: 'pending', created_at: now });
   return data;
 };
 
 export const saveTranscriptionResult = async (podcastId: string, fileUrl: string, transcript: string, summary?: string, userId?: string | null, script?: string | null) => {
   const now = new Date().toISOString();
-  const { data, error } = await supabase.from('audio_processing_results').insert({ file_url: fileUrl, transcript, summary, status: 'completed', created_at: now, user_id: userId || null }).select().single();
-  if (error) throw error;
+  const data = await apiClient.post('/v1/audio-processing-results', { file_url: fileUrl, transcript, summary, status: 'completed', created_at: now, user_id: userId || null });
 
   // Update podcast visual_assets with transcript metadata (preserve existing)
   try {
-    const { data: podcastData } = await supabase.from('ai_podcasts').select('visual_assets').eq('id', podcastId).maybeSingle();
+    const podcastData = await apiClient.get(`/v1/ai-podcasts/${podcastId}`, { select: 'visual_assets' }) as any;
     let visual = podcastData?.visual_assets || {};
     if (typeof visual === 'string') {
       try { visual = JSON.parse(visual); } catch (e) { visual = {}; }
@@ -60,7 +46,7 @@ export const saveTranscriptionResult = async (podcastId: string, fileUrl: string
     visual = { ...(visual || {}), transcript: { file_url: fileUrl, summary, length: transcript?.length || 0 } };
     // Also attempt to attach the transcript to the podcast's audio_segments
     try {
-      const { data: podcastRow } = await supabase.from('ai_podcasts').select('audio_segments').eq('id', podcastId).maybeSingle();
+      const podcastRow = await apiClient.get(`/v1/ai-podcasts/${podcastId}`, { select: 'audio_segments' }) as any;
       let segments: any[] = [];
       if (podcastRow && podcastRow.audio_segments) {
         try { segments = typeof podcastRow.audio_segments === 'string' ? JSON.parse(podcastRow.audio_segments) : podcastRow.audio_segments; } catch (e) { segments = []; }
@@ -93,11 +79,11 @@ export const saveTranscriptionResult = async (podcastId: string, fileUrl: string
       // Update visual_assets, audio_segments and top-level script (if provided) in one call
       const updatePayload: any = { visual_assets: visual, audio_segments: segments };
       if (script) updatePayload.script = script;
-      await supabase.from('ai_podcasts').update(updatePayload).eq('id', podcastId);
+      await apiClient.patch(`/v1/ai-podcasts/${podcastId}`, updatePayload);
     } catch (attachErr) {
       // If attaching to audio_segments fails, at least persist the visual_assets metadata
       try { 
-        await supabase.from('ai_podcasts').update({ visual_assets: visual }).eq('id', podcastId); 
+        await apiClient.patch(`/v1/ai-podcasts/${podcastId}`, { visual_assets: visual }); 
       } catch (vErr) { 
         // console.warn('Failed to update visual_assets', vErr); 
       }
@@ -226,8 +212,7 @@ export const saveRecordingAsSegment = async (podcastId: string, blob: Blob) => {
     }
 
     // fetch existing audio_segments (maybeSingle to avoid PGRST116 when 0 rows)
-    const { data: existing, error: selErr } = await supabase.from('ai_podcasts').select('audio_segments').eq('id', podcastId).maybeSingle();
-    if (selErr) throw selErr;
+    const existing = await apiClient.get(`/v1/ai-podcasts/${podcastId}`, { select: 'audio_segments' }) as any;
 
     let segments: any[] = [];
     if (existing && existing.audio_segments) {
@@ -255,7 +240,7 @@ export const saveRecordingAsSegment = async (podcastId: string, blob: Blob) => {
     segments.push(newSegment);
 
     const payload = { audio_segments: segments };
-    const { error: upErr } = await supabase.from('ai_podcasts').update(payload).eq('id', podcastId);
+    const upErr = await apiClient.patch(`/v1/ai-podcasts/${podcastId}`, payload).catch((e: any) => e);
     if (upErr) throw upErr;
 
     return newSegment;
@@ -334,8 +319,7 @@ export const createRecordingSession = async (podcastId: string, userId?: string 
     const now = new Date().toISOString();
     const payload: any = { podcast_id: podcastId, status: 'in_progress', started_at: now };
     if (userId) payload.user_id = userId;
-    const { data, error } = await supabase.from('podcast_recordings').insert(payload).select().single();
-    if (error) throw error;
+    const data = await apiClient.post('/v1/podcast-recordings', payload);
     return data;
   } catch (e) {
     // console.warn('createRecordingSession failed', e);
@@ -398,7 +382,7 @@ export const finalizeRecording = async (podcastId: string, uploadSessionId: stri
   try {
     // mark recording as assembling in DB (best-effort)
     try {
-      await supabase.from('podcast_recordings').update({ status: 'assembling', updated_at: new Date().toISOString() }).eq('session_id', uploadSessionId).eq('podcast_id', podcastId);
+      await apiClient.patch(`/v1/podcast-recordings?session_id=${uploadSessionId}&podcast_id=${podcastId}`, { status: 'assembling', updated_at: new Date().toISOString() });
     } catch (e) { /* best-effort */ }
 
     // invoke edge function to assemble chunks

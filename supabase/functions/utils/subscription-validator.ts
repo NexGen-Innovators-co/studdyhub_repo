@@ -256,11 +256,24 @@ export class SubscriptionValidator {
       return {
         tier: 'genius',
         modelChain: [
+          'gemini-3.7-flash',
           'gemini-3.6-flash',
           'gemini-3.5-flash',
+          'gemini-3-flash-preview',
+          'gemini-2.5-pro',
+          'gemini-3.5-flash-lite',
+          'gemini-2.5-flash',
         ],
-        streamingChain: ['gemini-3.6-flash', 'gemini-3.5-flash'],
-        displayLabel: 'Gemini Pro',
+        streamingChain: [
+          'gemini-3.7-flash',
+          'gemini-3.6-flash',
+          'gemini-3.5-flash',
+          'gemini-3-flash-preview',
+          'gemini-2.5-pro',
+          'gemini-3.5-flash-lite',
+          'gemini-2.5-flash',
+        ],
+        displayLabel: 'Gemini 3.7 Flash',
       };
     }
 
@@ -271,30 +284,66 @@ export class SubscriptionValidator {
         return {
           tier: 'genius',
           modelChain: [
+            'gemini-3.7-flash',
             'gemini-3.6-flash',
             'gemini-3.5-flash',
+            'gemini-3-flash-preview',
+            'gemini-2.5-pro',
+            'gemini-3.5-flash-lite',
+            'gemini-2.5-flash',
           ],
-          streamingChain: ['gemini-3.6-flash', 'gemini-3.5-flash'],
-          displayLabel: 'Gemini Pro',
+          streamingChain: [
+            'gemini-3.7-flash',
+            'gemini-3.6-flash',
+            'gemini-3.5-flash',
+            'gemini-3-flash-preview',
+            'gemini-2.5-pro',
+            'gemini-3.5-flash-lite',
+            'gemini-2.5-flash',
+          ],
+          displayLabel: 'Gemini 3.7 Flash',
         };
       case 'scholar':
         return {
           tier: 'scholar',
           modelChain: [
-            'gemini-3.5-flash',
             'gemini-3.6-flash',
+            'gemini-3.5-flash',
+            'gemini-3-flash-preview',
+            'gemini-3.5-flash-lite',
+            'gemini-2.5-flash',
+            'gemini-2.5-flash-lite',
           ],
-          streamingChain: ['gemini-3.5-flash', 'gemini-3.6-flash'],
-          displayLabel: 'Gemini 2.5 Flash',
+          streamingChain: [
+            'gemini-3.6-flash',
+            'gemini-3.5-flash',
+            'gemini-3-flash-preview',
+            'gemini-3.5-flash-lite',
+            'gemini-2.5-flash',
+            'gemini-2.5-flash-lite',
+          ],
+          displayLabel: 'Gemini 3.6 Flash',
         };
       default:
         return {
           tier: 'free',
           modelChain: [
             'gemini-3.5-flash',
+            'gemini-3-flash-preview',
+            'gemini-3.5-flash-lite',
+            'gemini-3.1-flash-lite',
+            'gemini-2.5-flash',
+            'gemini-2.5-flash-lite',
           ],
-          streamingChain: ['gemini-3.5-flash'],
-          displayLabel: 'Gemini Flash',
+          streamingChain: [
+            'gemini-3.5-flash',
+            'gemini-3-flash-preview',
+            'gemini-3.5-flash-lite',
+            'gemini-3.1-flash-lite',
+            'gemini-2.5-flash',
+            'gemini-2.5-flash-lite',
+          ],
+          displayLabel: 'Gemini 3.5 Flash',
         };
     }
   }

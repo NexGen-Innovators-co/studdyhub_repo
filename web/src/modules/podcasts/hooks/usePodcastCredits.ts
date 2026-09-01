@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import { useSubscription, PlanType } from '../../../hooks/useSubscription';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 
 // ─── Credit cost per podcast type ───────────────────────────────────────────
 export const PODCAST_CREDIT_COSTS: Record<string, number> = {
@@ -77,16 +77,7 @@ export function usePodcastCredits(): UsePodcastCreditsReturn {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('podcast_credits' as any)
-        .select('balance')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching podcast credits:', error);
-      }
-
+      const data = await apiClient.get('podcast-credits', { user_id: user.id });
       setBalance((data as any)?.balance ?? 0);
     } catch (err) {
       console.error('Error in refreshCredits:', err);
@@ -98,13 +89,8 @@ export function usePodcastCredits(): UsePodcastCreditsReturn {
   // ─── Fetch credit packs (store items) ──────────────────────────────────
   const fetchCreditPacks = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('podcast_credit_packs' as any)
-        .select('id, name, credits, price_ghs, price_display')
-        .eq('is_active', true)
-        .order('sort_order', { ascending: true });
-
-      if (!error && data) {
+      const data = await apiClient.get('podcast-credit-packs', { is_active: 'true' });
+      if (data) {
         setCreditPacks(data as any as CreditPack[]);
       }
     } catch (err) {
@@ -117,14 +103,8 @@ export function usePodcastCredits(): UsePodcastCreditsReturn {
     if (!user?.id) return;
 
     try {
-      const { data, error } = await supabase
-        .from('podcast_credit_transactions' as any)
-        .select('id, amount, balance_after, transaction_type, description, reference_id, created_at')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (!error && data) {
+      const data = await apiClient.get('podcast-credit-transactions', { user_id: user.id });
+      if (data) {
         setTransactions(data as any as CreditTransaction[]);
       }
     } catch (err) {
@@ -155,15 +135,10 @@ export function usePodcastCredits(): UsePodcastCreditsReturn {
     if (!user?.id || monthlyGrant === 0) return false;
 
     try {
-      const { data, error } = await supabase.rpc('grant_monthly_podcast_credits', {
+      const data = await apiClient.rpc('grant_monthly_podcast_credits', {
         p_user_id: user.id,
         p_tier: tier,
       });
-
-      if (error) {
-        console.error('Error claiming monthly grant:', error);
-        return false;
-      }
 
       const result = data as any;
       if (result?.success) {
@@ -190,18 +165,13 @@ export function usePodcastCredits(): UsePodcastCreditsReturn {
       const pack = creditPacks.find(p => p.id === packId);
       if (!pack) return false;
 
-      const { data, error } = await supabase.rpc('add_podcast_credits', {
+      const data = await apiClient.rpc('add_podcast_credits', {
         p_user_id: user.id,
         p_amount: pack.credits,
         p_type: 'purchase',
         p_reference_id: paymentReference,
         p_description: `Purchased ${pack.name} (${pack.credits} credits)`,
       });
-
-      if (error) {
-        console.error('Error adding purchased credits:', error);
-        return false;
-      }
 
       const result = data as any;
       if (result?.success) {

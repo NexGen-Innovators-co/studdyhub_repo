@@ -47,6 +47,7 @@ export const AUTO_APPROVE = new Set<string>([
   'update_flashcard_review',
   'create_note',
   'create_flashcard',
+  'create_flashcards_from_note',
   'create_quiz',
   'create_schedule_item',
   'create_document_folder',

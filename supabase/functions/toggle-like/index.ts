@@ -26,7 +26,7 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { post_id, is_liked } = body;
+    const { post_id } = body;
 
     if (!post_id) {
       return createErrorResponse('post_id is required', 400);
@@ -34,7 +34,21 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    if (is_liked) {
+    // Check current like state — don't rely on client sending is_liked
+    const { data: existingLike, error: checkError } = await supabase
+      .from('social_likes')
+      .select('id')
+      .eq('post_id', post_id)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (checkError && checkError.code !== 'PGRST116') {
+      throw checkError;
+    }
+
+    const isCurrentlyLiked = !!existingLike;
+
+    if (isCurrentlyLiked) {
       // Unlike — delete from social_likes
       const { error } = await supabase
         .from('social_likes')
@@ -80,26 +94,6 @@ serve(async (req) => {
             },
             { onConflict: 'id' }
           );
-      }
-
-      // Idempotent like: if already exists, return success instead of throwing unique constraint error
-      const { data: existingLike, error: existingLikeError } = await supabase
-        .from('social_likes')
-        .select('id')
-        .eq('post_id', post_id)
-        .eq('user_id', userId)
-        .single();
-
-      if (existingLikeError && existingLikeError.code !== 'PGRST116') {
-        // PGRST116 = No rows found, continue insert, otherwise bubble real errors
-        throw existingLikeError;
-      }
-
-      if (existingLike) {
-        return new Response(
-          JSON.stringify({ success: true, is_liked: true, idempotent: true }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
       }
 
       const { error: insertError } = await supabase

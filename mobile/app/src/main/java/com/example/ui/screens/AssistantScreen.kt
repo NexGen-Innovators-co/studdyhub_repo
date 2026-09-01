@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import com.example.ui.components.StuddyListCard
 import com.example.ui.components.StuddySectionHeader
 import com.example.ui.components.StuddyTileCard
@@ -52,8 +53,10 @@ fun AssistantScreen(
     onNavigateToAddSchedule: () -> Unit,
     onNavigateToCreateQuiz: () -> Unit,
     onNavigateToCreateNote: () -> Unit,
-    onNavigateToCreateFlashcards: () -> Unit
+    onNavigateToCreateFlashcards: () -> Unit,
+    onShowComingSoon: (() -> Unit)? = null
 ) {
+    val context = LocalContext.current
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -160,11 +163,11 @@ fun AssistantScreen(
                 )
                 StuddyTileCard(
                     title = "AI Podcast",
-                    subtitle = "Listen and review",
+                    subtitle = "Coming Soon",
                     icon = Icons.Default.Headphones,
                     accent = tierAccent(),
                     modifier = Modifier.weight(1f),
-                    onClick = onNavigateToAIPodcast
+                    onClick = { android.widget.Toast.makeText(context, "AI Podcast coming soon!", android.widget.Toast.LENGTH_SHORT).show() }
                 )
             }
 

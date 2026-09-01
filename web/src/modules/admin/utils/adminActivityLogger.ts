@@ -2,6 +2,7 @@
 // Centralised fire-and-forget logger for admin_activity_logs.
 // Import and call from any admin component after a write operation.
 import { supabase } from '../../../integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 
 export interface AdminLogEntry {
   action: string;
@@ -21,18 +22,13 @@ async function getAdminUserIdForCurrentUser(): Promise<string | null> {
     return cachedAdminUserId;
   }
 
-  const { data, error } = await supabase
-    .from('admin_users')
-    .select('id')
-    .eq('user_id', user.id)
-    .limit(1)
-    .maybeSingle();
-
-  if (error || !data?.id) return null;
+  const data = await apiClient.get('admin-users', { user_id: user.id }) as any[];
+  const adminUser = Array.isArray(data) ? data[0] : data;
+  if (!adminUser?.id) return null;
 
   cachedAuthUserId = user.id;
-  cachedAdminUserId = data.id;
-  return data.id;
+  cachedAdminUserId = adminUser.id;
+  return adminUser.id;
 }
 
 /**
@@ -44,7 +40,7 @@ export async function logAdminActivity(entry: AdminLogEntry): Promise<void> {
     const adminUserId = await getAdminUserIdForCurrentUser();
     if (!adminUserId) return;
 
-    await supabase.from('admin_activity_logs').insert({
+    await apiClient.post('admin-activity-logs', {
       admin_id: adminUserId,
       action: entry.action,
       target_type: entry.target_type || null,

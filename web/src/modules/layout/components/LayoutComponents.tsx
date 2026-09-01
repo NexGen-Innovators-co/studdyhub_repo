@@ -269,25 +269,51 @@ export const AppHeader: React.FC<{
   const isMobileDevice = () =>
     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
+  const detectDevice = (): 'android' | 'ios' | 'desktop' => {
+    const ua = navigator.userAgent || navigator.vendor || '';
+    if (/android/i.test(ua)) return 'android';
+    if (/iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return 'ios';
+    return 'desktop';
+  };
+
   const GITHUB_RELEASES_URL = 'https://github.com/NexGen-Innovators-co/studdyhub_repo/releases/latest';
 
-  // Download APK Button Component
+  // Download App Button Component — device-aware
   const InstallAppButton = () => {
+    const device = detectDevice();
+
+    if (device === 'android') {
+      return (
+        <a href={GITHUB_RELEASES_URL} target="_blank" rel="noopener noreferrer">
+          <Button
+            variant="outline"
+            size="sm"
+            className="hidden md:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200 rounded-full hover:scale-105 active:scale-95 transition-all duration-300"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Download App
+          </Button>
+        </a>
+      );
+    }
+
+    // iOS or Desktop — show disabled button with toast
     return (
-      <a
-        href={GITHUB_RELEASES_URL}
-        target="_blank"
-        rel="noopener noreferrer"
+      <Button
+        variant="outline"
+        size="sm"
+        className="hidden md:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-200 rounded-full opacity-60 cursor-not-allowed"
+        onClick={() => {
+          if (device === 'ios') {
+            toast.info('StuddyHub is not available on iOS yet. Please use an Android device.');
+          } else {
+            toast.info('StuddyHub is a mobile app. Open this page on an Android phone to download.');
+          }
+        }}
       >
-        <Button
-          variant="outline"
-          size="sm"
-          className="hidden md:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200 rounded-full hover:scale-105 active:scale-95 transition-all duration-300"
-        >
-          <Download className="h-4 w-4 mr-2" />
-          Download APK
-        </Button>
-      </a>
+        <Download className="h-4 w-4 mr-2" />
+        Download App
+      </Button>
     );
   };
 
@@ -446,20 +472,29 @@ export const AppHeader: React.FC<{
 
       {/* Mobile Menu Button */}
       <div className="flex items-center md:hidden gap-1">
-        <a
-          href={GITHUB_RELEASES_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+        {detectDevice() === 'android' ? (
+          <a href={GITHUB_RELEASES_URL} target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" size="icon" className="rounded-full min-w-[44px] min-h-[44px] w-11 h-11" aria-label="Download App">
+              <Download className="h-5 w-5" />
+            </Button>
+          </a>
+        ) : (
           <Button
             variant="outline"
             size="icon"
-            className="rounded-full min-w-[44px] min-h-[44px] w-11 h-11"
-            aria-label="Download APK"
+            className="rounded-full min-w-[44px] min-h-[44px] w-11 h-11 opacity-60 cursor-not-allowed"
+            aria-label="Download App"
+            onClick={() => {
+              if (detectDevice() === 'ios') {
+                toast.info('StuddyHub is not available on iOS yet. Please use an Android device.');
+              } else {
+                toast.info('StuddyHub is a mobile app. Open this page on an Android phone to download.');
+              }
+            }}
           >
             <Download className="h-5 w-5" />
           </Button>
-        </a>
+        )}
         <Button
           variant="ghost"
           size="icon"
@@ -485,17 +520,34 @@ export const AppHeader: React.FC<{
       {isMenuOpen && (
         <div className="absolute top-full left-0 w-full bg-white dark:bg-gray-900 shadow-lg md:hidden">
           <nav className="flex flex-col gap-1 p-6">
-            {/* Download APK in Mobile Menu */}
-            <a
-              href={GITHUB_RELEASES_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setIsMenuOpen(false)}
-              className="w-full mb-2 min-h-[44px] flex items-center justify-center gap-2 px-4 py-3 rounded-md bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-200 font-medium"
-            >
-              <Download className="h-5 w-5" />
-              Download APK
-            </a>
+            {/* Download App in Mobile Menu — device-aware */}
+            {detectDevice() === 'android' ? (
+              <a
+                href={GITHUB_RELEASES_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setIsMenuOpen(false)}
+                className="w-full mb-2 min-h-[44px] flex items-center justify-center gap-2 px-4 py-3 rounded-md bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-200 font-medium"
+              >
+                <Download className="h-5 w-5" />
+                Download App
+              </a>
+            ) : (
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  if (detectDevice() === 'ios') {
+                    toast.info('StuddyHub is not available on iOS yet. Please use an Android device.');
+                  } else {
+                    toast.info('StuddyHub is a mobile app. Open this page on an Android phone to download.');
+                  }
+                }}
+                className="w-full mb-2 min-h-[44px] flex items-center justify-center gap-2 px-4 py-3 rounded-md bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-200 font-medium opacity-60 cursor-not-allowed"
+              >
+                <Download className="h-5 w-5" />
+                Download App
+              </button>
+            )}
 
             <a
               href="/#features"
@@ -631,7 +683,7 @@ export const AppFooter: React.FC = () => {
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mt-2">
               <span className="font-medium text-blue-700"><PhoneCallIcon /></span>
-              <span>027 169 2568</span>
+              <span>0534396808</span>
             </div>
           </div>
 

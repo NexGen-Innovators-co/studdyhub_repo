@@ -50,6 +50,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -88,6 +91,21 @@ fun AIChatScreen(
     val attachedFileList by viewModel.attachedFiles.collectAsStateWithLifecycle()
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+
+    // Restore scroll position when returning to this screen
+    LaunchedEffect(Unit) {
+        val savedIndex = state.lastScrollIndex
+        if (savedIndex > 0 && savedIndex < state.messages.size) {
+            listState.scrollToItem(savedIndex)
+        }
+    }
+
+    // Persist scroll position as the user scrolls
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex }
+            .collect { index -> viewModel.updateScrollPosition(index) }
+    }
+
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     
@@ -292,7 +310,7 @@ fun AIChatScreen(
                 "📝 Synthesize notes into a study guide",
                 "📊 Generate a flowchart diagram",
                 "❓ Create active-recall quiz questions",
-                "🎙️ Synthesize podcast audio breakdown"
+                "🔒 AI Podcast — Coming Soon"
             )
         }
         AcademicTier.ALL -> listOf(
@@ -507,26 +525,27 @@ fun AIChatScreen(
                     }
                 }
 
-                items(state.messages, key = { it.id }) { msg ->
+                // Read streaming state ONCE at LazyColumn level — all items share this snapshot.
+                // This prevents each item from individually subscribing to streamingState.value,
+                // which would cause ALL visible items to recompose on every SSE token.
+                val sActive = streamingState.value.active
+                val sMsgId = streamingState.value.messageId
+                val sContent = streamingState.value.content
+                val sSteps = streamingState.value.steps
+
+                items(state.messages, key = { it.id }, contentType = { it.role }) { msg ->
                     val isUser = msg.role == "user"
-                    // Heavy parsing is cached per message: the list recomposes on every streaming
-                    // token, so re-running <thinking> extraction and the thinking-steps JSON parse
-                    // for every visible message each frame was a big chunk of the scrolling jank
-                    // while an AI reply was streaming in.
                     val parsed = remember(msg.id, msg.content) {
                         if (!isUser) parseThinkingAndContent(msg.content) else Pair(null, msg.content)
                     }
                     val thinkingText = parsed.first
                     val remainingText = parsed.second
 
-                    // Live streaming bubble: steps + partial content arrive in real time (SSE,
-                    // same as the web) and are rendered here until the stream completes, after
-                    // which the persisted message (clean content + stored steps) takes over.
-                    val isStreamingThis = !isUser && streamingState.value.active && msg.id == streamingState.value.messageId
+                    val isStreamingThis = !isUser && sActive && msg.id == sMsgId
                     val storedSteps = remember(msg.id, msg.thinkingStepsJson) {
                         if (!isUser) parseStoredThinkingSteps(msg.thinkingStepsJson) else emptyList()
                     }
-                    val liveSteps = remember(streamingState.value.steps) { renderLiveStepLines(streamingState.value.steps) }
+                    val liveSteps = if (isStreamingThis) remember(sSteps) { renderLiveStepLines(sSteps) } else emptyList()
                     val displaySteps = when {
                         isStreamingThis -> liveSteps
                         storedSteps.isNotEmpty() -> storedSteps
@@ -547,7 +566,8 @@ fun AIChatScreen(
                                 // Collapsible Thinking / Reasoning Process — shows the live agent
                                 // steps while streaming, the stored steps on history replay, and
                                 // legacy <thinking> blocks for old messages.
-                                val showThinkingCard = !isUser && (isStreamingThis || displaySteps.isNotEmpty() || thinkingText != null)
+                                // Only show the thinking card if there's actual content to display.
+                                val showThinkingCard = !isUser && (displaySteps.isNotEmpty() || thinkingText != null)
                                 if (showThinkingCard) {
                                     // Always expanded while streaming so the user watches the steps flow.
                                     val isExpanded = if (isStreamingThis) true else (expandedReasoning[msg.id] ?: false)
@@ -731,11 +751,11 @@ fun AIChatScreen(
                                             }
                                             if (isStreamingThis) {
                                                 // Streamed content flows into the bubble live.
-                                                if (streamingState.value.content.isBlank()) {
+                                                if (sContent.isBlank()) {
                                                     ChatBubbleTypingDots()
                                                 } else {
                                                     ChatMarkdownRenderer(
-                                                        text = streamingState.value.content,
+                                                        text = sContent,
                                                         modifier = Modifier.fillMaxWidth(),
                                                         streaming = true
                                                     )
@@ -908,7 +928,11 @@ fun AIChatScreen(
                 }
 
                 val hasPendingModelMessage = state.messages.any { !it.role.equals("user", ignoreCase = true) && it.content.isBlank() }
-                if (state.isSending && !hasPendingModelMessage) {
+                // Only show the typing bubble when sending but NOT streaming.
+                // During streaming, the placeholder model message itself shows typing dots / content,
+                // so a separate bubble would cause item-count races in the LazyColumn.
+                val isStreamActive = streamingState.value.active
+                if (state.isSending && !hasPendingModelMessage && !isStreamActive) {
                     item {
                         OllieTypingBubble()
                     }
@@ -999,6 +1023,7 @@ fun AIChatScreen(
                             attachedFileList.forEach { file ->
                                 val isParsing = file.status == "parsing"
                                 val isFailed = file.status == "failed"
+                                val isProcessing = file.status == "processing"
                                 val typeLabel = when (file.fileType) {
                                     "pdf" -> "PDF Document"
                                     "image" -> "Image"
@@ -1009,6 +1034,7 @@ fun AIChatScreen(
                                 }
                                 val iconBg = when {
                                     isFailed -> MaterialTheme.colorScheme.error.copy(alpha = 0.10f)
+                                    isProcessing -> Color(0xFFFFF7ED)
                                     file.fileType == "pdf" -> Color(0xFFFEF2F2)
                                     file.fileType == "image" -> Color(0xFFEFF6FF)
                                     file.fileType in listOf("docx", "doc") -> Color(0xFFEFF6FF)
@@ -1016,6 +1042,7 @@ fun AIChatScreen(
                                 }
                                 val iconTint = when {
                                     isFailed -> MaterialTheme.colorScheme.error
+                                    isProcessing -> Color(0xFFF59E0B)
                                     file.fileType == "pdf" -> Color(0xFFEF4444)
                                     file.fileType == "image" -> Color(0xFF3B82F6)
                                     file.fileType in listOf("docx", "doc") -> Color(0xFF6366F1)
@@ -1023,6 +1050,7 @@ fun AIChatScreen(
                                 }
                                 val fileIcon = when {
                                     isFailed -> Icons.Default.ErrorOutline
+                                    isProcessing -> Icons.Default.HourglassTop
                                     file.fileType == "pdf" -> Icons.Default.PictureAsPdf
                                     file.fileType == "image" -> Icons.Default.Image
                                     file.fileType in listOf("docx", "doc") -> Icons.Default.Description
@@ -1071,6 +1099,7 @@ fun AIChatScreen(
                                                 text = when {
                                                     isFailed -> "${file.fileName} (failed)"
                                                     isParsing -> "${file.fileName}..."
+                                                    isProcessing -> "${file.fileName} (processing)"
                                                     else -> file.fileName
                                                 },
                                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
@@ -1080,7 +1109,12 @@ fun AIChatScreen(
                                             )
                                             Spacer(modifier = Modifier.height(1.dp))
                                             Text(
-                                                text = if (isFailed) "Could not process file" else if (isParsing) "Processing..." else typeLabel,
+                                                text = when {
+                                                    isFailed -> "Could not process file"
+                                                    isParsing -> "Processing..."
+                                                    isProcessing -> file.statusMessage ?: "Processing in background..."
+                                                    else -> typeLabel
+                                                },
                                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
                                             )
@@ -1226,12 +1260,12 @@ fun AIChatScreen(
                                 )
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                                 DropdownMenuItem(
-                                    text = { Text("Generate AI Podcast") },
-                                    leadingIcon = { Icon(Icons.Default.Mic, contentDescription = null, tint = tierAccent()) },
-                                    enabled = state.attachedNoteIds.isNotEmpty() || state.attachedDocIds.isNotEmpty(),
+                                    text = { Text("Generate AI Podcast (Coming Soon)") },
+                                    leadingIcon = { Icon(Icons.Default.Mic, contentDescription = null, tint = tierAccent().copy(alpha = 0.5f)) },
+                                    enabled = false,
                                     onClick = {
                                         isOptionsMenuOpen = false
-                                        isPodcastGeneratorOpen = true
+                                        android.widget.Toast.makeText(context, "AI Podcast coming soon!", android.widget.Toast.LENGTH_SHORT).show()
                                     }
                                 )
                             }
@@ -1374,7 +1408,15 @@ fun AIChatScreen(
             }
 
             if (minimapExpanded) {
-                // ── Expanded state: full-width message list overlay ──
+                // ── Click-outside-to-close overlay ──
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTapGestures { minimapExpanded = false }
+                        }
+                )
+                // ── Expanded state: message list panel ──
                 Surface(
                     shape = RoundedCornerShape(topStart = 18.dp),
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
@@ -1384,6 +1426,9 @@ fun AIChatScreen(
                         .width(200.dp)
                         .fillMaxHeight(0.7f)
                         .padding(top = 60.dp, bottom = 60.dp)
+                        .pointerInput(Unit) {
+                            detectTapGestures { /* consume taps inside panel */ }
+                        }
                 ) {
                     Column(modifier = Modifier.fillMaxSize()) {
                         // Header with close
@@ -1485,7 +1530,7 @@ fun AIChatScreen(
                     }
                 }
             } else {
-                // ── Collapsed pill ──
+                // ── Collapsed pill: tap to expand, drag to scroll ──
                 Surface(
                     shape = RoundedCornerShape(topStart = 14.dp, bottomStart = 14.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
@@ -1493,7 +1538,25 @@ fun AIChatScreen(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(top = 100.dp)
-                        .clickable { minimapExpanded = true }
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onTap = { minimapExpanded = true }
+                            )
+                        }
+                        .pointerInput(Unit) {
+                            detectDragGestures { change, dragAmount ->
+                                change.consume()
+                                val totalMsgs = state.messages.size
+                                if (totalMsgs > 0) {
+                                    val deltaItems = (-dragAmount.y / 8f).toInt()
+                                    val currentIdx = listState.firstVisibleItemIndex
+                                    val targetIdx = (currentIdx + deltaItems).coerceIn(0, totalMsgs - 1)
+                                    if (targetIdx != currentIdx) {
+                                        coroutineScope.launch { listState.scrollToItem(targetIdx) }
+                                    }
+                                }
+                            }
+                        }
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1802,8 +1865,8 @@ fun AIChatScreen(
         )
     }
 
-    // AI Podcast Episode Generator Modal
-    if (isPodcastGeneratorOpen) {
+    // AI Podcast Episode Generator Modal — DISABLED (Coming Soon)
+    if (false && isPodcastGeneratorOpen) {
         var podcastTitleInput by remember { mutableStateOf("") }
         var selectedStyle by remember { mutableStateOf("Deep-Dive Lecture") }
         val styles = listOf("Deep-Dive Lecture", "Exam Review", "Witty Banter", "Crash Course Summary")
@@ -1879,8 +1942,8 @@ fun AIChatScreen(
         )
     }
 
-    // Animated simulated Podcast Audio Player overlay card
-    if (isPodcastPlayerOpen && (state.isPodcastGenerating || state.lastGeneratedPodcast != null)) {
+    // Animated simulated Podcast Audio Player overlay card — DISABLED (Coming Soon)
+    if (false && isPodcastPlayerOpen && (state.isPodcastGenerating || state.lastGeneratedPodcast != null)) {
         Box(
             modifier = Modifier
                 .fillMaxSize()

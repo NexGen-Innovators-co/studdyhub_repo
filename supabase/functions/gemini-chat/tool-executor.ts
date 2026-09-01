@@ -85,18 +85,25 @@ export function toLegacyAction(toolName: string, args: any): LegacyAction | null
           }
         }
       };
+    case 'create_flashcards_from_note':
+      return {
+        type: 'GENERATE_FLASHCARDS',
+        params: {
+          noteTitle: a.noteTitle,
+          count: a.count || 5
+        }
+      };
     case 'create_quiz':
       return {
-        type: 'DB_ACTION',
+        type: 'GENERATE_QUIZ',
         params: {
-          table: 'quizzes',
-          operation: 'INSERT',
-          data: {
-            title: a.title,
-            questions: a.questions || [],
-            source_type: a.source_type || 'ai',
-            class_id: a.class_id ?? null
-          }
+          topics: Array.isArray(a.topics) ? a.topics : (a.title ? [a.title] : ['General Knowledge']),
+          focus_areas: Array.isArray(a.focus_areas) ? a.focus_areas : [],
+          num_questions: a.num_questions || 8,
+          difficulty: a.difficulty || 'auto',
+          title: a.title || '',
+          source_type: a.source_type || 'ai',
+          class_id: a.class_id ?? null
         }
       };
     case 'create_schedule_item':
@@ -176,23 +183,14 @@ export function toLegacyAction(toolName: string, args: any): LegacyAction | null
         }
       };
     case 'generate_podcast':
-      // Mirrors generatePodcast()'s row; status:'processing' triggers the
-      // background edge function exactly like the dedicated method does.
       return {
-        type: 'DB_ACTION',
+        type: 'GENERATE_PODCAST',
         params: {
-          table: 'ai_podcasts',
-          operation: 'INSERT',
-          data: {
-            title: a.title,
-            sources: Array.isArray(a.sourceIds) ? a.sourceIds : [],
-            style: a.style,
-            status: 'processing',
-            script: '',
-            audio_segments: {},
-            duration_minutes: 0,
-            podcast_type: 'audio'
-          }
+          title: a.title,
+          noteIds: Array.isArray(a.sourceIds) ? a.sourceIds : (Array.isArray(a.noteIds) ? a.noteIds : []),
+          documentIds: Array.isArray(a.documentIds) ? a.documentIds : [],
+          style: a.style || 'educational',
+          duration: a.duration || 'medium'
         }
       };
 
@@ -215,6 +213,8 @@ export function toLegacyAction(toolName: string, args: any): LegacyAction | null
       if (a.content !== undefined) updates.content = a.content;
       if (a.category !== undefined) updates.category = a.category;
       if (Array.isArray(a.tags)) updates.tags = a.tags;
+      console.log('[ToolExecutor] update_note raw args:', JSON.stringify({ noteTitle: a.noteTitle, title: a.title, contentLen: (a.content || '').length, contentPreview: (a.content || '').slice(0, 100), category: a.category, hasTags: Array.isArray(a.tags) }));
+      console.log('[ToolExecutor] update_note mapped updates:', JSON.stringify({ keys: Object.keys(updates), hasContent: 'content' in updates, contentLen: (updates.content || '').length }));
       return {
         type: 'DB_ACTION',
         params: { table: 'notes', operation: 'UPDATE', data: updates, filters: { title: a.noteTitle } }

@@ -70,7 +70,7 @@ fun ProfileScreen(
         ),
         BadgeItem(
             name = "Audio Scholar",
-            desc = "${profileState.recordingsCount} Lectures • ${profileState.podcastsCount} Podcasts",
+            desc = "${profileState.recordingsCount} Lectures • Podcasts Coming Soon",
             icon = Icons.Default.Headphones,
             color = tierPrimary()
         )

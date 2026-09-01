@@ -3,7 +3,7 @@
  */
 import { useEffect, useCallback } from 'react';
 import { offlineStorage } from '../utils/offlineStorage';
-import { supabase } from '../integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { toast } from 'sonner';
 
 export const useOfflineSync = (refreshData: () => void) => {
@@ -41,30 +41,33 @@ export const useOfflineSync = (refreshData: () => void) => {
 
         const tableName = tableMap[storeName] || storeName;
 
+        // Map database table names to API endpoint paths
+        const apiPathMap: Record<string, string> = {
+          social_users: 'social-users',
+          social_likes: 'social-likes',
+          social_bookmarks: 'social-bookmarks',
+          social_shares: 'social-shares',
+          podcast_listeners: 'podcast-listeners',
+          notes: 'notes',
+          documents: 'documents',
+        };
+        const apiPath = apiPathMap[tableName] || tableName;
+
         if (action === 'create') {
-          const { error: createError } = await supabase
-            .from(tableName)
-            .insert(data);
-          error = createError;
+          await apiClient.post(apiPath, data);
+          error = null;
         } else if (action === 'update') {
-          const { error: updateError } = await supabase
-            .from(tableName)
-            .update(data)
-            .eq('id', data.id);
-          error = updateError;
+          await apiClient.patch(`${apiPath}/${data.id}`, data);
+          error = null;
         } else if (action === 'delete') {
-          let query = supabase.from(tableName).delete();
-
           if (tableName === 'social_likes' || tableName === 'social_bookmarks') {
-            query = query.eq('post_id', data.post_id).eq('user_id', data.user_id);
+            await apiClient.delete(apiPath, { post_id: data.post_id, user_id: data.user_id });
           } else if (tableName === 'podcast_listeners') {
-            query = query.eq('podcast_id', data.podcast_id).eq('user_id', data.user_id);
+            await apiClient.delete(apiPath, { podcast_id: data.podcast_id, user_id: data.user_id });
           } else {
-            query = query.eq('id', data.id);
+            await apiClient.delete(`${apiPath}/${data.id}`);
           }
-
-          const { error: deleteError } = await query;
-          error = deleteError;
+          error = null;
         }
 
         if (!error) {

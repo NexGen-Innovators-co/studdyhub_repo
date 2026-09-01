@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../../integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { logAdminActivity } from '../utils/adminActivityLogger';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/components/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/components/table';
@@ -37,12 +38,9 @@ const AdminManagement = () => {
     const fetchAdmins = async () => {
         try {
             setLoading(true);
-            const { data, error } = await supabase
-                .from('admin_users')
-                .select('*')
-                .order('created_at', { ascending: false });
-
-            if (error) throw error;
+            const { data } = await apiClient.get('admin_users', {
+                order: 'created_at.desc',
+            }) as any;
 
             const typed = (data ?? []).map(
                 (row): AdminUser => ({
@@ -107,30 +105,19 @@ const AdminManagement = () => {
                 }
 
                 // *** IMPORTANT: Create a corresponding record in the `profiles` table ***
-                const { error: profileError } = await supabase
-                    .from('profiles')
-                    .insert({
-                        id: authData.user.id, // *** CRITICAL: Set `profiles.id` to `auth.users.id` ***
-                        email: newAdminEmail, // You might want to add the email here
-                        username: generateUniqueUsername(newAdminEmail), // Generate a username.
-                    });
+                await apiClient.post('profiles', {
+                    id: authData.user.id,
+                    email: newAdminEmail,
+                    username: generateUniqueUsername(newAdminEmail),
+                });
 
-                if (profileError) {
-
-                    toast.error(`Error creating profile: ${profileError.message}`);
-                    // Consider deleting the auth user if profile creation fails.
-                    await supabase.auth.admin.deleteUser(authData.user.id);
-                    return;
-                }
-
-                const { error } = await supabase.from('admin_users').insert({
+                await apiClient.post('admin_users', {
                     user_id: authData.user?.id,
                     email: newAdminEmail,
                     role: newAdminRole,
                     permissions: {},
                     is_active: true,
                 });
-                if (error) throw error;
 
                 toast.success('Admin created successfully.');
                 logAdminActivity({ action: 'create_admin', target_type: 'admin_users', target_id: authData.user?.id, details: { email: newAdminEmail, role: newAdminRole, method: 'new_user' } });
@@ -149,14 +136,13 @@ const AdminManagement = () => {
                     return;
                 }
 
-                const { error } = await supabase.from('admin_users').insert({
+                await apiClient.post('admin_users', {
                     user_id: selectedUser.id,
                     email: selectedUser.email,
                     role: newAdminRole,
                     permissions: {},
                     is_active: true,
                 });
-                if (error) throw error;
 
                 toast.success('Admin role assigned to selected user.');
                 logAdminActivity({ action: 'assign_admin_role', target_type: 'admin_users', target_id: selectedUser.id, details: { email: selectedUser.email, role: newAdminRole, method: 'existing_user' } });
@@ -181,11 +167,7 @@ const AdminManagement = () => {
     }
     const toggleActive = async (adminId: string, makeActive: boolean) => {
         try {
-            const { error } = await supabase
-                .from('admin_users')
-                .update({ is_active: makeActive })
-                .eq('id', adminId);
-            if (error) throw error;
+            await apiClient.patch(`admin_users/${adminId}`, { is_active: makeActive });
             toast.success(makeActive ? 'Admin activated' : 'Admin deactivated');
             logAdminActivity({ action: makeActive ? 'activate_admin' : 'deactivate_admin', target_type: 'admin_users', target_id: adminId, details: { is_active: makeActive } });
             fetchAdmins();
@@ -249,15 +231,11 @@ const AdminManagement = () => {
         try {
 
 
-            const { data, error } = await supabase
-                .from('profiles') // Replace with your user table name
-                .select('id, email, full_name') // Select relevant fields
-                .ilike('email', `%${searchTerm}%`) // Adjust search based on your needs
-                .limit(1000); // Limit the number of results
-
-            if (error) {
-                throw error;
-            }
+            const { data } = await apiClient.get('profiles', {
+                select: 'id,email,full_name',
+                email__ilike: `%${searchTerm}%`,
+                limit: '1000',
+            }) as any;
 
 
             setSearchResults(data || []);

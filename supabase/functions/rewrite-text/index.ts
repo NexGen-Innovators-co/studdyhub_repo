@@ -26,7 +26,7 @@ serve(async (req) => {
       : "Rewrite the following text to improve clarity, grammar, and flow while preserving the original meaning.";
     const prompt = `${stylePrompt}\n\n${text.substring(0, 4000)}`;
     const systemInstruction = "You are a professional text editor. Rewrite content to be clear, engaging, and well-written. Output ONLY the rewritten text — no meta comments.";
-    const models = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'];
+    const models = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
     let rewritten = text;
     for (const model of models) {
       try {

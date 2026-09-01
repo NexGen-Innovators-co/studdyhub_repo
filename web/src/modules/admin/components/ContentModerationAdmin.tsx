@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { logAdminActivity } from '@/modules/admin/utils/adminActivityLogger';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/modules/ui/components/card';
@@ -69,13 +70,7 @@ export const ContentModerationAdmin: React.FC = () => {
 
   const fetchSettings = async () => {
     try {
-      const { data, error } = await supabase
-        .from('system_settings')
-        .select('*')
-        .eq('key', 'content_moderation')
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
+      const data = await apiClient.get('system-settings', { key: 'content_moderation' });
 
       if (data?.value) {
         setSettings(data.value);
@@ -95,7 +90,7 @@ export const ContentModerationAdmin: React.FC = () => {
           blockedKeywords: ['spam', 'advertisement', 'buy now', 'click here']
         };
         
-        await supabase.from('system_settings').insert({
+        await apiClient.post('system-settings', {
           key: 'content_moderation',
           value: defaultSettings,
           description: 'Content moderation settings for educational posts'
@@ -113,45 +108,34 @@ export const ContentModerationAdmin: React.FC = () => {
       const startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
       const [
-        { count: totalCount },
-        { count: approvedCount },
-        { count: rejectedCount },
-        { data: categoryData }
+        totalCount,
+        approvedCount,
+        rejectedCount,
+        categoryData
       ] = await Promise.all([
-        supabase
-          .from('content_moderation_log')
-          .select('*', { count: 'exact', head: true })
-          .gte('created_at', startDate),
-        supabase
-          .from('content_moderation_log')
-          .select('*', { count: 'exact', head: true })
-          .eq('decision', 'approved')
-          .gte('created_at', startDate),
-        supabase
-          .from('content_moderation_log')
-          .select('*', { count: 'exact', head: true })
-          .eq('decision', 'rejected')
-          .gte('created_at', startDate),
-        supabase
-          .from('content_moderation_log')
-          .select('category, decision')
-          .gte('created_at', startDate)
-          .not('category', 'is', null)
+        apiClient.get('content-moderation-log', { created_at: `gte.${startDate}` }),
+        apiClient.get('content-moderation-log', { decision: 'approved', created_at: `gte.${startDate}` }),
+        apiClient.get('content-moderation-log', { decision: 'rejected', created_at: `gte.${startDate}` }),
+        apiClient.get('content-moderation-log', { created_at: `gte.${startDate}` })
       ]);
 
       // Calculate category distribution
       const catStats: Record<string, { approved: number; rejected: number }> = {};
-      categoryData?.forEach((item: any) => {
-        const cat = item.category || 'Unknown';
-        if (!catStats[cat]) {
-          catStats[cat] = { approved: 0, rejected: 0 };
-        }
-        if (item.decision === 'approved') {
-          catStats[cat].approved++;
-        } else {
-          catStats[cat].rejected++;
-        }
-      });
+      if (Array.isArray(categoryData)) {
+        categoryData
+          .filter((item: any) => item.category)
+          .forEach((item: any) => {
+            const cat = item.category || 'Unknown';
+            if (!catStats[cat]) {
+              catStats[cat] = { approved: 0, rejected: 0 };
+            }
+            if (item.decision === 'approved') {
+              catStats[cat].approved++;
+            } else {
+              catStats[cat].rejected++;
+            }
+          });
+      }
 
       const chartData = Object.entries(catStats).map(([name, data]) => ({
         name,
@@ -162,10 +146,10 @@ export const ContentModerationAdmin: React.FC = () => {
 
       setCategoryData(chartData);
       setStats({
-        total: totalCount || 0,
-        approved: approvedCount || 0,
-        rejected: rejectedCount || 0,
-        approvalRate: totalCount ? ((approvedCount || 0) / totalCount) * 100 : 0
+        total: Array.isArray(totalCount) ? totalCount.length : 0,
+        approved: Array.isArray(approvedCount) ? approvedCount.length : 0,
+        rejected: Array.isArray(rejectedCount) ? rejectedCount.length : 0,
+        approvalRate: Array.isArray(totalCount) && totalCount.length > 0 ? ((Array.isArray(approvedCount) ? approvedCount.length : 0) / totalCount.length) * 100 : 0
       });
     } catch (error) {
 
@@ -176,14 +160,8 @@ export const ContentModerationAdmin: React.FC = () => {
 
   const fetchRecentLogs = async () => {
     try {
-      const { data, error } = await supabase
-        .from('content_moderation_log')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (error) throw error;
-      setRecentLogs(data || []);
+      const data = await apiClient.get('content-moderation-log');
+      setRecentLogs(Array.isArray(data) ? data.slice(0, 20) : []);
     } catch (error) {
 
     }
@@ -193,22 +171,12 @@ export const ContentModerationAdmin: React.FC = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
-      const { error } = await supabase
-        .from('system_settings')
-        .upsert(
-          {
+      await apiClient.post('system-settings', {
             key: 'content_moderation',
             value: settings,
             description: 'Content moderation settings for educational posts',
             updated_by: user?.id
-          },
-          {
-            onConflict: 'key',
-            ignoreDuplicates: false
-          }
-        );
-
-      if (error) throw error;
+          });
 
       toast({
         title: 'Settings Saved',

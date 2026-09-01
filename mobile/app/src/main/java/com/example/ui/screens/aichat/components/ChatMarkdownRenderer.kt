@@ -56,6 +56,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.TextLayoutResult
 import coil.compose.SubcomposeAsyncImage
@@ -488,7 +490,7 @@ private fun DiagramCard(
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (onFixDiagram != null) {
+                    if (onFixDiagram != null && errorMessage != null) {
                         Button(
                             onClick = { onFixDiagram(code, language, errorMessage) },
                             colors = ButtonDefaults.buttonColors(
@@ -623,8 +625,15 @@ private fun DiagramWebView(
             onFixDiagram = onFixDiagram
         )
     } else {
-        AndroidView(
-            factory = { ctx ->
+        // Avoid recreating the WebView on every LazyColumn recomposition by only
+        // entering the factory when the HTML content actually changes.  The remember
+        // holds the last‐used hash so we can skip redundant compositions.
+        val htmlHash = remember(html) { html.hashCode() }
+        var lastFactoryHash by rememberSaveable { mutableIntStateOf(0) }
+        if (htmlHash != lastFactoryHash) {
+            lastFactoryHash = htmlHash
+            AndroidView(
+                factory = { ctx ->
                 WebView(ctx).apply {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
@@ -673,7 +682,8 @@ private fun DiagramWebView(
                 }
             },
             modifier = modifier
-        )
+            )
+        }
     }
 }
 
@@ -798,6 +808,8 @@ private fun ChatMermaidBlock(
     onFixDiagram: ((code: String, language: String, error: String?) -> Unit)? = null
 ) {
     var mermaidError by remember { mutableStateOf<String?>(null) }
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val isDark = remember(surfaceColor) { surfaceColor.luminance() < 0.5f }
     DiagramCard(
         title = "Mermaid Diagram · ${diagram.type}",
         code = diagram.code,
@@ -807,7 +819,7 @@ private fun ChatMermaidBlock(
         defaultHeight = 320.dp
     ) { fillModifier ->
         DiagramWebView(
-            html = buildMermaidHtml(diagram.code),
+            html = buildMermaidHtml(diagram.code, isDark),
             fallbackCode = diagram.code,
             language = "mermaid",
             onFixDiagram = onFixDiagram,
@@ -1306,19 +1318,24 @@ private fun escapeHtml(s: String): String =
 private fun quoteJs(s: String): String =
     JSONObject.quote(s).replace("</", "<\\/")
 
-private fun buildMermaidHtml(code: String): String {
+private fun buildMermaidHtml(code: String, isDark: Boolean = true): String {
     val escaped = escapeHtml(code)
+    val mermaidTheme = if (isDark) "dark" else "default"
+    val bgColor = if (isDark) "#1a1a2e" else "#ffffff"
+    val textColor = if (isDark) "#e0e0e0" else "#1a1a2e"
+    val errColor = if (isDark) "#f87171" else "#dc2626"
+    val loadingColor = if (isDark) "#61dafb" else "#2563eb"
     return """
     <!DOCTYPE html><html><head>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
     <script src="https://cdn.jsdelivr.net/npm/mermaid@9.4.3/dist/mermaid.min.js"></script>
     <style>
-      html,body{margin:0;padding:0;background:#282c34;width:100%;min-height:100%;}
+      html,body{margin:0;padding:0;background:$bgColor;width:100%;min-height:100%;}
       #container{width:100%;min-height:100%;display:flex;align-items:flex-start;justify-content:center;padding:10px;box-sizing:border-box;}
-      #diagram{width:100%;margin:0;opacity:0;transition:opacity 0.2s ease;}
+      #diagram{width:100%;margin:0;opacity:0;transition:opacity 0.2s ease;color:$textColor;}
       #diagram svg{width:100% !important;height:auto !important;max-width:100% !important;}
-      #err{display:none;color:#f87171;font-family:monospace;font-size:12px;white-space:pre-wrap;padding:12px;}
-      #loading{color:#61dafb;font-family:sans-serif;font-size:13px;padding:12px;}
+      #err{display:none;color:$errColor;font-family:monospace;font-size:12px;white-space:pre-wrap;padding:12px;}
+      #loading{color:$loadingColor;font-family:sans-serif;font-size:13px;padding:12px;}
     </style></head><body>
     <div id="err"></div>
     <div id="container"><div id="loading">Rendering diagram…</div><pre class="mermaid" id="diagram">$escaped</pre></div>
@@ -1334,7 +1351,7 @@ private fun buildMermaidHtml(code: String): String {
       if(l){
         l.style.display='none';
       }
-      try{AndroidBridge.onError(m);}catch(_){}
+      try{AndroidBridge.onError(m);}catch(brErr){console.log('Bridge error:',brErr);}
     }
     var renderAttempts = 0;
     function renderNow(){
@@ -1353,7 +1370,7 @@ private fun buildMermaidHtml(code: String): String {
         }
         mermaid.initialize({
           startOnLoad:false,
-          theme:'dark',
+          theme:'$mermaidTheme',
           securityLevel:'loose',
           flowchart:{useMaxWidth:true,htmlLabels:true},
           sequence:{useMaxWidth:true},
@@ -1362,6 +1379,13 @@ private fun buildMermaidHtml(code: String): String {
           }
         });
         mermaid.init(undefined, document.getElementById('diagram'));
+
+        // DOM fallback: if parseError didn't fire but the error div is visible,
+        // re-send its text so the Kotlin side captures the real error.
+        var errEl=document.getElementById('err');
+        if(errEl&&errEl.style.display==='block'&&errEl.textContent){
+          try{AndroidBridge.onError(errEl.textContent.replace('Mermaid error: ',''));}catch(_){}
+        }
         
         // Ensure SVG generated scales correctly
         var svg = document.querySelector('#diagram svg');
@@ -1407,7 +1431,7 @@ private fun buildChartJsHtml(config: String): String {
       var m=(e&&e.message)?e.message:String(e);
       document.getElementById('err').style.display='block';
       document.getElementById('err').textContent='Chart error: '+m;
-      try{AndroidBridge.onError(m);}catch(_){}
+      try{AndroidBridge.onError(m);}catch(brErr){console.log('Bridge error:',brErr);}
     }
     // ── Repair pipeline mirroring the web app's ChartJsRenderer ──
     function detectChartType(obj){
@@ -1486,7 +1510,7 @@ private fun buildDotHtml(dot: String): String {
       var m=(e&&e.message)?e.message:String(e);
       document.getElementById('err').style.display='block';
       document.getElementById('err').textContent='DOT error: '+m;
-      try{AndroidBridge.onError(m);}catch(_){}
+      try{AndroidBridge.onError(m);}catch(brErr){console.log('Bridge error:',brErr);}
     }
     try{
       var dotSrc = $safeDot;
@@ -1524,7 +1548,7 @@ private fun buildThreeJsHtml(code: String): String {
       var m=(e&&e.message)?e.message:String(e);
       document.getElementById('err').style.display='block';
       document.getElementById('err').textContent='3D error: '+m;
-      try{AndroidBridge.onError(m);}catch(_){}
+      try{AndroidBridge.onError(m);}catch(brErr){console.log('Bridge error:',brErr);}
     }
     // Repair pipeline mirroring the web app's ThreeJsRenderer.sanitizeThreeJsCode
     function sanitize(code){
@@ -1650,6 +1674,7 @@ private fun ListBlock(list: ChatBlock.ListBlock) {
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         list.items.forEachIndexed { idx, item ->
+            val formattedItem = remember(item) { parseChatInlineFormatting(item) }
             Row(
                 verticalAlignment = Alignment.Top,
                 modifier = Modifier.fillMaxWidth()
@@ -1663,7 +1688,7 @@ private fun ListBlock(list: ChatBlock.ListBlock) {
                     modifier = Modifier.width(20.dp)
                 )
                 Text(
-                    text = parseChatInlineFormatting(item),
+                    text = formattedItem,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f)
                 )
@@ -1691,8 +1716,9 @@ private fun BlockquoteBlock(quote: ChatBlock.Blockquote) {
                 .size(20.dp)
                 .padding(end = 4.dp)
         )
+        val formattedQuote = remember(quote.text) { parseChatInlineFormatting(quote.text) }
         Text(
-            text = parseChatInlineFormatting(quote.text),
+            text = formattedQuote,
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontStyle = FontStyle.Italic,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
@@ -1751,8 +1777,11 @@ private fun ChatCodeBlockElement(codeBlock: ChatBlock.CodeBlock) {
                     .background(Color.Black.copy(alpha = 0.05f), RoundedCornerShape(6.dp))
                     .padding(8.dp)
             ) {
+                val highlightedCode = remember(codeBlock.code, codeBlock.language) {
+                    highlightCode(codeBlock.code, codeBlock.language)
+                }
                 Text(
-                    text = highlightCode(codeBlock.code, codeBlock.language),
+                    text = highlightedCode,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1805,7 +1834,7 @@ private fun buildLatexHtml(math: String, textColorHex: String): String {
       var el=document.getElementById('err');
       el.style.display='block';
       el.textContent='LaTeX error: '+m;
-      try{AndroidBridge.onError(m);}catch(_){}
+      try{AndroidBridge.onError(m);}catch(brErr){console.log('Bridge error:',brErr);}
     }
     function renderNow(){
       try{
@@ -2136,8 +2165,9 @@ private fun TaskItemBlock(
             }
         )
         Spacer(modifier = Modifier.width(4.dp))
+        val formattedTaskText = remember(item.text) { parseChatInlineFormatting(item.text) }
         Text(
-            text = parseChatInlineFormatting(item.text),
+            text = formattedTaskText,
             style = MaterialTheme.typography.bodyMedium.copy(
                 textDecoration = if (checkedState) TextDecoration.LineThrough else TextDecoration.None,
                 color = if (checkedState) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface
@@ -2186,13 +2216,14 @@ private fun MarkdownTableBlock(table: ChatBlock.TableBlock) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     headerRow.forEachIndexed { colIdx, cell ->
+                        val formattedCell = remember(cell) { parseChatInlineFormatting(cell) }
                         Box(
                             modifier = Modifier
                                 .width(colWidths.getOrElse(colIdx) { 120.dp })
                                 .padding(horizontal = 10.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = parseChatInlineFormatting(cell),
+                                text = formattedCell,
                                 style = MaterialTheme.typography.labelMedium.copy(
                                     fontWeight = FontWeight.ExtraBold,
                                     color = MaterialTheme.colorScheme.primary
@@ -2224,13 +2255,14 @@ private fun MarkdownTableBlock(table: ChatBlock.TableBlock) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     row.forEachIndexed { colIdx, cell ->
+                        val formattedCell = remember(cell) { parseChatInlineFormatting(cell) }
                         Box(
                             modifier = Modifier
                                 .width(colWidths.getOrElse(colIdx) { 120.dp })
                                 .padding(horizontal = 10.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = parseChatInlineFormatting(cell),
+                                text = formattedCell,
                                 style = MaterialTheme.typography.bodyMedium,
                                 maxLines = 4,
                                 overflow = TextOverflow.Ellipsis
@@ -2344,14 +2376,25 @@ private fun YouTubeEmbedBlock(yt: ChatBlock.YouTubeBlock) {
             // YouTube iframe embed
             AndroidView(
                 factory = { ctx ->
+                    // Enable third-party cookies globally — required by YouTube's embed player
+                    // (error 152 = HTML5 player can't initialise without cookie access).
+                    android.webkit.CookieManager.getInstance().apply {
+                        setAcceptCookie(true)
+                    }
                     WebView(ctx).apply {
+                        // Accept third-party cookies for THIS WebView so YouTube's iframe
+                        // player can initialise without hitting error 152.
+                        android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
+                        settings.databaseEnabled = true
                         settings.useWideViewPort = true
                         settings.loadWithOverviewMode = true
                         settings.mediaPlaybackRequiresUserGesture = false
+                        settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                         setBackgroundColor(android.graphics.Color.TRANSPARENT)
                         overScrollMode = View.OVER_SCROLL_NEVER
+                        webChromeClient = object : android.webkit.WebChromeClient() {}
                         webViewClient = object : android.webkit.WebViewClient() {
                             override fun shouldOverrideUrlLoading(
                                 view: android.webkit.WebView?,
@@ -2373,7 +2416,7 @@ private fun YouTubeEmbedBlock(yt: ChatBlock.YouTubeBlock) {
                             }
                         }
                         loadDataWithBaseURL(
-                            null,
+                            "https://www.youtube.com",
                             """<!DOCTYPE html>
 <html>
 <head>
@@ -2388,7 +2431,7 @@ private fun YouTubeEmbedBlock(yt: ChatBlock.YouTubeBlock) {
   <iframe
     src="$embedUrl"
     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-    referrerpolicy="strict-origin-when-cross-origin"
+    referrerpolicy="origin"
     allowfullscreen>
   </iframe>
 </body>

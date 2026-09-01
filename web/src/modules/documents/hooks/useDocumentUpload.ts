@@ -149,7 +149,7 @@ export const useDocumentUpload = ({
       });
     }, 200);
 
-    const functionUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/document-processor';
+    const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/document-processor`;
 
     try {
       toast.info(`Uploading and processing "${selectedFile.name}"...`, {
@@ -336,7 +336,7 @@ export const useDocumentUpload = ({
         }
 
         const resp = await fetch(
-          'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/resume-processing',
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/resume-processing`,
           {
             method: 'POST',
             headers: {
@@ -412,7 +412,7 @@ export const useDocumentUpload = ({
     setProcessingDocuments(prev => new Set(prev).add(doc.id));
     onDocumentUpdated({ ...doc, processing_status: 'pending', processing_error: null });
 
-    const functionUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/document-processor';
+    const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/document-processor`;
 
     try {
       toast.info(`${doc.processing_status === 'failed' ? 'Retrying' : 'Starting'} analysis for "${doc.file_name}"...`);

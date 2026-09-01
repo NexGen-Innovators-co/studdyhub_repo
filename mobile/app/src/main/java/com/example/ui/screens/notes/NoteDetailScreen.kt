@@ -81,6 +81,7 @@ fun NoteDetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     
     var note by remember { mutableStateOf<NoteEntity?>(null) }
+    var noteNotFound by remember { mutableStateOf(false) }
 
     // Form states
     var editTitle by remember { mutableStateOf("") }
@@ -405,6 +406,8 @@ fun NoteDetailScreen(
                 tfValue = TextFieldValue(fetched.content, TextRange(fetched.content.length))
                 editAiSummary = fetched.aiSummary
                 editDocumentId = fetched.documentId
+            } else {
+                noteNotFound = true
             }
         }
     }
@@ -562,7 +565,34 @@ fun NoteDetailScreen(
                     .padding(innerPadding),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                if (noteNotFound) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.ErrorOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Note not found",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "This note may have been deleted or not yet synced.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = onNavigateBack) {
+                            Text("Go Back")
+                        }
+                    }
+                } else {
+                    CircularProgressIndicator()
+                }
             }
         } else {
             Column(
@@ -614,7 +644,7 @@ fun NoteDetailScreen(
                 }
 
                 // Translated view indicator / toggle
-                if (note!!.translatedText.isNotBlank()) {
+                if (!note?.translatedText.isNullOrBlank()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -623,7 +653,7 @@ fun NoteDetailScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Translation (${note!!.translatedLanguage})",
+                            text = "Translation (${note?.translatedLanguage ?: ""})",
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                         )
                         TextButton(onClick = { viewTranslated = !viewTranslated }) {
@@ -1686,14 +1716,16 @@ fun NoteDetailScreen(
                                 ttsEngine?.stop()
                                 isSpeaking = false
                             } else {
-                                val rawNoteText = if (viewTranslated && !note?.translatedText.isNullOrBlank()) note!!.translatedText else "$editTitle.\n\n$editContent"
-                                if (rawNoteText.isNotBlank() && ttsEngine != null) {
+                                val currentNote = note
+                                val engine = ttsEngine
+                                val rawNoteText = if (viewTranslated && currentNote != null && !currentNote.translatedText.isNullOrBlank()) currentNote.translatedText else "$editTitle.\n\n$editContent"
+                                if (rawNoteText.isNotBlank() && engine != null) {
                                     isSpeaking = true
                                     coroutineScope.launch {
                                         com.example.data.local.TtsSettings.speakWithAiNarration(
-                                            tts = ttsEngine!!,
+                                            tts = engine,
                                             rawText = rawNoteText,
-                                            utterancePrefix = "note_narration_${note?.id ?: "temp"}",
+                                            utterancePrefix = "note_narration_${currentNote?.id ?: "temp"}",
                                             isKid = false,
                                             onAllDone = { isSpeaking = false }
                                         )

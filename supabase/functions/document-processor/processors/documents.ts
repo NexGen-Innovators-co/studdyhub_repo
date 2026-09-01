@@ -66,12 +66,15 @@ async function extractPdfTextWithGemini(
 
   const base64 = uint8ToBase64(buffer);
 
-  // Cheapest/highest-quota models first: PDF text extraction is a mechanical task, so
-  // spending a scarce preview-model quota on it just starves the chain. gemini-2.5-flash-lite
-  // was removed — it now 404s ("no longer available to new users").
+  // Enough depth to survive quota exhaustion before hitting OpenRouter fallback.
   const models = [
+    'gemini-3.7-flash',
+    'gemini-3.6-flash',
     'gemini-3.5-flash',
-    'gemini-3.6-flash',];
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
+    'gemini-2.5-flash',
+  ];
 
   const prompt =
     `Extract ALL text content from this PDF document. ` +

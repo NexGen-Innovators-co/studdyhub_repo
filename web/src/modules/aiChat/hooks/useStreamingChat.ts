@@ -255,17 +255,26 @@ export const useStreamingChat = (): StreamingChatHook => {
                   break;
                 case 'done':
                   accumulatedDataRef.current.isDone = true;
-                  // Log the final 'done' payload for debugging
-                  // console.debug('[useStreamingChat] done payload:', data);
                   params.onComplete(data);
                   clearInterval(timeoutCheck);
                   stopStreaming();
                   return; // Important: loop ends successfully
                 case 'error':
-                  throw new Error(`Backend error: ${data.error || data.message || 'Unknown streaming error'}`);
+                  // Surface backend errors to the user instead of silently swallowing them
+                  const errMsg = data.error || data.message || 'Unknown streaming error';
+                  setStreamingState({
+                    isStreaming: false,
+                    isPaused: false,
+                    error: errMsg,
+                    currentMessageId: null,
+                  });
+                  params.onError(errMsg);
+                  clearInterval(timeoutCheck);
+                  stopStreaming();
+                  return;
               }
             } catch (e) {
-              //console.error('❌ [Streaming] Event processing error:', e);
+              // Non-fatal parse error on a single SSE event — skip and continue
             }
           }
         }
@@ -283,6 +292,16 @@ export const useStreamingChat = (): StreamingChatHook => {
             thinkingSteps: accumulatedDataRef.current.thinkingSteps,
             interrupted: true
           });
+        } else {
+          // Stream ended with no content and no done event — edge function likely timed out
+          const errMsg = 'The AI took too long to respond. Please try again.';
+          setStreamingState({
+            isStreaming: false,
+            isPaused: false,
+            error: errMsg,
+            currentMessageId: null,
+          });
+          params.onError(errMsg);
         }
         stopStreaming();
       }

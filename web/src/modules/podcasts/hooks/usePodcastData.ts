@@ -1,6 +1,6 @@
 // usePodcastData.ts - Data fetching hook extracted from PodcastPanel
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { supabase } from '../../../integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import type { PodcastData } from '../utils/podcastTypes';
 
 export interface CreatorInfo {
@@ -82,11 +82,7 @@ export function usePodcastData({ podcast, isOpen }: UsePodcastDataOptions): UseP
     setCreatorLoading(true);
     (async () => {
       try {
-        const { data } = await supabase
-          .from('social_users')
-          .select('id, display_name, avatar_url')
-          .eq('id', podcast.user_id)
-          .single();
+        const data = await apiClient.get('social-users', { id: podcast.user_id });
         if (!cancelled && data) setCreatorInfo(data);
       } catch (_e) {}
       if (!cancelled) setCreatorLoading(false);
@@ -99,22 +95,22 @@ export function usePodcastData({ podcast, isOpen }: UsePodcastDataOptions): UseP
     if (!podcast?.id || relatedLoading) return;
     setRelatedLoading(true);
     try {
-      let query = supabase
-        .from('ai_podcasts')
-        .select('id, title, description, cover_image_url, duration_minutes, listen_count, podcast_type, tags, created_at, user_id')
-        .neq('id', podcast.id)
-        .order('listen_count', { ascending: false })
-        .range(page * RELATED_PAGE_SIZE, (page + 1) * RELATED_PAGE_SIZE - 1);
+      const params: Record<string, string> = {
+        page: String(page + 1),
+        limit: String(RELATED_PAGE_SIZE),
+        exclude_id: podcast.id,
+        order: 'listen_count',
+      };
       if (podcast.tags && podcast.tags.length > 0) {
-        query = query.overlaps('tags', podcast.tags);
+        params.tags = podcast.tags.join(',');
       }
-      const { data } = await query;
-      if (data && data.length > 0) {
+      const data = await apiClient.get('ai-podcasts/related', params);
+      if (data && Array.isArray(data) && data.length > 0) {
         setRelatedPodcasts(prev => {
           const ids = new Set(prev.map(p => p.id));
-          const unique = data.filter(p => {
+          const unique = data.filter((p: any) => {
             if (ids.has(p.id)) return false;
-            ids.add(p.id); // also prevent within-batch duplicates
+            ids.add(p.id);
             return true;
           });
           return [...prev, ...unique];
@@ -133,19 +129,14 @@ export function usePodcastData({ podcast, isOpen }: UsePodcastDataOptions): UseP
     if (!podcast?.id || listenersLoading) return;
     setListenersLoading(true);
     try {
-      const { data } = await supabase
-        .from('podcast_listeners')
-        .select('id, user_id, joined_at')
-        .eq('podcast_id', podcast.id)
-        .order('joined_at', { ascending: false })
-        .range(page * LISTENERS_PAGE_SIZE, (page + 1) * LISTENERS_PAGE_SIZE - 1);
-      if (data && data.length > 0) {
+      const data = await apiClient.get('podcast-listeners', { podcast_id: podcast.id });
+      if (data && Array.isArray(data) && data.length > 0) {
         // Fetch user info separately since there's no FK from podcast_listeners to social_users
         const userIds = [...new Set(data.map((item: any) => item.user_id).filter(Boolean))];
-        const { data: users } = userIds.length > 0
-          ? await supabase.from('social_users').select('id, display_name, avatar_url').in('id', userIds)
-          : { data: [] };
-        const userMap = new Map((users || []).map((u: any) => [u.id, u]));
+        const users = userIds.length > 0
+          ? await apiClient.get('social-users')
+          : [];
+        const userMap = new Map((Array.isArray(users) ? users : []).map((u: any) => [u.id, u]));
         const mapped: ListenerEntry[] = data.map((item: any) => {
           const user = userMap.get(item.user_id);
           return {
@@ -194,11 +185,8 @@ export function usePodcastData({ podcast, isOpen }: UsePodcastDataOptions): UseP
     let cancelled = false;
     (async () => {
       try {
-        const { count } = await supabase
-          .from('podcast_listeners')
-          .select('*', { count: 'exact', head: true })
-          .eq('podcast_id', podcast.id);
-        if (!cancelled && typeof count === 'number') setDisplayListenCount(count);
+        const data = await apiClient.get('podcast-listeners', { podcast_id: podcast.id });
+        if (!cancelled && Array.isArray(data)) setDisplayListenCount(data.length);
       } catch (_e) {}
     })();
     return () => { cancelled = true; };

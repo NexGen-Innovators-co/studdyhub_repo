@@ -505,22 +505,47 @@ export const Header: React.FC<HeaderProps> = ({
 
   const GITHUB_RELEASES_URL = 'https://github.com/NexGen-Innovators-co/studdyhub_repo/releases/latest';
 
+  const detectDevice = (): 'android' | 'ios' | 'desktop' => {
+    const ua = navigator.userAgent || navigator.vendor || '';
+    if (/android/i.test(ua)) return 'android';
+    if (/iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return 'ios';
+    return 'desktop';
+  };
+
   const InstallAppButton = () => {
+    const device = detectDevice();
+
+    if (device === 'android') {
+      return (
+        <a href={GITHUB_RELEASES_URL} target="_blank" rel="noopener noreferrer">
+          <Button
+            variant="outline"
+            size="sm"
+            className="hidden md:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200 rounded-full text-xs sm:text-sm"
+          >
+            <Download className="h-4 w-4 mr-2 flex-shrink-0" />
+            <span className="lg:inline hidden xl:inline">Download App</span>
+          </Button>
+        </a>
+      );
+    }
+
     return (
-      <a
-        href={GITHUB_RELEASES_URL}
-        target="_blank"
-        rel="noopener noreferrer"
+      <Button
+        variant="outline"
+        size="sm"
+        className="hidden md:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-200 rounded-full text-xs sm:text-sm opacity-60 cursor-not-allowed"
+        onClick={() => {
+          if (device === 'ios') {
+            toast.info('StuddyHub is not available on iOS yet. Please use an Android device.');
+          } else {
+            toast.info('StuddyHub is a mobile app. Open this page on an Android phone to download.');
+          }
+        }}
       >
-        <Button
-          variant="outline"
-          size="sm"
-          className="hidden md:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200 rounded-full text-xs sm:text-sm"
-        >
-          <Download className="h-4 w-4 mr-2 flex-shrink-0" />
-          <span className="lg:inline hidden xl:inline">Download APK</span>
-        </Button>
-      </a>
+        <Download className="h-4 w-4 mr-2 flex-shrink-0" />
+        <span className="lg:inline hidden xl:inline">Download App</span>
+      </Button>
     );
   };
 
@@ -586,18 +611,35 @@ export const Header: React.FC<HeaderProps> = ({
                     </button>
                   </div>
 
-                  {/* Download APK in menu */}
+                  {/* Download App in menu — device-aware */}
                   <div className="p-3 border-t border-slate-200 dark:border-slate-700">
-                    <a
-                      href={GITHUB_RELEASES_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => setIsAppMenuOpen(false)}
-                      className="w-full px-4 py-3 flex items-center gap-3 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
-                    >
-                      <Download className="h-5 w-5 flex-shrink-0" />
-                      <span>Download APK</span>
-                    </a>
+                    {detectDevice() === 'android' ? (
+                      <a
+                        href={GITHUB_RELEASES_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setIsAppMenuOpen(false)}
+                        className="w-full px-4 py-3 flex items-center gap-3 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
+                      >
+                        <Download className="h-5 w-5 flex-shrink-0" />
+                        <span>Download App</span>
+                      </a>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setIsAppMenuOpen(false);
+                          if (detectDevice() === 'ios') {
+                            toast.info('StuddyHub is not available on iOS yet. Please use an Android device.');
+                          } else {
+                            toast.info('StuddyHub is a mobile app. Open this page on an Android phone to download.');
+                          }
+                        }}
+                        className="w-full px-4 py-3 flex items-center gap-3 transition-colors rounded-lg opacity-60 cursor-not-allowed"
+                      >
+                        <Download className="h-5 w-5 flex-shrink-0" />
+                        <span>Download App</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}

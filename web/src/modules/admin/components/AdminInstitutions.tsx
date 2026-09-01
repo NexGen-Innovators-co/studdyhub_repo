@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { Card, CardContent } from '@/modules/ui/components/card';
 import { Button } from '@/modules/ui/components/button';
 import { Badge } from '@/modules/ui/components/badge';
@@ -61,18 +61,11 @@ const AdminInstitutions: React.FC = () => {
   const { data: institutions = [], isLoading } = useQuery({
     queryKey: ['admin-institutions', filterStatus],
     queryFn: async () => {
-      let query = supabase
-        .from('institutions')
-        .select('*')
-        .order('created_at', { ascending: false });
-
+      const params: Record<string, any> = {};
       if (filterStatus !== 'all') {
-        query = query.eq('verification_status', filterStatus);
+        params.verification_status = filterStatus;
       }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as Institution[];
+      return apiClient.get('institutions', params) as Promise<Institution[]>;
     },
   });
 
@@ -80,17 +73,14 @@ const AdminInstitutions: React.FC = () => {
   const { data: memberCounts = {} } = useQuery({
     queryKey: ['admin-institution-member-counts'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('institution_members')
-        .select('institution_id')
-        .eq('status', 'active');
-
-      if (error) throw error;
+      const data = await apiClient.get('institution-members', { status: 'active' });
 
       const counts: Record<string, number> = {};
-      data?.forEach((m) => {
-        counts[m.institution_id] = (counts[m.institution_id] || 0) + 1;
-      });
+      if (Array.isArray(data)) {
+        data.forEach((m: any) => {
+          counts[m.institution_id] = (counts[m.institution_id] || 0) + 1;
+        });
+      }
       return counts;
     },
   });
@@ -99,16 +89,17 @@ const AdminInstitutions: React.FC = () => {
   const verifyMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: VerificationStatus }) => {
       // Try RPC first — it handles both institution verification AND owner role approval
-      const { error: rpcError } = await supabase.rpc('admin_verify_institution', {
-        _institution_id: id,
-        _status: status,
-        _admin_id: user?.id,
-      });
-
-      if (!rpcError) return; // Success — institution updated + owner auto-approved
-
-      // RPC not available — fall back to direct update
-      console.warn('RPC admin_verify_institution unavailable, using direct update:', rpcError.message);
+      try {
+        await apiClient.rpc('admin_verify_institution', {
+          _institution_id: id,
+          _status: status,
+          _admin_id: user?.id,
+        });
+        return; // Success — institution updated + owner auto-approved
+      } catch (_rpcError: any) {
+        // RPC not available — fall back to direct update
+        console.warn('RPC admin_verify_institution unavailable, using direct update:', _rpcError.message);
+      }
 
       const updates: Record<string, any> = {
         verification_status: status,
@@ -118,49 +109,33 @@ const AdminInstitutions: React.FC = () => {
         updates.verified_at = new Date().toISOString();
       }
 
-      const { error } = await supabase
-        .from('institutions')
-        .update(updates)
-        .eq('id', id);
-
-      if (error) throw error;
+      await apiClient.patch(`institutions/${id}`, updates);
 
       // If verifying, also try to auto-approve the institution owner's role
       if (status === 'verified') {
         try {
-          const { data: owner } = await supabase
-            .from('institution_members')
-            .select('user_id')
-            .eq('institution_id', id)
-            .eq('role', 'owner')
-            .eq('status', 'active')
-            .limit(1)
-            .maybeSingle();
+          const members = await apiClient.get('institution-members', { 
+            institution_id: id, role: 'owner', status: 'active' 
+          });
+          const owner = Array.isArray(members) && members.length > 0 ? members[0] : null;
 
           if (owner?.user_id) {
             // Update owner's profile role verification
-            await supabase
-              .from('profiles')
-              .update({
+            await apiClient.patch(`profiles/${owner.user_id}`, {
                 role_verification_status: 'verified',
                 role_verified_at: new Date().toISOString(),
                 role_verified_by: user?.id,
                 role_rejection_reason: null,
-              } as any)
-              .eq('id', owner.user_id);
+              } as any);
 
             // Approve any pending role request
-            await supabase
-              .from('role_verification_requests')
-              .update({
+            await apiClient.patch(`role-verification-requests/${owner.user_id}`, {
                 status: 'approved',
                 reviewed_by: user?.id,
                 reviewed_at: new Date().toISOString(),
                 review_notes: 'Auto-approved: institution verified by admin',
                 updated_at: new Date().toISOString(),
-              })
-              .eq('user_id', owner.user_id)
-              .eq('status', 'pending');
+              });
           }
         } catch (err) {
           console.warn('Could not auto-approve institution owner role:', err);
@@ -177,22 +152,16 @@ const AdminInstitutions: React.FC = () => {
   // Toggle active mutation
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { error } = await supabase
-        .from('institutions')
-        .update({ is_active, updated_at: new Date().toISOString() })
-        .eq('id', id);
-      // If direct update fails due to RLS, use the verify RPC with current verification_status
-      if (error) {
+      try {
+        await apiClient.patch(`institutions/${id}`, { is_active, updated_at: new Date().toISOString() });
+      } catch (_err) {
+        // If direct update fails due to RLS, use the verify RPC with current verification_status
         const inst = institutions.find((i) => i.id === id);
         if (inst) {
           // Try toggling via direct update one more time (may succeed after migration)
-          const { error: retryErr } = await supabase
-            .from('institutions')
-            .update({ is_active })
-            .eq('id', id);
-          if (retryErr) throw retryErr;
+          await apiClient.patch(`institutions/${id}`, { is_active });
         } else {
-          throw error;
+          throw _err;
         }
       }
     },

@@ -9,6 +9,70 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ─── Free TTS via SpeechSter (no API key, 580+ voices) ───────────────────────
+// https://ahm7xmakki.com/speech  — POST /api/tts returns raw audio/mpeg.
+// Max 1950 chars per call; we split + parallel-fetch + base64-encode to stay
+// compatible with the existing audioContent format downstream.
+const SPEECHSTER_URL = "https://ahm7xmakki.com/api/tts";
+const SPEECHSTER_CHUNK = 1950;
+
+// Voice indices for podcast hosts (English). Query GET /api/voices to pick
+// the exact indices you want; these are sensible defaults for US English.
+const SPEECHSTER_VOICE_THOMAS = 1;   // Male English — adjust after checking /api/voices
+const SPEECHSTER_VOICE_DEFAULT = 2;  // Female English
+
+function splitTextIntoChunks(text: string, maxLen: number): string[] {
+  const chunks: string[] = [];
+  let remaining = text;
+  while (remaining.length > 0) {
+    if (remaining.length <= maxLen) {
+      chunks.push(remaining);
+      break;
+    }
+    // Try to split at the last sentence boundary within the limit
+    let splitAt = remaining.lastIndexOf(". ", maxLen - 1);
+    if (splitAt <= 0) splitAt = remaining.lastIndexOf(" ", maxLen - 1);
+    if (splitAt <= 0) splitAt = maxLen;
+    else splitAt += 1; // include the delimiter
+    chunks.push(remaining.substring(0, splitAt));
+    remaining = remaining.substring(splitAt);
+  }
+  return chunks;
+}
+
+async function speechSterTTS(text: string, voiceIndex: number): Promise<string> {
+  const chunks = splitTextIntoChunks(text, SPEECHSTER_CHUNK);
+  const audioBuffers = await Promise.all(
+    chunks.map(async (chunk) => {
+      const res = await fetch(SPEECHSTER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voiceIndex, text: chunk }),
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(`SpeechSter TTS failed: HTTP ${res.status} — ${errText.substring(0, 300)}`);
+      }
+      const buf = await res.arrayBuffer();
+      return new Uint8Array(buf);
+    })
+  );
+  // Concatenate all chunks into one Uint8Array then base64-encode
+  const totalLen = audioBuffers.reduce((sum, b) => sum + b.length, 0);
+  const merged = new Uint8Array(totalLen);
+  let offset = 0;
+  for (const buf of audioBuffers) {
+    merged.set(buf, offset);
+    offset += buf.length;
+  }
+  // Deno-compatible base64 encoding
+  let binary = "";
+  for (let i = 0; i < merged.length; i++) {
+    binary += String.fromCharCode(merged[i]);
+  }
+  return btoa(binary);
+}
+
 interface PodcastRequest {
   noteIds?: string[];
   documentIds?: string[];
@@ -37,8 +101,15 @@ serve(async (req) => {
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY")!;
 
     const MODEL_CHAIN = [
-      'gemini-3.5-flash',
+      'gemini-3.7-flash',
       'gemini-3.6-flash',
+      'gemini-3.5-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.1-flash-lite',
+      'gemini-3.1-pro-preview',
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
     ];
 
     async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 3): Promise<any> {
@@ -493,28 +564,18 @@ Title:`;
         // Pick voice based on provided hosts mapping (case-insensitive), fallback to defaults
         const hostIndex = hosts.findIndex(h => h.name && h.name.toLowerCase() === segment.speaker.toLowerCase());
         const hostDef = hostIndex >= 0 ? hosts[hostIndex] : undefined;
-        let voice = hostDef?.voice?.trim();
 
-        // Normalize short prefix like 'en-US-Neural2' and validate selected voices
-        const allowedVariants = ['A','C','D','E','F','G','H','I','J'];
-        const allowedVoices = new Set(allowedVariants.map(s => `en-US-Neural2-${s}`));
-
-        if (voice && /^en-US-Neural2$/i.test(voice)) {
-          const suffix = allowedVariants[hostIndex >= 0 ? (hostIndex % allowedVariants.length) : 0];
-          voice = `en-US-Neural2-${suffix}`;
-          // console.log(`[Podcast] Normalized host voice for ${hostDef?.name}: ${voice}`);
-        }
-
-        // If provided voice is a Neural2 variant but not allowed (e.g. 'en-US-Neural2-B'), map to nearest allowed and warn
-        if (voice && /^en-US-Neural2-[A-Z]$/i.test(voice) && !allowedVoices.has(voice)) {
-          const fallbackSuffix = allowedVariants[hostIndex >= 0 ? (hostIndex % allowedVariants.length) : 0];
-          // console.warn(`[Podcast] Requested voice '${voice}' not recognized/available. Falling back to en-US-Neural2-${fallbackSuffix}`);
-          voice = `en-US-Neural2-${fallbackSuffix}`;
-        }
-
-        // Final fallback when no voice provided
-        if (!voice) {
-          voice = (segment.speaker.toLowerCase() === 'thomas') ? 'en-US-Neural2-D' : 'en-US-Neural2-C';
+        // SpeechSter voice selection: use host-provided voice index if numeric,
+        // otherwise fall back to male/female defaults based on speaker name.
+        let speechVoiceIndex: number;
+        const customVoice = hostDef?.voice?.trim();
+        if (customVoice && /^\d+$/.test(customVoice)) {
+          speechVoiceIndex = parseInt(customVoice, 10);
+        } else {
+          // Default: Thomas = male (index 1), others = female (index 2)
+          speechVoiceIndex = (segment.speaker.toLowerCase() === 'thomas')
+            ? SPEECHSTER_VOICE_THOMAS
+            : SPEECHSTER_VOICE_DEFAULT;
         }
 
         // Clean the text: remove stage directions and action indicators
@@ -538,50 +599,27 @@ Title:`;
           return { speaker: segment.speaker, text: cleanedText, index };
         }
 
-        const ttsResponse = await fetch(
-          `https://texttospeech.googleapis.com/v1/text:synthesize?key=${geminiApiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              input: { text: cleanedText }, // Use cleaned text
-              voice: {
-                languageCode: "en-US",
-                name: voice,
-              },
-              audioConfig: {
-                audioEncoding: "MP3",
-                speakingRate: 1.0,
-                pitch: 0,
-              }
-            })
-          }
-        );
-
-        if (!ttsResponse.ok) {
-          const errorText = await ttsResponse.text();
+        // SpeechSter TTS: free, no API key, 580+ voices
+        let audioBase64: string;
+        try {
+          audioBase64 = await speechSterTTS(cleanedText, speechVoiceIndex);
+        } catch (ttsErr: any) {
           logSystemError(supabase, {
             severity: 'error',
             source: 'generate-podcast',
             component: 'tts-generation',
-            error_code: `TTS_HTTP_${ttsResponse.status}`,
-            message: `TTS API failed for segment ${index}: HTTP ${ttsResponse.status}`,
-            details: { segmentIndex: index, status: ttsResponse.status, errorSnippet: errorText.substring(0, 500) },
+            error_code: 'TTS_SPEECHSTER_FAIL',
+            message: `SpeechSter TTS failed for segment ${index}: ${ttsErr?.message}`,
+            details: { segmentIndex: index, voiceIndex: speechVoiceIndex },
             user_id: user.id,
           });
-          throw new Error(`TTS API failed: ${ttsResponse.status} - ${errorText}`);
-        }
-
-        const ttsData = await ttsResponse.json();
-
-        if (!ttsData.audioContent) {
-          throw new Error(`TTS response missing audioContent for segment ${index}`);
+          throw new Error(`TTS failed for segment ${index}: ${ttsErr?.message}`);
         }
 
         return {
           speaker: segment.speaker,
-          audioContent: ttsData.audioContent,
-          text: cleanedText, // Store the cleaned text
+          audioContent: audioBase64,
+          text: cleanedText,
           index
         };
       })
@@ -1711,7 +1749,7 @@ function generateScriptPrompt(content: string, sources: string[], style: string,
   const exampleFormat = hostNames.map(n => `${n.toUpperCase()}: [their dialogue]`).join('\n   ');
 
   const educationSection = educationBlock
-    ? `\n**${educationBlock}**\nTailor the discussion to be relevant to this student's curriculum, exam, and subject focus. Use appropriate terminology and examples for their education level.\n`
+    ? `\n**${educationBlock}**\nTailor the discussion to be relevant to this student's curriculum, exam, and subject focus. Use appropriate terminology and examples for their education level.\nCRITICAL: The STUDENT CONTEXT above tells you the student's grade/year/level. Primary/Basic/JHS students need simple language, basic concepts, relatable everyday examples. SHS students can handle curriculum-specific terminology and exam-focused content. University students get advanced academic discussion.\n`
     : '';
 
   return `You are creating a podcast script for an AI-generated audio show. Create a natural, engaging conversation between hosts (${hostsList}) discussing the following content.

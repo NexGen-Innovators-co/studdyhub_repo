@@ -105,11 +105,12 @@ const LiveQuizActiveFullscreen: React.FC<LiveQuizActiveFullscreenProps> = ({
 
   // Initialize audio
   useEffect(() => {
-    const bgUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/sonican-informational-quiz-loop-397409.mp3';
-    const correctUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/mixkit-correct-answer-tone-2870.wav';
-    const tickUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/mixkit-fast-wall-clock-ticking-1063.wav';
-    const incorrectUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/mixkit-wrong-answer-fail-notification-946.wav';
-    const endUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/mixkit-end-of-show-clapping-crowd-477.wav';
+    const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const bgUrl = `${baseUrl}/storage/v1/object/public/documents/sonican-informational-quiz-loop-397409.mp3`;
+    const correctUrl = `${baseUrl}/storage/v1/object/public/documents/mixkit-correct-answer-tone-2870.wav`;
+    const tickUrl = `${baseUrl}/storage/v1/object/public/documents/mixkit-fast-wall-clock-ticking-1063.wav`;
+    const incorrectUrl = `${baseUrl}/storage/v1/object/public/documents/mixkit-wrong-answer-fail-notification-946.wav`;
+    const endUrl = `${baseUrl}/storage/v1/object/public/documents/mixkit-end-of-show-clapping-crowd-477.wav`;
 
     bgMusicRef.current = new Audio(bgUrl);
     try { (bgMusicRef.current as any).crossOrigin = 'anonymous'; } catch (e) {}

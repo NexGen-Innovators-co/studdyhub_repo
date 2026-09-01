@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useWebRTC } from '@/modules/podcasts/hooks/useWebRTC';
 import { toast } from 'sonner';
+import { apiClient } from '@/services/apiClient';
 import { supabase } from '@/integrations/supabase/client';
 import { addPodcastListener, removePodcastListener } from '@/modules/podcasts/services/podcastLiveService';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/components/tooltip';
@@ -96,7 +97,7 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
   useEffect(() => {
     let isMounted = true;
     (async () => {
-      const { data } = await supabase.from('ai_podcasts').select('podcast_type').eq('id', podcastId).single();
+      const data = await apiClient.get(`ai-podcasts/${podcastId}`);
       if (!isMounted) return;
       setEnableVideo(!!data?.podcast_type && data.podcast_type.includes('video'));
     })();
@@ -219,7 +220,7 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data } = await supabase.from('social_users').select('display_name').eq('id', user.id).single();
+        const data = await apiClient.get('social-users', { id: user.id });
         if (data?.display_name) setCurrentUserName(data.display_name);
       }
     })();
@@ -297,17 +298,16 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { toast.error('Not authenticated'); return; }
-      const { data: podcast } = await supabase.from('ai_podcasts').select('title').eq('id', podcastId).single();
+      const podcast = await apiClient.get(`ai-podcasts/${podcastId}`);
       const title = `Live Podcast Notes — ${podcast?.title || 'Untitled'}`;
       const content = keyPoints.map((p, i) => `${i + 1}. ${p}`).join('\n');
-      const { error } = await supabase.from('notes').insert({
+      await apiClient.post('notes', {
         user_id: user.id,
         title,
         content,
         category: 'podcast',
         tags: ['live-podcast', 'auto-saved'],
       });
-      if (error) throw error;
       toast.success('Notes saved to My Notes');
     } catch (e) {
       toast.error('Failed to save notes');
@@ -333,7 +333,7 @@ const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({ podcastId, onClos
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('podcast_shares').insert({ 
+      await apiClient.post('podcast-shares', { 
         podcast_id: podcastId, 
         user_id: user?.id, 
         share_type: 'reaction', 

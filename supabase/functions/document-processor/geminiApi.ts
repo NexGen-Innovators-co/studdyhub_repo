@@ -6,12 +6,15 @@ import { findOverlapLength, mergeProcessedChunks } from './utils.ts';
 // MODEL CHAIN
 // ============================================================================
 
-// Ordered by what the project's key can actually serve. The 2.x models return 429
-// (free-tier daily quota exhausted) and gemini-2.5-flash-lite now 404s, so leading with
-// them burned the whole chain before reaching a model that works.
+// Ordered by capability — latest models first, with enough depth to survive
+// quota exhaustion before hitting the OpenRouter fallback.
 const DOC_MODEL_CHAIN = [
-  'gemini-3.5-flash',
+  'gemini-3.7-flash',
   'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-2.5-flash',
 ];
 
 // ============================================================================

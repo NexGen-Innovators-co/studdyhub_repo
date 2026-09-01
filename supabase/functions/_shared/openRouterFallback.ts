@@ -34,6 +34,22 @@ interface OpenRouterOptions {
 const OPENROUTER_MAX_MSG_CHARS = 30_000;   // Truncate individual messages
 const OPENROUTER_MAX_TOTAL_CHARS = 800_000; // ~200k tokens budget
 
+// ── Groq Model Circuit Breaker ────────────────────────────────────────────────
+const groqModelCooldowns = new Map<string, number>();
+const GROQ_COOLDOWN_MS = 60_000; // 1 minute cooldown for rate-limited Groq models
+
+function isGroqModelExhausted(model: string): boolean {
+  const expiry = groqModelCooldowns.get(model);
+  if (expiry === undefined) return false;
+  if (Date.now() > expiry) { groqModelCooldowns.delete(model); return false; }
+  return true;
+}
+
+function markGroqModelExhausted(model: string): void {
+  groqModelCooldowns.set(model, Date.now() + GROQ_COOLDOWN_MS);
+  console.log(`[GroqCircuitBreaker] ${model} marked exhausted for ${GROQ_COOLDOWN_MS / 1000}s`);
+}
+
 // ── Converter: Gemini contents → OpenRouter (OpenAI) messages ──────────────────
 function convertGeminiContentsToMessages(
   contents: Array<{ role: string; parts: Array<{ text?: string; inlineData?: any }> }>,
@@ -117,8 +133,13 @@ export async function callOpenRouterFallback(
   const groqApiKey = rawGroq.startsWith('gsk_') ? rawGroq : (rawXai.startsWith('gsk_') ? rawXai : rawGroq);
 
   if (groqApiKey) {
-    const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it'];
+    const groqModels = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.6-27b', 'groq/compound'];
+    const allGroqExhausted = groqModels.every(isGroqModelExhausted);
     for (const model of groqModels) {
+      if (!allGroqExhausted && isGroqModelExhausted(model)) {
+        console.log(`${tag} Skipping rate-limited Groq model: ${model}`);
+        continue;
+      }
       try {
         console.log(`${tag} Trying Groq fallback model: ${model}...`);
         const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -145,6 +166,7 @@ export async function callOpenRouterFallback(
         } else {
           const errText = await resp.text();
           console.warn(`${tag} Groq ${model} status ${resp.status}: ${errText.substring(0, 200)}`);
+          if (resp.status === 429) markGroqModelExhausted(model);
         }
       } catch (err) {
         console.error(`${tag} Groq exception with ${model}:`, err);

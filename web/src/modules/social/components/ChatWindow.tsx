@@ -46,6 +46,7 @@ import { Label } from '../../ui/components/label';
 import { ChatSessionWithDetails, ChatMessageWithDetails } from '../types/social';
 import { MessageInput } from './MessageInput';
 import { ResourceSharingModal } from './ResourceSharingModal';
+import { apiClient } from '@/services/apiClient';
 import { supabase } from '../../../integrations/supabase/client';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -275,12 +276,8 @@ const SharedDocumentPreview: React.FC<{ documentId: string; currentUserId: strin
   const [showLightbox, setShowLightbox] = useState(false);
 
   useEffect(() => {
-    supabase
-      .from('documents')
-      .select('title, file_name, file_url, file_type, file_size')
-      .eq('id', documentId)
-      .single()
-      .then(({ data }) => setDoc(data));
+    apiClient.get(`documents/${documentId}`)
+      .then((data) => setDoc(data));
   }, [documentId]);
 
   const handleAddToMyDocuments = async () => {
@@ -436,12 +433,8 @@ const SharedDocumentPreview: React.FC<{ documentId: string; currentUserId: strin
 const SharedPostPreview: React.FC<{ postId: string; onClick: () => void }> = ({ postId, onClick }) => {
   const [post, setPost] = useState<any>(null);
   useEffect(() => {
-    supabase
-      .from('social_posts')
-      .select(`*, author:social_users(display_name, avatar_url, username), media:social_media(*)`)
-      .eq('id', postId)
-      .single()
-      .then(({ data }) => setPost(data));
+    apiClient.get(`social-posts/${postId}`)
+      .then((data) => setPost(data));
   }, [postId]);
 
   if (!post) return <div className="bg-gray-200 dark:bg-slate-700 rounded-xl h-32 animate-pulse" />;
@@ -471,7 +464,7 @@ const SharedPostPreview: React.FC<{ postId: string; onClick: () => void }> = ({ 
 const SharedNotePreview: React.FC<{ noteId: string; onClick: () => void }> = ({ noteId, onClick }) => {
   const [note, setNote] = useState<any>(null);
   useEffect(() => {
-    supabase.from('notes').select('title').eq('id', noteId).single().then(({ data }) => setNote(data));
+    apiClient.get(`notes/${noteId}`).then((data) => setNote(data));
   }, [noteId]);
 
   return (
@@ -498,12 +491,8 @@ const SharedClassRecordingPreview: React.FC<{ recordingId: string; currentUserId
   const [isAdded, setIsAdded] = useState(false);
 
   useEffect(() => {
-    supabase
-      .from('class_recordings')
-      .select('id, title, summary, audio_url, duration, subject, date')
-      .eq('id', recordingId)
-      .single()
-      .then(({ data }) => setRecording(data));
+    apiClient.get(`class-recordings/${recordingId}`)
+      .then((data) => setRecording(data));
   }, [recordingId]);
 
   const handleAddToMyRecordings = async () => {
@@ -871,7 +860,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <SharedNotePreview
             noteId={resource.resource_id}
             onClick={async () => {
-              const { data } = await supabase.from('notes').select('title, content').eq('id', resource.resource_id).single();
+              const data = await apiClient.get(`notes/${resource.resource_id}`);
               if (data) {
                 setNoteToAdd({ id: resource.resource_id, title: data.title, content: data.content });
                 setNewNoteTitle(data.title);

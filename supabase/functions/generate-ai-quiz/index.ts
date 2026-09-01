@@ -245,6 +245,14 @@ LEARNING CONTEXT:
 - Difficulty level: ${performance.recommendedDifficulty}
 - Question styles: ${questionTypes.join(', ')}
 ${educationBlock}
+CRITICAL DIFFICULTY RULES (MUST follow):
+- The STUDENT CONTEXT above tells you the student's grade/year/level. You MUST match question difficulty to that level.
+- Primary / Basic / JHS students (e.g. "Primary 3", "JHS 2", "Basic 7"): Questions must be simple, age-appropriate, use basic vocabulary, and test foundational concepts only. No advanced formulas, no abstract theory, no multi-step problems.
+- SHS / Senior High students (e.g. "SHS 1", "SHS 3", "WASSCE"): Questions can be intermediate to advanced, test curriculum-aligned concepts, include application and analysis questions.
+- University / College / Graduate students: Questions should be advanced, analytical, and application-focused.
+- If NO student context is provided, default to intermediate difficulty but keep questions accessible.
+- The performance-based difficulty above is a GUIDE, but the student's grade level is the HARD LIMIT. Never give a Primary 3 student SHS-level questions.
+
 QUIZ REQUIREMENTS:
 1. Create exactly ${questionCount} questions. ${difficultyInstruction}
 2. Each question MUST test real factual knowledge about the specified topics — not generic filler

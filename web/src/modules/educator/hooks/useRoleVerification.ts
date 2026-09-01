@@ -2,6 +2,7 @@
 // Hook for submitting and tracking role verification requests.
 
 import { useState, useEffect, useCallback } from 'react';
+import { apiClient } from '@/services/apiClient';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '../../../hooks/useAuth';
 import type { RoleVerificationRequest, VerificationDocument, UserRole } from '@/types/Education';
@@ -99,7 +100,7 @@ export function useRoleVerification() {
     setIsSubmitting(true);
 
     try {
-      const { data, error } = await supabase.rpc('submit_role_request', {
+      const data = await apiClient.rpc('submit_role_request', {
         _user_id: user.id,
         _requested_role: params.requestedRole,
         _institution_id: params.institutionId || null,
@@ -110,7 +111,7 @@ export function useRoleVerification() {
         _documents: JSON.stringify(params.documents || []),
       });
 
-      if (error) throw error;
+      if (!data) throw new Error('No response from server');
 
       toast.success('Verification request submitted! An admin will review it shortly.');
       await fetchCurrentRequest();

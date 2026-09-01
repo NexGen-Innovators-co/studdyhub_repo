@@ -2,6 +2,7 @@
 // Tracks user login/logout and maintains real-time online status
 
 import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 
 /**
  * Track user login - called when user authenticates
@@ -9,24 +10,21 @@ import { supabase } from '@/integrations/supabase/client';
 export async function trackUserLogin(userId: string): Promise<void> {
   try {
     // Call RPC function to track login
-    const { error } = await supabase.rpc('track_user_login', {
+    await apiClient.rpc('track_user_login', {
       p_user_id: userId,
     });
-
-    if (error) {
-      console.warn('Failed to track login:', error.message);
-      // Fallback: direct update
-      await supabase
-        .from('social_users')
-        .update({
-          is_online: true,
-          last_login_at: new Date().toISOString(),
-          current_session_started_at: new Date().toISOString(),
-        })
-        .eq('id', userId);
-    }
   } catch (err) {
-    console.error('Error tracking login:', err);
+    console.warn('Failed to track login, using fallback:', err);
+    // Fallback: direct update
+    try {
+      await apiClient.patch(`social-users/${userId}`, {
+        is_online: true,
+        last_login_at: new Date().toISOString(),
+        current_session_started_at: new Date().toISOString(),
+      });
+    } catch (fallbackErr) {
+      console.error('Error tracking login:', fallbackErr);
+    }
   }
 }
 
@@ -36,24 +34,21 @@ export async function trackUserLogin(userId: string): Promise<void> {
 export async function trackUserLogout(userId: string): Promise<void> {
   try {
     // Call RPC function to track logout
-    const { error } = await supabase.rpc('track_user_logout', {
+    await apiClient.rpc('track_user_logout', {
       p_user_id: userId,
     });
-
-    if (error) {
-      console.warn('Failed to track logout:', error.message);
-      // Fallback: direct update
-      await supabase
-        .from('social_users')
-        .update({
-          is_online: false,
-          last_logout_at: new Date().toISOString(),
-          current_session_started_at: null,
-        })
-        .eq('id', userId);
-    }
   } catch (err) {
-    console.error('Error tracking logout:', err);
+    console.warn('Failed to track logout, using fallback:', err);
+    // Fallback: direct update
+    try {
+      await apiClient.patch(`social-users/${userId}`, {
+        is_online: false,
+        last_logout_at: new Date().toISOString(),
+        current_session_started_at: null,
+      });
+    } catch (fallbackErr) {
+      console.error('Error tracking logout:', fallbackErr);
+    }
   }
 }
 
@@ -67,13 +62,7 @@ export async function getUserStatus(userId: string): Promise<{
   status: string;
 }> {
   try {
-    const { data, error } = await supabase
-      .from('social_users')
-      .select('is_online, last_login_at, last_logout_at, status')
-      .eq('id', userId)
-      .single();
-
-    if (error) throw error;
+    const data = await apiClient.get(`social-users/${userId}`);
 
     return {
       is_online: data?.is_online ?? false,
@@ -138,14 +127,8 @@ export function subscribeToUserStatus(
  */
 export async function getOnlineUsersCount(): Promise<number> {
   try {
-    const { count, error } = await supabase
-      .from('social_users')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_online', true)
-      .eq('status', 'active');
-
-    if (error) throw error;
-    return count ?? 0;
+    const data = await apiClient.get('social-users', { is_online: true, status: 'active' });
+    return Array.isArray(data) ? data.length : 0;
   } catch (err) {
     console.error('Error getting online users count:', err);
     return 0;
@@ -160,14 +143,11 @@ export async function getDailyActiveUsersCount(): Promise<number> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const { count, error } = await supabase
-      .from('social_users')
-      .select('*', { count: 'exact', head: true })
-      .gte('last_login_at', today.toISOString())
-      .eq('status', 'active');
-
-    if (error) throw error;
-    return count ?? 0;
+    const data = await apiClient.get('social-users', { 
+      last_login_at: `gte.${today.toISOString()}`, 
+      status: 'active' 
+    });
+    return Array.isArray(data) ? data.length : 0;
   } catch (err) {
     console.error('Error getting daily active users:', err);
     return 0;
@@ -187,13 +167,7 @@ export async function getUserVerificationMetrics(userId: string): Promise<{
   checked_at: string;
 } | null> {
   try {
-    const { data, error } = await supabase
-      .from('social_users')
-      .select('verification_metrics')
-      .eq('id', userId)
-      .single();
-
-    if (error) throw error;
+    const data = await apiClient.get(`social-users/${userId}`);
     return data?.verification_metrics ?? null;
   } catch (err) {
     console.error('Error getting verification metrics:', err);

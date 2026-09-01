@@ -71,6 +71,13 @@ serve(async (req) => {
     const buildPrompt = (count: number) => `Based on the following transcript, create a comprehensive quiz with exactly ${count} multiple-choice questions.
 The difficulty level of the questions should be: ${safeDifficulty}.
 
+CRITICAL DIFFICULTY RULES (MUST follow):
+- The STUDENT CONTEXT above tells you the student's grade/year/level. You MUST match question difficulty to that level.
+- Primary / Basic / JHS students (e.g. "Primary 3", "JHS 2", "Basic 7"): Questions must be simple, age-appropriate, use basic vocabulary, and test foundational concepts only. No advanced formulas, no abstract theory, no multi-step problems.
+- SHS / Senior High students (e.g. "SHS 1", "SHS 3", "WASSCE"): Questions can be intermediate to advanced, test curriculum-aligned concepts, include application and analysis questions.
+- University / College / Graduate students: Questions should be advanced, analytical, and application-focused.
+- If NO student context is provided, default to the difficulty level above but keep questions accessible.
+
 Each question should:
 1. Test understanding of key concepts, facts, or themes appropriate for the requested difficulty level.
 2. Have 4 answer options (A, B, C, D)

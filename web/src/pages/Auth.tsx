@@ -4,6 +4,7 @@ import { Button } from '../modules/ui/components/button';
 import { Input } from '../modules/ui/components/input';
 import { Mail, Lock, User, Eye, EyeOff, Loader2, CheckCircle2, XCircle, RefreshCw, Clock, Ticket, BookOpen, FileText, Play, TrendingUp, Check, Sparkles } from 'lucide-react';
 import { supabase } from '../integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { toast } from 'sonner';
 import { BrandedLoader } from '../modules/ui/components/brandedLoader';
 
@@ -373,7 +374,7 @@ const Auth = () => {
     // fetch user-approved testimonials and append static fallbacks
     const fetchData = async () => {
       try {
-        const { data: rows } = await supabase.rpc('get_approved_testimonials', { p_limit: 10 });
+        const rows = await apiClient.rpc('get_approved_testimonials', { p_limit: 10 });
         if (rows && Array.isArray(rows)) {
           const mapped = rows.map((t: any) => ({
             name: t.author_name || 'Anonymous',
@@ -455,9 +456,8 @@ const Auth = () => {
     if (!name.trim() || currentTab !== 'signup') return false;
     setIsCheckingName(true);
     try {
-      const { data, error } = await supabase.from('profiles').select('full_name').eq('full_name', name.trim()).maybeSingle();
-      if (error && error.code !== 'PGRST116') throw error;
-      const exists = data !== null;
+      const data = await apiClient.get('profiles', { full_name: name.trim() });
+      const exists = data !== null && data !== undefined;
       setNameError(exists ? 'This name is already taken' : '');
       return exists;
     } catch { setNameError('Error checking name availability'); return true; }
@@ -496,7 +496,7 @@ const Auth = () => {
         } else toast.error(error.message);
       } else {
         if (promoCode && data.user) {
-          try { await supabase.rpc('apply_code_night_promo', { p_user_id: data.user.id, p_promo_code: promoCode.trim() }); toast.success('Promo applied!'); } catch {}
+          try { await apiClient.rpc('apply_code_night_promo', { p_user_id: data.user.id, p_promo_code: promoCode.trim() }); toast.success('Promo applied!'); } catch {}
         }
         ok = true; setIsRedirecting(true); navigate('/dashboard', { replace: true });
       }
@@ -521,7 +521,7 @@ const Auth = () => {
         else toast.error(error.message);
       } else {
         if (referralCode && data.user) {
-          try { const { error: re } = await supabase.rpc('process_referral_reward', { p_referee_id: data.user.id, p_referral_code: referralCode.toUpperCase() }); if (!re) toast.success('Referral bonus applied! +10 credits.'); } catch {}
+          try { const re = await apiClient.rpc('process_referral_reward', { p_referee_id: data.user.id, p_referral_code: referralCode.toUpperCase() }); toast.success('Referral bonus applied! +10 credits.'); } catch {}
         }
         if (promoCode?.trim().toUpperCase() === 'CODENIGHT2026') toast.success('Code Night Offer Applied! 1 month free Premium after verification.');
         

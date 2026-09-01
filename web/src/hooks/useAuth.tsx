@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, createContext, useContext, ReactNode } fro
 import { useQueryClient } from '@tanstack/react-query';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 
 import { pushNotificationService } from '@/services/pushNotificationService';
 import { resetPushInitialization } from '@/services/notificationInitService';
@@ -156,8 +157,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') &&
           session?.user?.id
         ) {
-          supabase.rpc('touch_profile_active').then(({ error }) => {
-            if (error) console.warn('[useAuth] Failed to touch profile active:', error.message);
+          apiClient.rpc('touch_profile_active').catch((error: any) => {
+            console.warn('[useAuth] Failed to touch profile active:', error.message);
           });
         }
 

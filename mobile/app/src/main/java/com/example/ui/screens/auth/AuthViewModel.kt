@@ -824,4 +824,144 @@ class AuthViewModel(private val repository: StuddyHubRepository) : ViewModel() {
             startResendCooldown()
         }
     }
+
+    /**
+     * Handle Google Sign-In result from the browser OAuth flow.
+     * The browser redirects to studdyhub://auth-callback with tokens in the fragment.
+     * This method processes those tokens the same way as email/password sign-in.
+     *
+     * For NEW users: extracts email/name from the JWT, creates a minimal profile,
+     * and navigates to onboarding so they can complete setup.
+     * For EXISTING users: fetches the profile from cloud and logs them in directly.
+     */
+    fun handleGoogleSignInResult(accessToken: String, refreshToken: String, onSuccess: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null, infoMessage = null)
+
+            // Decode the JWT to extract user info (sub, email, name)
+            val jwtClaims = try {
+                val parts = accessToken.split(".")
+                if (parts.size >= 2) {
+                    val payload = parts[1]
+                    val decoded = android.util.Base64.decode(
+                        payload.replace('-', '+').replace('_', '/'),
+                        android.util.Base64.NO_WRAP
+                    )
+                    org.json.JSONObject(String(decoded, Charsets.UTF_8))
+                } else null
+            } catch (e: Exception) {
+                android.util.Log.w("AuthViewModel", "Could not decode JWT: ${e.message}")
+                null
+            }
+
+            val subUserId = jwtClaims?.optString("sub")
+            val jwtEmail = jwtClaims?.optString("email") ?: ""
+            // Supabase puts Google user data in user_metadata, not at top level
+            val userMeta = jwtClaims?.optJSONObject("user_metadata")
+            val jwtFullName = jwtClaims?.optString("name")
+                ?: userMeta?.optString("full_name")
+                ?: userMeta?.optString("name")
+                ?: ""
+            val jwtAvatarUrl = jwtClaims?.optString("picture")
+                ?: userMeta?.optString("picture")
+                ?: userMeta?.optString("avatar_url")
+                ?: ""
+
+            android.util.Log.d("AuthViewModel", "Google Sign-In JWT: sub=$subUserId, email=$jwtEmail, name=$jwtFullName, hasAvatar=${jwtAvatarUrl.isNotBlank()}")
+
+            // Set tokens on the BackendApiService (same as email/password flow)
+            if (!subUserId.isNullOrBlank()) {
+                com.example.data.remote.BackendApiService.currentUserId = subUserId
+            }
+            com.example.data.remote.BackendApiService.userAccessToken = accessToken
+            com.example.data.remote.BackendApiService.refreshToken = refreshToken
+            // Extract token expiry from JWT 'exp' claim (same as email/password flow)
+            val expClaim = jwtClaims?.optLong("exp", 0L) ?: 0L
+            if (expClaim > 0L) {
+                com.example.data.remote.BackendApiService.tokenExpiresAt = expClaim * 1000
+            }
+
+            // Try to fetch existing profile from cloud
+            var profileFetched = false
+            try {
+                val profileResult = com.example.data.remote.BackendApiService.executeEdgeFunction(
+                    "auth-onboarding",
+                    org.json.JSONObject().apply {
+                        put("action", "get-profile")
+                    }
+                )
+
+                if (profileResult is com.example.data.remote.BackendResult.Success) {
+                    val profileJson = profileResult.data
+                    // Check if the RPC returned actual profile data (not just an error object)
+                    if (profileJson.has("id") || profileJson.has("full_name")) {
+                        val userId = profileJson.optString("id", subUserId ?: "")
+                        val fullName = profileJson.optString("full_name", jwtFullName)
+                        val email = profileJson.optString("email", jwtEmail)
+                        val onboardingComplete = profileJson.optBoolean("onboarding_completed", false)
+                        val school = profileJson.optString("school", "")
+                        val learningStyle = profileJson.optString("learning_style", "visual").takeIf { it.isNotBlank() } ?: "visual"
+                        val academicTier = profileJson.optString("academic_tier", "").let { if (it == "null" || it.isBlank()) "" else it }
+                        val academicLevel = profileJson.optString("academic_level", "").let { if (it == "null" || it.isBlank()) "" else it }
+                        val avatarUrl = profileJson.optString("avatar_url", "").takeIf { it.isNotBlank() }
+                            ?: jwtAvatarUrl.takeIf { it.isNotBlank() }
+                        val pointsBalance = if (profileJson.has("points_balance")) profileJson.optInt("points_balance", 0) else null
+
+                        repository.loginUser(
+                            email = email,
+                            fullName = fullName,
+                            school = school,
+                            learningStyle = learningStyle,
+                            academicTier = academicTier,
+                            academicLevel = academicLevel,
+                            onboardingCompleted = onboardingComplete,
+                            supabaseUserId = userId,
+                            accessToken = accessToken,
+                            refreshToken = refreshToken,
+                            pointsBalance = pointsBalance,
+                            avatarUrl = avatarUrl
+                        )
+
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            isSuccess = true,
+                            onboardingCompleted = onboardingComplete
+                        )
+                        profileFetched = true
+                        onSuccess(onboardingComplete)
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("AuthViewModel", "get-profile failed: ${e.message}")
+            }
+
+            // Profile not found — this is a NEW user. Create a minimal profile and
+            // log them in so they land on the onboarding flow.
+            if (!profileFetched) {
+                android.util.Log.d("AuthViewModel", "New Google user — creating minimal profile")
+
+                val userId = subUserId ?: ""
+                if (userId.isNotBlank()) {
+                    repository.loginUser(
+                        email = jwtEmail,
+                        fullName = jwtFullName,
+                        school = "",
+                        onboardingCompleted = false,
+                        supabaseUserId = userId,
+                        accessToken = accessToken,
+                        refreshToken = refreshToken,
+                        avatarUrl = jwtAvatarUrl.takeIf { it.isNotBlank() }
+                    )
+                }
+
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    isSuccess = true,
+                    onboardingCompleted = false
+                )
+                // Navigate to onboarding (onboardingCompleted = false)
+                onSuccess(false)
+            }
+        }
+    }
 }

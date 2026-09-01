@@ -56,7 +56,7 @@ serve(async (req) => {
     const prompt = `Rewrite the following study content into a natural, easy-to-understand spoken narration script for audio read-aloud. Preserve all the meaning and key information, but make it flow naturally when spoken aloud:\n\n${text.substring(0, 8000)}`;
 
     // Try Gemini Flash models, then fallback to original text
-    const MODEL_CHAIN = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'];
+    const MODEL_CHAIN = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
     let rewritten = text;
 
     for (const model of MODEL_CHAIN) {

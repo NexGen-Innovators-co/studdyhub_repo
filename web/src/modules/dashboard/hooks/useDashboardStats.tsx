@@ -1,6 +1,7 @@
 // hooks/useDashboardStats.ts
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../../integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 
 export interface DashboardStats {
   totalNotes: number;
@@ -133,15 +134,11 @@ export const useDashboardStats = (userId: string | undefined) => {
   // Optimized: Use database-side aggregation for activity data
   const fetchActivityDataOptimized = async (days: number, userId: string) => {
     try {
-      // Use the new powerful RPC for flexible history
-      // This supports the Central Dynamic Chart requirements
-      const { data, error } = await supabase.rpc('get_user_activity_history', {
+      const data = await apiClient.rpc('get_user_activity_history', {
         p_user_id: userId,
         p_start_date: new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString(),
         p_interval: 'day'
       });
-
-      if (error) throw error;
 
       if (data) {
         return data.map((d: any) => ({
@@ -157,13 +154,12 @@ export const useDashboardStats = (userId: string | undefined) => {
       }
       return await fetchActivityDataFallback(days, userId);
     } catch (error) {
-       // fallback to old RPC or client side
        try {
-          const { data, error } = await supabase.rpc('get_user_activity_stats', {
+          const data = await apiClient.rpc('get_user_activity_stats', {
             p_user_id: userId,
             p_days: days
           });
-          if (!error && data) return data;
+          if (data) return data;
        } catch (ignore) {}
 
       return await fetchActivityDataFallback(days, userId);
@@ -174,13 +170,13 @@ export const useDashboardStats = (userId: string | undefined) => {
 
   const fetchLongTermHistory = async (userId: string) => {
      try {
-        const { data, error } = await supabase.rpc('get_user_activity_history', {
+        const data = await apiClient.rpc('get_user_activity_history', {
             p_user_id: userId,
             p_start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
             p_interval: 'month'
         });
         
-        if (error || !data) return [];
+        if (!data) return [];
 
         return data.map((d: any) => ({
             period: new Date(d.period || d.period_start).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
@@ -196,13 +192,30 @@ export const useDashboardStats = (userId: string | undefined) => {
   };
 
 
-  // Helper to perform count queries with minimal payload and a single retry on transient errors
-  const safeCount = async (table: string, filterBuilder?: (qb: any) => any) => {
+  // Table name → API path mapping
+  const TABLE_PATH: Record<string, string> = {
+    notes: 'notes',
+    class_recordings: 'class-recordings',
+    documents: 'documents',
+    chat_messages: 'chat/sessions',
+    schedule_items: 'schedule',
+    quizzes: 'quizzes',
+    quiz_attempts: 'quiz-attempts',
+  };
+
+  // Helper to unwrap apiClient results (returns data directly, or { data: [] } on timeout/error from fetchWithTimeout)
+  const unwrapResult = (result: any): any[] => {
+    if (Array.isArray(result)) return result;
+    if (result && typeof result === 'object' && 'data' in result && Array.isArray(result.data)) return result.data;
+    return [];
+  };
+
+  // Helper to perform count queries via apiClient and a single retry on transient errors
+  const safeCount = async (table: string, params: Record<string, string> = {}) => {
     try {
-      let qb: any = supabase.from(table).select('id', { count: 'exact', head: true });
-      if (filterBuilder) qb = filterBuilder(qb) || qb;
-      const res = await qb;
-      return res;
+      const path = TABLE_PATH[table] || table;
+      const result = await apiClient.get(path, { ...params, count: 'true' });
+      return { count: result?.meta?.total ?? 0, error: null };
     } catch (err) {
       // Return 0 on error instead of throwing to prevent dashboard crashes
       return { count: 0, error: null };
@@ -220,19 +233,16 @@ export const useDashboardStats = (userId: string | undefined) => {
     const monthAgo = new Date();
     monthAgo.setDate(monthAgo.getDate() - 30);
 
-    // Single query with optimized fields
-    const { data, error } = await supabase
-      .from('notes')
-      .select('created_at')
-      .eq('user_id', userId)
-      .gte('created_at', monthAgo.toISOString())
-      .limit(2000); // Reasonable limit for hourly analysis
-
-    if (error) throw error;
+    const data = await apiClient.get('notes', {
+      user_id: userId,
+      select: 'created_at',
+      created_at_gte: monthAgo.toISOString(),
+      limit: '2000'
+    });
 
     const hourlyData = Array.from({ length: 24 }, (_, hour) => ({ hour, activity: 0 }));
 
-    (data || []).forEach(note => {
+    (Array.isArray(data) ? data : []).forEach((note: any) => {
       const hour = new Date(note.created_at).getHours();
       hourlyData[hour].activity += 1;
     });
@@ -243,13 +253,12 @@ export const useDashboardStats = (userId: string | undefined) => {
   // Optimized: Use materialized views or cached data for expensive operations
   const fetchLearningVelocityOptimized = async (userId: string) => {
     try {
-      // Try to use RPC for complex time-based aggregations
-      const { data, error } = await supabase.rpc('get_learning_velocity', {
+      const data = await apiClient.rpc('get_learning_velocity', {
         p_user_id: userId,
         p_weeks: 12
       });
 
-      if (!error && data) {
+      if (data) {
         return data;
       }
 
@@ -273,11 +282,11 @@ export const useDashboardStats = (userId: string | undefined) => {
       weekEnd.setDate(weekStart.getDate() + 6);
 
       // Use count queries instead of fetching data
-      const notesCount = await safeCount('notes', (q: any) =>
-        q.eq('user_id', userId)
-          .gte('created_at', getStartOfDay(weekStart).toISOString())
-          .lte('created_at', getEndOfDay(weekEnd).toISOString())
-      );
+      const notesCount = await safeCount('notes', {
+        user_id: userId,
+        created_at_gte: getStartOfDay(weekStart).toISOString(),
+        created_at_lte: getEndOfDay(weekEnd).toISOString()
+      });
 
       velocityData.push({
         week: `W${4 - i}`,
@@ -326,13 +335,13 @@ export const useDashboardStats = (userId: string | undefined) => {
       // Phase 1: Basic counts (fast) - keep this as the initial blocking work
       updateProgress(1, 5);
       const basicCounts = await Promise.all([
-        safeCount('notes', (q: any) => q.eq('user_id', userId)),
-        safeCount('class_recordings', (q: any) => q.eq('user_id', userId)),
-        safeCount('documents', (q: any) => q.eq('user_id', userId)),
-        safeCount('chat_messages', (q: any) => q.eq('user_id', userId)),
-        safeCount('schedule_items', (q: any) => q.eq('user_id', userId)),
-        safeCount('notes', (q: any) => q.eq('user_id', userId).not('ai_summary', 'is', null)),
-        safeCount('quizzes', (q: any) => q.eq('user_id', userId)),
+        safeCount('notes', { user_id: userId }),
+        safeCount('class_recordings', { user_id: userId }),
+        safeCount('documents', { user_id: userId }),
+        safeCount('chat_messages', { user_id: userId }),
+        safeCount('schedule_items', { user_id: userId }),
+        safeCount('notes', { user_id: userId, ai_summary_not_null: 'true' }),
+        safeCount('quizzes', { user_id: userId }),
       ]);
 
       // Phase 1b: Lightweight recent items (small limits) - fetch sequentially
@@ -354,20 +363,20 @@ export const useDashboardStats = (userId: string | undefined) => {
       };
 
       const recentNotesData = await fetchWithTimeout(
-        supabase.from('notes').select('id, title, category, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(3)
+        apiClient.get('notes', { user_id: userId, select: 'id,title,category,created_at', order: 'created_at.desc', limit: '3' })
       );
 
       // Small delay to give the DB a breather before the next query
       await new Promise(r => setTimeout(r, 100));
 
       const recentRecordingsData = await fetchWithTimeout(
-        supabase.from('class_recordings').select('id, title, duration, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(2)
+        apiClient.get('class-recordings', { user_id: userId, select: 'id,title,duration,created_at', order: 'created_at.desc', limit: '2' })
       );
 
       await new Promise(r => setTimeout(r, 100));
 
       const recentDocumentsData = await fetchWithTimeout(
-        supabase.from('documents').select('id, title, type, created_at, processing_status').eq('user_id', userId).order('created_at', { ascending: false }).limit(2)
+        apiClient.get('documents', { user_id: userId, select: 'id,title,type,created_at,processing_status', order: 'created_at.desc', limit: '2' })
       );
 
       // Minimal initial stats to render quickly
@@ -422,9 +431,9 @@ export const useDashboardStats = (userId: string | undefined) => {
         activityHistory: [],
         hourlyActivity: [],
         weekdayActivity: [],
-        recentNotes: recentNotesData.data || [],
-        recentRecordings: recentRecordingsData.data || [],
-        recentDocuments: recentDocumentsData.data || [],
+        recentNotes: unwrapResult(recentNotesData),
+        recentRecordings: unwrapResult(recentRecordingsData),
+        recentDocuments: unwrapResult(recentDocumentsData),
         topCategories: [],
         learningVelocity: [],
         engagementScore: 0,
@@ -450,7 +459,7 @@ export const useDashboardStats = (userId: string | undefined) => {
 
           let studyTimeData: any = { data: [] };
           try {
-            studyTimeData = await fetchWithTimeout(supabase.from('class_recordings').select('duration, created_at').eq('user_id', userId).limit(500), 8000);
+            studyTimeData = await fetchWithTimeout(apiClient.get('class-recordings', { user_id: userId, select: 'duration,created_at', limit: '500' }), 8000);
           } catch (e) {
             //console.warn('[useDashboardStats] studyTimeData fetch failed', e);
           }
@@ -458,7 +467,7 @@ export const useDashboardStats = (userId: string | undefined) => {
 
           let documentStats: any = { data: [] };
           try {
-            documentStats = await fetchWithTimeout(supabase.from('documents').select('processing_status, file_size, created_at').eq('user_id', userId).limit(500), 8000);
+            documentStats = await fetchWithTimeout(apiClient.get('documents', { user_id: userId, select: 'processing_status,file_size,created_at', limit: '500' }), 8000);
           } catch (e) {
             //console.warn('[useDashboardStats] documentStats fetch failed', e);
           }
@@ -524,67 +533,71 @@ export const useDashboardStats = (userId: string | undefined) => {
           // Phase 4: Additional data (lower priority)
           let categoryDistribution: any = { data: [] };
           try {
-            categoryDistribution = await fetchWithTimeout(supabase.from('notes').select('category').eq('user_id', userId).limit(50), 5000);
+            categoryDistribution = await fetchWithTimeout(apiClient.get('notes', { user_id: userId, select: 'category', limit: '50' }), 5000);
           } catch (e) {
             //console.warn('[useDashboardStats] categoryDistribution fetch failed', e);
             categoryDistribution = { data: [] };
           }
 
           // Streak RPC
-          const { data: streak } = await supabase.rpc('get_user_streak', { p_user_id: userId });
+          const streak = await apiClient.rpc('get_user_streak', { p_user_id: userId });
           const currentStreak = streak?.[0]?.current_streak || 0;
           const maxStreak = streak?.[0]?.max_streak || 0;
 
           // Schedule items
-          const scheduleItemsData = await supabase
-            .from('schedule_items')
-            .select('start_time, end_time')
-            .eq('user_id', userId)
-            .gte('start_time', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
-            .limit(100);
+          const scheduleItemsData = await apiClient.get('schedule', {
+            user_id: userId,
+            select: 'start_time,end_time',
+            start_time_gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+            limit: '100'
+          });
 
           const today = new Date();
           const todayDateStr = today.toISOString().split('T')[0];
 
-          const todayTasks = (scheduleItemsData.data || []).filter((item: any) => {
+          const scheduleItems = unwrapResult(scheduleItemsData);
+
+          const todayTasks = scheduleItems.filter((item: any) => {
             const itemDate = new Date(item.start_time).toISOString().split('T')[0];
             return itemDate === todayDateStr;
           }).length;
 
-          const upcomingTasks = (scheduleItemsData.data || []).filter((item: any) => {
+          const upcomingTasks = scheduleItems.filter((item: any) => {
             const itemDate = new Date(item.start_time);
             return itemDate > today;
           }).length;
 
-          const completedTasks = (scheduleItemsData.data || []).filter((item: any) => {
+          const completedTasks = scheduleItems.filter((item: any) => {
             const itemDate = new Date(item.end_time);
             return itemDate < today;
           }).length;
 
-          const overdueTasks = (scheduleItemsData.data || []).filter((item: any) => {
+          const overdueTasks = scheduleItems.filter((item: any) => {
             const itemDate = new Date(item.start_time);
             return itemDate < today && itemDate.toISOString().split('T')[0] !== todayDateStr;
           }).length;
 
           // Process study time and documents
-          const totalStudyTime = (studyTimeData.data || []).reduce((sum, rec) => sum + (rec.duration || 0), 0);
-          const studyTimeThisWeek = (studyTimeData.data || []).filter((rec: any) =>
+          const studyTimeRecords = unwrapResult(studyTimeData);
+          const totalStudyTime = studyTimeRecords.reduce((sum: number, rec: any) => sum + (rec.duration || 0), 0);
+          const studyTimeThisWeek = studyTimeRecords.filter((rec: any) =>
             new Date(rec.created_at) >= weekAgo
-          ).reduce((sum, rec) => sum + (rec.duration || 0), 0);
-          const studyTimeThisMonth = (studyTimeData.data || []).filter((rec: any) =>
+          ).reduce((sum: number, rec: any) => sum + (rec.duration || 0), 0);
+          const studyTimeThisMonth = studyTimeRecords.filter((rec: any) =>
             new Date(rec.created_at) >= monthAgo
-          ).reduce((sum, rec) => sum + (rec.duration || 0), 0);
+          ).reduce((sum: number, rec: any) => sum + (rec.duration || 0), 0);
 
-          const documentsProcessed = (documentStats.data || []).filter((d: any) => d.processing_status === 'completed').length;
-          const documentsPending = (documentStats.data || []).filter((d: any) =>
+          const docRecords = unwrapResult(documentStats);
+          const documentsProcessed = docRecords.filter((d: any) => d.processing_status === 'completed').length;
+          const documentsPending = docRecords.filter((d: any) =>
             d.processing_status === 'pending' || d.processing_status === 'processing'
           ).length;
-          const documentsFailed = (documentStats.data || []).filter((d: any) => d.processing_status === 'failed').length;
-          const totalDocumentSize = (documentStats.data || []).reduce((sum: number, doc: any) => sum + (doc.file_size || 0), 0);
+          const documentsFailed = docRecords.filter((d: any) => d.processing_status === 'failed').length;
+          const totalDocumentSize = docRecords.reduce((sum: number, doc: any) => sum + (doc.file_size || 0), 0);
 
           // Process category data
           const categoryCounts: Record<string, number> = {};
-          (categoryDistribution.data || []).forEach((note: any) => {
+          unwrapResult(categoryDistribution).forEach((note: any) => {
             const category = note.category || 'general';
             categoryCounts[category] = (categoryCounts[category] || 0) + 1;
           });

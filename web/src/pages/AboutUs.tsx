@@ -69,7 +69,7 @@ const AboutUs: React.FC = () => {
             />
             <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-colors" />
             <a
-              href="https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/video_2025-12-06_08-58-44.mp4"
+              href={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/documents/video_2025-12-06_08-58-44.mp4`}
               target="_blank"
               rel="noopener noreferrer"
               className="absolute inset-0 flex items-center justify-center"

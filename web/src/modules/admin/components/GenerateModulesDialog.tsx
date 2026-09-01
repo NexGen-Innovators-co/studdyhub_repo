@@ -21,6 +21,7 @@ import {
 } from '@/modules/ui/components/select';
 import { Sparkles, Loader2, BookOpen, Plus, Trash2, Check, Wand2, Edit2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { useAppContext } from '@/hooks/useAppContext';
 import { generateInlineContent } from '@/services/aiServices';
 import { toast } from 'sonner';
@@ -242,9 +243,9 @@ Make titles descriptive and academic. Descriptions should outline learning objec
           name.replace(/[^a-z0-9\-_. ]+/gi, '').replace(/\s+/g, '_').slice(0, 200);
 
         // Create document
-        const { data: doc, error: docError } = await supabase
-          .from('documents')
-          .insert({
+        let doc: any = null;
+        try {
+          doc = await apiClient.post('documents', {
             user_id: userId,
             title: `${courseTitle} - ${mod.title}`,
             file_name: sanitize(`${courseTitle}-${mod.title}.md`),
@@ -255,14 +256,13 @@ Make titles descriptive and academic. Descriptions should outline learning objec
             content_extracted: content,
             type: 'ai_generated',
             processing_status: 'completed',
-          })
-          .select()
-          .single();
-
-        if (docError) throw docError;
+          });
+        } catch (docError: any) {
+          throw docError;
+        }
 
         // Create note
-        await supabase.from('notes').insert({
+        await apiClient.post('notes', {
           user_id: userId,
           title: mod.title,
           content,
@@ -271,7 +271,7 @@ Make titles descriptive and academic. Descriptions should outline learning objec
         });
 
         // Create course material
-        await supabase.from('course_materials').insert({
+        await apiClient.post('course-materials', {
           course_id: courseId,
           title: mod.title,
           description: mod.description,
@@ -281,18 +281,20 @@ Make titles descriptive and academic. Descriptions should outline learning objec
 
         // Also create course_resources entries for the document and note
         if (doc?.id) {
-          await supabase.from('course_resources').insert({
-            course_id: courseId,
-            resource_type: 'document',
-            resource_id: doc.id,
-            title: mod.title,
-            description: mod.description || null,
-            category: normalizeCategory(mod.category),
-            is_required: false,
-            created_by: userId || null,
-          }).then(({ error }) => {
-            if (error && !error.message?.includes('duplicate')) console.warn('course_resources doc insert:', error.message);
-          });
+          try {
+            await apiClient.post('course-resources', {
+              course_id: courseId,
+              resource_type: 'document',
+              resource_id: doc.id,
+              title: mod.title,
+              description: mod.description || null,
+              category: normalizeCategory(mod.category),
+              is_required: false,
+              created_by: userId || null,
+            });
+          } catch (err: any) {
+            if (!err.message?.includes('duplicate')) console.warn('course_resources doc insert:', err.message);
+          }
         }
 
         saved++;

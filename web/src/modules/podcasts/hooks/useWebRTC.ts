@@ -1,6 +1,7 @@
 // useWebRTC.ts - Fixed version for live audio streaming
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
@@ -88,18 +89,17 @@ export const useWebRTC = ({
     if (!isHost && !isCohostMode) return;
 
     const fetchPendingRequests = async () => {
-      const { data } = await supabase
-        .from('podcast_participation_requests')
-        .select('*')
-        .eq('podcast_id', podcastId)
-        .eq('status', 'pending');
+      const data = await apiClient.get('podcast-participation-requests', {
+        podcast_id: podcastId,
+        status: 'pending'
+      });
 
       if (data) {
         setPermissionRequests(prev => {
            const existingIds = new Set(prev.map(p => p.userId));
-           const newRequests = data
-             .filter(r => !existingIds.has(r.user_id))
-             .map(r => ({
+           const newRequests = (Array.isArray(data) ? data : [])
+             .filter((r: any) => !existingIds.has(r.user_id))
+             .map((r: any) => ({
                userId: r.user_id,
                requestType: r.request_type as 'speak' | 'cohost',
                timestamp: new Date(r.created_at).getTime()
@@ -165,15 +165,13 @@ export const useWebRTC = ({
 
       // Check if user is co-host
       if (isCohost) {
-        const { data: cohostData } = await supabase
-          .from('podcast_cohosts')
-          .select('*')
-          .eq('podcast_id', podcastId)
-          .eq('user_id', user.id)
-          .eq('is_active', true)
-          .single();
+        const cohostData = await apiClient.get('podcast-cohosts', {
+          podcast_id: podcastId,
+          user_id: user.id,
+          is_active: 'true'
+        });
         
-        if (cohostData) {
+        if (cohostData && (Array.isArray(cohostData) ? cohostData.length > 0 : true)) {
           setIsCohostMode(true);
           log('User is a co-host');
         }
@@ -947,7 +945,7 @@ export const useWebRTC = ({
 
   const savePermissionRequest = async (requestType: 'speak' | 'cohost') => {
     try {
-      await supabase.from('podcast_participation_requests').insert({
+      await apiClient.post('podcast-participation-requests', {
         podcast_id: podcastId,
         user_id: currentUserIdRef.current!,
         request_type: requestType,
@@ -965,29 +963,20 @@ export const useWebRTC = ({
     
     // Update database
     try {
-      const { error } = await supabase
-        .from('podcast_participation_requests')
-        .update({
-          status: 'approved',
-          responded_at: new Date().toISOString(),
-          responder_id: currentUserIdRef.current
-        })
-        .eq('podcast_id', podcastId)
-        .eq('user_id', userId)
-        .eq('status', 'pending');
-
-      if (error) throw error;
+      await apiClient.patch(`podcast-participation-requests/${podcastId}/${userId}`, {
+        status: 'approved',
+        responded_at: new Date().toISOString(),
+        responder_id: currentUserIdRef.current
+      });
 
       // If cohost request, add to cohosts table
       if (requestType === 'cohost') {
-        await supabase
-          .from('podcast_cohosts')
-          .upsert({
-            podcast_id: podcastId,
-            user_id: userId,
-            permissions: ['speak', 'moderate'],
-            is_active: true
-          });
+        await apiClient.post('podcast-cohosts', {
+          podcast_id: podcastId,
+          user_id: userId,
+          permissions: ['speak', 'moderate'],
+          is_active: true
+        });
       }
     } catch (err) {
       log('Error updating permission in database:', err);
@@ -1020,23 +1009,16 @@ export const useWebRTC = ({
     
     // Update database
     try {
-      await supabase
-        .from('podcast_participation_requests')
-        .update({
-          status: 'revoked',
-          responded_at: new Date().toISOString(),
-          responder_id: currentUserIdRef.current
-        })
-        .eq('podcast_id', podcastId)
-        .eq('user_id', userId)
-        .eq('status', 'approved');
+      await apiClient.patch(`podcast-participation-requests/${podcastId}/${userId}`, {
+        status: 'revoked',
+        responded_at: new Date().toISOString(),
+        responder_id: currentUserIdRef.current
+      });
 
       // Remove from cohosts if exists
-      await supabase
-        .from('podcast_cohosts')
-        .update({ is_active: false })
-        .eq('podcast_id', podcastId)
-        .eq('user_id', userId);
+      await apiClient.patch(`podcast-cohosts/${podcastId}/${userId}`, {
+        is_active: false
+      });
     } catch (err) {
       log('Error revoking permission in database:', err);
     }

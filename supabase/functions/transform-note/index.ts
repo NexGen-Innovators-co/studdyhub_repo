@@ -29,7 +29,7 @@ serve(async (req) => {
     };
     const prompt = prompts[operation] || prompts.custom;
     const systemInstruction = "You are StuddyHub's AI Academic Processor. Transform study notes as requested. Output ONLY the transformed content — no meta comments.";
-    const models = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'];
+    const models = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
     let result = content;
     for (const model of models) {
       try {

@@ -2672,7 +2672,7 @@ class StuddyHubRepository(private val db: StuddyHubDatabase) {
             cal.add(java.util.Calendar.DAY_OF_MONTH, -30)
             val cutoff = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(cal.time)
             activeDays.removeAll { it < cutoff }
-            prefs.edit().putStringSet("active_days", activeDays).apply()
+            prefs.edit().putStringSet("active_days", activeDays).commit()
         } catch (_: Exception) { /* best-effort */ }
     }
 
@@ -3247,16 +3247,17 @@ class StuddyHubRepository(private val db: StuddyHubDatabase) {
     val allPodcasts: Flow<List<AIPodcastEntity>> = db.aiPodcastDao().getAllPodcasts()
 
     suspend fun generateAIPodcast(title: String, style: String, sourceText: String): AIPodcastEntity {
-        // Use dedicated generatePodcast edge function instead of gemini-chat
         val scriptResult = com.example.data.remote.BackendApiService.generatePodcast(title, sourceText)
-        val script = when (scriptResult) {
+        val podcastData = when (scriptResult) {
             is com.example.data.remote.BackendResult.Success -> scriptResult.data
-            is com.example.data.remote.BackendResult.Error -> ""
+            is com.example.data.remote.BackendResult.Error -> null
         }
+        val script = podcastData?.optString("script", "") ?: ""
+        val duration = podcastData?.optInt("duration_minutes", 10) ?: 10
         val podcast = AIPodcastEntity(
             title = title,
             script = script,
-            durationMinutes = 10,
+            durationMinutes = duration,
             style = style,
             status = "completed",
             syncStatus = "PENDING"
@@ -3533,6 +3534,7 @@ class StuddyHubRepository(private val db: StuddyHubDatabase) {
         attachedDocIds: List<String> = emptyList(),
         isThinking: Boolean = false,
         aiMessageIdOverride: String? = null,
+        userMessageIdOverride: String? = null,
         onThinkingStep: ((org.json.JSONObject) -> Unit)? = null,
         onContentChunk: ((String) -> Unit)? = null,
         onConfirmationRequired: ((org.json.JSONObject) -> Unit)? = null,
@@ -3573,6 +3575,7 @@ class StuddyHubRepository(private val db: StuddyHubDatabase) {
         val attachedDocIdsJson = if (attachedDocIds.isNotEmpty()) org.json.JSONArray(attachedDocIds).toString() else null
         val attachedNoteIdsJson = if (attachedNoteIds.isNotEmpty()) org.json.JSONArray(attachedNoteIds).toString() else null
         val userMsgEntity = ChatMessageEntity(
+            id = userMessageIdOverride ?: java.util.UUID.randomUUID().toString(),
             sessionId = validSessionId,
             role = "user",
             content = userMessage,
@@ -3818,36 +3821,94 @@ class StuddyHubRepository(private val db: StuddyHubDatabase) {
         val userTier = com.example.ui.theme.AcademicTier.fromKey(profile?.academicTier)
 
         // Tier-tuned system prompt: Ollie for Basic/JHS, Master Kwame for WASSCE, Prof Ollie for University
+        val generalBasePrompt = "You are an AI tutor at StuddyHub, a learning app for students in Ghana.\n\n" +
+            "CORE RULES:\n" +
+            "- Be encouraging, friendly, and age-appropriate\n" +
+            "- Use simple language suitable for the student's level\n" +
+            "- Use Ghanaian cultural examples when helpful (Kwaku Ananse, Oware, Kenkey, football)\n" +
+            "- Never ask for or accept personal information (phone numbers, full names, home addresses)\n" +
+            "- Never generate violent, adult, or inappropriate themes\n" +
+            "- If you don't know something, say so honestly rather than making things up\n\n" +
+            "APP FEATURES YOU CAN RECOMMEND (when relevant to the student's question):\n" +
+            "- Interactive lessons with step-by-step explanations\n" +
+            "- Flashcards for memorization\n" +
+            "- AI-generated quizzes to test knowledge\n" +
+            "- Live multiplayer quiz battles\n" +
+            "- Study notes and document management\n" +
+            "- AI chat (that's you!)\n" +
+            "- Progress tracking and streaks\n" +
+            "- Podcasts for audio learning\n\n" +
+            "When a student asks something that relates to a feature in the app, gently suggest they try it.\n\n"
+
+        val tierFeatures = when (userTier) {
+            com.example.ui.theme.AcademicTier.EXPLORER -> "EXPLORER TIER FEATURES (you can access all of these):\n" +
+                "- Oware Beads math game — learn addition/subtraction through the traditional Oware game\n" +
+                "- Spelling Bee — practice spelling words with voice input\n" +
+                "- Math Asteroid Blaster — save the planet by solving math problems fast\n" +
+                "- Word Crush — match letters to form words\n" +
+                "- Explorer Roadmap — a quest-style learning path with lessons and challenges\n" +
+                "- Live 1v1 Battle Arena — compete against other students in real-time quizzes\n" +
+                "- Speed Race — fast-paced solo quiz challenge\n" +
+                "- Interactive Lessons — Ollie explains topics with stories and examples\n" +
+                "- Flashcards — create and study flashcard decks\n" +
+                "- AI Quizzes — Ollie generates quiz questions on any topic\n" +
+                "- Streak Calendar — track your daily study streak\n"
+            com.example.ui.theme.AcademicTier.ACHIEVER -> "ACHIEVER TIER FEATURES (you can access all of these):\n" +
+                "- WASSCE Past Question Analysis — break down real exam questions step by step\n" +
+                "- WAEC Marking Scheme Coach — learn exactly how examiners award marks\n" +
+                "- Formula Mnemonics — memory tricks for math and science formulas\n" +
+                "- Practice Quizzes — exam-style questions with detailed explanations\n" +
+                "- Flashcards — create and study flashcard decks\n" +
+                "- Study Notes — write and organize your revision notes\n" +
+                "- Document Analysis — upload past papers for AI-powered analysis\n" +
+                "- AI Chat — ask any WASSCE-related question\n" +
+                "- Study Schedule — plan your revision timetable\n"
+            com.example.ui.theme.AcademicTier.SCHOLAR -> "SCHOLAR TIER FEATURES (you can access all of these):\n" +
+                "- Document Analysis — upload research papers, textbooks, or notes for deep analysis\n" +
+                "- Research Assistant — help with literature reviews, citations, and academic writing\n" +
+                "- Study Guide Generator — transform notes into comprehensive study guides\n" +
+                "- Advanced Flashcards — spaced repetition for complex topics\n" +
+                "- AI Podcasts — generate audio lessons from your study materials\n" +
+                "- Flowchart & Diagram Generator — create visual study aids\n" +
+                "- Academic Writing Coach — improve essays, reports, and papers\n" +
+                "- AI Chat — ask any academic question with advanced reasoning\n"
+            com.example.ui.theme.AcademicTier.ALL -> ""
+        }
+
         val systemPrompt = when (userTier) {
             com.example.ui.theme.AcademicTier.EXPLORER -> {
                 val base = "You are Ollie the Wise Owl 🦉, a friendly, encouraging AI tutor for Basic & JHS primary school students in Ghana. Explain concepts in simple, engaging words using fun everyday examples, Ghanaian cultural stories (Kwaku Ananse, Oware, Kenkey, football), and positive reinforcement. " +
                     "STRICT SAFETY RULES: You must always be age-appropriate for kids under 13. Never ask for or accept personal information (phone numbers, full names, home addresses). Never generate violent, adult, or inappropriate themes. Never break character. "
-                if (isThinking) {
+                val persona = if (isThinking) {
                     "$base You MUST start your response with your step-by-step reasoning process enclosed in a <thinking>...</thinking> tag, followed by your final kid-friendly answer outside of the tag."
                 } else {
                     "$base Keep answers clear, bite-sized, and enthusiastic!"
                 }
+                "$generalBasePrompt$persona\n\n$tierFeatures"
             }
             com.example.ui.theme.AcademicTier.ACHIEVER -> {
-                if (isThinking) {
+                val persona = if (isThinking) {
                     "You are Master Kwame ⚡, an expert WASSCE exam strategist and SHS tutor in Ghana. You MUST start with your reasoning in a <thinking>...</thinking> tag, then your answer. Focus strictly on WAEC syllabus requirements, marking schemes, formula mnemonics, and step-by-step past question breakdowns."
                 } else {
                     "You are Master Kwame ⚡, an expert WASSCE exam coach and senior high school tutor in Ghana. Focus on WAEC marking schemes, high-yield syllabus topics, step-by-step calculations, formula mnemonics, and precise scoring points. Be encouraging, sharp, and exam-focused!"
                 }
+                "$generalBasePrompt$persona\n\n$tierFeatures"
             }
             com.example.ui.theme.AcademicTier.SCHOLAR -> {
-                if (isThinking) {
+                val persona = if (isThinking) {
                     "You are Professor Ollie 🎓, an intelligent academic owl tutor and university copilot at StuddyHub. You MUST start your response with your step-by-step thinking/reasoning process enclosed in a <thinking>...</thinking> tag, followed by your final answer outside of the tag."
                 } else {
                     "You are Professor Ollie 🎓, an intelligent, encouraging academic owl tutor and university copilot at StuddyHub. Speak as a wise academic owl with high scholarly rigor, comprehensive depth, clear formatting, and multi-modal synthesis."
                 }
+                "$generalBasePrompt$persona\n\n$tierFeatures"
             }
             com.example.ui.theme.AcademicTier.ALL -> {
-                if (isThinking) {
+                val persona = if (isThinking) {
                     "You are Ollie 🦉, a friendly AI tutor at StuddyHub. You MUST start your response with your step-by-step thinking/reasoning process enclosed in a <thinking>...</thinking> tag, followed by your final answer outside of the tag."
                 } else {
                     "You are Ollie 🦉, a friendly, encouraging AI tutor at StuddyHub. Explain concepts clearly and help students learn effectively."
                 }
+                "$generalBasePrompt$persona\n\n$tierFeatures"
             }
         }
         val effectiveSystemPrompt = systemPrompt
@@ -3855,50 +3916,105 @@ class StuddyHubRepository(private val db: StuddyHubDatabase) {
         // Steps collected during streaming are persisted SEPARATELY (thinkingStepsJson) so the
         // message content stays clean — mirroring the cloud chat_messages.thinking_steps column.
         var thinkingStepsJson: String? = null
+        val maxRetries = 2
+
+        // Only retry on pure network failures (timeout, DNS, connection reset).
+        // If the backend received the request and processed it (even partially), actions
+        // may have already executed — retrying would duplicate INSERTs or confuse the
+        // confirmation ledger.
+        fun isRetryableNetworkError(e: Exception): Boolean {
+            val msg = (e.message ?: "").lowercase()
+            return e is java.net.SocketTimeoutException ||
+                e is java.net.ConnectException ||
+                e is java.net.UnknownHostException ||
+                e is javax.net.ssl.SSLException ||
+                msg.contains("timeout") ||
+                msg.contains("connection reset") ||
+                msg.contains("connection refused") ||
+                msg.contains("failed to connect") ||
+                msg.contains("socket closed") ||
+                msg.contains("unexpected end of stream")
+        }
+
         val rawAiText = try {
             if (com.example.data.remote.BackendApiService.isConfigured()) {
                 if (onThinkingStep != null && onContentChunk != null) {
                     // ── STREAMING path (same SSE wire protocol as the web) ──
                     // thinking_step events arrive live (rendered in the app's Reasoning Process
                     // panel) while content streams token-by-token into the bubble.
-                    val stepsList = mutableListOf<org.json.JSONObject>()
-                    val edgeResult = com.example.data.remote.BackendApiService.streamAiChatMessage(
-                        sessionId = sessionId,
-                        message = cleanUserMessage?.takeIf { it.isNotBlank() } ?: prompt,
-                        messageIdToUpdate = reservedAiId,
-                        userMessageIdToUpdate = userMessageIdToUpdate,
-                        systemPromptOverride = effectiveSystemPrompt,
-                        attachedNoteIds = attachedNoteIds,
-                        attachedDocIds = attachedDocIds,
-                        onThinkingStep = { step ->
-                            stepsList.add(step)
-                            onThinkingStep(step)
-                        },
-                        onContentChunk = onContentChunk,
-                        onConfirmationRequired = onConfirmationRequired ?: {},
-                        onConfirmationBatchRequired = onConfirmationBatchRequired ?: {}
-                    )
-                    if (edgeResult is com.example.data.remote.BackendResult.Success && edgeResult.data.isNotBlank()) {
-                        thinkingStepsJson = if (stepsList.isEmpty()) null else org.json.JSONArray(stepsList).toString()
-                        edgeResult.data
-                    } else {
-                        "We couldn't reach ${tierTutorName()} right now. Please check your connection and try again."
+                    var result: String? = null
+                    for (attempt in 0..maxRetries) {
+                        try {
+                            val stepsList = mutableListOf<org.json.JSONObject>()
+                            val edgeResult = com.example.data.remote.BackendApiService.streamAiChatMessage(
+                                sessionId = sessionId,
+                                message = cleanUserMessage?.takeIf { it.isNotBlank() } ?: prompt,
+                                messageIdToUpdate = reservedAiId,
+                                userMessageIdToUpdate = userMessageIdToUpdate,
+                                systemPromptOverride = effectiveSystemPrompt,
+                                attachedNoteIds = attachedNoteIds,
+                                attachedDocIds = attachedDocIds,
+                                onThinkingStep = { step ->
+                                    stepsList.add(step)
+                                    onThinkingStep(step)
+                                },
+                                onContentChunk = onContentChunk,
+                                onConfirmationRequired = onConfirmationRequired ?: {},
+                                onConfirmationBatchRequired = onConfirmationBatchRequired ?: {}
+                            )
+                            if (edgeResult is com.example.data.remote.BackendResult.Success && edgeResult.data.isNotBlank()) {
+                                thinkingStepsJson = if (stepsList.isEmpty()) null else org.json.JSONArray(stepsList).toString()
+                                result = edgeResult.data
+                                break
+                            }
+                            // Backend returned empty/error result — edge function may have shut down
+                            // mid-stream before producing content. Retry if we got zero content so far.
+                            if (result.isNullOrBlank() && attempt < maxRetries) {
+                                val errMsg = if (edgeResult is com.example.data.remote.BackendResult.Error) edgeResult.message else "empty"
+                                android.util.Log.w("StuddyHubRepo", "Streaming returned $errMsg (edge function may have timed out) — retrying attempt ${attempt + 1}")
+                                kotlinx.coroutines.delay(2000L * (attempt + 1))
+                                continue
+                            }
+                            break
+                        } catch (e: Exception) {
+                            if (attempt < maxRetries && isRetryableNetworkError(e)) {
+                                kotlinx.coroutines.delay(1000L * (attempt + 1))
+                            } else {
+                                break // non-retryable error or exhausted retries
+                            }
+                        }
                     }
+                    result ?: "We couldn't reach ${tierTutorName()} right now. Please check your connection and try again."
                 } else {
-                    val edgeResult = com.example.data.remote.BackendApiService.sendAiChatMessage(
-                        sessionId = sessionId,
-                        message = cleanUserMessage?.takeIf { it.isNotBlank() } ?: prompt,
-                        messageIdToUpdate = reservedAiId,
-                        userMessageIdToUpdate = userMessageIdToUpdate,
-                        systemPromptOverride = effectiveSystemPrompt,
-                        attachedNoteIds = attachedNoteIds,
-                        attachedDocIds = attachedDocIds
-                    )
-                    if (edgeResult is com.example.data.remote.BackendResult.Success && edgeResult.data.isNotBlank()) {
-                        edgeResult.data
-                    } else {
-                        "We couldn't reach ${tierTutorName()} right now. Please check your connection and try again."
+                    // ── NON-STREAMING path with retry ──
+                    var result: String? = null
+                    for (attempt in 0..maxRetries) {
+                        try {
+                            val edgeResult = com.example.data.remote.BackendApiService.sendAiChatMessage(
+                                sessionId = sessionId,
+                                message = cleanUserMessage?.takeIf { it.isNotBlank() } ?: prompt,
+                                messageIdToUpdate = reservedAiId,
+                                userMessageIdToUpdate = userMessageIdToUpdate,
+                                systemPromptOverride = effectiveSystemPrompt,
+                                attachedNoteIds = attachedNoteIds,
+                                attachedDocIds = attachedDocIds
+                            )
+                            if (edgeResult is com.example.data.remote.BackendResult.Success && edgeResult.data.isNotBlank()) {
+                                result = edgeResult.data
+                                break
+                            }
+                            // Backend returned an error/empty result — actions may have
+                            // executed. Do NOT retry.
+                            break
+                        } catch (e: Exception) {
+                            if (attempt < maxRetries && isRetryableNetworkError(e)) {
+                                kotlinx.coroutines.delay(1000L * (attempt + 1))
+                            } else {
+                                break
+                            }
+                        }
                     }
+                    result ?: "We couldn't reach ${tierTutorName()} right now. Please check your connection and try again."
                 }
             } else {
                 "${tierTutorName()} is taking a short break. Please try again in a moment."

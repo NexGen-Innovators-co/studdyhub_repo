@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../../../integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { logAdminActivity } from '../utils/adminActivityLogger';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/components/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/components/table';
@@ -30,12 +30,11 @@ const ContentModeration = () => {
   const fetchItems = async () => {
     try {
       setLoading(true);
-      let q = supabase.from('content_moderation_queue').select('*').order('created_at', { ascending: false });
-      if (filterStatus === 'pending') q = q.eq('status', 'pending');
-      const { data, error } = await q;
-      if (error) throw error;
+      const params: Record<string, string> = { order: 'created_at.desc' };
+      if (filterStatus === 'pending') params.status = 'pending';
+      const { data } = await apiClient.get('content_moderation_queue', params) as any;
 
-      const typed = (data ?? []).map(
+      const typed = ((data as any) ?? []).map(
         (row): ModerationItem => ({
           ...row,
           status: row.status as ModerationItem['status'],
@@ -54,22 +53,18 @@ const ContentModeration = () => {
     try {
       const item = items.find(i => i.id === id);
       const newStatus = action === 'dismiss' ? 'dismissed' : 'resolved';
-      const { error } = await supabase
-        .from('content_moderation_queue')
-        .update({
-          status: newStatus,
-          moderator_notes: `[${action.toUpperCase()}] ${notes}`.trim(),
-          resolved_at: new Date().toISOString()
-        })
-        .eq('id', id);
-      if (error) throw error;
+      await apiClient.patch(`content_moderation_queue/${id}`, {
+        status: newStatus,
+        moderator_notes: `[${action.toUpperCase()}] ${notes}`.trim(),
+        resolved_at: new Date().toISOString()
+      });
 
       // If action is 'remove', also delete the actual content
       if (action === 'remove' && item) {
         if (item.content_type === 'post' && item.content_id) {
-          await supabase.from('social_posts').delete().eq('id', item.content_id);
+          await apiClient.delete(`social_posts/${item.content_id}`);
         } else if (item.content_type === 'comment' && item.content_id) {
-          await supabase.from('social_comments').delete().eq('id', item.content_id);
+          await apiClient.delete(`social_comments/${item.content_id}`);
         }
       }
 

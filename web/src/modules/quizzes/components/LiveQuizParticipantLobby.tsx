@@ -81,8 +81,9 @@ const LiveQuizParticipantLobby: React.FC<LiveQuizParticipantLobbyProps> = ({
 
   // initialize lobby audio
   React.useEffect(() => {
-    const bgUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/sonican-informational-quiz-loop-397409.mp3';
-    const startUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/mixkit-correct-answer-tone-2870.wav';
+    const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const bgUrl = `${baseUrl}/storage/v1/object/public/documents/sonican-informational-quiz-loop-397409.mp3`;
+    const startUrl = `${baseUrl}/storage/v1/object/public/documents/mixkit-correct-answer-tone-2870.wav`;
 
     bgRef.current = new Audio(bgUrl);
     bgRef.current.loop = true;

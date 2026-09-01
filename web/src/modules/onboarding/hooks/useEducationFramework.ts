@@ -3,7 +3,7 @@
 // Used in onboarding and education settings.
 
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import type { Country, EducationFramework } from '@/types/Education';
 
 // ─── Session-storage cache helpers ─────────────────────────────
@@ -85,14 +85,8 @@ export function useEducationFramework(countryCode: string | null) {
       }
 
       try {
-        const { data, error: rpcError } = await supabase.rpc('get_active_countries');
+        const data = await apiClient.rpc('get_active_countries');
         if (cancelled) return;
-
-        if (rpcError) {
-          setError(rpcError.message);
-          setIsLoadingCountries(false);
-          return;
-        }
 
         const list = (data as Country[]) ?? [];
         setCountries(list);
@@ -135,16 +129,10 @@ export function useEducationFramework(countryCode: string | null) {
       setError(null);
 
       try {
-        const { data, error: rpcError } = await supabase.rpc('get_education_framework', {
+        const data = await apiClient.rpc('get_education_framework', {
           p_country_code: countryCode,
         });
         if (cancelled) return;
-
-        if (rpcError) {
-          setError(rpcError.message);
-          setIsLoadingFramework(false);
-          return;
-        }
 
         const fw = data as EducationFramework;
         setFramework(fw);

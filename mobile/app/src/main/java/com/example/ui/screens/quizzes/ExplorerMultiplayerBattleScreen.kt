@@ -76,7 +76,7 @@ fun ExplorerMultiplayerBattleScreen(
     var selectedTopic by remember { mutableStateOf(EXPLORER_BATTLE_TOPICS.first()) }
     var selectedDifficulty by remember { mutableStateOf("medium") }
     var selectedQuestionCount by remember { mutableIntStateOf(5) }
-    var timeLimitSec by remember { mutableIntStateOf(15) }
+    var timeLimitSec by remember { mutableIntStateOf(60) }
     var isStartingMatch by remember { mutableStateOf(false) }
     var isCreatingRoom by remember { mutableStateOf(false) }
     var isJoiningRoom by remember { mutableStateOf(false) }
@@ -99,7 +99,7 @@ fun ExplorerMultiplayerBattleScreen(
     // Show error feedback when battle creation/join fails
     LaunchedEffect(uiState.userMessage) {
         uiState.userMessage?.let { msg ->
-            snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
+            snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Long)
             viewModel.clearUserMessage()
         }
     }
@@ -113,7 +113,7 @@ fun ExplorerMultiplayerBattleScreen(
         } else if (!uiState.isLoading && (isStartingMatch || isCreatingRoom || isJoiningRoom)) {
             // Loading finished but no session created — likely an error. Show feedback.
             val errorMsg = uiState.userMessage ?: "Something went wrong. Please try again."
-            snackbarHostState.showSnackbar(errorMsg, duration = SnackbarDuration.Short)
+            snackbarHostState.showSnackbar(errorMsg, duration = SnackbarDuration.Long)
             viewModel.clearUserMessage()
             isStartingMatch = false
             isCreatingRoom = false
@@ -208,12 +208,30 @@ fun ExplorerMultiplayerBattleScreen(
             }
 
             // ── Open Public Battles ──
-            if (publicLobbies.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 Text(
                     text = "🔥 Open Battles",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
-                    modifier = Modifier.fillMaxWidth()
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold)
                 )
+                if (!loadingLobbies) {
+                    IconButton(onClick = {
+                        TactileSoundSystem.playPopSound()
+                        coroutineScope.launch {
+                            loadingLobbies = true
+                            viewModel.refreshActiveLobbies()
+                            publicLobbies = viewModel.activeLobbiesFromServer.value
+                            loadingLobbies = false
+                        }
+                    }, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh battles", modifier = Modifier.size(22.dp))
+                    }
+                }
+            }
+            if (publicLobbies.isNotEmpty()) {
                 publicLobbies.forEach { lobby ->
                     Tactile3DCard(
                         onClick = {
@@ -267,9 +285,21 @@ fun ExplorerMultiplayerBattleScreen(
                     ) {
                         Text("🔍", fontSize = 18.sp)
                         Text(
-                            text = "No open battles right now. Tap \"Create Battle Room\" to host one!",
-                            style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF64748B))
+                            text = "No open battles right now.",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF64748B)),
+                            modifier = Modifier.weight(1f)
                         )
+                        TextButton(onClick = {
+                            TactileSoundSystem.playPopSound()
+                            coroutineScope.launch {
+                                loadingLobbies = true
+                                viewModel.refreshActiveLobbies()
+                                publicLobbies = viewModel.activeLobbiesFromServer.value
+                                loadingLobbies = false
+                            }
+                        }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+                            Text("Refresh", style = MaterialTheme.typography.labelSmall)
+                        }
                     }
                 }
             }
@@ -386,7 +416,7 @@ fun ExplorerMultiplayerBattleScreen(
                     TactileSoundSystem.playPopSound()
                     showCreateDialog = true
                 },
-                containerColor = Color(0xFF3B82F6),
+                containerColor = if (isCreatingRoom) Color(0xFF93C5FD) else Color(0xFF3B82F6),
                 bevelColor = Color(0xFF1D4ED8),
                 cornerRadius = 22.dp,
                 elevationDepth = 5.dp,
@@ -399,38 +429,44 @@ fun ExplorerMultiplayerBattleScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color.White.copy(alpha = 0.25f),
-                        modifier = Modifier.size(54.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text("👑", fontSize = 28.sp)
+                    if (isCreatingRoom) {
+                        CircularProgressIndicator(modifier = Modifier.size(54.dp), strokeWidth = 3.dp, color = Color.White)
+                    } else {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color.White.copy(alpha = 0.25f),
+                            modifier = Modifier.size(54.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("👑", fontSize = 28.sp)
+                            }
                         }
                     }
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Create Battle Room",
+                            text = if (isCreatingRoom) "Creating Room…" else "Create Battle Room",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White
                             )
                         )
                         Text(
-                            text = "Pick a topic & get a PIN for friends!",
+                            text = if (isCreatingRoom) "Setting up your game…" else "Pick a topic & get a PIN for friends!",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = Color.White.copy(alpha = 0.9f)
                             )
                         )
                     }
 
-                    Icon(
-                        imageVector = Icons.Default.AddCircle,
-                        contentDescription = "Create",
-                        tint = Color.White,
-                        modifier = Modifier.size(28.dp)
-                    )
+                    if (!isCreatingRoom) {
+                        Icon(
+                            imageVector = Icons.Default.AddCircle,
+                            contentDescription = "Create",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
             }
 
@@ -441,7 +477,7 @@ fun ExplorerMultiplayerBattleScreen(
                     TactileSoundSystem.playPopSound()
                     showJoinDialog = true
                 },
-                containerColor = Color(0xFF8B5CF6),
+                containerColor = if (isJoiningRoom) Color(0xFFC4B5FD) else Color(0xFF8B5CF6),
                 bevelColor = Color(0xFF6D28D9),
                 cornerRadius = 22.dp,
                 elevationDepth = 5.dp,
@@ -454,38 +490,44 @@ fun ExplorerMultiplayerBattleScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color.White.copy(alpha = 0.25f),
-                        modifier = Modifier.size(54.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text("🎮", fontSize = 28.sp)
+                    if (isJoiningRoom) {
+                        CircularProgressIndicator(modifier = Modifier.size(54.dp), strokeWidth = 3.dp, color = Color.White)
+                    } else {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color.White.copy(alpha = 0.25f),
+                            modifier = Modifier.size(54.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("🎮", fontSize = 28.sp)
+                            }
                         }
                     }
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Join with Game PIN",
+                            text = if (isJoiningRoom) "Joining Room…" else "Join with Game PIN",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White
                             )
                         )
                         Text(
-                            text = "Type your friend's 4-digit code to enter!",
+                            text = if (isJoiningRoom) "Connecting you to the game…" else "Type your friend's 4-digit code to enter!",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = Color.White.copy(alpha = 0.9f)
                             )
                         )
                     }
 
-                    Icon(
-                        imageVector = Icons.Default.Login,
-                        contentDescription = "Join",
-                        tint = Color.White,
-                        modifier = Modifier.size(28.dp)
-                    )
+                    if (!isJoiningRoom) {
+                        Icon(
+                            imageVector = Icons.Default.Login,
+                            contentDescription = "Join",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
             }
 

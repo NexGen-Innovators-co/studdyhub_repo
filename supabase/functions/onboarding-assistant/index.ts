@@ -37,7 +37,7 @@ serve(async (req: Request) => {
       });
     }
 
-    const model = "gemini-2.5-flash";
+    const MODEL_CHAIN = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash'];
 
     // Build Gemini API request
     const contents = [{ role: "user", parts: [{ text: prompt }] }];
@@ -53,31 +53,33 @@ serve(async (req: Request) => {
       body.systemInstruction = { parts: [{ text: systemInstruction }] };
     }
 
-    // Try each key
+    // Try each key with model fallback
     let lastError = "";
     for (const apiKey of geminiKeys) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
+      for (const model of MODEL_CHAIN) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
 
-        if (res.ok) {
-          const data = await res.json();
-          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-          if (text) {
-            return new Response(JSON.stringify({ response: text }), {
-              status: 200,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
+          if (res.ok) {
+            const data = await res.json();
+            const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+            if (text) {
+              return new Response(JSON.stringify({ response: text }), {
+                status: 200,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              });
+            }
+          } else {
+            lastError = `${res.status}: ${await res.text()}`;
           }
-        } else {
-          lastError = `${res.status}: ${await res.text()}`;
+        } catch (e) {
+          lastError = String(e);
         }
-      } catch (e) {
-        lastError = String(e);
       }
     }
 
