@@ -1,7 +1,7 @@
 import React from 'react';
-import { Smartphone, ExternalLink, Shield, ArrowRight } from 'lucide-react';
+import { Smartphone, ExternalLink, Shield } from 'lucide-react';
 
-const GITHUB_RELEASES_URL = 'https://github.com/NexGen-Innovators-co/studdyhub_repo/releases/latest';
+const APK_DOWNLOAD_URL = '/StuddyHub-v1.0-beta.1.apk';
 
 function detectDevice(): 'android' | 'ios' | 'desktop' {
   const ua = navigator.userAgent || navigator.vendor || '';
@@ -49,9 +49,8 @@ export default function MaintenanceNotice() {
           {device === 'android' && (
             <div className="space-y-3">
               <a
-                href={GITHUB_RELEASES_URL}
-                target="_blank"
-                rel="noopener noreferrer"
+                href={APK_DOWNLOAD_URL}
+                download="StuddyHub-v1.0-beta.1.apk"
                 className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-blue-600 text-white font-semibold rounded-xl hover:from-indigo-600 hover:to-blue-700 transition-all duration-200 shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98]"
               >
                 <Smartphone className="h-5 w-5" />
@@ -83,17 +82,8 @@ export default function MaintenanceNotice() {
                 StuddyHub is a mobile app.
               </p>
               <p className="text-xs text-blue-500 dark:text-blue-400 mt-1">
-                Open this page on an Android phone to download the app.
+                Please use an Android device to access StuddyHub.
               </p>
-              <a
-                href={GITHUB_RELEASES_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 mt-3 text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
-              >
-                View on GitHub
-                <ArrowRight className="h-3.5 w-3.5" />
-              </a>
             </div>
           )}
         </div>
