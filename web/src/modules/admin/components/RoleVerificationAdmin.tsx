@@ -207,7 +207,6 @@ const RoleVerificationAdmin: React.FC = () => {
       } catch (profErr: any) {
         console.warn('Profile update failed (may need admin RLS policy):', profErr.message);
       }
-    }
 
       toast.success(`Approved ${selectedRequest.profile?.full_name || 'user'} as ${ROLE_LABELS[selectedRequest.requested_role] || selectedRequest.requested_role}`);
 
@@ -276,7 +275,6 @@ const RoleVerificationAdmin: React.FC = () => {
       } catch (profErr: any) {
         console.warn('Profile update failed (may need admin RLS policy):', profErr.message);
       }
-    }
 
       toast.success(`Rejected verification request from ${selectedRequest.profile?.full_name || 'user'}`);
 
