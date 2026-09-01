@@ -45,6 +45,7 @@ fun ScholarHomeContent(
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+    val context = LocalContext.current
 
     LazyColumn(
         state = listState,
@@ -143,7 +144,7 @@ fun ScholarHomeContent(
                     subtitle = "Coming Soon",
                     icon = Icons.Default.Mic,
                     modifier = Modifier.weight(1f),
-                    onClick = { android.widget.Toast.makeText(LocalContext.current, "AI Podcast coming soon!", android.widget.Toast.LENGTH_SHORT).show() }
+                    onClick = { android.widget.Toast.makeText(context, "AI Podcast coming soon!", android.widget.Toast.LENGTH_SHORT).show() }
                 )
                 ScholarActionTile(
                     title = "AI Research",
