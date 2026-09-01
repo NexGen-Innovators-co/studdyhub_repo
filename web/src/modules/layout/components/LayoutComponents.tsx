@@ -243,23 +243,26 @@ export const AppHeader: React.FC<{
   const showInstallInstructions = () => {
     toast(
       <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-        <h3 className="font-bold text-lg mb-2">Install StuddyHub on Mobile</h3>
+        <h3 className="font-bold text-lg mb-2">Install StuddyHub on Your Phone</h3>
         <div className="space-y-2 text-sm">
           <p className="flex items-center gap-2">
-            <Smartphone className="h-4 w-4 text-blue-500" />
-            <strong>iOS (Safari):</strong> Tap Share → Add to Home Screen
+            <Smartphone className="h-4 w-4 text-green-500" />
+            <strong>Android:</strong> Tap the button below to download, then open the file
           </p>
           <p className="flex items-center gap-2">
-            <Smartphone className="h-4 w-4 text-green-500" />
-            <strong>Android (Chrome):</strong> Tap Menu → Install App
+            <Smartphone className="h-4 w-4 text-blue-500" />
+            <strong>iPhone:</strong> Tap Share → Add to Home Screen
           </p>
         </div>
-        <Button
-          onClick={() => window.open('https://studdyhub.vercel.app/install-guide', '_blank')}
-          className="w-full mt-3"
+        <a
+          href={APK_DOWNLOAD_URL}
+          download="StuddyHub-v1.0-beta.1.apk"
         >
-          View Detailed Guide
-        </Button>
+          <Button className="w-full mt-3">
+            <Download className="h-4 w-4 mr-2" />
+            Download App
+          </Button>
+        </a>
       </div>,
       { duration: 10000, position: 'bottom-center' }
     );

@@ -503,7 +503,7 @@ export const Header: React.FC<HeaderProps> = ({
   // captured or carried over from AppHeader via window.__pwaPrompt).
   const hasInstallPrompt = !isPwaInstalled && (!!localPromptRef.current || !!getPwaPrompt());
 
-  const GITHUB_RELEASES_URL = 'https://github.com/NexGen-Innovators-co/studdyhub_repo/releases/latest';
+  const APK_DOWNLOAD_URL = '/StuddyHub-v1.0-beta.1.apk';
 
   const detectDevice = (): 'android' | 'ios' | 'desktop' => {
     const ua = navigator.userAgent || navigator.vendor || '';
