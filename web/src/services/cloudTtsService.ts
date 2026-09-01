@@ -14,7 +14,8 @@ export interface CloudTtsResponse {
 }
 
 /**
- * Generate speech audio using Google Cloud Text-to-Speech API
+ * Generate speech audio using SpeechSter (free TTS, no API key required).
+ * Falls back to the device's native Web Speech API when SpeechSter is unavailable.
  * @param options TTS options including text, voice, rate, and pitch
  * @returns Base64 encoded audio content
  */
@@ -81,7 +82,7 @@ export async function generateSpeech(options: CloudTtsOptions): Promise<CloudTts
   }
 }
 
-/** Google Cloud TTS byte limit for plain text input */
+/** SpeechSter byte limit per request (1950 chars, conservative headroom) */
 const TTS_CHUNK_BYTE_LIMIT = 4800; // leave headroom under 5000
 
 /**

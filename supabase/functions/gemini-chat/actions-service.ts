@@ -7,9 +7,21 @@ export type { ConstraintViolation } from './sanitize.ts';
 
 export class StuddyHubActionsService {
     supabase: any;
+    private userAuthToken: string | null = null;
 
     constructor(supabaseUrl: string, supabaseKey: string) {
         this.supabase = createClient(supabaseUrl, supabaseKey);
+    }
+
+    setUserAuthToken(token: string | null) {
+        this.userAuthToken = token;
+    }
+
+    private getAuthHeaders(): Record<string, string> {
+        if (this.userAuthToken) {
+            return { 'Authorization': `Bearer ${this.userAuthToken}` };
+        }
+        return {};
     }
 
     // ========== GENERIC DB ACTION EXECUTOR ==========
@@ -340,6 +352,7 @@ export class StuddyHubActionsService {
                     try {
                         console.log('[ActionsService] Routing social_posts creation to create-social-post function');
                         const invokeRes = await this.supabase.functions.invoke('create-social-post', {
+                            headers: this.getAuthHeaders(),
                             body: insertPayload
                         });
 
@@ -438,10 +451,75 @@ export class StuddyHubActionsService {
                     }
                 }
 
+                // ── Notes title-to-ID resolution (mirrors schedule_items) ──
+                // The planner often sends `filters: { title: "..." }` for notes UPDATE.
+                // Without resolving the title to an id, `applyFiltersToQuery` applies an
+                // exact `eq('title', ...)` filter that silently matches 0 rows when the
+                // title has slight case/whitespace differences — the UPDATE succeeds with
+                // an empty result array and the AI falsely reports success.
+                if (targetTable === 'notes' && cleanFilters.title && !cleanFilters.id) {
+                    try {
+                        const origTitle = String(cleanFilters.title || '');
+                        const titleVal = origTitle.trim();
+                        console.log('[ActionsService] Resolving notes title to id for update:', titleVal);
+
+                        let findRes = await this.supabase
+                            .from('notes')
+                            .select('id')
+                            .eq('user_id', userId)
+                            .eq('title', titleVal)
+                            .limit(1)
+                            .single();
+
+                        if (findRes.error || !findRes.data) {
+                            findRes = await this.supabase
+                                .from('notes')
+                                .select('id')
+                                .eq('user_id', userId)
+                                .ilike('title', titleVal)
+                                .limit(1)
+                                .single();
+                        }
+
+                        if (findRes.error || !findRes.data) {
+                            // Partial match: "Genetics" matches "Genetics Notes 2024"
+                            findRes = await this.supabase
+                                .from('notes')
+                                .select('id')
+                                .eq('user_id', userId)
+                                .ilike('title', `%${titleVal}%`)
+                                .limit(1)
+                                .single();
+                        }
+
+                        if (!findRes.error && findRes.data && (findRes.data as any).id) {
+                            cleanFilters = { id: (findRes.data as any).id };
+                            console.log('[ActionsService] Resolved notes title to id for update:', (findRes.data as any).id);
+                        } else {
+                            console.warn('[ActionsService] Could not resolve notes title to id:', titleVal);
+                        }
+                    } catch (err) {
+                        console.warn('[ActionsService] Error resolving notes title to id:', err);
+                    }
+                }
+
+                // Always stamp updated_at on UPDATE so clients can detect changes.
+                if (targetTable === 'notes') {
+                    cleanData.updated_at = new Date().toISOString();
+                }
+                console.log('[ActionsService] UPDATE payload:', JSON.stringify({ table: targetTable, dataKeys: Object.keys(cleanData), hasContent: 'content' in cleanData, contentLength: (cleanData.content || '').length, filters: cleanFilters }));
                 let query: any = this.supabase.from(targetTable).update(cleanData);
                 query = applyFiltersToQuery(query, cleanFilters);
                 const { data: result, error } = await query.select();
                 if (error) throw error;
+
+                // Validate that the UPDATE actually affected at least 1 row.
+                // PostgREST returns an empty array when the filter matched nothing,
+                // which looks like success to the caller but means nothing was written.
+                if (Array.isArray(result) && result.length === 0) {
+                    console.warn(`[ActionsService] UPDATE ${targetTable} matched 0 rows — no content was changed. Filters:`, cleanFilters);
+                    return { success: false, error: `No matching ${targetTable} found to update. The title or filter may not match any existing record.` };
+                }
                 return { success: true, data: result };
 
             } else if (operation === 'DELETE') {
@@ -769,6 +847,7 @@ export class StuddyHubActionsService {
             console.log(`[ActionService] Generating image for prompt: "${prompt}"`);
 
             const { data, error } = await this.supabase.functions.invoke('generate-image-from-text', {
+                headers: this.getAuthHeaders(),
                 body: {
                     description: prompt,
                     userId: userId
@@ -865,6 +944,10 @@ export class StuddyHubActionsService {
             if (error) {
                 console.error('[ActionService] Error updating note:', error);
                 return { success: false, error: error.message };
+            }
+
+            if (!data) {
+                return { success: false, error: `Note "${noteTitle}" not found or no changes applied` };
             }
 
             return { success: true, note: data, message: `✏️ Updated note: "${data.title}"` };
@@ -1224,6 +1307,177 @@ export class StuddyHubActionsService {
         }
     }
 
+    // ========== EDGE FUNCTION CALLERS ==========
+
+    /**
+     * Generate a quiz via the generate-ai-quiz edge function (proper format + validation),
+     * then save the result to the quizzes table.
+     */
+    async generateQuizViaEdge(userId: string, params: {
+        topics: string[];
+        focus_areas?: string[];
+        num_questions?: number;
+        difficulty?: string;
+        title?: string;
+        source_type?: string;
+        class_id?: string;
+    }) {
+        try {
+            console.log('[ActionService] Calling generate-ai-quiz edge function');
+            const invokeRes = await this.supabase.functions.invoke('generate-ai-quiz', {
+                headers: this.getAuthHeaders(),
+                body: {
+                    user_topics: params.topics || ['General Knowledge'],
+                    focus_areas: params.focus_areas || [],
+                    num_questions: params.num_questions || 8,
+                    difficulty: params.difficulty || 'auto',
+                    recent_performance: [],
+                    learning_style: 'adaptive'
+                }
+            });
+
+            if (invokeRes?.error) {
+                console.error('[ActionService] generate-ai-quiz error:', invokeRes.error);
+                return { success: false, error: invokeRes.error.message || 'Quiz generation failed' };
+            }
+
+            const quizData = invokeRes?.data;
+            if (!quizData?.title || !Array.isArray(quizData.questions) || quizData.questions.length === 0) {
+                return { success: false, error: 'Quiz generation returned empty or invalid data' };
+            }
+
+            // Normalize questions to mobile-compatible format (correct index instead of correctAnswer text)
+            const normalizedQuestions = quizData.questions.map((q: any) => ({
+                question: q.question,
+                options: q.options,
+                correct: typeof q.correctAnswer === 'number' ? q.correctAnswer : 0,
+                explanation: q.explanation || ''
+            }));
+
+            // Save to DB
+            const quizTitle = params.title || quizData.title;
+            const saveResult = await this.createQuiz(userId, {
+                title: quizTitle,
+                questions: normalizedQuestions,
+                source_type: (params.source_type as any) || 'ai',
+                class_id: params.class_id
+            });
+
+            return {
+                ...saveResult,
+                quiz: { title: quizTitle, questions: normalizedQuestions },
+                message: `📝 Created quiz: "${quizTitle}" with ${normalizedQuestions.length} questions`
+            };
+        } catch (error: any) {
+            console.error('[ActionService] Exception in generateQuizViaEdge:', error);
+            return { success: false, error: error?.message || 'Failed to generate quiz' };
+        }
+    }
+
+    /**
+     * Generate flashcards via the generate-flashcards edge function (AI-powered with retry + validation).
+     */
+    async generateFlashcardsViaEdge(userId: string, noteContent: string, params: {
+        noteId?: string;
+        numberOfCards?: number;
+        difficulty?: string;
+        focusAreas?: string[];
+    }) {
+        try {
+            console.log('[ActionService] Calling generate-flashcards edge function');
+
+            // Fetch user profile for learning style
+            const { data: profile } = await this.supabase
+                .from('profiles')
+                .select('learning_style, learning_preferences')
+                .eq('id', userId)
+                .single();
+
+            const userProfile = {
+                learning_style: profile?.learning_style || 'adaptive',
+                learning_preferences: profile?.learning_preferences || {}
+            };
+
+            const invokeRes = await this.supabase.functions.invoke('generate-flashcards', {
+                headers: this.getAuthHeaders(),
+                body: {
+                    noteContent,
+                    noteId: params.noteId || null,
+                    userProfile,
+                    numberOfCards: params.numberOfCards || 10,
+                    difficulty: params.difficulty || 'medium',
+                    focusAreas: params.focusAreas || []
+                }
+            });
+
+            if (invokeRes?.error) {
+                console.error('[ActionService] generate-flashcards error:', invokeRes.error);
+                return { success: false, error: invokeRes.error.message || 'Flashcard generation failed' };
+            }
+
+            const data = invokeRes?.data;
+            if (!data?.flashcards || !Array.isArray(data.flashcards)) {
+                return { success: false, error: 'Flashcard generation returned invalid data' };
+            }
+
+            return {
+                success: true,
+                flashcards: data.flashcards,
+                count: data.flashcards.length,
+                message: `🃏 Generated ${data.flashcards.length} flashcards`,
+                xp_reward: 15
+            };
+        } catch (error: any) {
+            console.error('[ActionService] Exception in generateFlashcardsViaEdge:', error);
+            return { success: false, error: error?.message || 'Failed to generate flashcards' };
+        }
+    }
+
+    /**
+     * Generate a podcast via the generate-podcast edge function.
+     * The edge function handles script generation, audio synthesis, and DB storage.
+     */
+    async generatePodcastViaEdge(userId: string, params: {
+        title: string;
+        noteIds?: string[];
+        documentIds?: string[];
+        style?: string;
+        duration?: string;
+    }) {
+        try {
+            console.log('[ActionService] Calling generate-podcast edge function');
+            const invokeRes = await this.supabase.functions.invoke('generate-podcast', {
+                headers: this.getAuthHeaders(),
+                body: {
+                    noteIds: params.noteIds || [],
+                    documentIds: params.documentIds || [],
+                    style: params.style || 'educational',
+                    duration: params.duration || 'medium'
+                }
+            });
+
+            if (invokeRes?.error) {
+                console.error('[ActionService] generate-podcast error:', invokeRes.error);
+                return { success: false, error: invokeRes.error.message || 'Podcast generation failed' };
+            }
+
+            const data = invokeRes?.data;
+            if (!data) {
+                return { success: false, error: 'Podcast generation returned no data' };
+            }
+
+            return {
+                success: true,
+                podcast: data.podcast || data,
+                message: `🎙️ Podcast generated: "${data.podcast?.title || params.title}"`,
+                xp_reward: 50
+            };
+        } catch (error: any) {
+            console.error('[ActionService] Exception in generatePodcastViaEdge:', error);
+            return { success: false, error: error?.message || 'Failed to generate podcast' };
+        }
+    }
+
     async recordQuizAttempt(userId: string, quizTitle: string, attemptData: {
         score: number;
         total_questions: number;
@@ -1296,39 +1550,26 @@ export class StuddyHubActionsService {
                 return { success: false, error: 'Note not found' };
             }
 
-            const flashcards = this.generateFlashcardsFromContent(note.content, count);
+            if (!note.content || note.content.trim().length === 0) {
+                return { success: false, error: 'Note has no content to generate flashcards from' };
+            }
 
-            const { data, error } = await this.supabase
-                .from('flashcards')
-                .insert(
-                    flashcards.map(flashcard => ({
-                        user_id: userId,
-                        note_id: noteId,
-                        front: flashcard.front,
-                        back: flashcard.back,
-                        category: note.title.substring(0, 20),
-                        difficulty: 'medium',
-                        review_count: 0,
-                        last_reviewed_at: null,
-                        next_review_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-                        ease_factor: 2.5,
-                        interval_days: 1,
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString()
-                    }))
-                )
-                .select();
+            // Route through the generate-flashcards edge function for AI-powered generation
+            console.log('[ActionService] Routing flashcard generation to generate-flashcards edge function');
+            const result = await this.generateFlashcardsViaEdge(userId, note.content, {
+                noteId,
+                numberOfCards: count,
+                difficulty: 'medium',
+                focusAreas: []
+            });
 
-            if (error) {
-                console.error('[ActionService] Error creating flashcards:', error);
-                return { success: false, error: error.message };
+            if (!result.success) {
+                return result;
             }
 
             return {
-                success: true,
-                flashcards: data,
-                message: `🎴 Created ${data.length} flashcards from note: "${note.title}"`,
-                xp_reward: 15
+                ...result,
+                message: `🃏 Generated ${result.count} flashcards from note: "${note.title}"`
             };
         } catch (error: any) {
             console.error('[ActionService] Exception creating flashcards:', error);
@@ -1695,55 +1936,34 @@ export class StuddyHubActionsService {
                 groupId = group?.id || null;
             }
 
-            const { data: socialUser } = await this.supabase
-                .from('social_users')
-                .select('id')
-                .eq('id', userId)
-                .single();
-
-            if (!socialUser) {
-                const { data: profile } = await this.supabase
-                    .from('profiles')
-                    .select('full_name, username, email')
-                    .eq('id', userId)
-                    .single();
-
-                await this.supabase
-                    .from('social_users')
-                    .insert({
-                        id: userId,
-                        username: profile?.username || `user_${userId.substring(0, 8)}`,
-                        display_name: profile?.full_name || 'User',
-                        email: profile?.email,
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString()
-                    });
-            }
-
-            const { data, error } = await this.supabase
-                .from('social_posts')
-                .insert({
-                    author_id: userId,
+            // Route through the create-social-post edge function
+            // which handles moderation, hashtags, notifications, and counts
+            console.log('[ActionService] Routing social post to create-social-post edge function');
+            const invokeRes = await this.supabase.functions.invoke('create-social-post', {
+                headers: this.getAuthHeaders(),
+                body: {
                     content: postData.content,
                     privacy: postData.privacy || 'public',
                     group_id: groupId,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
-                })
-                .select()
-                .single();
+                    author_id: userId
+                }
+            });
 
-            if (error) {
-                console.error('[ActionService] Error creating social post:', error);
-                return { success: false, error: error.message };
+            if (invokeRes?.error) {
+                console.error('[ActionService] create-social-post edge function error:', invokeRes.error);
+                return { success: false, error: invokeRes.error.message || 'Failed to create post' };
             }
 
-            return {
-                success: true,
-                post: data,
-                message: `📱 Posted: "${postData.content.substring(0, 50)}..."`,
-                xp_reward: 20
-            };
+            if (invokeRes?.data) {
+                return {
+                    success: true,
+                    post: invokeRes.data.post || invokeRes.data,
+                    message: `📱 Posted: "${postData.content.substring(0, 50)}..."`,
+                    xp_reward: 20
+                };
+            }
+
+            return { success: false, error: 'Post creation returned no data' };
         } catch (error: any) {
             console.error('[ActionService] Exception creating social post:', error);
             return { success: false, error: 'Failed to create social post' };

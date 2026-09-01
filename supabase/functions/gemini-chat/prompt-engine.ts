@@ -310,12 +310,14 @@ When constructing a \`DB_ACTION\`, you MUST use the exact table and column names
    - ⚠️ Do NOT save text notes into \`documents\`. \`documents\` is strictly for uploaded file assets!
 
 3. **FLASHCARDS (User asks to "create flashcards", "make study cards")**:
-   - **TABLE**: \`flashcards\`
-   - **COLUMNS**: \`user_id\` ("auth.uid"), \`front\` (question/term), \`back\` (answer/definition), \`category\`, \`difficulty\` ('easy'|'medium'|'hard'), \`hint\`
+   - Use the \`create_flashcards_from_note\` tool to auto-generate AI-powered flashcards from an existing note
+   - The tool calls the generate-flashcards edge function which handles AI generation, validation, and DB storage
+   - For single flashcards, use the \`create_flashcard\` tool with explicit front/back
 
 4. **QUIZZES (User asks to "generate quiz", "make a quiz", "test me")**:
-   - **TABLE**: \`quizzes\`
-   - **COLUMNS**: \`user_id\` ("auth.uid"), \`title\`, \`questions\` (JSON array of question objects), \`source_type\` ('ai_generated'|'manual')
+   - Use the \`create_quiz\` tool to generate an AI-powered quiz
+   - The tool calls the generate-ai-quiz edge function which handles AI generation, validation, and DB storage
+   - Pass the topic/title and optionally num_questions, difficulty
 
 5. **SCHEDULE & CALENDAR (User asks to "schedule class", "add exam", "set study reminder", "add to calendar")**:
    - **TABLE**: \`schedule_items\`

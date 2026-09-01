@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 
 export function useUserResources(userId: string | null) {
   const [userNotes, setUserNotes] = useState<any[]>([]);
@@ -14,14 +14,14 @@ export function useUserResources(userId: string | null) {
     setIsLoading(true);
 
     Promise.all([
-      supabase.from('notes').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(50),
-      supabase.from('documents').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(50),
-      supabase.from('class_recordings').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(50),
-    ]).then(([notesResult, documentsResult, recordingsResult]) => {
+      apiClient.get('notes', { user_id: userId }),
+      apiClient.get('documents', { user_id: userId }),
+      apiClient.get('class-recordings', { user_id: userId }),
+    ]).then(([notesData, documentsData, recordingsData]) => {
       if (cancelled) return;
-      if (notesResult.data) setUserNotes(notesResult.data);
-      if (documentsResult.data) setUserDocuments(documentsResult.data);
-      if (recordingsResult.data) setUserClassRecordings(recordingsResult.data);
+      if (notesData) setUserNotes(notesData);
+      if (documentsData) setUserDocuments(documentsData);
+      if (recordingsData) setUserClassRecordings(recordingsData);
     }).finally(() => {
       if (!cancelled) setIsLoading(false);
     });

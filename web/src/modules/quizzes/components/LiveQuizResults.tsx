@@ -94,7 +94,8 @@ const LiveQuizResults: React.FC<LiveQuizResultsProps> = ({
   React.useEffect(() => {
     const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
     window.addEventListener('resize', handleResize);
-    const applause = new Audio('https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/mixkit-end-of-show-clapping-crowd-477.wav');
+    const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const applause = new Audio(`${baseUrl}/storage/v1/object/public/documents/mixkit-end-of-show-clapping-crowd-477.wav`);
     applause.volume = 0.7;
     applause.play().catch(() => {});
     const timer = setTimeout(() => setRecycleConfetti(false), 6000);

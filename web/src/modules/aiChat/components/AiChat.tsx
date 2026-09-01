@@ -13,6 +13,7 @@ import {
 import { UserProfile, Document } from '../../../types/Document';
 import { Note } from '../../../types/Note';
 import { supabase } from '../../../integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { DocumentSelector } from './DocumentSelector';
 import { toast } from 'sonner';
 import { DiagramPanel } from './DiagramPanel';
@@ -299,12 +300,12 @@ const AIChat: React.FC<AIChatProps> = ({
 
     const fetchMissing = async () => {
       try {
-        const { data } = await supabase
-          .from('documents')
-          .select('*')
-          .in('id', missingIds);
-
-        const fetchedDocs = (data as Document[]) || [];
+        const results = await Promise.allSettled(
+          missingIds.map(id => apiClient.get<Document>(`documents/${id}`))
+        );
+        const fetchedDocs = results
+          .filter((r): r is PromiseFulfilledResult<Document> => r.status === 'fulfilled')
+          .map(r => r.value);
         const foundIds = new Set(fetchedDocs.map(d => d.id));
 
         // Create placeholders for documents that truly don't exist (deleted)
@@ -389,17 +390,8 @@ const AIChat: React.FC<AIChatProps> = ({
     if (!userProfile?.id) return;
 
     try {
-      const { data: sessionData, error } = await supabase
-        .from('chat_sessions')
-        .select('document_ids')
-        .eq('id', sessionId)
-        .eq('user_id', userProfile.id)
-        .single();
-
-      if (error) {
-
-        return;
-      }
+      const sessions = await apiClient.get<any[]>('chat/sessions');
+      const sessionData = sessions?.find((s: any) => s.id === sessionId);
 
       if (sessionData?.document_ids) {
         onSelectionChange(sessionData.document_ids);
@@ -571,18 +563,7 @@ const AIChat: React.FC<AIChatProps> = ({
       }
 
       if (activeChatSessionId) {
-        const { error } = await supabase
-          .from('chat_sessions')
-          .update({
-            document_ids: selectedDocumentIds,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', activeChatSessionId)
-          .eq('user_id', userId);
-
-        if (error) {
-
-        }
+        try { await apiClient.patch(`chat/sessions/${activeChatSessionId}`, { document_ids: selectedDocumentIds, updated_at: new Date().toISOString() }); } catch {}
       }
 
       const documentIds = selectedDocumentIds.filter(id =>
@@ -721,17 +702,7 @@ const AIChat: React.FC<AIChatProps> = ({
     }
 
     try {
-      const { error } = await supabase
-        .from('chat_messages')
-        .update({ has_been_displayed: true })
-        .eq('id', messageId)
-        .eq('session_id', activeChatSessionId)
-        .eq('user_id', userProfile.id);
-
-      if (error) {
-
-        return;
-      }
+      await apiClient.patch(`chat/messages/${messageId}`, { has_been_displayed: true });
 
       onMessageUpdate({
         ...messages.find(msg => msg.id === messageId)!,

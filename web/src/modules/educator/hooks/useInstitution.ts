@@ -3,6 +3,7 @@
 // Used in educator dashboard and institution management pages.
 
 import { useState, useEffect, useCallback } from 'react';
+import { apiClient } from '@/services/apiClient';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '../../../hooks/useAuth';
 import type { Institution, InstitutionMember, InstitutionType } from '@/types/Education';
@@ -135,35 +136,27 @@ export function useInstitution(): UseInstitutionReturn {
       if (!user?.id) return null;
 
       try {
-        const { data: inst, error: createError } = await supabase
-          .from('institutions')
-          .insert({
-            name: data.name,
-            slug: data.slug,
-            type: data.type,
-            country_id: data.countryId || null,
-            education_level_id: data.educationLevelId || null,
-            description: data.description || null,
-            website: data.website || null,
-            address: data.address || null,
-            city: data.city || null,
-            region: data.region || null,
-          })
-          .select('*')
-          .single();
-
-        if (createError) throw createError;
+        const inst = await apiClient.post('institutions', {
+          name: data.name,
+          slug: data.slug,
+          type: data.type,
+          country_id: data.countryId || null,
+          education_level_id: data.educationLevelId || null,
+          description: data.description || null,
+          website: data.website || null,
+          address: data.address || null,
+          city: data.city || null,
+          region: data.region || null,
+        });
 
         // Add creator as owner
-        const { error: memberError } = await supabase.from('institution_members').insert({
+        await apiClient.post('institution-members', {
           institution_id: inst.id,
           user_id: user.id,
           role: 'owner',
           status: 'active',
           joined_at: new Date().toISOString(),
         });
-
-        if (memberError) throw memberError;
 
         toast.success('Institution created successfully!');
         await fetchInstitution();
@@ -181,22 +174,17 @@ export function useInstitution(): UseInstitutionReturn {
       if (!institution?.id) return false;
 
       try {
-        const { error: updateError } = await supabase
-          .from('institutions')
-          .update({
-            name: updates.name,
-            description: updates.description,
-            website: updates.website,
-            address: updates.address,
-            city: updates.city,
-            region: updates.region,
-            logo_url: updates.logo_url,
-            settings: updates.settings as any,
-            metadata: updates.metadata as any,
-          })
-          .eq('id', institution.id);
-
-        if (updateError) throw updateError;
+        await apiClient.patch(`institutions/${institution.id}`, {
+          name: updates.name,
+          description: updates.description,
+          website: updates.website,
+          address: updates.address,
+          city: updates.city,
+          region: updates.region,
+          logo_url: updates.logo_url,
+          settings: updates.settings as any,
+          metadata: updates.metadata as any,
+        });
 
         toast.success('Institution updated!');
         await fetchInstitution();

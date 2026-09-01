@@ -4,7 +4,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '../modules/ui/components/button';
 import { Sparkles, ArrowRight, Play, Shield, Globe, Award, Users, FileText, TrendingUp, Star, Zap, ChevronLeft, ChevronRight, Loader2, Mic, MessageSquare, Brain, LayoutDashboard, ArrowUp } from 'lucide-react';
-import { supabase } from '../integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
+import { supabase } from '@/integrations/supabase/client';
 import { AppLayout, ContentContainer } from '../modules/layout/components/LayoutComponents';
 import { RateAppDialog } from '../modules/ratings/components/RateAppDialog';
 // Update src/pages/LandingPage.tsx - Add this after features section
@@ -108,48 +109,30 @@ const LandingPage: React.FC = () => {
     return () => clearInterval(featureInterval);
   }, []);
 
-  // Fetch App Stats from Supabase
+  // Fetch App Stats directly from Supabase (RLS allows public SELECT)
   useEffect(() => {
     const fetchAppStats = async () => {
       setLoadingStats(true);
       try {
-        const { data, error } = await supabase
-          .from('app_stats')
+        const { data } = await supabase
+          .from('app_stats' as any)
           .select('*')
           .eq('id', '00000000-0000-0000-0000-000000000001')
-          .single();          if (error) {
+          .maybeSingle();
+        if (data) {
           setAppStats({
-            activeUsers: '350+',
-            totalUsers: '354',
-            notesProcessed: '0+',
-            quizzesTaken: '0+',
-            documentsUploaded: '0+',
-            podcastsGenerated: '0+',
-            uptime: '99.9%',
-            userRating: '4.9/5',
+            activeUsers: (data as any).active_users || '0+',
+            totalUsers: (data as any).total_users || '0',
+            notesProcessed: (data as any).notes_processed || '0+',
+            quizzesTaken: (data as any).quizzes_taken || '0+',
+            documentsUploaded: (data as any).documents_uploaded || '0+',
+            podcastsGenerated: (data as any).podcasts_generated || '0+',
+            uptime: (data as any).uptime || '99.9%',
+            userRating: (data as any).user_rating || '4.9/5',
           });
-        } else if (data) {
-          setAppStats({
-            activeUsers: data.active_users || '0+',
-            totalUsers: data.total_users || '0',
-            notesProcessed: data.notes_processed || '0+',
-            quizzesTaken: data.quizzes_taken || '0+',
-            documentsUploaded: data.documents_uploaded || '0+',
-            podcastsGenerated: data.podcasts_generated || '0+',
-            uptime: data.uptime || '99.9%',
-            userRating: data.user_rating || '4.9/5',
-          });
-        }        } catch (error) {
-        setAppStats({
-          activeUsers: '350+',
-          totalUsers: '354',
-          notesProcessed: '0+',
-          quizzesTaken: '0+',
-          documentsUploaded: '0+',
-          podcastsGenerated: '0+',
-          uptime: '99.9%',
-          userRating: '4.9/5',
-        });
+        }
+      } catch (error) {
+        // Fallback to defaults if table doesn't exist yet
       } finally {
         setLoadingStats(false);
       }
@@ -200,7 +183,7 @@ const LandingPage: React.FC = () => {
     const fetchLiveData = async () => {
       try {
         // Use SECURITY DEFINER RPC so anonymous visitors see real names + avatars
-        const { data: testimonialRows } = await supabase.rpc('get_approved_testimonials', { p_limit: 20 });
+        const testimonialRows = await apiClient.rpc('get_approved_testimonials', { p_limit: 20 });
 
         if (Array.isArray(testimonialRows) && testimonialRows.length > 0) {
           const mapped = testimonialRows.map((t: any) => {
@@ -220,7 +203,7 @@ const LandingPage: React.FC = () => {
         }
 
         // Fetch aggregate rating stats
-        const { data: ratingData } = await supabase.rpc('get_app_rating_stats');
+        const ratingData = await apiClient.rpc('get_app_rating_stats');
         if (ratingData) {
           setLiveRatingStats({
             average: ratingData.average_rating || 0,
@@ -347,7 +330,7 @@ const LandingPage: React.FC = () => {
               className="text-lg sm:text-xl text-gray-600 dark:text-gray-300 max-w-xl mx-auto lg:mx-0 mb-8 leading-relaxed"
             >
               Notes, docs, recordings, podcasts, quizzes, scheduling &amp; social study
-              groups — all supercharged by AI. One platform to ace every semester.
+              groups all supercharged by AI. One platform to ace every semester.
             </motion.p>
 
             <motion.div

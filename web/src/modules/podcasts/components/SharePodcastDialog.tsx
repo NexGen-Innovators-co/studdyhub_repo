@@ -30,7 +30,7 @@ import {
   Music,
   MessageSquare
 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { toast } from 'sonner';
 import { createPodcastNotification } from '@/services/notificationHelpers';
 
@@ -98,25 +98,14 @@ export const SharePodcastDialog: React.FC<SharePodcastDialogProps> = ({
   const fetchFriends = async () => {
     setLoadingFriends(true);
     try {
-      // Get users the current user is following
-      const { data: followingData, error: followingError } = await supabase
-        .from('social_follows')
-        .select('following_id')
-        .eq('follower_id', currentUser.id);
+      const followingData = await apiClient.get('social-follows', { follower_id: currentUser.id });
+      const followingIds = Array.isArray(followingData)
+        ? followingData.map((f: any) => f.following_id)
+        : [];
 
-      if (followingError) throw followingError;
-
-      if (followingData && followingData.length > 0) {
-        const followingIds = followingData.map(f => f.following_id);
-        
-        const { data: usersData, error: usersError } = await supabase
-          .from('social_users')
-          .select('id, display_name, username, avatar_url, email')
-          .in('id', followingIds)
-          .limit(50);
-
-        if (usersError) throw usersError;
-        setFriends(usersData || []);
+      if (followingIds.length > 0) {
+        const usersData = await apiClient.get('social-users', { ids: followingIds.join(',') });
+        setFriends(Array.isArray(usersData) ? usersData : []);
       }
     } catch (error) {
 
@@ -128,14 +117,8 @@ export const SharePodcastDialog: React.FC<SharePodcastDialogProps> = ({
   const fetchGroups = async () => {
     setLoadingGroups(true);
     try {
-      // Get groups the user is a member of
-      const { data, error } = await supabase
-        .from('social_groups')
-        .select('id, name, description, avatar_url')
-        .order('name');
-
-      if (error) throw error;
-      setGroups(data || []);
+      const data = await apiClient.get('social-groups');
+      setGroups(Array.isArray(data) ? data : []);
     } catch (error) {
 
     } finally {
@@ -160,14 +143,14 @@ export const SharePodcastDialog: React.FC<SharePodcastDialogProps> = ({
 
   const trackShare = async (shareType: string, platform: string) => {
     try {
-      await supabase.from('podcast_shares').insert({
+      await apiClient.post('podcast-shares', {
         podcast_id: podcast.id,
         user_id: currentUser?.id,
         share_type: shareType,
         platform: platform
       });
 
-      await supabase.rpc('increment_podcast_share_count', { podcast_id: podcast.id });
+      await apiClient.rpc('increment_podcast_share_count', { podcast_id: podcast.id });
     } catch (error) {
 
     }
@@ -229,16 +212,12 @@ Duration: ${podcast.duration || 0} minutes
 
 Listen here: ${shareUrl}`;
 
-      const { error } = await supabase
-        .from('social_posts')
-        .insert({
-          author_id: currentUser.id,
-          content,
-          privacy: 'public',
-          group_id: group.id
-        });
-
-      if (error) throw error;
+      await apiClient.post('social-posts', {
+        author_id: currentUser.id,
+        content,
+        privacy: 'public',
+        group_id: group.id
+      });
 
       await trackShare('group_post', 'studdyhub');
       toast.success(`Shared to ${group.name}!`);

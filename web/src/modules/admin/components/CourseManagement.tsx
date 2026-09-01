@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { logAdminActivity } from '@/modules/admin/utils/adminActivityLogger';
 import { Button } from '@/modules/ui/components/button';
 import { Input } from '@/modules/ui/components/input';
@@ -40,12 +41,7 @@ const CourseManagement = () => {
   const { data: courses, isLoading: isLoadingCourses } = useQuery({
     queryKey: ['admin-courses'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('courses')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
+      return apiClient.get('courses');
     },
   });
 
@@ -53,13 +49,7 @@ const CourseManagement = () => {
     queryKey: ['admin-course-materials', selectedCourseId],
     queryFn: async () => {
       if (!selectedCourseId) return [];
-      const { data, error } = await supabase
-        .from('course_materials')
-        .select('*, documents(title)')
-        .eq('course_id', selectedCourseId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
+      return apiClient.get('course-materials', { course_id: selectedCourseId });
     },
     enabled: !!selectedCourseId,
   });
@@ -67,8 +57,7 @@ const CourseManagement = () => {
   // --- Mutations ---
   const createCourseMutation = useMutation({
     mutationFn: async (newCourse: any) => {
-      const { error } = await supabase.from('courses').insert(newCourse);
-      if (error) throw error;
+      await apiClient.post('courses', newCourse);
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
@@ -81,8 +70,7 @@ const CourseManagement = () => {
 
   const createMaterialMutation = useMutation({
     mutationFn: async (newMaterial: any) => {
-      const { error } = await supabase.from('course_materials').insert(newMaterial);
-      if (error) throw error;
+      await apiClient.post('course-materials', newMaterial);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-course-materials', selectedCourseId] });
@@ -97,8 +85,7 @@ const CourseManagement = () => {
 
   const deleteCourseMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('courses').delete().eq('id', id);
-      if (error) throw error;
+      await apiClient.delete(`courses/${id}`);
     },
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
@@ -110,8 +97,7 @@ const CourseManagement = () => {
 
   const deleteMaterialMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('course_materials').delete().eq('id', id);
-      if (error) throw error;
+      await apiClient.delete(`course-materials/${id}`);
     },
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: ['admin-course-materials', selectedCourseId] });
@@ -147,9 +133,7 @@ const CourseManagement = () => {
   const handleAIGeneratedCourse = async (courseData: AIGeneratedCourse) => {
     try {
       // 1. Create Course
-      const { data: newCourse, error: courseError } = await supabase
-        .from('courses')
-        .insert({
+        const newCourse = await apiClient.post('courses', {
           title: courseData.title,
           code: courseData.code,
           description: courseData.description,
@@ -158,11 +142,8 @@ const CourseManagement = () => {
           level: 1, 
           semester: 1,
           school_name: null 
-        })
-        .select()
-        .single();
+        });
       
-      if (courseError) throw courseError;
       if (!newCourse) throw new Error("Failed to create course");
 
       // 2. Create Modules + AI-generated documents/notes
@@ -212,9 +193,8 @@ const CourseManagement = () => {
 
           let doc: any = null;
           if (userIdForDocument) {
-            const { data: createdDoc, error: docError } = await supabase
-              .from('documents')
-              .insert({
+            try {
+              doc = await apiClient.post('documents', {
                 user_id: userIdForDocument,
                 title: `${newCourse.title} - ${mod.title}`,
                 file_name: generatedFilename,
@@ -227,23 +207,16 @@ const CourseManagement = () => {
                 content_extracted: generatedContent,
                 type: 'ai_generated',
                 processing_status: 'completed' // <-- PATCHED: mark as completed
-              })
-              .select()
-              .single();
-
-            if (docError) {
-              //console.error('Failed to create document for module', mod.title, docError);
-            } else {
-              doc = createdDoc;
+              });
+            } catch (_docError) {
+              //console.error('Failed to create document for module', mod.title, _docError);
             }
           } else {
             //console.warn('No user available; skipping document creation for module', mod.title);
           }
 
           // Insert a note linked to the document (document_id may be null)
-          const { error: noteError } = await supabase
-            .from('notes')
-            .insert({
+          await apiClient.post('notes', {
               user_id: user?.id || userProfile?.id || null,
               title: mod.title,
               content: generatedContent,
@@ -255,9 +228,7 @@ const CourseManagement = () => {
           //if (noteError) // console.error('Failed to create note for module', mod.title, noteError);
 
           // Create the course material linking to the generated document (document_id may be null)
-          const { error: materialError } = await supabase
-            .from('course_materials')
-            .insert({
+          await apiClient.post('course-materials', {
               course_id: newCourse.id,
               title: mod.title,
               description: mod.description,
@@ -326,7 +297,7 @@ const CourseManagement = () => {
       setUploadProgress(10);
       
       try {
-        const functionUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/document-processor';
+        const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/document-processor`;
         const base64Data = await getBase64(selectedFile);
         setUploadProgress(30);
 
@@ -368,7 +339,7 @@ const CourseManagement = () => {
           documentId = result.documents[0].id;
           // ensure the processed/uploaded document is marked public so course viewers can access it
           try {
-            await supabase.from('documents').update({ is_public: true }).eq('id', documentId);
+            await apiClient.patch(`documents/${documentId}`, { is_public: true });
           } catch (err) {
             //console.warn('Failed to mark uploaded document public', err);
           }
@@ -404,7 +375,7 @@ const CourseManagement = () => {
     // If linking an existing document by ID, ensure it's public for course viewers
     if (documentId) {
       try {
-        await supabase.from('documents').update({ is_public: true }).eq('id', documentId);
+        await apiClient.patch(`documents/${documentId}`, { is_public: true });
       } catch (err) {
         //console.warn('Failed to mark linked document public', err);
       }

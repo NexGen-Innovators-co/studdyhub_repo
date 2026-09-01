@@ -91,6 +91,7 @@ interface TabContentProps {
     imageMimeType?: string,
     imageDataBase64?: string,
     aiMessageIdToUpdate?: string | null,
+    userMessageIdToUpdate?: string | null,
     attachedFiles?: Array<{
       name: string;
       mimeType: string;
@@ -101,7 +102,7 @@ interface TabContentProps {
       processing_status: string;
       processing_error: string | null;
     }>,
-    enableStreaming?: boolean  // NEW: Streaming mode flag
+    enableStreaming?: boolean
   ) => Promise<void>;
 
   // onDocumentUploaded: (document: Document) => Promise<void>;
@@ -575,8 +576,9 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
         imageMimeType,
         imageDataBase64,
         null, // aiMessageIdToUpdate
+        null, // userMessageIdToUpdate
         attachedFiles,
-        localStorage.getItem('ai-streaming-mode') === 'true' // Read streaming mode from localStorage
+        localStorage.getItem('ai-streaming-mode') === 'true'
       );
     },
     onMessageUpdate: props.onMessageUpdate,

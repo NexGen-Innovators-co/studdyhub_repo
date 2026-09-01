@@ -22,6 +22,7 @@ import {
   ArrowRight,
   School,
 } from 'lucide-react';
+import { apiClient } from '@/services/apiClient';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import {
@@ -192,7 +193,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     }
     // Also persist to DB via SECURITY DEFINER RPC (avoids RLS recursion)
     try {
-      await supabase.rpc('complete_onboarding', {});
+      await apiClient.rpc('complete_onboarding', {});
       // Log onboarding completion as activity for streaks + UX
       void logUserActivity(userId, 'onboarding', 0);
     } catch {
@@ -270,7 +271,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         ? null
         : educationData.institutionId || null;
 
-      const { data, error } = await supabase.rpc('complete_onboarding', {
+      const data = await apiClient.rpc('complete_onboarding', {
         _email: userEmail || authUser?.email || null,
         _full_name: fullName.trim() || userProfile?.full_name || null,
         _institution_id: resolvedInstitutionId,   // new normalized field
@@ -287,7 +288,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         _personal_context: personalContext || null,
       });
 
-      if (error) throw error;
+      if (!data) throw new Error('No response from server');
 
       // 3. Request permissions (grant & immediately release media streams)
       if (wantNotifications) {

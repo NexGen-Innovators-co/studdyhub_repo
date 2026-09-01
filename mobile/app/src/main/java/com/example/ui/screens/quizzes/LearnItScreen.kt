@@ -2,6 +2,7 @@ package com.example.ui.screens.quizzes
 
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import com.example.data.remote.BackendApiService
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -273,12 +274,12 @@ fun LearnItScreen(
                         }
                     }
                     is com.example.data.remote.BackendResult.Error -> {
-                        lessonError = "Lesson generation failed: ${backendRes.message}"
+                        lessonError = BackendApiService.UserMessages.LESSON_FAILED
                     }
                 }
             } catch (e: Exception) {
                 android.util.Log.e("LearnItScreen", "Error generating lesson: ${e.message}", e)
-                lessonError = "Failed to generate lesson: ${e.localizedMessage ?: e.message}"
+                lessonError = BackendApiService.UserMessages.LESSON_FAILED
             } finally {
                 isGeneratingLesson = false
             }

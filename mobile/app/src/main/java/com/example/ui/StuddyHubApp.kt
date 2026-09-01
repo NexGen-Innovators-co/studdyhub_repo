@@ -325,6 +325,21 @@ fun StuddyHubApp() {
 
             composable(Screen.Auth.route) {
                 val vm: AuthViewModel = viewModel(factory = viewModelFactory)
+
+                // Check for pending Google OAuth tokens when the auth screen appears
+                LaunchedEffect(Unit) {
+                    val tokens = com.example.MainActivity.consumePendingGoogleTokens()
+                    if (tokens != null) {
+                        vm.handleGoogleSignInResult(tokens.first, tokens.second) { onboardingCompleted ->
+                            val targetRoute = if (!onboardingCompleted) Screen.Onboarding.route else Screen.Dashboard.route
+                            navController.navigate(targetRoute) {
+                                popUpTo(Screen.Auth.route) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        }
+                    }
+                }
+
                 AuthScreen(
                     viewModel = vm,
                     onNavigateToMain = { onboardingCompleted ->
@@ -459,8 +474,33 @@ fun StuddyHubApp() {
             }
 
             composable(Screen.AIPodcast.route) {
-                val vm: AIPodcastViewModel = viewModel(factory = viewModelFactory)
-                AIPodcastScreen(viewModel = vm, onBack = goBack)
+                // Podcast feature disabled — Coming Soon
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = androidx.compose.ui.Alignment.Center
+                ) {
+                    androidx.compose.foundation.layout.Column(
+                        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+                    ) {
+                        androidx.compose.material3.Icon(
+                            imageVector = Icons.Default.Headphones,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                        )
+                        androidx.compose.material3.Text(
+                            text = "AI Podcast",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        androidx.compose.material3.Text(
+                            text = "Coming Soon!",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                }
             }
 
             composable(Screen.Courses.route) {

@@ -127,7 +127,7 @@ fun ExplorerGameDetailScreen(
                                     topic = game.title,
                                     difficulty = "medium",
                                     questionCount = 5,
-                                    timeLimitSec = 15,
+                                    timeLimitSec = 60,
                                     advanceMode = "auto",
                                     allowLateJoin = false
                                 ),

@@ -96,8 +96,9 @@ data class ChatAttachedFile(
     val fileName: String,
     val sizeKb: Int,
     val fileType: String,           // pdf | image | docx | pptx | xlsx | txt
-    val status: String,             // parsing | ready | failed
-    val docId: String? = null       // cloud document id once parsed+uploaded
+    val status: String,             // parsing | ready | failed | processing
+    val docId: String? = null,      // cloud document id once parsed+uploaded
+    val statusMessage: String? = null // optional user-facing message (e.g. "processing in background")
 )
 
 data class AIChatUiState(
@@ -114,7 +115,8 @@ data class AIChatUiState(
     val allPodcasts: List<AIPodcastEntity> = emptyList(),
     val currentSessionId: String = "chat_default",
     val allSessions: List<ChatSessionEntity> = emptyList(),
-    val pendingConfirmation: PendingConfirmationBatch? = null
+    val pendingConfirmation: PendingConfirmationBatch? = null,
+    val lastScrollIndex: Int = 0
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -149,6 +151,10 @@ class AIChatViewModel(private val repository: StuddyHubRepository) : ViewModel()
         // No need to fire syncCloudDataToLocal() on every screen visit.
     }
 
+    fun updateScrollPosition(index: Int) {
+        _lastScrollIndex.value = index
+    }
+
     private val _currentSessionId = MutableStateFlow("chat_default")
     val currentSessionId: StateFlow<String> = _currentSessionId.asStateFlow()
 
@@ -160,6 +166,10 @@ class AIChatViewModel(private val repository: StuddyHubRepository) : ViewModel()
         )
 
     private val _isSending = MutableStateFlow(false)
+    // Optimistic messages: user + AI placeholder inserted instantly into the UI before Room
+    // emits. Cleared once Room catches up, preventing the flash of an empty chat list when
+    // the session ID switches from "chat_default" to the newly created real session.
+    private val _optimisticMessages = MutableStateFlow<List<ChatMessageEntity>>(emptyList())
     private val _streamingState = MutableStateFlow(AIChatStreamingState())
     val streamingState: StateFlow<AIChatStreamingState> = _streamingState.asStateFlow()
 
@@ -167,12 +177,21 @@ class AIChatViewModel(private val repository: StuddyHubRepository) : ViewModel()
     // emission recomposes the chat list + re-parses the growing markdown. Flushing at most
     // every ~50ms keeps the reply feeling live without hammering low-end devices.
     private var streamingFlushJob: kotlinx.coroutines.Job? = null
+    // Generation counter: incremented on each new stream. Prevents stale flush coroutines
+    // from overwriting the streaming state after the stream has ended and been reset.
+    @Volatile private var streamingGeneration: Long = 0L
+    // Lock protects contentBuilder.toString() from racing with append() on IO thread.
+    private val contentLock = Any()
 
-    private fun flushStreamingContent(contentBuilder: StringBuilder) {
+    private fun flushStreamingContent(contentBuilder: StringBuilder, generation: Long) {
         if (streamingFlushJob?.isActive != true) {
             streamingFlushJob = viewModelScope.launch {
                 delay(50)
-                _streamingState.value = _streamingState.value.copy(content = contentBuilder.toString())
+                // Only update if this stream is still the active one
+                if (generation == streamingGeneration) {
+                    val snapshot = synchronized(contentLock) { contentBuilder.toString() }
+                    _streamingState.value = _streamingState.value.copy(content = snapshot)
+                }
             }
         }
     }
@@ -196,6 +215,7 @@ class AIChatViewModel(private val repository: StuddyHubRepository) : ViewModel()
     private val _isPodcastGenerating = MutableStateFlow(false)
     private val _lastGeneratedPodcast = MutableStateFlow<AIPodcastEntity?>(null)
     private val _pendingConfirmation = MutableStateFlow<PendingConfirmationBatch?>(null)
+    private val _lastScrollIndex = MutableStateFlow(0)
 
     private val localState = combine(
         _isSending,
@@ -227,7 +247,9 @@ class AIChatViewModel(private val repository: StuddyHubRepository) : ViewModel()
         repository.allNotes,
         repository.allDocuments,
         repository.allPodcasts,
-        repository.allChatSessions
+        repository.allChatSessions,
+        _optimisticMessages,
+        _lastScrollIndex
     ) { flowsArray ->
         val msgs = flowsArray[0] as List<ChatMessageEntity>
         val local = flowsArray[1] as LocalChatState
@@ -235,9 +257,21 @@ class AIChatViewModel(private val repository: StuddyHubRepository) : ViewModel()
         val repoDocs = flowsArray[3] as List<DocumentEntity>
         val repoPodcasts = flowsArray[4] as List<AIPodcastEntity>
         val repoSessions = flowsArray[5] as List<ChatSessionEntity>
+        val optimistic = flowsArray[6] as List<ChatMessageEntity>
+        val scrollIdx = flowsArray[7] as Int
+
+        // Merge optimistic messages with Room messages, deduped by id.
+        // Optimistic entries are superseded once Room emits the real version.
+        val mergedMsgs = if (optimistic.isNotEmpty()) {
+            val roomIds = msgs.map { it.id }.toSet()
+            val orphanedOptimistic = optimistic.filter { it.id !in roomIds }
+            orphanedOptimistic + msgs
+        } else {
+            msgs
+        }
 
         AIChatUiState(
-            messages = msgs,
+            messages = mergedMsgs,
             isSending = local.sending,
             userMessage = local.userMsg,
             attachedNoteIds = local.notes,
@@ -250,7 +284,8 @@ class AIChatViewModel(private val repository: StuddyHubRepository) : ViewModel()
             allPodcasts = repoPodcasts,
             currentSessionId = local.currentSessionId,
             allSessions = repoSessions,
-            pendingConfirmation = local.pendingConfirmation
+            pendingConfirmation = local.pendingConfirmation,
+            lastScrollIndex = scrollIdx
         )
     }.stateIn(
         scope = viewModelScope,
@@ -344,14 +379,12 @@ class AIChatViewModel(private val repository: StuddyHubRepository) : ViewModel()
                     com.example.data.remote.GeminiApiService.analyzeFile(base64, mime, prompt)
                 }
 
-                if (parsedText.isBlank() || com.example.util.DocumentTextCleaner.looksLikeBinary(parsedText)) {
-                    _attachedFiles.value = _attachedFiles.value + (key to _attachedFiles.value.getValue(key).copy(status = "failed"))
-                    return@launch
-                }
+                val extractionFailed = parsedText.isBlank() || com.example.util.DocumentTextCleaner.looksLikeBinary(parsedText)
 
-                // Create the document in the cloud first (the AI edge function resolves
-                // attachedDocumentIds from the server), then mirror it locally under the
-                // same id so the attachment capsule resolves a title.
+                // Even if client-side extraction failed (e.g. Gemini 429), proceed to
+                // createDocument — the edge function's model fallback chain may succeed
+                // server-side.  The document is saved with processing_status="failed" only
+                // as a last resort after ALL providers are exhausted.
                 val userId = repository.getOrRestoreActiveUserId()
                 val docId = java.util.UUID.randomUUID().toString()
                 val baseTitle = fileName.substringBeforeLast(".").ifBlank { fileName }
@@ -376,11 +409,25 @@ class AIChatViewModel(private val repository: StuddyHubRepository) : ViewModel()
                     fileSizeKb = (bytes.size / 1024L).toInt().coerceAtLeast(1),
                     content = parsedText,
                     id = cloudId,
-                    markSynced = true,
+                    markSynced = res is com.example.data.remote.BackendResult.Success,
                     rawBytes = bytes
                 )
 
-                _attachedFiles.value = _attachedFiles.value + (key to _attachedFiles.value.getValue(key).copy(status = "ready", docId = cloudId))
+                // If client extraction failed but the document was saved to the cloud,
+                // show a non-blocking message instead of "failed" — the server may be
+                // processing it, or the cron watchdog will retry.
+                val finalStatus = if (extractionFailed && res is com.example.data.remote.BackendResult.Success) {
+                    "processing"
+                } else if (extractionFailed) {
+                    "failed"
+                } else {
+                    "ready"
+                }
+                val statusMessage = if (finalStatus == "processing") {
+                    "Your file is being processed in the background — it will be ready shortly."
+                } else null
+
+                _attachedFiles.value = _attachedFiles.value + (key to _attachedFiles.value.getValue(key).copy(status = finalStatus, docId = cloudId, statusMessage = statusMessage))
                 _attachedDocIds.value = _attachedDocIds.value + cloudId
             } catch (e: kotlinx.coroutines.CancellationException) {
                 android.util.Log.d("AIChatViewModel", "Attachment parsing canceled for $key")
@@ -544,7 +591,29 @@ class AIChatViewModel(private val repository: StuddyHubRepository) : ViewModel()
             val pendingAiId = java.util.UUID.randomUUID().toString()
             val steps = mutableListOf<org.json.JSONObject>()
             val contentBuilder = StringBuilder()
+            val myGeneration = ++streamingGeneration
             _streamingState.value = AIChatStreamingState(messageId = pendingAiId, active = true)
+
+            // Optimistic message: show the user's message immediately in the UI before Room
+            // emits. This prevents the flash of an empty chat list when the session switches
+            // from "chat_default" to the newly created real session.
+            val optimisticUserId = java.util.UUID.randomUUID().toString()
+            val optimisticUserMsg = com.example.data.local.entities.ChatMessageEntity(
+                id = optimisticUserId,
+                sessionId = _currentSessionId.value,
+                role = "user",
+                content = effectiveText,
+                timestamp = System.currentTimeMillis()
+            )
+            val optimisticAiMsg = com.example.data.local.entities.ChatMessageEntity(
+                id = pendingAiId,
+                sessionId = _currentSessionId.value,
+                role = "model",
+                content = "",
+                timestamp = System.currentTimeMillis() + 1
+            )
+            _optimisticMessages.value = listOf(optimisticUserMsg, optimisticAiMsg)
+
             try {
                 var activeSessionId = _currentSessionId.value
                 val existingSession = repository.getSessionById(activeSessionId)
@@ -561,13 +630,18 @@ class AIChatViewModel(private val repository: StuddyHubRepository) : ViewModel()
                     activeSessionId, effectiveText, notesToAttach, docsToAttach,
                     isThinking = thinking,
                     aiMessageIdOverride = pendingAiId,
+                    userMessageIdOverride = optimisticUserId,
                     onThinkingStep = { step ->
-                        steps.add(step)
-                        _streamingState.value = _streamingState.value.copy(steps = steps.toList())
+                        if (myGeneration == streamingGeneration) {
+                            steps.add(step)
+                            _streamingState.value = _streamingState.value.copy(steps = steps.toList())
+                        }
                     },
                     onContentChunk = { chunk ->
-                        contentBuilder.append(chunk)
-                        flushStreamingContent(contentBuilder)
+                        if (myGeneration == streamingGeneration) {
+                            synchronized(contentLock) { contentBuilder.append(chunk) }
+                            flushStreamingContent(contentBuilder, myGeneration)
+                        }
                     },
                     onConfirmationBatchRequired = { data ->
                         _pendingConfirmation.value = data.toPendingConfirmationBatch()
@@ -587,10 +661,15 @@ class AIChatViewModel(private val repository: StuddyHubRepository) : ViewModel()
             } catch (e: Exception) {
                 _userMessage.value = "We couldn't get a response from the AI. Please check your connection and try again."
             } finally {
+                // Invalidate any pending flush coroutine BEFORE resetting state
+                streamingGeneration++
                 streamingFlushJob?.cancel()
                 streamingFlushJob = null
                 _streamingState.value = AIChatStreamingState()
                 _isSending.value = false
+                // Clear optimistic messages after Room has had time to emit the real ones.
+                kotlinx.coroutines.delay(500)
+                _optimisticMessages.value = emptyList()
             }
         }
     }
@@ -611,18 +690,23 @@ class AIChatViewModel(private val repository: StuddyHubRepository) : ViewModel()
             val pendingAiId = java.util.UUID.randomUUID().toString()
             val steps = mutableListOf<org.json.JSONObject>()
             val contentBuilder = StringBuilder()
+            val myGeneration = ++streamingGeneration
             _streamingState.value = AIChatStreamingState(messageId = pendingAiId, active = true)
             try {
                 val responseText = repository.regenerateLastResponse(
                     sessionId, thinking,
                     aiMessageIdOverride = pendingAiId,
                     onThinkingStep = { step ->
-                        steps.add(step)
-                        _streamingState.value = _streamingState.value.copy(steps = steps.toList())
+                        if (myGeneration == streamingGeneration) {
+                            steps.add(step)
+                            _streamingState.value = _streamingState.value.copy(steps = steps.toList())
+                        }
                     },
                     onContentChunk = { chunk ->
-                        contentBuilder.append(chunk)
-                        flushStreamingContent(contentBuilder)
+                        if (myGeneration == streamingGeneration) {
+                            synchronized(contentLock) { contentBuilder.append(chunk) }
+                            flushStreamingContent(contentBuilder, myGeneration)
+                        }
                     },
                     onConfirmationBatchRequired = { data ->
                         _pendingConfirmation.value = data.toPendingConfirmationBatch()
@@ -639,6 +723,7 @@ class AIChatViewModel(private val repository: StuddyHubRepository) : ViewModel()
             } catch (e: Exception) {
                 _userMessage.value = "We couldn't get a response from the AI. Please check your connection and try again."
             } finally {
+                streamingGeneration++ // invalidate any in-flight streaming callbacks
                 streamingFlushJob?.cancel()
                 streamingFlushJob = null
                 _streamingState.value = AIChatStreamingState()

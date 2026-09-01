@@ -6,6 +6,7 @@
  * results to the database, and auto-links them as course_resources.
  */
 
+import { apiClient } from '@/services/apiClient';
 import { supabase } from '@/integrations/supabase/client';
 import { UserProfile } from '@/types';
 
@@ -52,23 +53,16 @@ async function collectCourseContent(courseId: string): Promise<{
   noteIds: string[];
 }> {
   // 1. Get linked document resources
-  const { data: docResources } = await supabase
-    .from('course_resources')
-    .select('resource_id')
-    .eq('course_id', courseId)
-    .eq('resource_type', 'document');
+  const docResources = await apiClient.get('course-resources', { course_id: courseId, resource_type: 'document' });
 
-  const docIds = docResources?.map((r) => r.resource_id) ?? [];
+  const docIds = Array.isArray(docResources) ? docResources.map((r: any) => r.resource_id) : [];
   let combinedText = '';
   const documentIds: string[] = [];
 
   if (docIds.length > 0) {
-    const { data: docs } = await supabase
-      .from('documents')
-      .select('id, title, content_extracted')
-      .in('id', docIds);
+    const docs = await apiClient.get('documents', { ids: docIds.join(',') });
 
-    if (docs) {
+    if (Array.isArray(docs)) {
       for (const doc of docs) {
         if (doc.content_extracted) {
           combinedText += `\n\n--- ${doc.title} ---\n${doc.content_extracted}`;
@@ -79,25 +73,19 @@ async function collectCourseContent(courseId: string): Promise<{
   }
 
   // 2. Also include course_materials that have a linked document
-  const { data: materials } = await supabase
-    .from('course_materials')
-    .select('id, title, document_id')
-    .eq('course_id', courseId)
-    .not('document_id', 'is', null);
+  const materials = await apiClient.get('course-materials', { course_id: courseId });
 
-  if (materials) {
+  if (Array.isArray(materials)) {
+    const materialsWithDoc = materials.filter((m: any) => m.document_id);
     // Fetch the actual document content for materials not already in docIds
-    const matDocIds = materials
-      .map((m) => m.document_id!)
+    const matDocIds = materialsWithDoc
+      .map((m: any) => m.document_id as string)
       .filter((id) => !docIds.includes(id));
 
     if (matDocIds.length > 0) {
-      const { data: matDocs } = await supabase
-        .from('documents')
-        .select('id, title, content_extracted')
-        .in('id', matDocIds);
+      const matDocs = await apiClient.get('documents', { ids: matDocIds.join(',') });
 
-      if (matDocs) {
+      if (Array.isArray(matDocs)) {
         for (const doc of matDocs) {
           if (doc.content_extracted) {
             combinedText += `\n\n--- ${doc.title} ---\n${doc.content_extracted}`;
@@ -109,19 +97,12 @@ async function collectCourseContent(courseId: string): Promise<{
   }
 
   // 3. Get linked note resources
-  const { data: noteResources } = await supabase
-    .from('course_resources')
-    .select('resource_id')
-    .eq('course_id', courseId)
-    .eq('resource_type', 'note');
+  const noteResources = await apiClient.get('course-resources', { course_id: courseId, resource_type: 'note' });
 
-  const noteIds = noteResources?.map((r) => r.resource_id) ?? [];
+  const noteIds = Array.isArray(noteResources) ? noteResources.map((r: any) => r.resource_id) : [];
 
   if (noteIds.length > 0) {
-    const { data: notes } = await supabase
-      .from('notes')
-      .select('id, title, content')
-      .in('id', noteIds);
+    const notes = await apiClient.get('notes', { ids: noteIds });
 
     if (notes) {
       for (const note of notes) {
@@ -146,16 +127,16 @@ async function linkResourceToCourse(
   category?: string,
   isRequired?: boolean
 ) {
-  const { error } = await supabase.from('course_resources').insert({
-    course_id: courseId,
-    resource_type: resourceType,
-    resource_id: resourceId,
-    title,
-    category: category ?? 'AI Generated',
-    is_required: isRequired ?? false,
-  });
-
-  if (error) {
+  try {
+    await apiClient.post('course-resources', {
+      course_id: courseId,
+      resource_type: resourceType,
+      resource_id: resourceId,
+      title,
+      category: category ?? 'AI Generated',
+      is_required: isRequired ?? false,
+    });
+  } catch (error: any) {
     console.warn(`[courseAI] Failed to link ${resourceType} to course:`, error.message);
   }
 }
@@ -191,20 +172,12 @@ async function generateQuizForCourse(
 
   const quizTitle = data.title || `${req.courseCode} Quiz`;
 
-  const { data: inserted, error: insertError } = await supabase
-    .from('quizzes')
-    .insert({
-      title: quizTitle,
-      questions: data.questions,
-      user_id: req.userId,
-      source_type: 'notes',
-    })
-    .select('id')
-    .single();
-
-  if (insertError || !inserted) {
-    throw new Error(insertError?.message || 'Failed to save quiz');
-  }
+  const inserted = await apiClient.post('quizzes', {
+    title: quizTitle,
+    questions: data.questions,
+    user_id: req.userId,
+    source_type: 'notes',
+  });
 
   // Auto-link to course
   await linkResourceToCourse(req.courseId, 'quiz', inserted.id, quizTitle, 'Quiz');
@@ -253,21 +226,13 @@ Format as clean Markdown with proper headings, bullet points, and bold for empha
   updateProgress({ status: 'saving', message: 'Saving notes...' });
 
   const noteTitle = `${req.courseCode} — AI Study Notes`;
-  const { data: inserted, error: insertError } = await supabase
-    .from('notes')
-    .insert({
-      user_id: req.userId,
-      title: noteTitle,
-      content: data.generatedContent,
-      category: 'course',
-      tags: [req.courseCode, 'ai-generated'],
-    })
-    .select('id')
-    .single();
-
-  if (insertError || !inserted) {
-    throw new Error(insertError?.message || 'Failed to save notes');
-  }
+  const inserted = await apiClient.post('notes', {
+    user_id: req.userId,
+    title: noteTitle,
+    content: data.generatedContent,
+    category: 'course',
+    tags: [req.courseCode, 'ai-generated'],
+  });
 
   await linkResourceToCourse(req.courseId, 'note', inserted.id, noteTitle, 'Study Notes');
   return inserted.id;
@@ -311,13 +276,10 @@ async function generatePodcastForCourse(
   }
 
   // If no id returned, find the latest one for this user
-  const { data: latestPodcast } = await supabase
-    .from('ai_podcasts')
-    .select('id, title')
-    .eq('user_id', req.userId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
+  const latestPodcasts = await apiClient.get('ai-podcasts', { user_id: req.userId });
+  const latestPodcast = Array.isArray(latestPodcasts) && latestPodcasts.length > 0
+    ? latestPodcasts.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+    : null;
 
   if (latestPodcast) {
     updateProgress({ status: 'saving', message: 'Linking podcast to course...' });
@@ -370,13 +332,7 @@ async function generateFlashcardsForCourse(
     hint: fc.hint || null,
   }));
 
-  const { error: insertError } = await supabase
-    .from('flashcards')
-    .insert(flashcardRows);
-
-  if (insertError) {
-    throw new Error(insertError.message || 'Failed to save flashcards');
-  }
+  await apiClient.post('flashcards', flashcardRows);
 
   // Flashcards don't have a single resource_id to link, but we can return success
   return 'flashcards-created';

@@ -2,6 +2,7 @@
 // Hook for managing institution members — list, invite, remove, update roles.
 
 import { useState, useEffect, useCallback } from 'react';
+import { apiClient } from '@/services/apiClient';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '../../../hooks/useAuth';
 import type { InstitutionMember, InstitutionMemberRole, InstitutionMemberStatus, InstitutionInvite } from '@/types/Education';
@@ -171,7 +172,7 @@ export function useInstitutionMembers(institutionId: string | null): UseInstitut
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + 7); // 7-day expiry
 
-        const { error: inviteError } = await supabase.from('institution_invites').insert({
+        await apiClient.post('institution-invites', {
           institution_id: institutionId,
           email: email.toLowerCase().trim(),
           role,
@@ -180,8 +181,6 @@ export function useInstitutionMembers(institutionId: string | null): UseInstitut
           status: 'pending',
           expires_at: expiresAt.toISOString(),
         });
-
-        if (inviteError) throw inviteError;
 
         // Reset the invites accessibility flag so fetchMembers re-queries invites
         invitesAccessible = null;

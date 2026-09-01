@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, supabaseUrl } from '../../../integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../ui/components/card';
 import { Button } from '../../ui/components/button';
 import { Textarea } from '../../ui/components/textarea';
@@ -73,35 +74,34 @@ const AIAdminInsights: React.FC = () => {
         usersThisWeek, usersLastWeek,
         postsThisWeek, postsLastWeek
       ] = await Promise.all([
-        supabase.from('profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('updated_at', day7Ago),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('updated_at', day30Ago),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', now.toISOString().split('T')[0]),
-        supabase.from('social_posts').select('*', { count: 'exact', head: true }),
-        supabase.from('social_comments').select('*', { count: 'exact', head: true }),
-        supabase.from('notes').select('*', { count: 'exact', head: true }),
-        supabase.from('documents').select('*', { count: 'exact', head: true }),
-        supabase.from('social_groups').select('*', { count: 'exact', head: true }),
-        supabase.from('ai_podcasts').select('*', { count: 'exact', head: true }),
-        supabase.from('chat_sessions').select('*', { count: 'exact', head: true }),
-        supabase.from('quiz_attempts').select('*', { count: 'exact', head: true }),
-        supabase.from('social_reports').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-        supabase.from('content_moderation_queue').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-        supabase.from('system_error_logs').select('*', { count: 'exact', head: true }).gte('created_at', day1Ago),
-        supabase.from('system_error_logs').select('*', { count: 'exact', head: true }).gte('created_at', day1Ago).eq('severity', 'critical'),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', day7Ago),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', day14Ago).lt('created_at', day7Ago),
-        supabase.from('social_posts').select('*', { count: 'exact', head: true }).gte('created_at', day7Ago),
-        supabase.from('social_posts').select('*', { count: 'exact', head: true }).gte('created_at', day14Ago).lt('created_at', day7Ago),
+        apiClient.get('profiles', { count: 'true' }),
+        apiClient.get('profiles', { count: 'true', updated_at__gte: day7Ago }),
+        apiClient.get('profiles', { count: 'true', updated_at__gte: day30Ago }),
+        apiClient.get('profiles', { count: 'true', created_at__gte: now.toISOString().split('T')[0] }),
+        apiClient.get('social_posts', { count: 'true' }),
+        apiClient.get('social_comments', { count: 'true' }),
+        apiClient.get('notes', { count: 'true' }),
+        apiClient.get('documents', { count: 'true' }),
+        apiClient.get('social_groups', { count: 'true' }),
+        apiClient.get('ai_podcasts', { count: 'true' }),
+        apiClient.get('chat_sessions', { count: 'true' }),
+        apiClient.get('quiz_attempts', { count: 'true' }),
+        apiClient.get('social_reports', { count: 'true', status: 'pending' }),
+        apiClient.get('content_moderation_queue', { count: 'true', status: 'pending' }),
+        apiClient.get('system_error_logs', { count: 'true', created_at__gte: day1Ago }),
+        apiClient.get('system_error_logs', { count: 'true', created_at__gte: day1Ago, severity: 'critical' }),
+        apiClient.get('profiles', { count: 'true', created_at__gte: day7Ago }),
+        apiClient.get('profiles', { count: 'true', created_at__gte: day14Ago, created_at__lt: day7Ago }),
+        apiClient.get('social_posts', { count: 'true', created_at__gte: day7Ago }),
+        apiClient.get('social_posts', { count: 'true', created_at__gte: day14Ago, created_at__lt: day7Ago }),
       ]);
 
       // Get top error sources
-      const { data: recentErrors } = await supabase
-        .from('system_error_logs')
-        .select('source')
-        .gte('created_at', day1Ago)
-        .order('created_at', { ascending: false })
-        .limit(100);
+      const { data: recentErrors } = await apiClient.get('system_error_logs', {
+        created_at__gte: day1Ago,
+        order: 'created_at.desc',
+        limit: '100',
+      });
 
       const sourceCounts: Record<string, number> = {};
       (recentErrors || []).forEach((e: any) => {
@@ -114,35 +114,35 @@ const AIAdminInsights: React.FC = () => {
 
       setSnapshot({
         users: {
-          total: totalUsers.count || 0,
-          active7d: active7d.count || 0,
-          active30d: active30d.count || 0,
-          newToday: newToday.count || 0,
+          total: (totalUsers as any).meta?.total || 0,
+          active7d: (active7d as any).meta?.total || 0,
+          active30d: (active30d as any).meta?.total || 0,
+          newToday: (newToday as any).meta?.total || 0,
         },
         content: {
-          posts: totalPosts.count || 0,
-          comments: totalComments.count || 0,
-          notes: totalNotes.count || 0,
-          documents: totalDocs.count || 0,
-          groups: totalGroups.count || 0,
-          podcasts: totalPodcasts.count || 0,
-          chatSessions: totalChats.count || 0,
-          quizzes: totalQuizzes.count || 0,
+          posts: (totalPosts as any).meta?.total || 0,
+          comments: (totalComments as any).meta?.total || 0,
+          notes: (totalNotes as any).meta?.total || 0,
+          documents: (totalDocs as any).meta?.total || 0,
+          groups: (totalGroups as any).meta?.total || 0,
+          podcasts: (totalPodcasts as any).meta?.total || 0,
+          chatSessions: (totalChats as any).meta?.total || 0,
+          quizzes: (totalQuizzes as any).meta?.total || 0,
         },
         moderation: {
-          pendingReports: pendingReports.count || 0,
-          pendingModeration: pendingModeration.count || 0,
+          pendingReports: (pendingReports as any).meta?.total || 0,
+          pendingModeration: (pendingModeration as any).meta?.total || 0,
         },
         errors: {
-          last24h: errorsLast24h.count || 0,
-          criticalLast24h: criticalErrors.count || 0,
+          last24h: (errorsLast24h as any).meta?.total || 0,
+          criticalLast24h: (criticalErrors as any).meta?.total || 0,
           topSources,
         },
         growth: {
-          usersThisWeek: usersThisWeek.count || 0,
-          usersLastWeek: usersLastWeek.count || 0,
-          postsThisWeek: postsThisWeek.count || 0,
-          postsLastWeek: postsLastWeek.count || 0,
+          usersThisWeek: (usersThisWeek as any).meta?.total || 0,
+          usersLastWeek: (usersLastWeek as any).meta?.total || 0,
+          postsThisWeek: (postsThisWeek as any).meta?.total || 0,
+          postsLastWeek: (postsLastWeek as any).meta?.total || 0,
         },
       });
     } catch (err) {

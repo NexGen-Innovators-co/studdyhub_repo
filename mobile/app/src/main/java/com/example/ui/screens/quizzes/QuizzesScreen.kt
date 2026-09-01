@@ -231,7 +231,7 @@ fun QuizzesScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(state.userMessage) {
         state.userMessage?.let { msg ->
-            snackbarHostState.showSnackbar(msg)
+            snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Long)
             viewModel.clearUserMessage()
         }
     }

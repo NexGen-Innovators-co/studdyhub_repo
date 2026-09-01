@@ -9,6 +9,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/modules/ui/components
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/modules/ui/components/command';
 import { ChevronsUpDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { useEducationFramework } from '@/modules/onboarding/hooks/useEducationFramework';
@@ -62,11 +63,7 @@ export const EducationSettingsTab: React.FC = () => {
   // load institutions for combobox
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
-        .from('institutions')
-        .select('id,name')
-        .eq('is_active', true)
-        .eq('type', 'school');
+      const data = await apiClient.get('institutions', { is_active: 'true', type: 'school' });
       if (data) setInstitutionOptions(data as {id:string;name:string}[]);
     })();
   }, []);
@@ -91,35 +88,24 @@ export const EducationSettingsTab: React.FC = () => {
     setSaveSuccess(false);
 
     try {
-      const { data: eduProfile, error: profileError } = await supabase
-        .from('user_education_profiles')
-        .upsert(
-          {
-            user_id: user.id,
-            country_id: formData.countryId,
-            education_level_id: formData.educationLevelId,
-            curriculum_id: formData.curriculumId,
-            target_examination_id: formData.examinationId,
-            institution_name: formData.institutionName.trim() || null,
-            year_or_grade: formData.yearOrGrade.trim() || null,
-          },
-          { onConflict: 'user_id' }
-        )
-        .select('id')
-        .single();
-
-      if (profileError) throw profileError;
+      const eduProfile = await apiClient.post('user_education_profiles', {
+        user_id: user.id,
+        country_id: formData.countryId,
+        education_level_id: formData.educationLevelId,
+        curriculum_id: formData.curriculumId,
+        target_examination_id: formData.examinationId,
+        institution_name: formData.institutionName.trim() || null,
+        year_or_grade: formData.yearOrGrade.trim() || null,
+      });
 
       // Sync user_subjects
       if (eduProfile) {
-        await supabase.from('user_subjects').delete().eq('user_education_profile_id', eduProfile.id);
+        await apiClient.delete('user_subjects', { user_education_profile_id: eduProfile.id });
         if (formData.selectedSubjectIds.length > 0) {
-          await supabase.from('user_subjects').insert(
-            formData.selectedSubjectIds.map((subjectId) => ({
-              user_education_profile_id: eduProfile.id,
-              subject_id: subjectId,
-            }))
-          );
+          await apiClient.post('user_subjects', formData.selectedSubjectIds.map((subjectId) => ({
+            user_education_profile_id: eduProfile.id,
+            subject_id: subjectId,
+          })));
         }
       }
 
@@ -128,10 +114,7 @@ export const EducationSettingsTab: React.FC = () => {
       if (formData.institutionName.trim()) profileUpdates.school = formData.institutionName.trim();
       if (formData.institutionId) profileUpdates.institution_id = formData.institutionId;
       if (Object.keys(profileUpdates).length > 0) {
-        await supabase
-          .from('profiles')
-          .update(profileUpdates)
-          .eq('id', user.id);
+        await apiClient.patch(`profiles/${user.id}`, profileUpdates);
       }
 
       await refetch();

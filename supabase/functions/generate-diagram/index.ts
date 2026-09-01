@@ -29,7 +29,7 @@ serve(async (req) => {
     };
     const systemInstruction = systemInstructions[diagramType] || systemInstructions.mermaid;
     const prompt = `${systemInstruction}\n\nContent to visualize:\n${content.substring(0, 6000)}`;
-    const models = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'];
+    const models = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
     let diagram = '';
     for (const model of models) {
       try {

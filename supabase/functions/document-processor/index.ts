@@ -46,6 +46,7 @@ serve(async (req) => {
     const requestData      = await req.json();
     userId                 = requestData.userId;
     const incomingFilesData: any[] = requestData.files;
+    const skipDbSave       = requestData.skipDbSave === true;
 
     if (!userId) {
       return new Response(
@@ -68,15 +69,19 @@ serve(async (req) => {
     }
 
     // ── Persist initial records early so clients can poll during long processing ─
-    for (const file of files) {
-      // mark as processing so that the DB shows work in progress
-      file.processing_status = file.processing_status || 'processing';
-      file.processing_error = file.processing_error ?? null;
-      const id = await saveFileToDatabase(file, userId);
-      if (id) {
-        uploadedDocumentIds.push(id);
+    // skipDbSave: when true, only extract content — do not create any DB rows.
+    // Used by GeminiApiService.analyzeFile() which only needs text extraction.
+    if (!skipDbSave) {
+      for (const file of files) {
+        // mark as processing so that the DB shows work in progress
+        file.processing_status = file.processing_status || 'processing';
+        file.processing_error = file.processing_error ?? null;
+        const id = await saveFileToDatabase(file, userId);
+        if (id) {
+          uploadedDocumentIds.push(id);
+        }
+        // even if the early save failed we continue; final save will report failure
       }
-      // even if the early save failed we continue; final save will report failure
     }
 
     // ── AI processing ──────────────────────────────────────────────────────
@@ -88,21 +93,28 @@ serve(async (req) => {
     // ── Persist final results to database ────────────────────────────────────
     const savedDocuments: any[] = [];
 
-    for (const file of files) {
-      const documentId = await saveFileToDatabase(file, userId); // will update existing record if id present
+    if (!skipDbSave) {
+      for (const file of files) {
+        const documentId = await saveFileToDatabase(file, userId); // will update existing record if id present
 
-      if (documentId) {
-        // make sure id is tracked even if it was already pushed earlier
-        if (!uploadedDocumentIds.includes(documentId)) uploadedDocumentIds.push(documentId);
+        if (documentId) {
+          // make sure id is tracked even if it was already pushed earlier
+          if (!uploadedDocumentIds.includes(documentId)) uploadedDocumentIds.push(documentId);
+          savedDocuments.push(buildSavedDoc(file, userId));
+        } else {
+          savedDocuments.push({
+            ...buildSavedDoc(file, userId),
+            id: file.id ?? null,
+            file_url: file.file_url ?? null,
+            processing_status: 'failed',
+            processing_error: file.processing_error ?? 'Failed to save to database',
+          });
+        }
+      }
+    } else {
+      // skipDbSave: return extraction results without persisting
+      for (const file of files) {
         savedDocuments.push(buildSavedDoc(file, userId));
-      } else {
-        savedDocuments.push({
-          ...buildSavedDoc(file, userId),
-          id: file.id ?? null,
-          file_url: file.file_url ?? null,
-          processing_status: 'failed',
-          processing_error: file.processing_error ?? 'Failed to save to database',
-        });
       }
     }
 

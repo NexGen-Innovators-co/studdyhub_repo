@@ -82,11 +82,16 @@ object BackendApiService {
         "document-extractor",
         "gemini-document-extractor",
         "generate-ai-quiz",
+        "generate-quiz",
         "generate-flashcards",
         "generate-summary",
         "generate-roadmap",
         "gemini-audio-processor",
-        "gemini-chat"
+        "gemini-chat",
+        "generate-podcast",
+        "live-quiz",
+        "generate-spelling-words",
+        "generate-interactive-lesson"
     )
 
     /**
@@ -368,6 +373,11 @@ object BackendApiService {
         const val NOT_FOUND = "We couldn't find that. It may have been removed."
         const val AI_NO_RESPONSE = "The AI couldn't finish that request. Please try again."
         const val UPLOAD_FAILED = "We couldn't upload that file. Please try again."
+        const val QUIZ_GENERATION_FAILED = "Ollie couldn't make those questions right now. Let's try again!"
+        const val SPELLING_FAILED = "Ollie couldn't generate those words. Please try again!"
+        const val LESSON_FAILED = "Ollie couldn't prepare this lesson. Please try again!"
+        const val QUESTIONS_FAILED = "Something went wrong loading the questions. Let's try again!"
+        const val LIVE_QUIZ_FAILED = "The live quiz ran into a problem. Please try rejoining!"
 
         const val AUTH_INVALID_CREDENTIALS = "That email or password doesn't look right. Please try again."
         const val AUTH_EMAIL_NOT_CONFIRMED = "Your email hasn't been confirmed yet. We're sending you a new verification code now."
@@ -381,6 +391,7 @@ object BackendApiService {
         val known: Set<String> = setOf(
             GENERIC, SERVER, OFFLINE, NOT_READY, SESSION_EXPIRED, SIGNED_OUT,
             NO_PERMISSION, DUPLICATE, NOT_FOUND, AI_NO_RESPONSE, UPLOAD_FAILED,
+            QUIZ_GENERATION_FAILED, SPELLING_FAILED, LESSON_FAILED, QUESTIONS_FAILED, LIVE_QUIZ_FAILED,
             AUTH_INVALID_CREDENTIALS, AUTH_EMAIL_NOT_CONFIRMED, AUTH_ACCOUNT_EXISTS,
             AUTH_WEAK_PASSWORD, AUTH_INVALID_EMAIL, AUTH_RATE_LIMIT, AUTH_INVALID_OTP
         )
@@ -1677,20 +1688,24 @@ object BackendApiService {
 
     suspend fun toggleLikePost(postId: String, userId: String = ""): BackendResult<Boolean> {
         val uid = ensureValidUuid(userId.ifBlank { currentUserId })
-        val checkRes = tableGet("social_likes", mapOf("post_id" to postId, "user_id" to uid))
-        val isCurrentlyLiked = checkRes is BackendResult.Success && checkRes.data.length() > 0
 
+        // Let the toggle-like edge function handle everything — it checks
+        // existence, ensures social_users row, inserts/deletes, and sends
+        // notifications. No need for a separate pre-check that can 406.
         val fnPayload = JSONObject().apply {
             put("post_id", postId)
-            put("is_liked", isCurrentlyLiked)
         }
         val fnRes = executeEdgeFunction("toggle-like", fnPayload)
         if (fnRes is BackendResult.Success) {
-            val isLikedResult = fnRes.data.optBoolean("is_liked", !isCurrentlyLiked)
+            val data = fnRes.data
+            val isLikedResult = data.optBoolean("is_liked", false)
             return BackendResult.Success(isLikedResult)
         }
 
         // Fallback to direct REST
+        val checkRes = tableGet("social_likes", mapOf("post_id" to postId, "user_id" to uid))
+        val isCurrentlyLiked = checkRes is BackendResult.Success && checkRes.data.length() > 0
+
         if (isCurrentlyLiked) {
             val delRes = tableDelete("social_likes", mapOf("post_id" to postId, "user_id" to uid))
             return when (delRes) {
@@ -1702,12 +1717,14 @@ object BackendApiService {
                 put("post_id", postId)
                 put("user_id", uid)
             }
-            // Idempotent upsert on (post_id, user_id): the UNIQUE constraint on those
-            // columns means a plain INSERT throws on a race/desync — treat it as success.
-            val insRes = tablePost("social_likes", payload, onConflict = "post_id,user_id")
+            val insRes = tablePost("social_likes", payload)
             return when (insRes) {
                 is BackendResult.Success -> BackendResult.Success(true)
-                is BackendResult.Error -> insRes
+                is BackendResult.Error -> {
+                    if (insRes.message.contains("23505") || insRes.message.contains("unique") || insRes.message.contains("409")) {
+                        BackendResult.Success(true)
+                    } else insRes
+                }
             }
         }
     }
@@ -2323,8 +2340,11 @@ object BackendApiService {
                         if (resumed != null) return BackendResult.Success(resumed)
                     }
                     if (procStatus == "failed") {
-                        val reason = docObj.optString("processing_error").ifBlank { "extraction failed" }
-                        return BackendResult.Error("Document extraction failed: $reason")
+                        // Document was saved but extraction failed (e.g. Gemini 429).
+                        // Return Success so the client knows the document exists.
+                        // The cron watchdog will retry extraction automatically.
+                        android.util.Log.w(TAG, "Document extraction failed but doc saved: ${docObj.optString("processing_error")}")
+                        return BackendResult.Success(docObj)
                     }
                     return BackendResult.Success(docObj)
                 }
@@ -3456,7 +3476,7 @@ object BackendApiService {
         }
     }
 
-    suspend fun generatePodcast(title: String, textContent: String): BackendResult<String> {
+    suspend fun generatePodcast(title: String, textContent: String): BackendResult<JSONObject> {
         return try {
             val payload = JSONObject().apply {
                 put("title", title)
@@ -3464,10 +3484,21 @@ object BackendApiService {
             }
             val edgeRes = executeEdgeFunction("generate-podcast", payload)
             if (edgeRes is BackendResult.Success) {
-                val script = edgeRes.data.optString("script", edgeRes.data.optString("text", ""))
-                if (script.isNotBlank()) return BackendResult.Success(script)
+                // Response format: { "success": true, "podcast": { "id", "script", "audio_segments", "duration_minutes", ... } }
+                val podcastObj = edgeRes.data.optJSONObject("podcast")
+                if (podcastObj != null) {
+                    val script = podcastObj.optString("script", "")
+                    if (script.isNotBlank()) return BackendResult.Success(podcastObj)
+                }
+                // Fallback: check top-level script (older format)
+                val script = edgeRes.data.optString("script", "")
+                if (script.isNotBlank()) {
+                    return BackendResult.Success(JSONObject().apply {
+                        put("script", script)
+                        put("duration_minutes", 10)
+                    })
+                }
             }
-            // Dedicated edge function is the sole path — return error if it fails.
             BackendResult.Error(userFacingErrorMessage("Podcast generation failed. Please try again."))
         } catch (e: Exception) {
             BackendResult.Error(userFacingErrorMessage("Podcast generation error: ${e.localizedMessage ?: e.message}"))
@@ -3778,8 +3809,24 @@ object BackendApiService {
 
         val request = reqBuilder.build()
         try {
-            val response = client.newCall(request).execute()
-            val rawBody = response.body?.string() ?: ""
+            var response = client.newCall(request).execute()
+            var rawBody = response.body?.string() ?: ""
+            // Retry on transient failures (5xx, network errors) up to 2 times with backoff
+            var retries = 0
+            val maxRetries = 2
+            while (retries < maxRetries && (response.code >= 500 || response.code == 0)) {
+                retries++
+                val backoffMs = retries * 1500L
+                Log.w(TAG, "[RETRY] API $subPath failed (HTTP ${response.code}), retry $retries/$maxRetries in ${backoffMs}ms")
+                kotlinx.coroutines.delay(backoffMs)
+                try {
+                    response = client.newCall(request).execute()
+                    rawBody = response.body?.string() ?: ""
+                } catch (retryE: Exception) {
+                    Log.w(TAG, "[RETRY] API $subPath retry $retries failed: ${retryE.message}")
+                    rawBody = ""
+                }
+            }
             if (!response.isSuccessful) {
                 return@withContext BackendResult.Error("API Gateway HTTP ${response.code}: $rawBody", response.code)
             }
@@ -3824,11 +3871,33 @@ object BackendApiService {
             .build()
 
         try {
-            var response = client.newCall(buildRequest()).execute()
+            // Route long-running edge functions through the generous-timeout client so they
+            // don't get killed mid-flight by the 15 s default (the function may need >60 s
+            // for document processing, podcast generation, etc.).
+            val callClient = if (functionName in LONG_RUNNING_FUNCTIONS) longRunningClient else client
+            var response = callClient.newCall(buildRequest()).execute()
             var code = response.code
             var bodyStr = response.body?.string() ?: ""
+            // Retry on transient failures (5xx, network errors) up to 2 times with backoff
+            var retries = 0
+            val maxRetries = 2
+            while (retries < maxRetries && (code >= 500 || code == 0)) {
+                retries++
+                val backoffMs = retries * 1500L
+                Log.w(TAG, "[RETRY] $functionName failed (HTTP $code), retry $retries/$maxRetries in ${backoffMs}ms")
+                kotlinx.coroutines.delay(backoffMs)
+                try {
+                    response = callClient.newCall(buildRequest()).execute()
+                    code = response.code
+                    bodyStr = response.body?.string() ?: ""
+                } catch (retryE: Exception) {
+                    Log.w(TAG, "[RETRY] $functionName retry $retries failed: ${retryE.message}")
+                    bodyStr = ""
+                    code = 0
+                }
+            }
             if (code == 401 && refreshSessionIfPossible()) {
-                response = client.newCall(buildRequest()).execute()
+                response = callClient.newCall(buildRequest()).execute()
                 code = response.code
                 bodyStr = response.body?.string() ?: ""
             }

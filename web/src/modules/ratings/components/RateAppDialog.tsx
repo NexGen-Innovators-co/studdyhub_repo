@@ -3,7 +3,7 @@ import { Star, Send, Loader2, CheckCircle2, Pencil } from 'lucide-react';
 import { Button } from '../../ui/components/button';
 import { Textarea } from '../../ui/components/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '../../ui/components/dialog';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
@@ -35,21 +35,24 @@ export const RateAppDialog: React.FC<RateAppDialogProps> = ({ trigger, externalO
     if (!open || !user) return;
 
     const fetchExisting = async () => {
-      const [ratingRes, testimonialRes] = await Promise.all([
-        supabase.from('app_ratings').select('rating').eq('user_id', user.id).maybeSingle(),
-        supabase.from('app_testimonials').select('content, rating, is_approved').eq('user_id', user.id).maybeSingle(),
+      const [ratingResult, testimonialResult] = await Promise.all([
+        apiClient.get('app_ratings', { select: 'rating', user_id: user.id }),
+        apiClient.get('app_testimonials', { select: 'content,rating,is_approved', user_id: user.id }),
       ]);
 
-      if (ratingRes.data) {
-        setExistingRating(ratingRes.data.rating);
-        setRating(ratingRes.data.rating);
+      const ratingData = Array.isArray(ratingResult) ? ratingResult[0] : ratingResult;
+      const testimonialData = Array.isArray(testimonialResult) ? testimonialResult[0] : testimonialResult;
+
+      if (ratingData) {
+        setExistingRating(ratingData.rating);
+        setRating(ratingData.rating);
       }
 
-      if (testimonialRes.data) {
-        setExistingTestimonial(testimonialRes.data.content);
-        setTestimonial(testimonialRes.data.content);
-        setRating(testimonialRes.data.rating);
-        setTestimonialStatus(testimonialRes.data.is_approved ? 'approved' : 'pending');
+      if (testimonialData) {
+        setExistingTestimonial(testimonialData.content);
+        setTestimonial(testimonialData.content);
+        setRating(testimonialData.rating);
+        setTestimonialStatus(testimonialData.is_approved ? 'approved' : 'pending');
       }
 
       setLoaded(true);
@@ -71,31 +74,21 @@ export const RateAppDialog: React.FC<RateAppDialogProps> = ({ trigger, externalO
     setSubmitting(true);
     try {
       // Upsert rating
-      const { error: ratingError } = await supabase
-        .from('app_ratings')
-        .upsert(
-          { user_id: user.id, rating, updated_at: new Date().toISOString() },
-          { onConflict: 'user_id' }
-        );
-
-      if (ratingError) throw ratingError;
+      await apiClient.post('app-ratings', {
+        user_id: user.id,
+        rating,
+        updated_at: new Date().toISOString(),
+      });
 
       // Upsert testimonial if provided
       if (testimonial.trim().length >= 10) {
-        const { error: testError } = await supabase
-          .from('app_testimonials')
-          .upsert(
-            {
-              user_id: user.id,
-              content: testimonial.trim(),
-              rating,
-              is_approved: false, // reset approval on edit
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: 'user_id' }
-          );
-
-        if (testError) throw testError;
+        await apiClient.post('testimonials', {
+          user_id: user.id,
+          content: testimonial.trim(),
+          rating,
+          is_approved: false,
+          updated_at: new Date().toISOString(),
+        });
         toast.success('Thanks! Your rating and testimonial have been submitted for review.');
         setTestimonialStatus('pending');
       } else {

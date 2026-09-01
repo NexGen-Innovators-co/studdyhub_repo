@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '../../../integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { Document } from '../../../types/Document';
 import { DocumentFolder } from '../../../types/Folder';
 import { User } from '@supabase/supabase-js';
@@ -50,29 +51,15 @@ export const useDocumentOperations = ({
       }
 
       if (targetFolderId) {
-        const { error } = await supabase.from('document_folder_items').insert([
-          { folder_id: targetFolderId, document_id: documentId }
-        ]);
-        if (error) {
-          // console.error(error); 
-           // If it's a unique constraint violation, it might be fine, but we are supposed to set the relationship newly.
-           // However based on the original code logic which was replacing:
-           // Actually original logic was a bit simplified in the snippet I saw. 
-           // It constructed `newFolderIds` and then called update on `documents` table?
-           // Wait, let's check the original code from previous turn.
+        try {
+          await apiClient.post('document_folder_items', { folder_id: targetFolderId, document_id: documentId });
+        } catch {
+          // Ignore unique constraint violations — may already exist
         }
       }
 
       // The previous code also did this:
-      const { error: updateError } = await supabase
-        .from('documents')
-        .update({ folder_ids: newFolderIds })
-        .eq('id', documentId)
-        .eq('user_id', user.id);
-        
-      if (updateError) {
-         throw updateError;
-      }
+      await apiClient.patch(`documents/${documentId}`, { folder_ids: newFolderIds });
 
       const updatedDocument = { ...document, folder_ids: newFolderIds };
       onDocumentUpdated(updatedDocument);
@@ -100,15 +87,7 @@ export const useDocumentOperations = ({
 
       const newFolderIds = [...currentFolderIds, folderId];
 
-      const { error } = await supabase
-        .from('documents')
-        .update({ folder_ids: newFolderIds })
-        .eq('id', documentId)
-        .eq('user_id', user.id);
-
-      if (error) {
-        throw error;
-      }
+      await apiClient.patch(`documents/${documentId}`, { folder_ids: newFolderIds });
 
       const updatedDocument = { ...document, folder_ids: newFolderIds };
       onDocumentUpdated(updatedDocument);
@@ -129,15 +108,7 @@ export const useDocumentOperations = ({
       const currentFolderIds = document.folder_ids || [];
       const newFolderIds = currentFolderIds.filter(id => id !== folderId);
 
-      const { error } = await supabase
-        .from('documents')
-        .update({ folder_ids: newFolderIds })
-        .eq('id', documentId)
-        .eq('user_id', user.id);
-
-      if (error) {
-        throw error;
-      }
+      await apiClient.patch(`documents/${documentId}`, { folder_ids: newFolderIds });
 
       const updatedDocument = { ...document, folder_ids: newFolderIds };
       onDocumentUpdated(updatedDocument);
@@ -174,15 +145,7 @@ export const useDocumentOperations = ({
         return;
       }
 
-      const { error } = await supabase
-        .from('document_folders')
-        .update({ parent_folder_id: targetParentId })
-        .eq('id', folderId)
-        .eq('user_id', user.id);
-
-      if (error) {
-        throw error;
-      }
+      await apiClient.patch(`document_folders/${folderId}`, { parent_folder_id: targetParentId });
 
       await loadDataIfNeeded('folders', true);
       toast.success('Folder moved successfully!');
@@ -236,14 +199,7 @@ export const useDocumentOperations = ({
               toast.warning('Could not derive storage path from file URL. File will not be deleted from storage.');
             }
 
-            const { error: dbError } = await supabase
-              .from('documents')
-              .delete()
-              .eq('id', documentId);
-
-            if (dbError) {
-              throw new Error(`Database deletion failed: ${dbError.message}`);
-            }
+            await apiClient.delete(`documents/${documentId}`);
 
             toast.success('Document deleted successfully!');
             onDocumentDeleted(documentId);

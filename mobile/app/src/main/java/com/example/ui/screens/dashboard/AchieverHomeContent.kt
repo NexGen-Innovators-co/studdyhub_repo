@@ -57,7 +57,7 @@ fun AchieverHomeContent(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // 1. WASSCE Countdown & Daily Sprint Card
-            item {
+            item(key = "wassce_countdown") {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth(),
@@ -186,7 +186,7 @@ fun AchieverHomeContent(
         }
 
         // 2. High-Yield Practice Shortcuts
-        item {
+        item(key = "high_yield_practice") {
             Row(
                 modifier = Modifier
                     .fillMaxWidth(),
@@ -257,7 +257,7 @@ fun AchieverHomeContent(
         }
 
         // 3. Quick Action Launchers (Timed Mock & Error Bank)
-        item {
+        item(key = "exam_tools") {
             Column(
                 modifier = Modifier
             ) {
@@ -340,7 +340,7 @@ fun AchieverHomeContent(
         // 4. Continue Revision Note (if available)
         val lastNote = state.lastActiveNote ?: state.notes.firstOrNull()
         if (lastNote != null) {
-            item {
+            item(key = "revision_note_${lastNote.id}") {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -375,7 +375,7 @@ fun AchieverHomeContent(
             }
         }
 
-        item {
+        item(key = "bottom_spacer") {
             Spacer(modifier = Modifier.height(80.dp))
         }
     }

@@ -15,6 +15,7 @@ import {
   Captions, Pencil, Check
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiClient } from '@/services/apiClient';
 import { supabase } from '../../../integrations/supabase/client';
 import { getBlobDuration } from '@/modules/podcasts/services/podcastLiveService';
 import { transcribeLivePodcast } from '@/modules/podcasts/services/transcriptionService';
@@ -76,12 +77,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
     }
     setIsSavingTitle(true);
     try {
-      const { error } = await supabase
-        .from('ai_podcasts')
-        .update({ title: editTitle.trim() })
-        .eq('id', podcast.id)
-        .eq('user_id', currentUser!.id);
-      if (error) throw error;
+      await apiClient.patch(`ai-podcasts/${podcast.id}`, { title: editTitle.trim() });
       // Update local podcast object
       (podcast as any).title = editTitle.trim();
       toast.success('Title updated');
@@ -463,7 +459,7 @@ export const PodcastPanel = forwardRef<PodcastPanelRef, PodcastPanelProps>(({
       const blob = await resp.blob();
       const seconds = await getBlobDuration(blob);
       const minutes = Math.ceil((seconds || 0) / 60);
-      try { await supabase.from('ai_podcasts').update({ duration_minutes: minutes }).eq('id', podcast.id); } catch (_e) {}
+      try { await apiClient.patch(`ai-podcasts/${podcast.id}`, { duration_minutes: minutes }); } catch (_e) {}
       setFullAudioDuration(seconds || 0);
       setDuration(seconds || 0);
       if (!podcast.script) {

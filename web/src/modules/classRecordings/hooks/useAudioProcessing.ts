@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '../../../integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { generateId } from '../utils/helpers';
 import { ClassRecording } from '../../../types/Class';
 import { FunctionsHttpError } from '@supabase/supabase-js';
@@ -79,15 +80,11 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
 
       // Apply update if we found a valid duration
       if (newDuration > 0) {
-        const { error } = await supabase
-          .from('class_recordings')
-          .update({ duration: newDuration })
-          .eq('id', recording.id);
-        
-        if (!error) {
-             // Update local state immediately
-             onUpdateRecording({ ...recording, duration: newDuration });
-             // toast.success(`Fixed duration for "${recording.title}"`);
+        try {
+          await apiClient.patch(`class_recordings/${recording.id}`, { duration: newDuration });
+          onUpdateRecording({ ...recording, duration: newDuration });
+        } catch {
+          // Best-effort duration fix — ignore errors
         }
       }
     }
@@ -190,19 +187,15 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
 
       toast.loading('Saving results...', { id: toastId });
 
-      const { error: updateDocError } = await supabase
-        .from('documents')
-        .update({
+      try {
+        await apiClient.patch(`documents/${documentId}`, {
           content_extracted: transcript,
           processing_status: 'completed',
           processing_error: null,
           updated_at: new Date().toISOString(),
-        })
-        .eq('id', documentId)
-        .eq('user_id', user.id);
-
-      if (updateDocError) {
-        throw new Error(`Failed to update document: ${updateDocError.message}`);
+        });
+      } catch (err: any) {
+        throw new Error(`Failed to update document: ${err.message}`);
       }
 
       // Prepare update object for recording
@@ -214,37 +207,33 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
 
       // Update duration if returned from processor and current duration is 0 or null
       if (duration) {
-        const { data: currentRecording } = await supabase
-          .from('class_recordings')
-          .select('duration')
-          .eq('document_id', documentId)
-          .eq('user_id', user.id)
-          .single();
+        const recordingsResult = await apiClient.get('class_recordings', {
+          select: 'duration',
+          document_id: documentId,
+        });
+        const currentRecording = Array.isArray(recordingsResult) ? recordingsResult[0] : recordingsResult;
 
         if (currentRecording && (currentRecording.duration === 0 || currentRecording.duration === null)) {
           recordingUpdate.duration = duration;
         }
       }
 
-      const { error: updateRecordingError } = await supabase
-        .from('class_recordings')
-        .update(recordingUpdate)
-        .eq('document_id', documentId)
-        .eq('user_id', user.id);
-
-      if (updateRecordingError) {
-        //console.error('Error updating class recording with processed audio:', updateRecordingError);
-        throw new Error(`Failed to update recording: ${updateRecordingError.message}`);
+      try {
+        await apiClient.patch('class_recordings', {
+          ...recordingUpdate,
+          document_id: documentId,
+        });
+      } catch (err: any) {
+        throw new Error(`Failed to update recording: ${err.message}`);
       }
 
-      const { data: fetchedRecording, error: fetchError } = await supabase
-        .from('class_recordings')
-        .select('*')
-        .eq('document_id', documentId)
-        .eq('user_id', user.id)
-        .single();
+      const fetchedRecordings = await apiClient.get('class_recordings', {
+        select: '*',
+        document_id: documentId,
+      });
+      const fetchedRecording = Array.isArray(fetchedRecordings) ? fetchedRecordings[0] : fetchedRecordings;
 
-      if (fetchedRecording && !fetchError) {
+      if (fetchedRecording) {
         const updatedRecording: ClassRecording = {
           id: fetchedRecording.id,
           title: fetchedRecording.title,
@@ -261,8 +250,6 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
           document_id: fetchedRecording.document_id
         };
         onUpdateRecording(updatedRecording);
-      } else {
-        //console.error('Failed to refetch updated recording after processing:', fetchError?.message);
       }
 
       setTranslatedContent(null);
@@ -286,15 +273,11 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
 
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        await supabase
-          .from('documents')
-          .update({
-            processing_status: 'failed',
-            processing_error: errorMessage,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', documentId)
-          .eq('user_id', user.id);
+        apiClient.patch(`documents/${documentId}`, {
+          processing_status: 'failed',
+          processing_error: errorMessage,
+          updated_at: new Date().toISOString(),
+        }).catch(() => {});
       }
     } finally {
       setIsProcessingAudio(false);
@@ -316,20 +299,21 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
     }
 
     // CHECK SUBSCRIPTION LIMITS BEFORE ATTEMPTING UPLOAD
-    const { data: subscriptionData } = await supabase
-      .from('subscriptions')
-      .select('subscription_tier')
-      .eq('user_id', user.id)
-      .single();
+    const subscriptionsResult = await apiClient.get('subscriptions', {
+      select: 'subscription_tier',
+      user_id: user.id,
+    });
+    const subscriptionData = Array.isArray(subscriptionsResult) ? subscriptionsResult[0] : subscriptionsResult;
     
     const tier = subscriptionData?.subscription_tier || 'free';
     const maxRecordings = tier === 'free' ? 50 : tier === 'scholar' ? 500 : Infinity;
     
     // Count existing recordings
-    const { count: recordingCount } = await supabase
-      .from('class_recordings')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id);
+    const recordingsList = await apiClient.get('class_recordings', {
+      select: 'id',
+      user_id: user.id,
+    });
+    const recordingCount = Array.isArray(recordingsList) ? recordingsList.length : 0;
     
     if (recordingCount && recordingCount >= maxRecordings) {
       toast.error(`Recording limit reached (${maxRecordings}). You have created ${recordingCount} recordings.`, {
@@ -384,9 +368,8 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
       }
 
       const newDocumentId = generateId();
-      const { error: docError } = await supabase
-        .from('documents')
-        .insert({
+      try {
+        await apiClient.post('documents', {
           id: newDocumentId,
           user_id: user.id,
           title: `Uploaded Audio: ${file.name}`,
@@ -399,8 +382,9 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
           processing_status: 'processing',
           processing_error: null,
         });
-
-      if (docError) throw new Error(docError?.message || 'Failed to create document record for audio.');
+      } catch (err: any) {
+        throw new Error(err.message || 'Failed to create document record for audio.');
+      }
 
       // Calculate duration for uploaded audio
       const audioUrl = URL.createObjectURL(file);
@@ -428,9 +412,8 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
         document_id: newDocumentId
       };
 
-      const { error: insertRecordingError } = await supabase
-        .from('class_recordings')
-        .insert({
+      try {
+        await apiClient.post('class_recordings', {
           id: newRecording.id,
           user_id: newRecording.userId,
           title: newRecording.title,
@@ -443,8 +426,9 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
           created_at: newRecording.created_at,
           document_id: newRecording.document_id
         });
-
-      if (insertRecordingError) throw new Error(`Failed to save recording to database: ${insertRecordingError.message}`);
+      } catch (err: any) {
+        throw new Error(`Failed to save recording to database: ${err.message}`);
+      }
 
       setUploadedAudioDetails({ url: urlData.publicUrl, type: file.type, name: file.name, document_id: newDocumentId });
       setIsAudioOptionsVisible(true);
@@ -601,9 +585,8 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
       }
 
       const newDocumentId = generateId();
-      const { error: docError } = await supabase
-        .from('documents')
-        .insert({
+      try {
+        await apiClient.post('documents', {
           id: newDocumentId,
           user_id: user.id,
           title: `Class Recording: ${title}`,
@@ -618,8 +601,9 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
           updated_at: new Date().toISOString(),
           processing_error: null,
         });
-
-      if (docError) throw new Error(docError?.message || 'Failed to create document record for audio.');
+      } catch (err: any) {
+        throw new Error(err.message || 'Failed to create document record for audio.');
+      }
 
       const newRecording: ClassRecording = {
         id: generateId(),
@@ -637,9 +621,8 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
         document_id: newDocumentId
       };
 
-      const { error: insertError } = await supabase
-        .from('class_recordings')
-        .insert({
+      try {
+        await apiClient.post('class_recordings', {
           id: newRecording.id,
           user_id: newRecording.userId,
           title: newRecording.title,
@@ -652,8 +635,9 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
           created_at: newRecording.created_at,
           document_id: newRecording.document_id
         });
-
-      if (insertError) throw new Error(`Failed to save recording to database: ${insertError.message}`);
+      } catch (err: any) {
+        throw new Error(`Failed to save recording to database: ${err.message}`);
+      }
 
       onAddRecording(newRecording);
       void logUserActivity(user.id, 'recording', 25);
@@ -664,12 +648,12 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
         const result = await processLargeAudioInChunks(audioBlob, user.id, newDocumentId, toastId, 'en');
 
         // Save results to DB
-        await supabase.from('documents').update({
+        await apiClient.patch(`documents/${newDocumentId}`, {
           content_extracted: result.transcript,
           processing_status: 'completed',
           processing_error: null,
           updated_at: new Date().toISOString(),
-        }).eq('id', newDocumentId).eq('user_id', user.id);
+        });
 
         const recUpdate: any = {
           transcript: result.transcript,
@@ -679,12 +663,17 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
         if (result.duration && (!newRecording.duration || newRecording.duration === 0)) {
           recUpdate.duration = result.duration;
         }
-        await supabase.from('class_recordings').update(recUpdate)
-          .eq('document_id', newDocumentId).eq('user_id', user.id);
+        await apiClient.patch('class_recordings', {
+          ...recUpdate,
+          document_id: newDocumentId,
+        });
 
         // Refresh local state
-        const { data: fetchedRec } = await supabase.from('class_recordings')
-          .select('*').eq('document_id', newDocumentId).eq('user_id', user.id).single();
+        const fetchedRecResult = await apiClient.get('class_recordings', {
+          select: '*',
+          document_id: newDocumentId,
+        });
+        const fetchedRec = Array.isArray(fetchedRecResult) ? fetchedRecResult[0] : fetchedRecResult;
         if (fetchedRec) {
           onUpdateRecording({
             id: fetchedRec.id, title: fetchedRec.title, subject: fetchedRec.subject,
@@ -729,11 +718,11 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
     const toastId = toast.loading('Initiating full note generation from audio...');
 
     try {
-      const { data: documentData, error: docFetchError } = await supabase
-        .from('documents')
-        .select('content_extracted')
-        .eq('id', recording.document_id)
-        .single();
+      const documentResult = await apiClient.get('documents', {
+        select: 'content_extracted',
+        id: recording.document_id,
+      });
+      const documentData = Array.isArray(documentResult) ? documentResult[0] : documentResult;
 
       const contentToUse = documentData?.content_extracted || '';
 

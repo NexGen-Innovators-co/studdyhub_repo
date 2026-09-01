@@ -53,6 +53,9 @@ export function getFriendlyActionLabel(actionType: string, params: any): string 
     if (actionType === 'ENGAGE_SOCIAL') return 'Social engagement';
     if (actionType === 'WEB_SEARCH') return `Searching web for "${params?.query || 'topic'}"`;
     if (actionType === 'FETCH_WEB_RESOURCE') return `Importing web resource`;
+    if (actionType === 'GENERATE_QUIZ') return `Generating AI quiz`;
+    if (actionType === 'GENERATE_FLASHCARDS') return `Generating flashcards from note`;
+    if (actionType === 'GENERATE_PODCAST') return `Generating podcast`;
     return actionType;
 }
 
@@ -169,6 +172,20 @@ export async function runAction(actionsService: any, userId: string, sessionId: 
             const url = String(params.url || params.link || '').trim();
             const title = params.title || '';
             return await actionsService.fetchAndSaveWebResource(userId, { url, title });
+        }
+
+        if (actionType === 'GENERATE_QUIZ') {
+            return await actionsService.generateQuizViaEdge(userId, params);
+        }
+
+        if (actionType === 'GENERATE_FLASHCARDS') {
+            const noteTitle = params.noteTitle || params.note_title || '';
+            const count = params.count || 5;
+            return await actionsService.createFlashcardsFromNote(userId, noteTitle, count);
+        }
+
+        if (actionType === 'GENERATE_PODCAST') {
+            return await actionsService.generatePodcastViaEdge(userId, params);
         }
 
         return { success: false, error: `Unknown action type: ${actionType}` };

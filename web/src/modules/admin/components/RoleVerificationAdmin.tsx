@@ -3,6 +3,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { useAuth } from '@/hooks/useAuth';
 import { logAdminActivity } from '@/modules/admin/utils/adminActivityLogger';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/modules/ui/components/table';
@@ -96,40 +97,31 @@ const RoleVerificationAdmin: React.FC = () => {
   const fetchRequests = useCallback(async () => {
     setIsLoading(true);
     try {
-      let query = supabase
-        .from('role_verification_requests')
-        .select('*')
-        .order('created_at', { ascending: false });
-
+      let params: Record<string, any> = {};
       if (filter !== 'all') {
-        query = query.eq('status', filter);
+        params.status = filter;
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
+      const data = await apiClient.get('role-verification-requests', params);
 
       // Fetch profile info for each request
       const userIds = [...new Set((data || []).map((r: any) => r.user_id))];
       let profileMap: Record<string, any> = {};
 
       if (userIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, full_name, avatar_url')
-          .in('id', userIds);
+        const profiles = await apiClient.get('profiles');
 
-        if (profiles) {
-          profileMap = Object.fromEntries(profiles.map((p: any) => [p.id, p]));
+        if (Array.isArray(profiles)) {
+          const filtered = profiles.filter((p: any) => userIds.includes(p.id));
+          profileMap = Object.fromEntries(filtered.map((p: any) => [p.id, p]));
         }
 
         // Also try to get emails from auth (admin might have access via RLS)
-        const { data: socialUsers } = await supabase
-          .from('social_users')
-          .select('id, display_name')
-          .in('id', userIds);
+        const socialUsers = await apiClient.get('social-users');
 
-        if (socialUsers) {
-          for (const su of socialUsers) {
+        if (Array.isArray(socialUsers)) {
+          const filtered = socialUsers.filter((su: any) => userIds.includes(su.id));
+          for (const su of filtered) {
             if (profileMap[su.id]) {
               profileMap[su.id].display_name = su.display_name;
             }
@@ -156,11 +148,9 @@ const RoleVerificationAdmin: React.FC = () => {
   // Fetch stats
   const fetchStats = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('role_verification_requests')
-        .select('status');
+      const data = await apiClient.get('role-verification-requests');
 
-      if (!error && data) {
+      if (Array.isArray(data)) {
         const s = { pending: 0, approved: 0, rejected: 0, total: data.length };
         for (const r of data) {
           if (r.status === 'pending') s.pending++;
@@ -186,43 +176,38 @@ const RoleVerificationAdmin: React.FC = () => {
 
     try {
       // Try RPC first (atomic, handles both tables)
-      const { error: rpcError } = await supabase.rpc('approve_role_request', {
+      await apiClient.rpc('approve_role_request', {
         _request_id: selectedRequest.id,
         _admin_id: user.id,
         _review_notes: reviewNotes || null,
       });
-
-      if (rpcError) {
-        console.warn('RPC approve_role_request failed, falling back to direct updates:', rpcError.message);
-        // Fallback: update both tables directly
-        const { error: reqErr } = await supabase
-          .from('role_verification_requests')
-          .update({
+    } catch (_rpcError: any) {
+      console.warn('RPC approve_role_request failed, falling back to direct updates:', _rpcError.message);
+      // Fallback: update both tables directly
+      try {
+        await apiClient.patch(`role-verification-requests/${selectedRequest.id}`, {
             status: 'approved',
             reviewed_by: user.id,
             reviewed_at: new Date().toISOString(),
             review_notes: reviewNotes || null,
             updated_at: new Date().toISOString(),
-          })
-          .eq('id', selectedRequest.id);
+          });
+      } catch (reqErr: any) {
+        throw reqErr;
+      }
 
-        if (reqErr) throw reqErr;
-
-        const { error: profErr } = await supabase
-          .from('profiles')
-          .update({
+      try {
+        await apiClient.patch(`profiles/${selectedRequest.user_id}`, {
             user_role: selectedRequest.requested_role,
             role_verification_status: 'verified',
             role_verified_at: new Date().toISOString(),
             role_verified_by: user.id,
             role_rejection_reason: null,
-          } as any)
-          .eq('id', selectedRequest.user_id);
-
-        if (profErr) {
-          console.warn('Profile update failed (may need admin RLS policy):', profErr.message);
-        }
+          } as any);
+      } catch (profErr: any) {
+        console.warn('Profile update failed (may need admin RLS policy):', profErr.message);
       }
+    }
 
       toast.success(`Approved ${selectedRequest.profile?.full_name || 'user'} as ${ROLE_LABELS[selectedRequest.requested_role] || selectedRequest.requested_role}`);
 
@@ -259,44 +244,39 @@ const RoleVerificationAdmin: React.FC = () => {
 
     try {
       // Try RPC first (atomic, handles both tables)
-      const { error: rpcError } = await supabase.rpc('reject_role_request', {
+      await apiClient.rpc('reject_role_request', {
         _request_id: selectedRequest.id,
         _admin_id: user.id,
         _reason: reviewNotes,
         _review_notes: reviewNotes,
       });
-
-      if (rpcError) {
-        console.warn('RPC reject_role_request failed, falling back to direct updates:', rpcError.message);
-        // Fallback: update both tables directly
-        const { error: reqErr } = await supabase
-          .from('role_verification_requests')
-          .update({
+    } catch (_rpcError: any) {
+      console.warn('RPC reject_role_request failed, falling back to direct updates:', _rpcError.message);
+      // Fallback: update both tables directly
+      try {
+        await apiClient.patch(`role-verification-requests/${selectedRequest.id}`, {
             status: 'rejected',
             reviewed_by: user.id,
             reviewed_at: new Date().toISOString(),
             review_notes: reviewNotes,
             updated_at: new Date().toISOString(),
-          })
-          .eq('id', selectedRequest.id);
+          });
+      } catch (reqErr: any) {
+        throw reqErr;
+      }
 
-        if (reqErr) throw reqErr;
-
-        const { error: profErr } = await supabase
-          .from('profiles')
-          .update({
+      try {
+        await apiClient.patch(`profiles/${selectedRequest.user_id}`, {
             user_role: 'student',
             role_verification_status: 'rejected',
             role_verified_at: null,
             role_verified_by: user.id,
             role_rejection_reason: reviewNotes,
-          } as any)
-          .eq('id', selectedRequest.user_id);
-
-        if (profErr) {
-          console.warn('Profile update failed (may need admin RLS policy):', profErr.message);
-        }
+          } as any);
+      } catch (profErr: any) {
+        console.warn('Profile update failed (may need admin RLS policy):', profErr.message);
       }
+    }
 
       toast.success(`Rejected verification request from ${selectedRequest.profile?.full_name || 'user'}`);
 

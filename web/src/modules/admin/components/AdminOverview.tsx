@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../../../integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../ui/components/card';
 import {
   Users,
@@ -70,48 +70,41 @@ const AdminOverview = ({ onNavigate }: { onNavigate?: (tab: string) => void }) =
         socialReportsCount,
         newUsersToday
       ] = await Promise.all([
-        supabase.from('profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('profiles').select('*', { count: 'exact', head: true })
-          .lt('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
-        supabase.from('social_users').select('*', { count: 'exact', head: true })
-          .gte('last_login_at', todayMidnight),
-        supabase.from('social_users').select('*', { count: 'exact', head: true })
-          .gte('last_login_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
-        supabase.from('social_users').select('*', { count: 'exact', head: true })
-          .gte('last_login_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
-        supabase.from('social_posts').select('*', { count: 'exact', head: true }),
-        supabase.from('social_comments').select('*', { count: 'exact', head: true }),
-        supabase.from('social_groups').select('*', { count: 'exact', head: true }),
-        supabase.from('notes').select('*', { count: 'exact', head: true }),
-        supabase.from('documents').select('*', { count: 'exact', head: true }),
-        supabase.from('content_moderation_queue').select('*', { count: 'exact', head: true })
-          .eq('status', 'pending'),
-        supabase.from('social_reports').select('*', { count: 'exact', head: true })
-          .eq('status', 'pending'),
-        supabase.from('profiles').select('*', { count: 'exact', head: true })
-          .gte('created_at', todayMidnight)
+        apiClient.get('profiles', { count: 'true' }),
+        apiClient.get('profiles', { count: 'true', created_at__lt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() }),
+        apiClient.get('social_users', { count: 'true', last_login_at__gte: todayMidnight }),
+        apiClient.get('social_users', { count: 'true', last_login_at__gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() }),
+        apiClient.get('social_users', { count: 'true', last_login_at__gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() }),
+        apiClient.get('social_posts', { count: 'true' }),
+        apiClient.get('social_comments', { count: 'true' }),
+        apiClient.get('social_groups', { count: 'true' }),
+        apiClient.get('notes', { count: 'true' }),
+        apiClient.get('documents', { count: 'true' }),
+        apiClient.get('content_moderation_queue', { count: 'true', status: 'pending' }),
+        apiClient.get('social_reports', { count: 'true', status: 'pending' }),
+        apiClient.get('profiles', { count: 'true', created_at__gte: todayMidnight })
       ]);
 
-      const totalUsers = usersCount.count || 0;
-      const totalUsersYesterday = usersCountYesterday.count || 0;
+      const totalUsers = (usersCount as any).meta?.total || 0;
+      const totalUsersYesterday = (usersCountYesterday as any).meta?.total || 0;
       const userGrowth = totalUsersYesterday > 0
         ? ((totalUsers - totalUsersYesterday) / totalUsersYesterday) * 100
         : 0;
 
       setStats({
         totalUsers,
-        activeUsersToday: activeUsersToday.count || 0,
-        activeUsers7d: activeUsers7d.count || 0,
-        activeUsers30d: activeUsers30d.count || 0,
-        totalPosts: postsCount.count || 0,
-        totalComments: commentsCount.count || 0,
-        totalGroups: groupsCount.count || 0,
-        totalNotes: notesCount.count || 0,
-        totalDocuments: documentsCount.count || 0,
-        pendingReports: (reportsCount.count || 0) + (socialReportsCount.count || 0),
-        newUsersToday: newUsersToday.count || 0,
+        activeUsersToday: (activeUsersToday as any).meta?.total || 0,
+        activeUsers7d: (activeUsers7d as any).meta?.total || 0,
+        activeUsers30d: (activeUsers30d as any).meta?.total || 0,
+        totalPosts: (postsCount as any).meta?.total || 0,
+        totalComments: (commentsCount as any).meta?.total || 0,
+        totalGroups: (groupsCount as any).meta?.total || 0,
+        totalNotes: (notesCount as any).meta?.total || 0,
+        totalDocuments: (documentsCount as any).meta?.total || 0,
+        pendingReports: ((reportsCount as any).meta?.total || 0) + ((socialReportsCount as any).meta?.total || 0),
+        newUsersToday: (newUsersToday as any).meta?.total || 0,
         userGrowth,
-        engagementRate: totalUsers > 0 ? ((activeUsers7d.count || 0) / totalUsers) * 100 : 0,
+        engagementRate: totalUsers > 0 ? ((activeUsers7d as any).meta?.total || 0) / totalUsers * 100 : 0,
       });
     } catch (error) {
 
@@ -130,29 +123,24 @@ const AdminOverview = ({ onNavigate }: { onNavigate?: (tab: string) => void }) =
       const [usersInRange, activeUsersInRange, postsInRange, commentsInRange, notesInRange,
         totalPostsCount, totalCommentsCount, totalNotesCount, totalDocsCount, totalGroupsCount, totalPodcastsCount, totalChatSessionsCount
       ] = await Promise.all([
-        supabase.from('profiles').select('created_at').gte('created_at', startISO).order('created_at'),
-        supabase.from('social_users').select('id, last_login_at').gte('last_login_at', startISO).order('last_login_at'),
-        supabase.from('social_posts').select('created_at')
-          .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
-        supabase.from('social_comments').select('created_at')
-          .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
-        supabase.from('notes').select('created_at')
-          .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
-        // Content distribution counts (fetched independently so they don't depend on stats state)
-        supabase.from('social_posts').select('*', { count: 'exact', head: true }),
-        supabase.from('social_comments').select('*', { count: 'exact', head: true }),
-        supabase.from('notes').select('*', { count: 'exact', head: true }),
-        supabase.from('documents').select('*', { count: 'exact', head: true }),
-        supabase.from('social_groups').select('*', { count: 'exact', head: true }),
-        supabase.from('ai_podcasts').select('id', { count: 'exact', head: true }),
-        supabase.from('chat_sessions').select('*', { count: 'exact', head: true }),
+        apiClient.get('profiles', { select: 'created_at', created_at__gte: startISO, order: 'created_at' }),
+        apiClient.get('social_users', { select: 'id,last_login_at', last_login_at__gte: startISO, order: 'last_login_at' }),
+        apiClient.get('social_posts', { select: 'created_at', created_at__gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() }),
+        apiClient.get('social_comments', { select: 'created_at', created_at__gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() }),
+        apiClient.get('notes', { select: 'created_at', created_at__gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() }),
+        apiClient.get('social_posts', { count: 'true' }),
+        apiClient.get('social_comments', { count: 'true' }),
+        apiClient.get('notes', { count: 'true' }),
+        apiClient.get('documents', { count: 'true' }),
+        apiClient.get('social_groups', { count: 'true' }),
+        apiClient.get('ai_podcasts', { count: 'true' }),
+        apiClient.get('chat_sessions', { count: 'true' }),
       ]);
 
-      // Also get total users before the range for cumulative count
-      const { count: usersBeforeRange } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .lt('created_at', startISO);
+      const { count: usersBeforeRange } = await apiClient.get('profiles', {
+        count: 'true',
+        created_at__lt: startISO,
+      }) as any;
 
       // Build user growth data by grouping on client side
       const usersByDate: Record<string, number> = {};
@@ -185,13 +173,13 @@ const AdminOverview = ({ onNavigate }: { onNavigate?: (tab: string) => void }) =
 
       // Content distribution from direct counts (not dependent on stats state)
       const contentDistribution = [
-        { name: 'Posts', value: totalPostsCount.count || 0 },
-        { name: 'Comments', value: totalCommentsCount.count || 0 },
-        { name: 'Notes', value: totalNotesCount.count || 0 },
-        { name: 'Documents', value: totalDocsCount.count || 0 },
-        { name: 'Groups', value: totalGroupsCount.count || 0 },
-        { name: 'Podcasts', value: totalPodcastsCount.count || 0 },
-        { name: 'AI Chats', value: totalChatSessionsCount.count || 0 },
+        { name: 'Posts', value: (totalPostsCount as any).meta?.total || 0 },
+        { name: 'Comments', value: (totalCommentsCount as any).meta?.total || 0 },
+        { name: 'Notes', value: (totalNotesCount as any).meta?.total || 0 },
+        { name: 'Documents', value: (totalDocsCount as any).meta?.total || 0 },
+        { name: 'Groups', value: (totalGroupsCount as any).meta?.total || 0 },
+        { name: 'Podcasts', value: (totalPodcastsCount as any).meta?.total || 0 },
+        { name: 'AI Chats', value: (totalChatSessionsCount as any).meta?.total || 0 },
       ].filter(item => item.value > 0);
 
       // Activity trend (last 7 days) - group fetched data by day

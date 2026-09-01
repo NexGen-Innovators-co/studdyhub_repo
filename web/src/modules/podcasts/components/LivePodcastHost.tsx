@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useWebRTC } from '@/modules/podcasts/hooks/useWebRTC';
 import { useChunkedRecording } from '@/modules/classRecordings/hooks/useChunkedRecording';
+import { apiClient } from '@/services/apiClient';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -103,12 +104,8 @@ const LivePodcastHost: React.FC<LivePodcastHostProps> = ({ podcastId, onEndStrea
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     const fetchMetrics = async () => {
-      const { data, error } = await supabase
-        .from('podcast_listeners')
-        .select('user_id', { count: 'exact', head: true })
-        .eq('podcast_id', podcastId)
-        .eq('is_active', true);
-      if (!error) setLiveViewers(data?.length || 0);
+      const data = await apiClient.get('podcast-listeners', { podcast_id: podcastId, is_active: 'true' });
+      setLiveViewers(Array.isArray(data) ? data.length : 0);
     };
     fetchMetrics();
     interval = setInterval(fetchMetrics, 5000);
@@ -366,17 +363,16 @@ const LivePodcastHost: React.FC<LivePodcastHostProps> = ({ podcastId, onEndStrea
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { toast.error('Not authenticated'); return; }
       // Fetch podcast title for a meaningful note title
-      const { data: podcast } = await supabase.from('ai_podcasts').select('title').eq('id', podcastId).single();
+      const podcast = await apiClient.get(`ai-podcasts/${podcastId}`);
       const title = `Live Podcast Notes — ${podcast?.title || 'Untitled'}`;
       const content = keyPoints.map((p, i) => `${i + 1}. ${p}`).join('\n');
-      const { error } = await supabase.from('notes').insert({
+      await apiClient.post('notes', {
         user_id: user.id,
         title,
         content,
         category: 'podcast',
         tags: ['live-podcast', 'auto-saved'],
       });
-      if (error) throw error;
       toast.success('Notes saved to My Notes');
     } catch (e) {
       toast.error('Failed to save notes');
@@ -402,7 +398,7 @@ const LivePodcastHost: React.FC<LivePodcastHostProps> = ({ podcastId, onEndStrea
         await saveNotesToUserNotes();
       }
       
-      await supabase.from('ai_podcasts').update({ is_live: false }).eq('id', podcastId);
+      await apiClient.patch(`ai-podcasts/${podcastId}`, { is_live: false });
       toast.success('Stream ended successfully');
       onEndStream();
     } catch (e) {
@@ -489,8 +485,7 @@ const LivePodcastHost: React.FC<LivePodcastHostProps> = ({ podcastId, onEndStrea
 
   const promoteToCohost = async (userId: string) => {
     try {
-      await supabase.from('podcast_members').update({ role: 'cohost' })
-        .eq('podcast_id', podcastId).eq('user_id', userId);
+      await apiClient.patch(`podcast-members/${podcastId}`, { role: 'cohost', user_id: userId });
       toast.success('User promoted to co-host');
     } catch (e) {
       toast.error('Failed to promote user');
@@ -522,16 +517,9 @@ const LivePodcastHost: React.FC<LivePodcastHostProps> = ({ podcastId, onEndStrea
     setNotesDraft('');
     // Persist notes to ai_podcasts.visual_assets.notes
     try {
-      const { data: podcast } = await supabase
-        .from('ai_podcasts')
-        .select('visual_assets')
-        .eq('id', podcastId)
-        .single();
+      const podcast = await apiClient.get(`ai-podcasts/${podcastId}`);
       const existingAssets = (podcast?.visual_assets as Record<string, any>) || {};
-      await supabase
-        .from('ai_podcasts')
-        .update({ visual_assets: { ...existingAssets, notes: newPoints } })
-        .eq('id', podcastId);
+      await apiClient.patch(`ai-podcasts/${podcastId}`, { visual_assets: { ...existingAssets, notes: newPoints } });
       toast.success('Key point saved');
     } catch (e) {
       toast.success('Key point added locally');
@@ -541,11 +529,7 @@ const LivePodcastHost: React.FC<LivePodcastHostProps> = ({ podcastId, onEndStrea
   // Load existing notes from DB on mount
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
-        .from('ai_podcasts')
-        .select('visual_assets')
-        .eq('id', podcastId)
-        .single();
+      const data = await apiClient.get(`ai-podcasts/${podcastId}`);
       const existing = (data?.visual_assets as Record<string, any>);
       if (existing?.notes && Array.isArray(existing.notes)) {
         setKeyPoints(existing.notes);

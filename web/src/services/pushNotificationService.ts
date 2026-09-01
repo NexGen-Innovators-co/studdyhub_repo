@@ -1,5 +1,5 @@
 // Push Notification Service
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import type { PushNotificationPayload, NotificationSubscription } from '@/types';
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
@@ -78,7 +78,7 @@ class PushNotificationService {
 
         // Save or update subscription via RPC to avoid RLS issues when an endpoint is
         // already associated with a different user (e.g. switching accounts in the same browser).
-        const { data, error } = await supabase.rpc('upsert_notification_subscription', {
+        const data = await apiClient.rpc('upsert_notification_subscription', {
           p_endpoint: subscriptionData.endpoint!,
           p_p256dh: subscriptionData.keys!.p256dh,
           p_auth: subscriptionData.keys!.auth,
@@ -86,7 +86,6 @@ class PushNotificationService {
           p_browser: this.getBrowserInfo()
         });
 
-        if (error) throw error;
         return data as NotificationSubscription;
       }
 
@@ -99,7 +98,7 @@ class PushNotificationService {
       // Save subscription to database using RPC to handle ownership changes safely
       const subscriptionData = this.subscription.toJSON();
 
-      const { data, error } = await supabase
+      const data = await apiClient
         .rpc('upsert_notification_subscription', {
           p_endpoint: subscriptionData.endpoint!,
           p_p256dh: subscriptionData.keys!.p256dh,
@@ -107,8 +106,6 @@ class PushNotificationService {
           p_device_type: this.getDeviceType(),
           p_browser: this.getBrowserInfo()
         });
-
-      if (error) throw error;
 
       return data;
     } catch (error) {
@@ -127,10 +124,7 @@ class PushNotificationService {
       }
 
       // Remove from database
-      await supabase
-        .from('notification_subscriptions')
-        .delete()
-        .eq('user_id', userId);
+      await apiClient.delete('notification-subscriptions', { user_id: userId });
 
       this.subscription = null;
       return true;
@@ -194,9 +188,7 @@ class PushNotificationService {
     scheduledFor: Date
   ): Promise<boolean> {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .insert({
+      await apiClient.post('notifications', {
           user_id: userId,
           type: 'schedule_reminder',
           title: payload.title,
@@ -205,8 +197,6 @@ class PushNotificationService {
           scheduled_for: scheduledFor.toISOString(),
           read: false
         });
-
-      if (error) throw error;
       return true;
     } catch (error) {
       // console.error('Failed to schedule notification:', error);

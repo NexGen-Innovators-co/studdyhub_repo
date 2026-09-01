@@ -394,19 +394,29 @@ export const TOOL_SCHEMAS = [
   {
     name: "create_quiz",
     description:
-      "Create a quiz for the user from provided or generated questions. Use for 'make me a quiz on photosynthesis'. Questions must be complete, ready-to-play question objects.",
+      "Generate an AI-powered quiz on a topic. The system handles question generation, validation, and storage. Use for 'make me a quiz on photosynthesis'.",
     parameters: {
       type: "object",
       properties: {
         title: {
           type: "string",
-          description: "Quiz title",
+          description: "Quiz title or topic (e.g. 'Photosynthesis', 'Chapter 5 Review')",
         },
-        questions: {
+        num_questions: {
+          type: "integer",
+          description: "Number of questions to generate (1-20, default 8)",
+          default: 8,
+        },
+        difficulty: {
+          type: "string",
+          enum: ["easy", "auto", "hard"],
+          description: "Difficulty level (auto = adaptive based on user performance)",
+          default: "auto",
+        },
+        topics: {
           type: "array",
-          items: { type: "object" },
-          description:
-            "Array of question objects as stored in the quizzes.questions JSONB column (each with its prompt/choices/answer fields)",
+          items: { type: "string" },
+          description: "Specific subtopics to focus on (optional, defaults to the title)",
         },
         source_type: {
           type: "string",
@@ -419,7 +429,7 @@ export const TOOL_SCHEMAS = [
           description: "Optional linked class/course id",
         },
       },
-      required: ["title", "questions"],
+      required: ["title"],
     },
   },
   {
@@ -473,7 +483,7 @@ export const TOOL_SCHEMAS = [
   {
     name: "create_flashcards_from_note",
     description:
-      "Auto-generate revision flashcards from the content of one of the user's existing notes (by title). Use for 'make flashcards from my Photosynthesis note'.",
+      "AI-generate revision flashcards from the content of one of the user's existing notes (by title). Uses the generate-flashcards edge function for high-quality, educationally-aligned flashcards. Use for 'make flashcards from my Photosynthesis note'.",
     parameters: {
       type: "object",
       properties: {
@@ -483,7 +493,7 @@ export const TOOL_SCHEMAS = [
         },
         count: {
           type: "integer",
-          description: "How many flashcards to generate",
+          description: "How many flashcards to generate (1-50)",
           default: 5,
         },
       },

@@ -11,8 +11,11 @@ const MODEL_CHAIN = [
   'gemini-3.6-flash',
   'gemini-3.5-flash',
   'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-3.1-pro-preview',
   'gemini-2.5-flash',
-  'gemini-2.5-pro'
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
 ];
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -30,7 +33,7 @@ STUDENT PROFILE:
 - Preferred Explanation Style: ${userProfile.learning_preferences?.explanation_style || 'balanced'}
 - Difficulty Level: ${difficulty}
 ${userProfile.personal_context ? `\nPERSONAL CONTEXT (use to tailor flashcard language and examples):\n${userProfile.personal_context}` : ''}
-${educationBlock ? `\n${educationBlock}\nAlign flashcard content, terminology, and examples to this student's curriculum and exam requirements.\n` : ''}
+${educationBlock ? `\n${educationBlock}\nAlign flashcard content, terminology, and examples to this student's curriculum and exam requirements.\nCRITICAL DIFFICULTY RULES: The STUDENT CONTEXT above tells you the student's grade/year/level. You MUST match flashcard difficulty to that level. Primary/Basic/JHS students need simple vocabulary and foundational concepts only. SHS students can handle intermediate-advanced content. University students get advanced material. If NO student context is provided, use the difficulty level above.\n` : ''}
 
 FLASHCARD CREATION GUIDELINES:
 

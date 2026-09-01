@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,7 +54,7 @@ fun ScholarHomeContent(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // 1. Workspace Status Card
-        item {
+        item(key = "workspace_status") {
             Card(
                 modifier = Modifier
                     .fillMaxWidth(),
@@ -112,7 +113,7 @@ fun ScholarHomeContent(
         }
 
         // 2. Primary Research Actions (Flat / Slate style)
-        item {
+        item(key = "research_actions") {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -139,10 +140,10 @@ fun ScholarHomeContent(
                 )
                 ScholarActionTile(
                     title = "Lecture Audio",
-                    subtitle = "Record & Synthesize",
+                    subtitle = "Coming Soon",
                     icon = Icons.Default.Mic,
                     modifier = Modifier.weight(1f),
-                    onClick = { onNavigate(Screen.AIPodcast.route) }
+                    onClick = { android.widget.Toast.makeText(LocalContext.current, "AI Podcast coming soon!", android.widget.Toast.LENGTH_SHORT).show() }
                 )
                 ScholarActionTile(
                     title = "AI Research",
@@ -156,7 +157,7 @@ fun ScholarHomeContent(
         }
 
         // 3. Continue Last Active Document / Note
-        item {
+        item(key = "active_documents") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -229,7 +230,7 @@ fun ScholarHomeContent(
         }
 
         // 4. Academic Timetable & Schedule
-        item {
+        item(key = "lecture_timetable") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -308,7 +309,7 @@ fun ScholarHomeContent(
             }
         }
 
-        item {
+        item(key = "bottom_spacer") {
             // Clearance so the last card isn't hidden behind the floating pill nav.
             Spacer(modifier = Modifier.height(80.dp))
         }

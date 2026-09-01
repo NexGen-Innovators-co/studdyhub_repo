@@ -282,20 +282,21 @@ class SearchViewModel(
             )
         }
 
-        podcasts.forEach { p ->
-            items += SearchResultItem(
-                id = p.id,
-                title = p.title.ifBlank { "AI podcast" },
-                subtitle = listOf(p.style.replaceFirstChar { it.uppercase() }, if (p.durationMinutes > 0) "${p.durationMinutes} min" else null)
-                    .filterNotNull()
-                    .joinToString(" • ").ifBlank { "AI podcast" },
-                category = "Podcasts",
-                route = Screen.AIPodcast.route,
-                icon = Icons.Default.Headphones,
-                timestamp = p.createdAt,
-                haystack = listOf(p.title, p.script, p.style).joinToString(" ")
-            )
-        }
+        // Podcasts disabled (Coming Soon)
+        // podcasts.forEach { p ->
+        //     items += SearchResultItem(
+        //         id = p.id,
+        //         title = p.title.ifBlank { "AI podcast" },
+        //         subtitle = listOf(p.style.replaceFirstChar { it.uppercase() }, if (p.durationMinutes > 0) "${p.durationMinutes} min" else null)
+        //             .filterNotNull()
+        //             .joinToString(" • ").ifBlank { "AI podcast" },
+        //         category = "Podcasts",
+        //         route = Screen.AIPodcast.route,
+        //         icon = Icons.Default.Headphones,
+        //         timestamp = p.createdAt,
+        //         haystack = listOf(p.title, p.script, p.style).joinToString(" ")
+        //     )
+        // }
 
         courses.forEach { c ->
             items += SearchResultItem(

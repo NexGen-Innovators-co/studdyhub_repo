@@ -54,6 +54,7 @@ import com.example.ui.components.studdyPressScale
 import com.example.ui.theme.EmeraldAccent
 import com.example.ui.theme.IndigoPrimary
 import com.example.ui.theme.VioletTertiary
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -569,6 +570,103 @@ fun AuthScreen(
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
+
+                // Google Sign-In button (only on Sign In tab)
+                if (uiState.selectedTab == 0) {
+                    val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
+                    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+                    var isGoogleLoading by remember { mutableStateOf(false) }
+
+                    // Activity result launcher for native Google account picker
+                    val googleSignInLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                        contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+                    ) { result ->
+                        android.util.Log.d("AuthScreen", "Google Sign-In result: resultCode=${result.resultCode}, hasData=${result.data != null}")
+                        // Log ALL extras from the result intent for debugging
+                        result.data?.extras?.let { bundle ->
+                            for (key in bundle.keySet()) {
+                                android.util.Log.d("AuthScreen", "  extra[$key] = ${bundle.get(key)}")
+                            }
+                        }
+                        if (result.data != null) {
+                            // Always try to process the data — handleSignInResult extracts the
+                            // actual error from ApiException when resultCode is RESULT_CANCELED.
+                            coroutineScope.launch {
+                                com.example.data.remote.GoogleSignInNative.handleSignInResult(
+                                    data = result.data,
+                                    supabaseUrl = com.example.data.remote.BackendApiService.getSupabaseUrl(),
+                                    onSuccess = { accessToken, refreshToken ->
+                                        android.util.Log.d("AuthScreen", "Google token exchange success, calling handleGoogleSignInResult")
+                                        isGoogleLoading = false
+                                        viewModel.handleGoogleSignInResult(accessToken, refreshToken)
+                                    },
+                                    onError = { error ->
+                                        android.util.Log.e("AuthScreen", "Google Sign-In error: $error")
+                                        isGoogleLoading = false
+                                    }
+                                )
+                            }
+                        } else {
+                            android.util.Log.w("AuthScreen", "Google Sign-In: no data returned, resultCode=${result.resultCode}")
+                            isGoogleLoading = false
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            if (isGoogleLoading || activity == null) return@OutlinedButton
+                            isGoogleLoading = true
+                            // Launch native Google account picker via activity result launcher
+                            coroutineScope.launch {
+                                val intent = com.example.data.remote.GoogleSignInNative.getSignInIntent(activity)
+                                if (intent != null) {
+                                    googleSignInLauncher.launch(intent)
+                                } else {
+                                    // Failed to get intent — fall back to Chrome Custom Tab
+                                    android.util.Log.w("AuthScreen", "Could not get Google Sign-In intent, falling back to Custom Tab")
+                                    com.example.data.remote.GoogleSignInHelper.launchSignIn(
+                                        activity,
+                                        com.example.data.remote.BackendApiService.getSupabaseUrl()
+                                    )
+                                }
+                            }
+                        },
+                        enabled = !uiState.isLoading && !isGoogleLoading,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        border = ButtonDefaults.outlinedButtonBorder(enabled = !uiState.isLoading && !isGoogleLoading)
+                    ) {
+                        if (isGoogleLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isGoogleLoading) "Signing in..." else "Continue with Google",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,

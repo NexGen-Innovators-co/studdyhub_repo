@@ -235,6 +235,17 @@ serve(async (req: Request) => {
     // ════════════════════════════════════════════════════════════════════════
     // 4. DOCUMENT FOLDERS — /v1/document-folders, /v1/document-folders/:id
     // ════════════════════════════════════════════════════════════════════════
+    if (resource === "document-folder-items") {
+      if (method === "POST") {
+        const body = await req.json().catch(() => ({}));
+        const items = Array.isArray(body) ? body : [body];
+        const rows = items.map((item: any) => ({ id: crypto.randomUUID(), ...item }));
+        const { data, error } = await supabase.from("document_folder_items").insert(rows).select();
+        if (error) throw error;
+        return ok(data, 201);
+      }
+    }
+
     if (resource === "document-folders") {
       if (method === "GET" && !subId) {
         const { data, error } = await supabase.from("document_folders").select("*").eq("user_id", userId).order("created_at", { ascending: true });
@@ -533,24 +544,23 @@ serve(async (req: Request) => {
           const body = await req.json().catch(() => ({}));
           await ensureSocialUser();
           const payload = { post_id: body.post_id, user_id: userId };
-          // Idempotent like. On databases where the (post_id,user_id) unique
-          // constraint hasn't been applied yet, ON CONFLICT fails with 42P10 —
-          // fall back to check-then-insert so liking works either way.
+          // Check-then-insert: avoids ON CONFLICT issues with PostgREST schema cache.
           let data: any = null;
-          const up = await supabase.from("social_likes").upsert(payload, { onConflict: "post_id,user_id" }).select();
-          if (up.error && (up.error as any).code === "42P10") {
-            const existing = await supabase.from("social_likes").select("*").eq("post_id", payload.post_id).eq("user_id", userId).maybeSingle();
-            if (existing.data) {
-              data = existing.data;
+          const existing = await supabase.from("social_likes").select("*").eq("post_id", payload.post_id).eq("user_id", userId).maybeSingle();
+          if (existing.data) {
+            data = existing.data;
+          } else {
+            const ins = await supabase.from("social_likes").insert(payload).select();
+            if (ins.error) {
+              if ((ins.error as any).code === "23505") {
+                // Race condition duplicate — treat as success
+                data = existing.data;
+              } else {
+                throw ins.error;
+              }
             } else {
-              const ins = await supabase.from("social_likes").insert(payload).select();
-              if (ins.error) throw ins.error;
               data = ins.data?.[0] ?? null;
             }
-          } else if (up.error) {
-            throw up.error;
-          } else {
-            data = up.data?.[0] ?? null;
           }
           return ok(data || body, 201);
         }
@@ -808,7 +818,11 @@ serve(async (req: Request) => {
     // ════════════════════════════════════════════════════════════════════════
     if (resource === "class-recordings") {
       if (method === "GET" && !subId) {
-        const { data, error } = await supabase.from("class_recordings").select("*").eq("user_id", userId).order("created_at", { ascending: false });
+        let query = supabase.from("class_recordings").select("*").eq("user_id", userId);
+        const documentId = getParam(url, "document_id");
+        if (documentId) query = query.eq("document_id", documentId);
+        query = applyOrder(query, url, "created_at.desc");
+        const { data, error } = await query;
         if (error) throw error;
         return ok(data);
       }
@@ -817,6 +831,12 @@ serve(async (req: Request) => {
         const { data, error } = await supabase.from("class_recordings").upsert({ ...body, user_id: userId }, { onConflict: "id" }).select();
         if (error) throw error;
         return ok(data?.[0] || body, 201);
+      }
+      if ((method === "PATCH" || method === "PUT") && subId) {
+        const body = await req.json().catch(() => ({}));
+        const { data, error } = await supabase.from("class_recordings").update(body).eq("id", subId).eq("user_id", userId).select().single();
+        if (error) throw error;
+        return ok(data);
       }
       if (method === "DELETE" && subId) {
         const { error } = await supabase.from("class_recordings").delete().eq("id", subId).eq("user_id", userId);
@@ -1084,7 +1104,83 @@ serve(async (req: Request) => {
     // ════════════════════════════════════════════════════════════════════════
     if (resource === "app-ratings") {
       if (method === "GET") {
+        const targetUserId = getParam(url, "user_id");
+        if (targetUserId) {
+          const { data, error } = await supabase.from("app_ratings").select("rating").eq("user_id", targetUserId).maybeSingle();
+          if (error) throw error;
+          return ok(data || null);
+        }
         const { data, error } = await supabase.rpc("get_app_rating_stats");
+        if (error) throw error;
+        return ok(data);
+      }
+      if (method === "POST") {
+        const body = await req.json().catch(() => ({}));
+        const { data, error } = await supabase.from("app_ratings").upsert({ ...body, user_id: userId }, { onConflict: "user_id" }).select().single();
+        if (error) throw error;
+        return ok(data, 201);
+      }
+    }
+
+    if (resource === "app-testimonials") {
+      if (method === "GET") {
+        const targetUserId = getParam(url, "user_id", userId);
+        const { data, error } = await supabase.from("app_testimonials").select("content, rating, is_approved").eq("user_id", targetUserId).maybeSingle();
+        if (error) throw error;
+        return ok(data || null);
+      }
+      if (method === "POST") {
+        const body = await req.json().catch(() => ({}));
+        const { data, error } = await supabase.from("app_testimonials").upsert({ ...body, user_id: userId }, { onConflict: "user_id" }).select().single();
+        if (error) throw error;
+        return ok(data, 201);
+      }
+    }
+
+    if (resource === "user-learning-goals") {
+      if (method === "GET") {
+        let query = supabase.from("user_learning_goals").select("*").eq("user_id", userId);
+        query = applyOrder(query, url, "created_at.desc");
+        const { data, error } = await query;
+        if (error) throw error;
+        return ok(data);
+      }
+      if (method === "POST") {
+        const body = await req.json().catch(() => ({}));
+        const goal = { id: body.id || crypto.randomUUID(), user_id: userId, ...body };
+        const { data, error } = await supabase.from("user_learning_goals").insert(goal).select().single();
+        if (error) throw error;
+        return ok(data, 201);
+      }
+      if ((method === "PATCH" || method === "PUT") && subId) {
+        const body = await req.json().catch(() => ({}));
+        const { data, error } = await supabase.from("user_learning_goals").update(body).eq("id", subId).eq("user_id", userId).select().single();
+        if (error) throw error;
+        return ok(data);
+      }
+      if (method === "DELETE" && subId) {
+        const { error } = await supabase.from("user_learning_goals").delete().eq("id", subId).eq("user_id", userId);
+        if (error) throw error;
+        return ok({ deleted: true, id: subId });
+      }
+    }
+
+    if (resource === "achievements") {
+      if (method === "GET") {
+        const { data, error } = await supabase.from("achievements").select("*, badges(*)").eq("user_id", userId).order("earned_at", { ascending: false });
+        if (error) throw error;
+        return ok(data);
+      }
+    }
+
+    if (resource === "institutions") {
+      if (method === "GET") {
+        let query = supabase.from("institutions").select("id,name");
+        const isActive = getParam(url, "is_active");
+        if (isActive === "true") query = query.eq("is_active", true);
+        const type = getParam(url, "type");
+        if (type) query = query.eq("type", type);
+        const { data, error } = await query;
         if (error) throw error;
         return ok(data);
       }

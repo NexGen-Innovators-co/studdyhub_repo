@@ -37,17 +37,26 @@ fun SpeedRaceScreen(
 
     var showExitDialog by remember { mutableStateOf(false) }
     var matchTimeoutReached by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Show error feedback when battle creation/join fails
+    LaunchedEffect(uiState.userMessage) {
+        uiState.userMessage?.let { msg ->
+            snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Long)
+            viewModel.clearUserMessage()
+        }
+    }
 
     // Intercept hardware back button to show confirmation
     BackHandler(enabled = true) {
         showExitDialog = true
     }
 
-    // 15-second matchmaking watchdog timer
+    // 30-second matchmaking watchdog timer (quiz generation + opponent search)
     LaunchedEffect(uiState.isLoading, session) {
         if (uiState.isLoading && session == null) {
             matchTimeoutReached = false
-            delay(15000)
+            delay(30000)
             if (uiState.isLoading && session == null) {
                 matchTimeoutReached = true
             }
@@ -76,7 +85,8 @@ fun SpeedRaceScreen(
                     }
                 }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -137,7 +147,7 @@ fun SpeedRaceScreen(
                                         gameTitle = "Solo Speed Quest",
                                         isPublicLobby = false,
                                         difficulty = "easy",
-                                        timeLimitSec = 15,
+                                        timeLimitSec = 60,
                                         questionCount = 5
                                     )
                                 },

@@ -5,14 +5,17 @@ import { logSystemError } from '../_shared/errorLogger.ts';
 import { callOpenRouterFallback } from '../_shared/openRouterFallback.ts';
 
 // Model fallback chain for quota/rate-limit resilience
-// Ordered by what the project's key can actually serve: the 2.x models currently return
-// 429 (free-tier daily quota exhausted), so leading with them exhausted the chain before
-// reaching a usable model and the whole generation failed.
+// Model fallback chain for quota/rate-limit resilience
 const MODEL_CHAIN = [
-  'gemini-3.5-flash',
+  'gemini-3.7-flash',
   'gemini-3.6-flash',
   'gemini-3.5-flash',
-  'gemini-3.6-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-3.1-pro-preview',
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
 ];
 
 async function callGeminiWithModelChain(prompt: string, apiKey: string): Promise<string> {

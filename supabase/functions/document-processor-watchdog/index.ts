@@ -177,12 +177,91 @@ serve(async (req) => {
       }
     }
 
+    // ── 3. Retry idle 'failed' docs ─────────────────────────────────────────
+    // Documents stuck in 'failed' (e.g. Gemini 429 on all models). Re-invoke
+    // document-processor so its model-fallback chain gets another shot.
+    const { data: failedDocs, error: failedErr } = await supabase
+      .from('documents')
+      .select('id, user_id, file_url, file_type, continuation_attempt')
+      .eq('processing_status', 'failed')
+      .lt('updated_at', stuckCutoff)
+      .not('file_url', 'is', null)
+      .neq('file_url', '');
+
+    if (failedErr) throw new Error(`Failed query failed: ${failedErr.message}`);
+
+    const results2 = { failed_retried: 0, ...results };
+
+    for (const doc of (failedDocs ?? [])) {
+      const attempts = doc.continuation_attempt ?? 0;
+
+      try {
+        if (attempts >= MAX_AUTO_ATTEMPTS) {
+          // Already retried too many times — leave as 'failed'
+          console.log(`[watchdog] Skipping failed doc ${doc.id} — max attempts (${attempts}) reached`);
+          continue;
+        }
+
+        // Flip to 'processing' so the edge function knows to re-extract
+        await supabase.from('documents').update({
+          processing_status:  'processing',
+          continuation_attempt: attempts + 1,
+          updated_at:         new Date().toISOString(),
+        }).eq('id', doc.id);
+
+        // Re-invoke document-processor with service role
+        const dpUrl = `${supabaseUrl}/functions/v1/document-processor`;
+        const resp = await fetch(dpUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'apikey':        supabaseServiceKey,
+          },
+          body: JSON.stringify({
+            userId:   doc.user_id,
+            documentId: doc.id,
+            files: [{
+              id:         doc.id,
+              file_url:   doc.file_url,
+              file_type:  doc.file_type,
+            }],
+          }),
+        });
+
+        if (resp.ok) {
+          results2.failed_retried++;
+          console.log(`[watchdog] Retried failed doc ${doc.id} (attempt ${attempts + 1}/${MAX_AUTO_ATTEMPTS})`);
+        } else {
+          const errBody = await resp.json().catch(() => ({}));
+          console.error(`[watchdog] document-processor returned ${resp.status} for failed doc ${doc.id}:`, errBody);
+          // Flip back to 'failed' so we don't keep trying
+          await supabase.from('documents').update({
+            processing_status: 'failed',
+            processing_error:  `Watchdog retry failed: HTTP ${resp.status}`,
+            updated_at:        new Date().toISOString(),
+          }).eq('id', doc.id);
+          results2.errors++;
+        }
+      } catch (err: any) {
+        results2.errors++;
+        console.error(`[watchdog] Error retrying failed doc ${doc.id}:`, err.message);
+        // Flip back to 'failed' on network error too
+        await supabase.from('documents').update({
+          processing_status: 'failed',
+          processing_error:  `Watchdog retry error: ${err.message}`,
+          updated_at:        new Date().toISOString(),
+        }).eq('id', doc.id);
+      }
+    }
+
     const summary = {
       success:          true,
       processingTimeMs: Date.now() - startTime,
       stuckDocsFound:   (stuckDocs ?? []).length,
       partialDocsFound: (partialDocs ?? []).length,
-      ...results,
+      failedDocsFound:  (failedDocs ?? []).length,
+      ...results2,
     };
 
     console.log('[watchdog] Run complete:', summary);

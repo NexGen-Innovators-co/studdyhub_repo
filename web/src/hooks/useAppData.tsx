@@ -5,6 +5,7 @@ import { ClassRecording, ScheduleItem, Message, Quiz, QuizQuestion } from '../ty
 import { Document, UserProfile } from '../types/Document';
 import { DocumentFolder, FolderTreeNode } from '../types/Folder';
 import { supabase } from '../integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { toast } from 'sonner';
 import { clearCache } from '@/utils/socialCache';
 import { offlineStorage, STORES } from '@/utils/offlineStorage';
@@ -231,6 +232,17 @@ const withTimeout = async <T,>(
       data: null,
       error: error instanceof Error ? error : new Error(String(error))
     };
+  }
+};
+
+// Wrapper that adapts apiClient promises (which throw on error) to the
+// { data, error } shape expected by withTimeout / withRetry.
+const apiQuery = async <T,>(promise: Promise<T>): Promise<{ data: T | null; error: any }> => {
+  try {
+    const data = await promise;
+    return { data, error: null };
+  } catch (error) {
+    return { data: null, error };
   }
 };
 
@@ -670,12 +682,13 @@ export const useAppData = (authUser?: any) => {
 
       const { data, error } = await withRetry<any[]>(
         () => withTimeout<any[]>(
-          supabase
-            .from('documents')
-            .select(`*, folder_items:document_folder_items!document_folder_items_document_id_fkey (folder_id)`, { count: 'exact' })
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false })
-            .range(offset, offset + limit - 1),
+          apiQuery(apiClient.get('documents', {
+            select: '*, folder_items:document_folder_items!document_folder_items_document_id_fkey (folder_id)',
+            user_id: `eq.${userId}`,
+            order: 'created_at.desc',
+            offset: String(offset),
+            limit: String(limit),
+          }, API_TIMEOUT)),
           API_TIMEOUT,
           'Failed to load documents'
         ),
@@ -822,12 +835,13 @@ export const useAppData = (authUser?: any) => {
 
       const { data, error } = await withRetry<ClassRecording[]>(
         () => withTimeout<ClassRecording[]>(
-          supabase
-            .from('class_recordings')
-            .select('*', { count: 'exact' })
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false })
-            .range(offset, offset + limit - 1),
+          apiQuery(apiClient.get('class_recordings', {
+            select: '*',
+            user_id: `eq.${userId}`,
+            order: 'created_at.desc',
+            offset: String(offset),
+            limit: String(limit),
+          }, API_TIMEOUT)),
           API_TIMEOUT,
           'Failed to load recordings'
         ),
@@ -954,13 +968,14 @@ export const useAppData = (authUser?: any) => {
       const now = new Date().toISOString();
 
       const { data, error } = await withTimeout<SupabaseScheduleItem[]>(
-        supabase
-          .from('schedule_items')
-          .select('id,title,subject,start_time,end_time,type,description,location,color,user_id,created_at,calendar_event_id,is_recurring,recurrence_pattern,recurrence_interval,recurrence_days,recurrence_end_date', { count: 'exact' })
-          .eq('user_id', userId)
-          .or(`and(is_recurring.eq.true,or(recurrence_end_date.is.null,recurrence_end_date.gte.${now})),end_time.gte.${now}`)
-          .order('start_time', { ascending: true })
-          .range(offset, offset + limit - 1),
+        apiQuery(apiClient.get('schedule_items', {
+          select: 'id,title,subject,start_time,end_time,type,description,location,color,user_id,created_at,calendar_event_id,is_recurring,recurrence_pattern,recurrence_interval,recurrence_days,recurrence_end_date',
+          user_id: `eq.${userId}`,
+          or: `and(is_recurring.eq.true,or(recurrence_end_date.is.null,recurrence_end_date.gte.${now})),end_time.gte.${now}`,
+          order: 'start_time.asc',
+          offset: String(offset),
+          limit: String(limit),
+        }, API_TIMEOUT)),
         API_TIMEOUT,
         'Failed to load schedule items'
       );
@@ -1088,12 +1103,13 @@ export const useAppData = (authUser?: any) => {
 
       const { data, error } = await withRetry<Quiz[]>(
         () => withTimeout<Quiz[]>(
-          supabase
-            .from('quizzes')
-            .select('*', { count: 'exact' })
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false })
-            .range(offset, offset + limit - 1),
+          apiQuery(apiClient.get('quizzes', {
+            select: '*',
+            user_id: `eq.${userId}`,
+            order: 'created_at.desc',
+            offset: String(offset),
+            limit: String(limit),
+          }, API_TIMEOUT)),
           API_TIMEOUT,
           'Failed to load quizzes'
         ),
@@ -1266,11 +1282,11 @@ export const useAppData = (authUser?: any) => {
 
       const { data, error } = await withRetry<DocumentFolder[]>(
         () => withTimeout<DocumentFolder[]>(
-          supabase
-            .from('document_folders')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false }),
+          apiQuery(apiClient.get('document_folders', {
+            select: '*',
+            user_id: `eq.${userId}`,
+            order: 'created_at.desc',
+          }, API_TIMEOUT)),
           API_TIMEOUT,
           'Failed to load folders'
         ),
@@ -1387,11 +1403,7 @@ export const useAppData = (authUser?: any) => {
 
       const { data: profileData, error: profileError, retriesUsed } = await withRetry<any>(
         () => withTimeout<UserProfile>(
-          supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .maybeSingle(),
+          apiQuery(apiClient.get('v1/profile', undefined, API_TIMEOUT)),
           API_TIMEOUT,
           'Failed to load user profile'
         ),
@@ -1499,7 +1511,7 @@ export const useAppData = (authUser?: any) => {
             };
 
             await withTimeout(
-              supabase.from('profiles').upsert(profileInsertPayload, { onConflict: 'id' }),
+              apiQuery(apiClient.post('v1/profiles', profileInsertPayload, API_TIMEOUT)),
               API_TIMEOUT,
               'Failed to create profile'
             );
@@ -1654,12 +1666,13 @@ export const useAppData = (authUser?: any) => {
 
       const { data, error } = await withRetry<any[]>(
         () => withTimeout<any[]>(
-          supabase
-            .from('notes')
-            .select('*', { count: 'exact' })
-            .eq('user_id', userId)
-            .order('updated_at', { ascending: false })
-            .range(offset, offset + limit - 1),
+          apiQuery(apiClient.get('notes', {
+            select: '*',
+            user_id: `eq.${userId}`,
+            order: 'updated_at.desc',
+            offset: String(offset),
+            limit: String(limit),
+          }, API_TIMEOUT)),
           API_TIMEOUT,
           'Failed to load notes'
         ),
@@ -1954,11 +1967,11 @@ export const useAppData = (authUser?: any) => {
     try {
       // OPTIMIZATION: Batch load with minimal fields
       const { data, error } = await withTimeout<any[]>(
-        supabase
-          .from('documents')
-          .select('id, title, file_name, content_extracted, type, processing_status')
-          .eq('user_id', userId)
-          .in('id', ids),
+        apiQuery(apiClient.get('documents', {
+          select: 'id, title, file_name, content_extracted, type, processing_status',
+          user_id: `eq.${userId}`,
+          id: `in.(${ids.join(',')})`,
+        }, 5000)),
         5000, // Shorter timeout for background loads
         'Failed to load specific documents'
       );
@@ -2013,12 +2026,12 @@ export const useAppData = (authUser?: any) => {
 
     try {
       const { data, error } = await withTimeout<any[]>(
-        supabase
-          .from('notes')
-          .select('*')
-          .eq('user_id', userId)
-          .in('id', ids)
-          .order('updated_at', { ascending: false }),
+        apiQuery(apiClient.get('notes', {
+          select: '*',
+          user_id: `eq.${userId}`,
+          id: `in.(${ids.join(',')})`,
+          order: 'updated_at.desc',
+        }, API_TIMEOUT)),
         API_TIMEOUT,
         'Failed to load specific notes'
       );
@@ -2112,7 +2125,7 @@ export const useAppData = (authUser?: any) => {
     try {
       const startTime = Date.now();
       const { error } = await withTimeout(
-        supabase.from('profiles').select('id').limit(1),
+        apiQuery(apiClient.get('v1/profile', { select: 'id', limit: '1' }, 5000)),
         5000,
         'Connection health check timeout'
       );
@@ -2172,13 +2185,15 @@ export const useAppData = (authUser?: any) => {
       const searchLower = searchQuery.toLowerCase();
 
       // Query notes table with search on title and content
-      const { data, error } = await supabase
-        .from('notes')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .or(`title.ilike.%${searchLower}%,content.ilike.%${searchLower}%`)
-        .order('updated_at', { ascending: false })
-        .limit(50);
+      const { data, error } = await apiQuery(
+        apiClient.get('notes', {
+          select: '*',
+          user_id: `eq.${currentUser.id}`,
+          or: `title.ilike.%${searchLower}%,content.ilike.%${searchLower}%`,
+          order: 'updated_at.desc',
+          limit: '50',
+        })
+      );
 
       if (error) {
         // console.error('Note search error:', error);

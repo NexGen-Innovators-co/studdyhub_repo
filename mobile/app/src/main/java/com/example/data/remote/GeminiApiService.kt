@@ -26,6 +26,7 @@ object GeminiApiService {
             Log.d(TAG, "Executing document extraction via backend document-processor for mimeType: $mimeType")
             val payload = JSONObject().apply {
                 put("userId", BackendApiService.currentUserId ?: "")
+                put("skipDbSave", true)
                 put("files", JSONArray().apply {
                     put(JSONObject().apply {
                         put("name", "document_${System.currentTimeMillis()}")

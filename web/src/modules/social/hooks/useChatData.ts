@@ -1,6 +1,7 @@
 // src/components/social/hooks/useChatData.ts
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../../../integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { toast } from 'sonner';
 import { ChatSessionWithDetails, ChatMessageWithDetails } from '../types/social';
 
@@ -74,14 +75,14 @@ export const useChatData = (currentUserId: string | null) => {
         let signedFileUrl: string | null = null;
 
         if (res.resource_type === 'note') {
-            // ✅ FIX: Use maybeSingle() to avoid 406 errors if note is deleted
-            const { data: note, error } = await supabase
-                .from('notes')
-                .select('id, title, content, category, tags, created_at, updated_at, ai_summary, document_id')
-                .eq('id', res.resource_id)
-                .maybeSingle();
+            let note: any = null;
+            try {
+                note = await apiClient.get(`notes/${res.resource_id}`);
+            } catch {
+                note = null;
+            }
 
-            if (error || !note) {
+            if (!note) {
                 return { ...res, error: 'Note not found or access denied' };
             }
 
@@ -89,11 +90,12 @@ export const useChatData = (currentUserId: string | null) => {
 
             // Only fetch associated document if note has one
             if (note.document_id) {
-                const { data: doc } = await supabase
-                    .from('documents')
-                    .select('id, title, file_name, file_type, file_size, file_url, content_extracted, processing_status')
-                    .eq('id', note.document_id)
-                    .maybeSingle();
+                let doc: any = null;
+                try {
+                    doc = await apiClient.get(`documents/${note.document_id}`);
+                } catch {
+                    doc = null;
+                }
 
                 if (doc?.file_url && !canDisplayDocumentInline(doc)) {
                     // ✅ FIX: Use robust path extraction
@@ -114,13 +116,14 @@ export const useChatData = (currentUserId: string | null) => {
             }
         }
         else if (res.resource_type === 'document') {
-            const { data: doc, error } = await supabase
-                .from('documents')
-                .select('id, title, file_name, file_type, file_size, file_url, content_extracted, processing_status')
-                .eq('id', res.resource_id)
-                .maybeSingle();
+            let doc: any = null;
+            try {
+                doc = await apiClient.get(`documents/${res.resource_id}`);
+            } catch {
+                doc = null;
+            }
 
-            if (error || !doc) {
+            if (!doc) {
                 return { ...res, error: 'Document not found or access denied' };
             }
 
@@ -143,13 +146,14 @@ export const useChatData = (currentUserId: string | null) => {
             fullResource.previewContent = doc.content_extracted || null;
         }
         else if (res.resource_type === 'class_recording') {
-            const { data: recording, error } = await supabase
-                .from('class_recordings')
-                .select('id, title, subject, audio_url, duration, date, summary, transcript')
-                .eq('id', res.resource_id)
-                .maybeSingle();
+            let recording: any = null;
+            try {
+                recording = await apiClient.get(`class-recordings/${res.resource_id}`);
+            } catch {
+                recording = null;
+            }
 
-            if (error || !recording) {
+            if (!recording) {
                 return { ...res, error: 'Recording not found or access denied' };
             }
 
@@ -179,18 +183,20 @@ export const useChatData = (currentUserId: string | null) => {
         pendingMessageIds.current.clear();
 
         try {
-            const { data: messages, error } = await supabase
-                .from('social_chat_messages')
-                .select('*, sender:social_users(*)')
-                .in('id', ids);
+            let messages: any[] = [];
+            try {
+                messages = await apiClient.get('social/chat-messages', { ids: ids.join(',') });
+            } catch {
+                messages = [];
+            }
 
-            if (error || !messages || messages.length === 0) return;
+            if (!messages || messages.length === 0) return;
 
             const messageIds = messages.map(m => m.id);
 
-            const [{ data: allMedia }, { data: allBasicResources }] = await Promise.all([
-                supabase.from('social_chat_message_media').select('*').in('message_id', messageIds),
-                supabase.from('social_chat_message_resources').select('*').in('message_id', messageIds),
+            const [allMedia, allBasicResources] = await Promise.all([
+                apiClient.get('social/chat-message-media', { message_id: messageIds.join(',') }).catch(() => []),
+                apiClient.get('social/chat-message-resources', { message_id: messageIds.join(',') }).catch(() => []),
             ]);
 
             const mediaByMsg = groupBy(allMedia || [], m => m.message_id);
@@ -281,11 +287,10 @@ export const useChatData = (currentUserId: string | null) => {
     const markSessionMessagesAsRead = async (sessionId: string) => {
         if (!currentUserId) return;
         try {
-            const { error } = await supabase.rpc('mark_session_messages_read', {
+            await apiClient.rpc('mark_session_messages_read', {
                 p_session_id: sessionId,
                 p_user_id: currentUserId,
             });
-            if (error) throw error;
 
             setChatSessions(prev =>
                 prev.map(s => (s.id === sessionId ? { ...s, unread_count: 0 } : s))
@@ -317,16 +322,11 @@ export const useChatData = (currentUserId: string | null) => {
 
     const editMessage = async (messageId: string, newContent: string): Promise<boolean> => {
         try {
-            const { error } = await supabase
-                .from('social_chat_messages')
-                .update({
-                    content: newContent.trim(),
-                    is_edited: true,
-                    updated_at: new Date().toISOString(),
-                })
-                .eq('id', messageId);
-
-            if (error) throw error;
+            await apiClient.patch(`social/chat-messages/${messageId}`, {
+                content: newContent.trim(),
+                is_edited: true,
+                updated_at: new Date().toISOString(),
+            });
 
             setActiveSessionMessages(prev =>
                 prev.map(m =>
@@ -519,17 +519,18 @@ export const useChatData = (currentUserId: string | null) => {
 
     const fetchFullMessage = async (messageId: string): Promise<ChatMessageWithDetails | null> => {
         try {
-            const { data: msg } = await supabase
-                .from('social_chat_messages')
-                .select('*, sender:social_users(*)')
-                .eq('id', messageId)
-                .single();
+            let msg: any = null;
+            try {
+                msg = await apiClient.get('social/chat-messages', { id: messageId });
+            } catch {
+                msg = null;
+            }
 
             if (!msg) return null;
 
-            const [{ data: media }, { data: resources }] = await Promise.all([
-                supabase.from('social_chat_message_media').select('*').eq('message_id', messageId),
-                supabase.from('social_chat_message_resources').select('*').eq('message_id', messageId),
+            const [media, resources] = await Promise.all([
+                apiClient.get('social/chat-message-media', { message_id: messageId }).catch(() => []),
+                apiClient.get('social/chat-message-resources', { message_id: messageId }).catch(() => []),
             ]);
 
             const enriched = await Promise.all((resources || []).map(enrichResource));

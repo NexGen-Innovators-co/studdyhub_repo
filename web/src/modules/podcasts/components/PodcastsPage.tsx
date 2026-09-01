@@ -34,6 +34,7 @@ import {
   Video,
   Lightbulb
 } from 'lucide-react';
+import { apiClient } from '@/services/apiClient';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { offlineStorage, STORES } from '@/utils/offlineStorage';
@@ -241,15 +242,8 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
     queryKey: ['my-podcast-count', currentUser?.id],
     queryFn: async () => {
       if (!currentUser?.id) return 0;
-      const { count, error } = await supabase
-        .from('ai_podcasts')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', currentUser.id);
-      if (error) {
-        //console.error('Error fetching podcast count:', error);
-        return 0;
-      }
-      return count || 0;
+      const data = await apiClient.get('ai-podcasts', { user_id: currentUser.id });
+      return Array.isArray(data) ? data.length : 0;
     },
     enabled: !!currentUser?.id
   });
@@ -268,12 +262,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
 
       if (error) throw error;
       if (data?.imageUrl) {
-        const { error: updateError } = await supabase
-          .from('ai_podcasts')
-          .update({ cover_image_url: data.imageUrl })
-          .eq('id', podcast.id);
-
-        if (updateError) throw updateError;
+        await apiClient.patch(`ai-podcasts/${podcast.id}`, { cover_image_url: data.imageUrl });
 
         queryClient.invalidateQueries({ queryKey: ['podcasts'] });
 
@@ -298,12 +287,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
     try {
       const newPublicState = !podcast.is_public;
 
-      const { error } = await supabase
-        .from('ai_podcasts')
-        .update({ is_public: newPublicState })
-        .eq('id', podcast.id);
-
-      if (error) throw error;
+      await apiClient.patch(`ai-podcasts/${podcast.id}`, { is_public: newPublicState });
 
       queryClient.invalidateQueries({ queryKey: ['podcasts'] });
 
@@ -395,33 +379,20 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
         return;
       }
 
-      const { data: existingListener, error: listenerError } = await supabase
-        .from('podcast_listeners')
-        .select('id')
-        .eq('podcast_id', podcastId)
-        .eq('user_id', currentUser.id)
-        .maybeSingle();
+      const existingListener = await apiClient.get('podcast-listeners', { podcast_id: podcastId, user_id: currentUser.id });
 
-      if (listenerError) {
-        return;
-      }
-
-      if (existingListener) {
+      if (existingListener && Array.isArray(existingListener) && existingListener.length > 0) {
         // Already in DB — nothing to do
         return;
       }
 
       // Add user as a listener in podcast_listeners table
-      const { error: insertError } = await supabase
-        .from('podcast_listeners')
-        .insert({ podcast_id: podcastId, user_id: currentUser.id });
-      if (insertError) {
-        return;
-      }
+      await apiClient.post('podcast-listeners', { podcast_id: podcastId, user_id: currentUser.id });
 
       // Increment the listen_count in ai_podcasts table
-      const { error: rpcError } = await supabase.rpc('increment_podcast_listen_count', { podcast_id: podcastId });
-      if (rpcError) {
+      try {
+        await apiClient.rpc('increment_podcast_listen_count', { podcast_id: podcastId });
+      } catch (rpcError) {
         // Don't fail silently - log the error but continue
         // console.warn('Failed to increment listen count:', rpcError);
       }
@@ -500,12 +471,7 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
         .from('podcasts')
         .getPublicUrl(filePath);
 
-      const { error: updateError } = await supabase
-        .from('ai_podcasts')
-        .update({ cover_image_url: publicUrl })
-        .eq('id', podcastId);
-
-      if (updateError) throw updateError;
+      await apiClient.patch(`ai-podcasts/${podcastId}`, { cover_image_url: publicUrl });
 
       queryClient.invalidateQueries({ queryKey: ['podcasts'] });
 
@@ -531,34 +497,7 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
     if (podcastId) {
       const fetchAndSelectPodcast = async () => {
         try {
-          const { data, error } = await supabase
-            .from('ai_podcasts')
-            .select(`
-              id,
-              user_id,
-              title,
-              sources,
-              script,
-              audio_segments,
-              duration_minutes,
-              style,
-              podcast_type,
-              status,
-              is_public,
-              is_live,
-              created_at,
-              updated_at,
-              cover_image_url,
-              description,
-              tags,
-              listen_count,
-              share_count,
-              visual_assets
-            `)
-            .eq('id', podcastId)
-            .single();
-
-          if (error) throw error;
+          const data = await apiClient.get(`ai-podcasts/${podcastId}`);
           if (data) {
             // Parse audio_segments
             let audioSegments = [];
@@ -587,11 +526,7 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
             }
 
             // Fetch user info
-            const { data: userData } = await supabase
-              .from('social_users')
-              .select('id, display_name, username, avatar_url')
-              .eq('id', data.user_id)
-              .single();
+            const userData = await apiClient.get('social-users', { id: data.user_id });
 
             // Calculate duration
             let totalDuration = data.duration_minutes || 0;
@@ -746,11 +681,8 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
 
   // Helper to get all member user IDs for a podcast
   const getPodcastMemberUserIds = async (podcastId: string): Promise<string[]> => {
-    const { data, error } = await supabase
-      .from('podcast_members')
-      .select('user_id')
-      .eq('podcast_id', podcastId);
-    if (error || !data) return [];
+    const data = await apiClient.get('podcast-members', { podcast_id: podcastId });
+    if (!Array.isArray(data)) return [];
     return data.map((m: any) => m.user_id);
   };
 
@@ -798,12 +730,7 @@ const incrementListenCount = useCallback(async (podcastId: string) => {
       }
 
       // Delete podcast from database
-      const { error } = await supabase
-        .from('ai_podcasts')
-        .delete()
-        .eq('id', podcastToDelete.id);
-
-      if (error) throw error;
+      await apiClient.delete(`ai-podcasts/${podcastToDelete.id}`);
 
       // Send notification to all podcast members
       const memberIds = await getPodcastMemberUserIds(podcastToDelete.id);

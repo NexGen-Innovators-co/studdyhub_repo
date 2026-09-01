@@ -1,3 +1,4 @@
+import { apiClient } from '@/services/apiClient';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface ContentModerationResult {
@@ -172,15 +173,13 @@ export async function appealModeration(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    const { error } = await supabase.from('moderation_appeals').insert({
+    await apiClient.post('moderation-appeals', {
       user_id: user.id,
       content_id: contentId,
       content_type: contentType,
       reason: reason,
       status: 'pending'
     });
-
-    if (error) throw error;
 
     return { success: true };
   } catch (error: any) {

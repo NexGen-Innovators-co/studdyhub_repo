@@ -10,10 +10,23 @@ object DocumentTextCleaner {
         "jpeg" to "image/jpeg",
         "webp" to "image/webp",
         "gif" to "image/gif",
+        "bmp" to "image/bmp",
+        "svg" to "image/svg+xml",
+        "tiff" to "image/tiff",
+        "tif" to "image/tiff",
+        "ico" to "image/ico",
+        "heic" to "image/heic",
+        "heif" to "image/heif",
         "txt" to "text/plain",
         "md" to "text/plain",
         "csv" to "text/plain",
-        "html" to "text/plain"
+        "html" to "text/plain",
+        "docx" to "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "doc" to "application/msword",
+        "pptx" to "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "ppt" to "application/vnd.ms-powerpoint",
+        "xlsx" to "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "xls" to "application/vnd.ms-excel"
     )
 
     /** Returns the Gemini-supported MIME type for a file name, or null when it needs conversion. */

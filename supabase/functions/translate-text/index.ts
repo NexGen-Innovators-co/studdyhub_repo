@@ -23,7 +23,7 @@ serve(async (req) => {
     }
     const prompt = `Translate the following study content into ${targetLanguage} cleanly. Preserve all formatting, bullet points, and structure. Output ONLY the translated text:\n\n${text.substring(0, 8000)}`;
     const systemInstruction = "You are an expert academic translator. Translate study content accurately while preserving formatting and educational meaning. Output ONLY the translated text.";
-    const models = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'];
+    const models = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
     let translated = text;
     for (const model of models) {
       try {

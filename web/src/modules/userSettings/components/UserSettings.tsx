@@ -34,6 +34,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Switch } from '../../ui/components/switch';
 import { Label } from '../../ui/components/label';
 import { supabase } from '../../../integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { toast } from 'sonner';
 import { useConfirmDialog } from '../../ui/components/confirm-dialog';
 import { UserProfile } from '../../../types/Document';
@@ -229,13 +230,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
-        .from('user_learning_goals')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      const data = await apiClient.get('user-learning-goals', { order: 'created_at.desc' });
       setGoals(data || []);
     } catch (error) {
       //console.error('Error fetching goals:', error);
@@ -248,16 +243,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
-        .from('achievements')
-        .select(`
-          *,
-          badges (*)
-        `)
-        .eq('user_id', user.id)
-        .order('earned_at', { ascending: false });
-
-      if (error) throw error;
+      const data = await apiClient.get('achievements', { order: 'earned_at.desc' });
       setAchievements(data || []);
     } catch (error) {
       //console.error('Error fetching achievements:', error);
@@ -271,14 +257,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       if (!user) throw new Error('Not authenticated');
 
       // Get the most recent stats record
-      const { data, error } = await supabase
-        .from('user_stats')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('updated_at', { ascending: false })
-        .limit(1);
-
-      if (error) throw error;
+      const data = await apiClient.get('user-stats', { order: 'updated_at.desc', limit: '1' });
       setStats(data?.[0] || null);
     } catch (error) {
       //console.error('Error fetching stats:', error);
@@ -509,33 +488,23 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
         difficulty: difficulty,
       };
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({
-          learning_style: learningStyle,
-          learning_preferences: updatedPreferences,
-          full_name: fullName,
-          avatar_url: updatedAvatarUrl,
-          personal_context: personalContext,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id)
-        .select()
-        .single();
-
-      if (error) throw error;
+      const data = await apiClient.patch('profile', {
+        learning_style: learningStyle,
+        learning_preferences: updatedPreferences,
+        full_name: fullName,
+        avatar_url: updatedAvatarUrl,
+        personal_context: personalContext,
+        updated_at: new Date().toISOString(),
+      });
 
       // Sync display_name + avatar to social_users so the social profile stays in sync
       (async () => {
         try {
-          await supabase
-            .from('social_users')
-            .update({
-              display_name: fullName,
-              avatar_url: updatedAvatarUrl,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', user.id);
+          await apiClient.post('social-users', {
+            display_name: fullName,
+            avatar_url: updatedAvatarUrl,
+            updated_at: new Date().toISOString(),
+          });
         } catch (e) {
           // non-blocking: ignore sync failures
         }
@@ -583,18 +552,11 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const { data, error } = await supabase
-        .from('user_learning_goals')
-        .insert([{
-          user_id: user.id,
-          goal_text: newGoal,
-          progress: 0,
-          category: 'general'
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
+      const data = await apiClient.post('user-learning-goals', {
+        goal_text: newGoal,
+        progress: 0,
+        category: 'general',
+      });
 
       setGoals([data, ...goals]);
       setNewGoal('');
@@ -607,16 +569,11 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 
   const updateProgress = async (goalId: string, progress: number) => {
     try {
-      const { error } = await supabase
-        .from('user_learning_goals')
-        .update({
-          progress,
-          updated_at: new Date().toISOString(),
-          is_completed: progress === 100
-        })
-        .eq('id', goalId);
-
-      if (error) throw error;
+      await apiClient.patch(`user-learning-goals/${goalId}`, {
+        progress,
+        updated_at: new Date().toISOString(),
+        is_completed: progress === 100
+      });
 
       setGoals(goals.map(g => g.id === goalId ? { ...g, progress } : g));
       toast.success('Progress updated!');
@@ -628,12 +585,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 
   const deleteGoal = async (goalId: string) => {
     try {
-      const { error } = await supabase
-        .from('user_learning_goals')
-        .delete()
-        .eq('id', goalId);
-
-      if (error) throw error;
+      await apiClient.delete(`user-learning-goals/${goalId}`);
 
       setGoals(goals.filter(g => g.id !== goalId));
       toast.success('Goal deleted!');
@@ -742,11 +694,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
         }
       };
 
-      const { error } = await supabase
-        .from('notification_preferences')
-        .upsert(preferences, { onConflict: 'user_id' });
-
-      if (error) throw error;
+      await apiClient.post('notification-preferences', preferences);
 
       toast.success('Notification settings saved!');
     } catch (error) {
@@ -783,13 +731,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
-        .from('notification_preferences')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
+      const data = await apiClient.get('notification-preferences');
 
       let timezoneToUse = 'UTC';
       
@@ -842,17 +784,17 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 
       // Fetch all user data - use limit(1) for stats
       const [profileData, goalsData, achievementsData, statsData] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', user.id).single(),
-        supabase.from('user_learning_goals').select('*').eq('user_id', user.id),
-        supabase.from('achievements').select('*, badges(*)').eq('user_id', user.id),
-        supabase.from('user_stats').select('*').eq('user_id', user.id).limit(1)
+        apiClient.get('profile'),
+        apiClient.get('user-learning-goals'),
+        apiClient.get('achievements'),
+        apiClient.get('user-stats', { limit: '1' })
       ]);
 
       const userData = {
-        profile: profileData.data,
-        goals: goalsData.data,
-        achievements: achievementsData.data,
-        stats: statsData.data?.[0] || null,
+        profile: profileData,
+        goals: goalsData,
+        achievements: achievementsData,
+        stats: Array.isArray(statsData) ? (statsData as any[])[0] || null : statsData || null,
         export_date: new Date().toISOString()
       };
 
@@ -891,10 +833,9 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
         return;
       }
 
-      const { error } = await supabase.rpc('purge_user_data' as any, {
+      await apiClient.rpc('purge_user_data', {
         p_user_id: user.id,
       });
-      if (error) throw error;
 
       toast.success('All your data has been deleted. You will now be signed out.');
 

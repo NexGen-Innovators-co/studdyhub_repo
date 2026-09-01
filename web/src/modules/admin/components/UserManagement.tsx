@@ -1,6 +1,6 @@
 // src/components/admin/UserManagement.tsx
 import React, { useEffect, useState, useCallback } from 'react';
-import { supabase } from '../../../integrations/supabase/client';
+import { apiClient } from '@/services/apiClient';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/components/table';
 import { Button } from '../../ui/components/button';
 import { Input } from '../../ui/components/input';
@@ -54,37 +54,23 @@ const UserManagement = () => {
     setIsUpgrading(true);
     try {
       // Upsert subscription for user
-      const { error } = await supabase
-        .from('subscriptions')
-        .upsert({
+      await apiClient.post('subscriptions', {
           user_id: selectedUser.id,
           plan_type: upgradePlan,
           status: 'active',
           current_period_end: '2099-12-31', // Far future for indefinite access
           paystack_sub_code: null
-        }, { onConflict: 'user_id' });
-      if (error) throw error;
+        });
 
       // Grant podcast credits for the new tier
       const creditAmount = PLAN_CREDITS[upgradePlan] ?? 0;
       if (creditAmount > 0) {
-        const { error: creditError } = await supabase.rpc('add_podcast_credits' as any, {
+        const creditResult = await apiClient.rpc('add_podcast_credits' as any, {
           p_user_id: selectedUser.id,
           p_amount: creditAmount,
           p_type: 'admin_adjustment',
           p_description: `Admin granted ${upgradePlan} tier credits (${creditAmount} credits)`,
         });
-        if (creditError) {
-          console.error('Credit grant error:', creditError);
-          // Non-fatal — subscription upgrade succeeded, log but don't block
-          toast({
-            title: 'Partial Success',
-            description: `User upgraded to ${upgradePlan} but credit grant failed: ${creditError.message}`,
-            variant: 'destructive',
-          });
-          setIsUpgradeOpen(false);
-          return;
-        }
       }
 
       toast({ title: 'Success', description: `User upgraded to ${upgradePlan} plan with ${creditAmount} podcast credits.` });
@@ -125,16 +111,13 @@ const UserManagement = () => {
     // Fetch verified_creator badge UUID
     useEffect(() => {
       const fetchVerifiedBadgeId = async () => {
-        const { data, error } = await supabase
-          .from('badges')
-          .select('id')
-          .eq('name', 'verified_creator')
-          .single();
-        if (error) {
-          toast({ title: 'Error', description: `Failed to fetch badge UUID: ${error.message}`, variant: 'destructive' });
+        const data = await apiClient.get('badges', { name: 'verified_creator' });
+        const badge = Array.isArray(data) && data.length > 0 ? data[0] : null;
+        if (!badge) {
+          toast({ title: 'Error', description: 'Failed to fetch badge UUID', variant: 'destructive' });
           setVerifiedBadgeId(null);
         } else {
-          setVerifiedBadgeId(data?.id || null);
+          setVerifiedBadgeId(badge?.id || null);
         }
       };
       fetchVerifiedBadgeId();
@@ -153,58 +136,6 @@ const UserManagement = () => {
 
       const trimmedSearch = searchTerm.trim();
 
-      let countQuery = supabase
-        .from('social_users')
-        .select('id', { count: 'exact', head: true });
-
-      if (filterStatus !== 'all') {
-        if (filterStatus === 'active_now') {
-          countQuery = countQuery.eq('is_online', true);
-        } else {
-          countQuery = countQuery.eq('status', filterStatus);
-        }
-      }
-
-      if (trimmedSearch) {
-        countQuery = countQuery.or(`username.ilike.%${trimmedSearch}%,email.ilike.%${trimmedSearch}%,display_name.ilike.%${trimmedSearch}%`);
-      }
-
-      if (activeFrom) {
-        countQuery = countQuery.gte('last_active', `${activeFrom}T00:00:00Z`);
-      }
-      if (activeTo) {
-        countQuery = countQuery.lte('last_active', `${activeTo}T23:59:59Z`);
-      }
-
-      // Fetch total count
-      const { count, error: countError } = await countQuery;
-
-      if (countError) throw countError;
-      setTotalCount(count || 0);
-
-      let usersQuery = supabase
-        .from('social_users')
-        .select(`
-          id,
-          username,
-          email,
-          display_name,
-          created_at,
-          last_active,
-          status,
-          posts_count,
-          followers_count,
-          is_online,
-          is_verified
-        `);
-
-      if (activeFrom) {
-        usersQuery = usersQuery.gte('last_active', `${activeFrom}T00:00:00Z`);
-      }
-      if (activeTo) {
-        usersQuery = usersQuery.lte('last_active', `${activeTo}T23:59:59Z`);
-      }
-
       let orderColumn: 'created_at' | 'last_active' = 'created_at';
       let orderAsc = false;
       if (sortOption === 'created_asc') {
@@ -218,37 +149,65 @@ const UserManagement = () => {
         orderAsc = true;
       }
 
+      // Build query params for apiClient
+      const countParams: Record<string, string> = {};
+      const listParams: Record<string, string> = {};
+
       if (filterStatus !== 'all') {
         if (filterStatus === 'active_now') {
-          usersQuery = usersQuery.eq('is_online', true);
+          countParams.is_online = 'true';
+          listParams.is_online = 'true';
         } else {
-          usersQuery = usersQuery.eq('status', filterStatus);
+          countParams.status = filterStatus;
+          listParams.status = filterStatus;
         }
       }
 
       if (trimmedSearch) {
-        usersQuery = usersQuery.or(`username.ilike.%${trimmedSearch}%,email.ilike.%${trimmedSearch}%,display_name.ilike.%${trimmedSearch}%`);
+        countParams.search = trimmedSearch;
+        listParams.search = trimmedSearch;
       }
 
-      const { data, error } = await usersQuery
-        .order(orderColumn, { ascending: orderAsc })
-        .range(from, to);
+      if (activeFrom) {
+        countParams.last_active_from = `${activeFrom}T00:00:00Z`;
+        listParams.last_active_from = `${activeFrom}T00:00:00Z`;
+      }
+      if (activeTo) {
+        countParams.last_active_to = `${activeTo}T23:59:59Z`;
+        listParams.last_active_to = `${activeTo}T23:59:59Z`;
+      }
 
-      if (error) throw error;
+      // Fetch users and count via apiClient
+      const [usersData, countData] = await Promise.all([
+        apiClient.get('social-users', {
+          ...listParams,
+          order: orderColumn,
+          order_asc: String(orderAsc),
+          page: String(page),
+          page_size: String(pageSize),
+        }),
+        apiClient.get('social-users/count', countParams),
+      ]);
+
+      const data = Array.isArray(usersData) ? usersData : [];
+      const count = typeof countData === 'number' ? countData : (countData as any)?.count ?? data.length;
+
+      setTotalCount(count);
       
       // Fetch avatars from profiles table
       const userIds = (data ?? []).map(u => u.id);
       let avatarMap: Record<string, string | null> = {};
       
       if (userIds.length > 0) {
-        const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('id, avatar_url')
-          .in('id', userIds);
+        const profilesData = await apiClient.get('profiles');
         
-        profilesData?.forEach(profile => {
-          avatarMap[profile.id] = profile.avatar_url;
-        });
+        if (Array.isArray(profilesData)) {
+          profilesData
+            .filter((profile: any) => userIds.includes(profile.id))
+            .forEach((profile: any) => {
+              avatarMap[profile.id] = profile.avatar_url;
+            });
+        }
       }
       
       // Merge avatar data into users
@@ -306,11 +265,7 @@ const UserManagement = () => {
 
   const toggleActive = async (userId: string, makeActive: boolean) => {
     try {
-      const { error } = await supabase
-        .from('social_users')
-        .update({ status: makeActive ? 'active' : 'suspended' })
-        .eq('id', userId);
-      if (error) throw error;
+      await apiClient.patch(`social-users/${userId}`, { status: makeActive ? 'active' : 'suspended' });
 
       logAdminActivity({
         action: makeActive ? 'activate_user' : 'suspend_user',
@@ -335,12 +290,11 @@ const UserManagement = () => {
     if (!selectedUser) return;
     setIsChecking(true);
     try {
-      const { data, error } = await supabase.rpc('check_creator_verification_eligibility' as any, {
+      const data = await apiClient.rpc('check_creator_verification_eligibility' as any, {
         p_user_id: selectedUser.id,
       });
-      if (error) throw error;
       
-      if (data && data.length > 0) {
+      if (data && Array.isArray(data) && data.length > 0) {
         setEligibilityResults(data[0]);
       }
     } catch (err) {
@@ -354,10 +308,9 @@ const UserManagement = () => {
     if (!selectedUser) return;
     setIsVerifying(true);
     try {
-      const { error: verifyError } = await supabase.rpc('admin_verify_user' as any, {
+      await apiClient.rpc('admin_verify_user' as any, {
         p_user_id: selectedUser.id,
       });
-      if (verifyError) throw verifyError;
       toast({ title: 'Success', description: `${selectedUser.username} is now verified!` });
       setIsMakeVerifiedOpen(false);
       fetchUsers();
@@ -374,20 +327,11 @@ const UserManagement = () => {
     setIsRemovingVerified(true);
     try {
       // Update social_users to reflect removal of verified status
-      const { error: updateError } = await supabase
-        .from('social_users')
-        .update({ is_verified: false })
-        .eq('id', selectedUser.id);
-      if (updateError) throw updateError;
+      await apiClient.patch(`social-users/${selectedUser.id}`, { is_verified: false });
 
       // Also remove the verified_creator badge from achievements (if it exists)
       if (verifiedBadgeId) {
-        const { error: removeError } = await supabase
-          .from('achievements')
-          .delete()
-          .eq('user_id', selectedUser.id)
-          .eq('badge_id', verifiedBadgeId);
-        if (removeError) throw removeError;
+        await apiClient.delete(`achievements/${selectedUser.id}`, { badge_id: verifiedBadgeId });
       }
 
       toast({ title: 'Success', description: `${selectedUser.username} is no longer verified.` });
@@ -404,10 +348,9 @@ const UserManagement = () => {
     if (!selectedUser || purgeConfirmText !== 'PURGE') return;
     setIsPurging(true);
     try {
-      const { error } = await supabase.rpc('purge_user_data' as any, {
+      await apiClient.rpc('purge_user_data' as any, {
         p_user_id: selectedUser.id,
       });
-      if (error) throw error;
 
       logAdminActivity({
         action: 'purge_user_data',

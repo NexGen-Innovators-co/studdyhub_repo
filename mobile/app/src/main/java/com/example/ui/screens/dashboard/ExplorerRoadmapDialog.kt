@@ -289,7 +289,7 @@ fun ExplorerRoadmapDialog(
                     contentPadding = PaddingValues(horizontal = 24.dp, vertical = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
-                    itemsIndexed(nodes.reversed()) { index, node ->
+                    itemsIndexed(nodes.reversed(), key = { _, node -> node.id }) { index, node ->
                         // Zig-zag offset: Center, Left, Center, Right...
                         val alignment = when (index % 4) {
                             0 -> Alignment.CenterHorizontally

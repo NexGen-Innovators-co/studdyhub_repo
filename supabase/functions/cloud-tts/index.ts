@@ -7,9 +7,67 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ─── Free TTS via SpeechSter (no API key, 580+ voices) ───────────────────────
+// https://ahm7xmakki.com/speech  — POST /api/tts returns raw audio/mpeg.
+// Replaces the paid Google Cloud TTS API. The web client expects
+// { success: true, audioContent: "<base64-mp3>" } so we base64-encode the bytes.
+const SPEECHSTER_URL = "https://ahm7xmakki.com/api/tts";
+const SPEECHSTER_CHUNK = 1950; // max chars per SpeechSter call
+const SPEECHSTER_VOICE_MALE = 1;   // Thomas — Male English
+const SPEECHSTER_VOICE_FEMALE = 2; // Default — Female English
+
+function splitTextIntoChunks(text: string, maxLen: number): string[] {
+  const chunks: string[] = [];
+  let remaining = text;
+  while (remaining.length > 0) {
+    if (remaining.length <= maxLen) {
+      chunks.push(remaining);
+      break;
+    }
+    let splitAt = remaining.lastIndexOf(". ", maxLen - 1);
+    if (splitAt <= 0) splitAt = remaining.lastIndexOf(" ", maxLen - 1);
+    if (splitAt <= 0) splitAt = maxLen;
+    else splitAt += 1;
+    chunks.push(remaining.substring(0, splitAt));
+    remaining = remaining.substring(splitAt);
+  }
+  return chunks;
+}
+
+async function speechSterTTS(text: string, voiceIndex: number): Promise<string> {
+  const chunks = splitTextIntoChunks(text, SPEECHSTER_CHUNK);
+  const audioBuffers = await Promise.all(
+    chunks.map(async (chunk) => {
+      const res = await fetch(SPEECHSTER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voiceIndex, text: chunk }),
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(`SpeechSter TTS failed: HTTP ${res.status} — ${errText.substring(0, 300)}`);
+      }
+      const buf = await res.arrayBuffer();
+      return new Uint8Array(buf);
+    })
+  );
+  // Concatenate all chunks then base64-encode
+  const totalLen = audioBuffers.reduce((sum, b) => sum + b.length, 0);
+  const merged = new Uint8Array(totalLen);
+  let offset = 0;
+  for (const buf of audioBuffers) {
+    merged.set(buf, offset);
+    offset += buf.length;
+  }
+  let binary = "";
+  for (let i = 0; i < merged.length; i++) {
+    binary += String.fromCharCode(merged[i]);
+  }
+  return btoa(binary);
+}
+
 interface TtsRequest {
   text: string;
-  // voice can be 'male'|'female' for legacy usage or a specific TTS voice name like 'en-US-Neural2-D'
   voice?: 'male' | 'female' | string;
   rate?: number;
   pitch?: number;
@@ -29,25 +87,7 @@ serve(async (req) => {
       throw new Error("Invalid request body - expected JSON");
     }
 
-    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!geminiApiKey) {
-      console.error("[CloudTTS] GEMINI_API_KEY environment variable is not set");
-      // Log critical config error so admin sees it in the dashboard
-      const _cfgClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-      await logSystemError(_cfgClient, {
-        severity: 'critical',
-        source: 'cloud-tts',
-        error_code: 'MISSING_API_KEY',
-        message: 'GEMINI_API_KEY environment variable is not set — Cloud TTS is non-functional',
-        details: { hint: 'Set GEMINI_API_KEY in Supabase Edge Function secrets (must have Cloud TTS API enabled on GCP)' },
-      });
-
-      // No external fallback available here yet; return the configuration error.
-
-      throw new Error("TTS service is not configured - missing API key");
-    }
-
-    const { text, voice = 'female', rate = 1.0, pitch = 0 } = body as TtsRequest;
+    const { text, voice = 'female' } = body as TtsRequest;
 
     if (!text || text.trim().length === 0) {
       throw new Error("Text is required");
@@ -55,95 +95,26 @@ serve(async (req) => {
 
     console.log(`[CloudTTS] Generating audio for ${text.length} characters, voice: ${voice}`);
 
-    // Map voice to Google TTS voice name. Accept explicit voice names (e.g. en-US-Neural2-D)
-    let voiceName: string;
-    if (typeof voice === 'string' && /^en-[a-zA-Z-0-9]+/.test(voice)) {
-      voiceName = voice;
+    // Map voice to SpeechSter voice index
+    let voiceIndex: number;
+    if (typeof voice === 'string' && /^\d+$/.test(voice)) {
+      voiceIndex = parseInt(voice, 10);
     } else {
-      voiceName = (voice === 'male') ? 'en-US-Neural2-D' : 'en-US-Neural2-C';
+      voiceIndex = (voice === 'male') ? SPEECHSTER_VOICE_MALE : SPEECHSTER_VOICE_FEMALE;
     }
 
-    const ttsUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${geminiApiKey}`;
-    console.log(`[CloudTTS] Calling TTS API with voice: ${voiceName}, rate: ${rate}, pitch: ${pitch}`);
+    const audioBase64 = await speechSterTTS(text, voiceIndex);
 
-    const ttsResponse = await fetch(
-      ttsUrl,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          input: { text: text },
-          voice: {
-            languageCode: "en-US",
-            name: voiceName,
-          },
-          audioConfig: {
-            audioEncoding: "MP3",
-            speakingRate: rate,
-            pitch: pitch,
-          }
-        })
-      }
-    );
-
-    if (!ttsResponse.ok) {
-      const errorText = await ttsResponse.text();
-      console.error(`[CloudTTS] TTS API error: status=${ttsResponse.status}`, errorText);
-
-      // Determine error code for admin visibility
-      let errorCode = 'TTS_API_ERROR';
-      if (ttsResponse.status === 403) errorCode = 'TTS_API_FORBIDDEN';
-      else if (ttsResponse.status === 429) errorCode = 'TTS_QUOTA_EXCEEDED';
-      else if (ttsResponse.status === 401) errorCode = 'TTS_AUTH_FAILED';
-
-      const _errClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-      await logSystemError(_errClient, {
-        severity: ttsResponse.status === 429 ? 'warning' : 'error',
-        source: 'cloud-tts',
-        component: 'google-tts-api',
-        error_code: errorCode,
-        message: `Google TTS API returned ${ttsResponse.status}: ${errorText.substring(0, 500)}`,
-        details: {
-          status: ttsResponse.status,
-          voice: voiceName,
-          text_length: text.length,
-          response_body: errorText.substring(0, 1000),
-        },
-      });
-
-      // No external fallback available here yet; return the API error below.
-
-      const isAuthError = ttsResponse.status === 403 || ttsResponse.status === 401;
-      const fallbackMode = isAuthError ? 'native' : undefined;
-
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: `TTS API failed (${ttsResponse.status})`,
-          code: errorCode,
-          fallback: fallbackMode,
-          details: errorText.substring(0, 1000),
-        }),
-        {
-          status: ttsResponse.status,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
+    if (!audioBase64) {
+      throw new Error("TTS response missing audio content");
     }
 
-    const ttsData = await ttsResponse.json();
-
-    if (!ttsData.audioContent) {
-      console.error("[CloudTTS] No audioContent in response:", JSON.stringify(ttsData).substring(0, 500));
-      throw new Error("TTS response missing audioContent");
-    }
-
-    console.log(`[CloudTTS] Audio generated successfully, size: ${ttsData.audioContent.length}`);
+    console.log(`[CloudTTS] Audio generated successfully, base64 size: ${audioBase64.length}`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        audioContent: ttsData.audioContent
+        audioContent: audioBase64
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -152,7 +123,6 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error("[CloudTTS] Error:", error?.message || error);
-    // ── Log to system_error_logs for admin visibility ──
     try {
       const _logClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
       await logSystemError(_logClient, {
@@ -176,4 +146,3 @@ serve(async (req) => {
     );
   }
 });
-

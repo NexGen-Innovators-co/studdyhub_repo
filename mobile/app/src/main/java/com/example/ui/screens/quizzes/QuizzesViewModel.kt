@@ -249,6 +249,10 @@ class QuizzesViewModel(private val repository: StuddyHubRepository) : ViewModel(
         }
     }
 
+    fun refreshActiveLobbies() {
+        checkActiveSessions()
+    }
+
     fun endSessionDirect(sessionId: String) {
         viewModelScope.launch {
             _isLoading.value = true
@@ -383,7 +387,7 @@ class QuizzesViewModel(private val repository: StuddyHubRepository) : ViewModel(
                         topic = config.title,
                         difficulty = level.difficulty,
                         questionCount = level.questionCount,
-                        timeLimitSec = if (speedRace) 15 else level.timeLimitSec
+                        timeLimitSec = if (speedRace) 60 else level.timeLimitSec
                     ),
                     topicGuidance = gameGuidance(config.key)
                 )
@@ -637,7 +641,18 @@ class QuizzesViewModel(private val repository: StuddyHubRepository) : ViewModel(
             }
             "Maths practice ($ops) — Level $levelIndex: $levelName"
         }
-        else -> "$levelName"
+        "science_explorer" -> {
+            val scope = when (levelIndex) {
+                1 -> "plant biology, seed germination, and growth"
+                2 -> "energy sources, light, heat, and simple machines"
+                3 -> "weather patterns, the water cycle, and climate"
+                4 -> "ecosystems, food chains, habitats, and biodiversity"
+                else -> "plants, animals, energy, weather, the human body, and natural phenomena"
+            }
+            "Science quiz about $scope — Level $levelIndex: $levelName"
+        }
+        "math_asteroid_blaster" -> "Fast-paced arithmetic quiz (addition, subtraction, multiplication, division) — Level $levelIndex: $levelName"
+        else -> "General knowledge quiz — Level $levelIndex: $levelName"
     }
 
     /**
@@ -713,19 +728,15 @@ class QuizzesViewModel(private val repository: StuddyHubRepository) : ViewModel(
                         val parsed = parseQuizQuestionsJson(normalized)
                         if (parsed.isNotEmpty()) return LiveQuestionResult(questions = parsed)
                     }
-                    backendFailure = "Backend 'generate-ai-quiz' returned no valid questions for \"$topic\"."
+                    backendFailure = "Ollie couldn't make those questions right now. Let's try again!"
                 } else if (res is BackendResult.Error) {
                     val code = res.code
                     android.util.Log.e("QuizzesViewModel", "[BACKEND-API] generate-ai-quiz failed (HTTP $code): ${res.message}")
-                    backendFailure = if (code != null) {
-                        "Edge function 'generate-ai-quiz' returned HTTP $code. ${res.message}"
-                    } else {
-                        "Edge function 'generate-ai-quiz' failed: ${res.message}"
-                    }
+                    backendFailure = BackendApiService.UserMessages.QUIZ_GENERATION_FAILED
                 }
             } catch (e: Exception) {
                 android.util.Log.w("QuizzesViewModel", "Backend live-question generation failed: ${e.message}")
-                backendFailure = "Backend live-question generation failed: ${e.message}"
+                backendFailure = BackendApiService.UserMessages.QUIZ_GENERATION_FAILED
             }
         }
         // 2) No gemini-chat fallback — backend is the sole generation source.
@@ -772,16 +783,12 @@ class QuizzesViewModel(private val repository: StuddyHubRepository) : ViewModel(
                 val msg = (res as? BackendResult.Error)?.message ?: "Unknown error"
                 android.util.Log.e("QuizzesViewModel", "[BACKEND-API] generate-spelling-words failed (HTTP $code): $msg")
                 return SpellingWordsResult(
-                    errorMessage = if (code != null) {
-                        "Edge function 'generate-spelling-words' returned HTTP $code. $msg"
-                    } else {
-                        "Edge function 'generate-spelling-words' failed: $msg"
-                    }
+                    errorMessage = BackendApiService.UserMessages.SPELLING_FAILED
                 )
             }
         } catch (e: Exception) {
             android.util.Log.w("QuizzesViewModel", "Spelling-word generation failed: ${e.message}")
-            return SpellingWordsResult(errorMessage = "AI word generation failed: ${e.message}")
+            return SpellingWordsResult(errorMessage = BackendApiService.UserMessages.SPELLING_FAILED)
         }
     }
 

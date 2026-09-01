@@ -78,7 +78,9 @@ fun ExplorerHomeContent(
     val incompleteSteps = remember(roadmap) { roadmap.filterNot { it.isCompleted } }
     val currentMission = incompleteSteps.firstOrNull() ?: roadmap.firstOrNull()
 
-    // Active days for streak calendar display
+    // Active days for streak calendar display — fetched once on first composition.
+    // SharedPreferences reads are fast and the data only changes on explicit user action,
+    // so we don't need a lifecycle observer that re-fetches on every resume.
     var activeDays by remember { mutableStateOf(emptySet<String>()) }
     LaunchedEffect(Unit) {
         activeDays = repo.getActiveDays()
@@ -663,7 +665,7 @@ fun ExplorerHomeContent(
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         contentPadding = PaddingValues(end = 8.dp)
                     ) {
-                        item {
+                        item(key = "asteroid_laser") {
                             FeaturedGameCard(
                                 title = "ASTEROID LASER",
                                 category = "SPACE MATH 🚀",
@@ -674,7 +676,7 @@ fun ExplorerHomeContent(
                             )
                         }
 
-                        item {
+                        item(key = "ananse_riddles") {
                             FeaturedGameCard(
                                 title = "ANANSE RIDDLES",
                                 category = "LOGIC & WISDOM",
@@ -685,7 +687,7 @@ fun ExplorerHomeContent(
                             )
                         }
 
-                        item {
+                        item(key = "oware_math") {
                             FeaturedGameCard(
                                 title = "OWARE MATH",
                                 category = "ARITHMETIC",
@@ -696,7 +698,7 @@ fun ExplorerHomeContent(
                             )
                         }
 
-                        item {
+                        item(key = "kente_quiz") {
                             FeaturedGameCard(
                                 title = "KENTE QUIZ",
                                 category = "GHANAIAN HERITAGE",
@@ -707,7 +709,7 @@ fun ExplorerHomeContent(
                             )
                         }
 
-                        item {
+                        item(key = "spelling_bee") {
                             FeaturedGameCard(
                                 title = "SPELLING BEE",
                                 category = "WORD MASTER",
