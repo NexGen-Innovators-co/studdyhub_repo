@@ -256,7 +256,7 @@ export const AppHeader: React.FC<{
         </div>
         <a
           href={APK_DOWNLOAD_URL}
-          download="StuddyHub-v1.0-beta.1.apk"
+          download="studdyhub-v1.0-beta.2.apk"
         >
           <Button className="w-full mt-3">
             <Download className="h-4 w-4 mr-2" />
@@ -279,7 +279,7 @@ export const AppHeader: React.FC<{
     return 'desktop';
   };
 
-  const APK_DOWNLOAD_URL = '/StuddyHub-v1.0-beta.1.apk';
+  const APK_DOWNLOAD_URL = '/studdyhub-v1.0-beta.2.apk';
 
   // Download App Button Component — device-aware
   const InstallAppButton = () => {
@@ -287,7 +287,7 @@ export const AppHeader: React.FC<{
 
     if (device === 'android') {
       return (
-        <a href={APK_DOWNLOAD_URL} download="StuddyHub-v1.0-beta.1.apk">
+        <a href={APK_DOWNLOAD_URL} download="studdyhub-v1.0-beta.2.apk">
           <Button
             variant="outline"
             size="sm"
@@ -476,7 +476,7 @@ export const AppHeader: React.FC<{
       {/* Mobile Menu Button */}
       <div className="flex items-center md:hidden gap-1">
         {detectDevice() === 'android' ? (
-          <a href={APK_DOWNLOAD_URL} download="StuddyHub-v1.0-beta.1.apk">
+          <a href={APK_DOWNLOAD_URL} download="studdyhub-v1.0-beta.2.apk">
             <Button variant="outline" size="icon" className="rounded-full min-w-[44px] min-h-[44px] w-11 h-11" aria-label="Download App">
               <Download className="h-5 w-5" />
             </Button>
@@ -527,7 +527,7 @@ export const AppHeader: React.FC<{
             {detectDevice() === 'android' ? (
               <a
                 href={APK_DOWNLOAD_URL}
-                download="StuddyHub-v1.0-beta.1.apk"
+                download="studdyhub-v1.0-beta.2.apk"
                 onClick={() => setIsMenuOpen(false)}
                 className="w-full mb-2 min-h-[44px] flex items-center justify-center gap-2 px-4 py-3 rounded-md bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-200 font-medium"
               >

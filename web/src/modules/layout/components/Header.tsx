@@ -503,7 +503,7 @@ export const Header: React.FC<HeaderProps> = ({
   // captured or carried over from AppHeader via window.__pwaPrompt).
   const hasInstallPrompt = !isPwaInstalled && (!!localPromptRef.current || !!getPwaPrompt());
 
-  const APK_DOWNLOAD_URL = '/StuddyHub-v1.0-beta.1.apk';
+  const APK_DOWNLOAD_URL = '/studdyhub-v1.0-beta.2.apk';
 
   const detectDevice = (): 'android' | 'ios' | 'desktop' => {
     const ua = navigator.userAgent || navigator.vendor || '';
@@ -517,7 +517,7 @@ export const Header: React.FC<HeaderProps> = ({
 
     if (device === 'android') {
       return (
-        <a href={APK_DOWNLOAD_URL} download="StuddyHub-v1.0-beta.1.apk">
+        <a href={APK_DOWNLOAD_URL} download="studdyhub-v1.0-beta.2.apk">
           <Button
             variant="outline"
             size="sm"
@@ -616,7 +616,7 @@ export const Header: React.FC<HeaderProps> = ({
                     {detectDevice() === 'android' ? (
                       <a
                         href={APK_DOWNLOAD_URL}
-                        download="StuddyHub-v1.0-beta.1.apk"
+                        download="studdyhub-v1.0-beta.2.apk"
                         onClick={() => setIsAppMenuOpen(false)}
                         className="w-full px-4 py-3 flex items-center gap-3 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
                       >

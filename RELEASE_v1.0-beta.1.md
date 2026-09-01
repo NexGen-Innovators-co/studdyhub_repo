@@ -53,7 +53,7 @@ Output: `mobile/app/build/outputs/apk/release/app-release.apk`
 ### 2. Rename the APK
 
 ```bash
-copy app\build\outputs\apk\release\app-release.apk ..\web\public\StuddyHub-v1.0-beta.1.apk
+copy app\build\outputs\apk\release\app-release.apk ..\web\public\StuddyHub-v1.0-beta.2.apk
 ```
 
 This copies the APK to the web app's public folder so users can download it directly.
@@ -87,7 +87,7 @@ git push origin explorer-tier-fixes
 
 Vercel auto-deploys when `main` is updated. The APK in `web/public/` will be served at:
 ```
-https://studdyhub.vercel.app/StuddyHub-v1.0-beta.1.apk
+https://studdyhub.vercel.app/StuddyHub-v1.0-beta.2.apk
 ```
 
 ### 7. Create GitHub Release (Optional)
@@ -95,7 +95,7 @@ https://studdyhub.vercel.app/StuddyHub-v1.0-beta.1.apk
 1. Go to https://github.com/NexGen-Innovators-co/studdyhub_repo/releases/new
 2. Tag: `v1.0-beta.1`
 3. Title: `v1.0-beta.1`
-4. Upload `StuddyHub-v1.0-beta.1.apk` as release asset
+4. Upload `StuddyHub-v1.0-beta.2.apk` as release asset
 5. Publish
 
 ---
@@ -134,7 +134,7 @@ https://studdyhub.vercel.app/StuddyHub-v1.0-beta.1.apk
 ## Release Checklist
 
 - [ ] Build release APK (`.\gradlew.bat assembleRelease`)
-- [ ] Copy APK to `web/public/StuddyHub-v1.0-beta.1.apk`
+- [ ] Copy APK to `web/public/StuddyHub-v1.0-beta.2.apk`
 - [ ] Test APK on a physical Android device
 - [ ] Test Google Sign-In with new account
 - [ ] Test onboarding flow with Google account
