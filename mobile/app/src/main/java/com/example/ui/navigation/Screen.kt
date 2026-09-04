@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     object Splash : Screen("splash", "Splash", Icons.Default.School)
+    object Welcome : Screen("welcome", "Welcome", Icons.Default.AutoAwesome)
     object Onboarding : Screen("onboarding", "Welcome", Icons.Default.AutoAwesome)
     object Auth : Screen("auth", "Sign In", Icons.Default.Lock)
     object Dashboard : Screen("dashboard", "Home", Icons.Default.Home)

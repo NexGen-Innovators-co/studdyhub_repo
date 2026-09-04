@@ -88,9 +88,36 @@ const queryClient = new QueryClient({
 
 const Fallback = () => <BrandedLoader />;
 
+// Set to true to gate the web app for maintenance.
+// Admin panel (/admin/*) remains accessible for administrators.
+const IS_MAINTENANCE_MODE = true;
+
 // Create a wrapper component for SEO
 const AppWithSEO = () => {
   const location = useLocation();
+
+  // Maintenance Guard: block protected product routes even when a user has a
+  // valid cached session or enters the URL directly.
+  const isAdminRoute = location.pathname.startsWith('/admin');
+  const protectedRoutePrefixes = [
+    '/dashboard', '/notes', '/note', '/recordings', '/schedule', '/chat',
+    '/documents', '/settings', '/quizzes', '/library', '/course',
+    '/subscription', '/pricing', '/podcasts', '/podcast', '/social', '/educator',
+    '/calendar-callback', '/join'
+  ];
+  const isProtectedRoute = protectedRoutePrefixes.some(prefix => location.pathname.startsWith(prefix));
+  const isAdminAuthPass = location.pathname === '/auth' && location.search.includes('admin');
+
+  if (IS_MAINTENANCE_MODE && isProtectedRoute && !isAdminRoute && !isAdminAuthPass) {
+    return (
+      <>
+        <DynamicHead pathname={location.pathname} />
+        <Suspense fallback={<EmptyFallback />}>
+          <MaintenanceNotice />
+        </Suspense>
+      </>
+    );
+  }
 
   // Determine transition key to group dashboard routes
   const getPageKey = (pathname: string) => {
@@ -131,7 +158,7 @@ const AppWithSEO = () => {
             <Route path="/api" element={<Suspense fallback={<EmptyFallback />}><APIPage /></Suspense>} />
             <Route path="/documentation-page" element={<Suspense fallback={<EmptyFallback />}><DocumentationPage /></Suspense>} />
             <Route path="/user-guide-page" element={<Suspense fallback={<EmptyFallback />}><UserGuidePage /></Suspense>} />
-            <Route path="/auth" element={<Suspense fallback={<EmptyFallback />}><MaintenanceNotice /></Suspense>} />
+            <Route path="/auth" element={<Suspense fallback={<EmptyFallback />}>{location.search.includes('admin') ? <Auth /> : <MaintenanceNotice />}</Suspense>} />
             <Route path="/reset-password" element={<Suspense fallback={<EmptyFallback />}><MaintenanceNotice /></Suspense>} />
             <Route path="/calendar-callback" element={<Suspense fallback={<EmptyFallback />}><CalendarCallback /></Suspense>} />
             <Route path="/join/:inviteToken" element={<Suspense fallback={<EmptyFallback />}><JoinInstitution /></Suspense>} />

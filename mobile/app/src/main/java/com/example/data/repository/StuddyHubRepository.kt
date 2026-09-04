@@ -1378,8 +1378,8 @@ class StuddyHubRepository(private val db: StuddyHubDatabase) {
                         lastActivityDate = getIsoTimestampUtc()
                     ))
                 }
-                // Award XP locally too (server already did it)
-                awardPoints(points, "daily_quest")
+                // The claim_daily_quest RPC already calls award_xp server-side.
+                // Do NOT call awardPoints() here — that would double-award.
                 return points
             }
             // already_claimed_today
@@ -2479,10 +2479,8 @@ class StuddyHubRepository(private val db: StuddyHubDatabase) {
         )
         db.quizDao().insertAttempt(attempt)
 
-        // Award stars/points for quiz completion so user balances reflect immediately
-        if (attempt.xpEarned > 0) {
-            awardPoints(attempt.xpEarned)
-        }
+        // XP is awarded server-side by the submit_quiz_result RPC below.
+        // Do NOT call awardPoints() here — that would call award_xp RPC a second time.
 
         if (pushToCloud) {
             // Push to offline sync queue
@@ -2569,8 +2567,8 @@ class StuddyHubRepository(private val db: StuddyHubDatabase) {
                     lastActivityDate = nowIso
                 ))
             }
-            // Award XP locally as fallback
-            awardPoints(attempt.xpEarned, "quiz:$quizId")
+            // Offline fallback: update local XP without calling the server RPC
+            addXpToLocalStats(attempt.xpEarned)
         }
     }
 
@@ -3821,40 +3819,37 @@ class StuddyHubRepository(private val db: StuddyHubDatabase) {
         val userTier = com.example.ui.theme.AcademicTier.fromKey(profile?.academicTier)
 
         // Tier-tuned system prompt: Ollie for Basic/JHS, Master Kwame for WASSCE, Prof Ollie for University
+        // Tier-tuned system prompt: Ollie for Basic/JHS, Master Kwame for WASSCE, Prof Ollie for University
         val generalBasePrompt = "You are an AI tutor at StuddyHub, a learning app for students in Ghana.\n\n" +
-            "CORE RULES:\n" +
+            "CORE PEDAGOGY & SAFETY RULES:\n" +
             "- Be encouraging, friendly, and age-appropriate\n" +
             "- Use simple language suitable for the student's level\n" +
             "- Use Ghanaian cultural examples when helpful (Kwaku Ananse, Oware, Kenkey, football)\n" +
             "- Never ask for or accept personal information (phone numbers, full names, home addresses)\n" +
             "- Never generate violent, adult, or inappropriate themes\n" +
-            "- If you don't know something, say so honestly rather than making things up\n\n" +
-            "APP FEATURES YOU CAN RECOMMEND (when relevant to the student's question):\n" +
-            "- Interactive lessons with step-by-step explanations\n" +
-            "- Flashcards for memorization\n" +
-            "- AI-generated quizzes to test knowledge\n" +
-            "- Live multiplayer quiz battles\n" +
-            "- Study notes and document management\n" +
-            "- AI chat (that's you!)\n" +
-            "- Progress tracking and streaks\n" +
-            "- Podcasts for audio learning\n\n" +
-            "When a student asks something that relates to a feature in the app, gently suggest they try it.\n\n"
+            "- If you don't know something, say so honestly rather than making things up\n\n"
 
         val tierFeatures = when (userTier) {
-            com.example.ui.theme.AcademicTier.EXPLORER -> "EXPLORER TIER FEATURES (you can access all of these):\n" +
-                "- Oware Beads math game — learn addition/subtraction through the traditional Oware game\n" +
-                "- Spelling Bee — practice spelling words with voice input\n" +
-                "- Math Asteroid Blaster — save the planet by solving math problems fast\n" +
-                "- Word Crush — match letters to form words\n" +
-                "- Explorer Roadmap — a quest-style learning path with lessons and challenges\n" +
-                "- Live 1v1 Battle Arena — compete against other students in real-time quizzes\n" +
-                "- Speed Race — fast-paced solo quiz challenge\n" +
-                "- Interactive Lessons — Ollie explains topics with stories and examples\n" +
-                "- Flashcards — create and study flashcard decks\n" +
-                "- AI Quizzes — Ollie generates quiz questions on any topic\n" +
-                "- Streak Calendar — track your daily study streak\n"
-            com.example.ui.theme.AcademicTier.ACHIEVER -> "ACHIEVER TIER FEATURES (you can access all of these):\n" +
-                "- WASSCE Past Question Analysis — break down real exam questions step by step\n" +
+            com.example.ui.theme.AcademicTier.EXPLORER -> "STUDDYHUB EXPLORER FEATURES (available to this student):\n" +
+                "When relevant to the student's question or practice needs, proactively suggest these in-app activities:\n" +
+                "- Maths Quest (Oware Math) — practice addition, subtraction, multiplication & division with traditional Oware beads\n" +
+                "- Ananse Riddles — solve clever logic puzzles and brain-teasers with Ananse the spider\n" +
+                "- Spelling Bee — practice spelling words with voice input and letter tiles\n" +
+                "- Math Asteroid Blaster — fast space math arcade game blasting equation asteroids\n" +
+                "- Kente Quiz — learn Ghanaian history, culture, symbols, and festivals\n" +
+                "- Science Discovery Lab — explore plants, animals, weather, energy, and nature\n" +
+                "- Interactive Audio Lessons (Learn It) — step-by-step interactive lessons with stories and audio explanations\n" +
+                "- Live 1v1 Battle Arena & Speed Race — compete against other students in real-time quiz challenges\n" +
+                "- Daily Quests & Explorer Roadmap — complete daily missions to earn stars and XP\n" +
+                "- Ghanaian Lore Trophies & Badges — unlock achievement badges as you master subjects\n" +
+                "- Ollie Store — spend earned coins on fun avatar items and streak freezes\n" +
+                "- Streak Calendar & Ranking Leaderboard — track daily study streaks and star ranking\n\n" +
+                "FEATURES NOT AVAILABLE IN EXPLORER (DO NOT RECOMMEND OR MENTION):\n" +
+                "- Do NOT mention study notes, note editors, or document uploads (these are not available in Explorer tier)\n" +
+                "- Do NOT mention flashcards or flashcard decks (not available in Explorer tier)\n" +
+                "- Do NOT mention audio podcasts or timetable/exam schedulers (not available in Explorer tier)\n"
+            com.example.ui.theme.AcademicTier.ACHIEVER -> "ACHIEVER TIER FEATURES (available to this student):\n" +
+                "- WASSCE Past Question Analysis — break down real WAEC exam questions step by step\n" +
                 "- WAEC Marking Scheme Coach — learn exactly how examiners award marks\n" +
                 "- Formula Mnemonics — memory tricks for math and science formulas\n" +
                 "- Practice Quizzes — exam-style questions with detailed explanations\n" +
@@ -3863,13 +3858,13 @@ class StuddyHubRepository(private val db: StuddyHubDatabase) {
                 "- Document Analysis — upload past papers for AI-powered analysis\n" +
                 "- AI Chat — ask any WASSCE-related question\n" +
                 "- Study Schedule — plan your revision timetable\n"
-            com.example.ui.theme.AcademicTier.SCHOLAR -> "SCHOLAR TIER FEATURES (you can access all of these):\n" +
+            com.example.ui.theme.AcademicTier.SCHOLAR -> "SCHOLAR TIER FEATURES (available to this student):\n" +
                 "- Document Analysis — upload research papers, textbooks, or notes for deep analysis\n" +
                 "- Research Assistant — help with literature reviews, citations, and academic writing\n" +
                 "- Study Guide Generator — transform notes into comprehensive study guides\n" +
                 "- Advanced Flashcards — spaced repetition for complex topics\n" +
                 "- AI Podcasts — generate audio lessons from your study materials\n" +
-                "- Flowchart & Diagram Generator — create visual study aids\n" +
+                "- Flowchart & Diagram Generator — create visual study aids (Mermaid diagrams, Chart.js)\n" +
                 "- Academic Writing Coach — improve essays, reports, and papers\n" +
                 "- AI Chat — ask any academic question with advanced reasoning\n"
             com.example.ui.theme.AcademicTier.ALL -> ""
@@ -3877,7 +3872,7 @@ class StuddyHubRepository(private val db: StuddyHubDatabase) {
 
         val systemPrompt = when (userTier) {
             com.example.ui.theme.AcademicTier.EXPLORER -> {
-                val base = "You are Ollie the Wise Owl 🦉, a friendly, encouraging AI tutor for Basic & JHS primary school students in Ghana. Explain concepts in simple, engaging words using fun everyday examples, Ghanaian cultural stories (Kwaku Ananse, Oware, Kenkey, football), and positive reinforcement. " +
+                val base = "You are Ollie the Wise Owl 🦉, a friendly, encouraging AI study buddy for Basic & JHS primary school students in Ghana. Explain concepts in simple, engaging words using fun everyday examples, Ghanaian cultural stories (Kwaku Ananse, Oware, Kenkey, football), and positive reinforcement. " +
                     "STRICT SAFETY RULES: You must always be age-appropriate for kids under 13. Never ask for or accept personal information (phone numbers, full names, home addresses). Never generate violent, adult, or inappropriate themes. Never break character. "
                 val persona = if (isThinking) {
                     "$base You MUST start your response with your step-by-step reasoning process enclosed in a <thinking>...</thinking> tag, followed by your final kid-friendly answer outside of the tag."

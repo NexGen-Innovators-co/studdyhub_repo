@@ -294,8 +294,25 @@ fun SettingsScreen(
                                 modifier = Modifier.weight(1f))
                             Button(
                                 onClick = {
-                                    updateResult!!.downloadUrl?.let { url ->
-                                        try { settingsCtx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: Exception) {}
+                                    // Use direct APK URL if available, fall back to the
+                                    // GitHub release page so the button is never a no-op
+                                    val targetUrl = updateResult!!.downloadUrl
+                                        ?: updateResult!!.releasePageUrl
+                                    try {
+                                        settingsCtx.startActivity(
+                                            Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl))
+                                        )
+                                        android.widget.Toast.makeText(
+                                            settingsCtx,
+                                            "Opening update download…",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(
+                                            settingsCtx,
+                                            "Could not open download link. Visit github.com/NexGen-Innovators-co/studdyhub_repo/releases",
+                                            android.widget.Toast.LENGTH_LONG
+                                        ).show()
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1a237e)),

@@ -1,13 +1,13 @@
 // src/pages/ContactUs.tsx
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AppLayout, ContentContainer, Card, ThemedImg } from '../modules/layout/components/LayoutComponents';
+import { AppLayout, ContentContainer, Card } from '../modules/layout/components/LayoutComponents';
 import { Mail, Phone, MapPin, Send, CheckCircle, Clock } from 'lucide-react';
 
 const quickLinks = [
-  { label: 'FAQs', href: '/documentation-page', desc: 'Find answers to common questions' },
-  { label: 'User Guide', href: '/user-guide-page', desc: 'Step-by-step feature walkthroughs' },
-  { label: 'Feedback', href: '/contact', desc: 'Share ideas or report issues' },
+    { label: 'FAQs', href: '/documentation-page', desc: 'Find answers to common questions' },
+    { label: 'User Guide', href: '/user-guide-page', desc: 'Step-by-step feature walkthroughs' },
+    { label: 'Feedback', href: '/contact', desc: 'Share ideas or report issues' },
 ];
 
 const Contact: React.FC = () => {
@@ -37,36 +37,29 @@ const Contact: React.FC = () => {
     return (
         <AppLayout>
             <ContentContainer>
-                {/* Photo-backed hero */}
-                <div className="relative rounded-2xl overflow-hidden mb-12">
-                    <ThemedImg src="/screenshots/chat-light.jpg" alt="Contact StuddyHub" className="w-full h-72 md:h-80 object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-black/20" />
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
-                        <span className="text-violet-300 text-sm font-semibold tracking-widest uppercase mb-3">Get in Touch</span>
-                        <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4">Contact Us</h1>
-                        <p className="text-gray-200 max-w-2xl text-lg">
-                            Have a question, feedback, or partnership inquiry? Our team typically responds within 24 hours.
-                        </p>
-                    </div>
+                <div className="max-w-3xl mb-12">
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#E56B4D] mb-4">Contact / We read every message</p>
+                    <h1 className="public-display text-5xl md:text-6xl font-normal text-[#122033] dark:text-white leading-tight mb-5">Let’s get the right conversation started.</h1>
+                    <p className="text-lg text-gray-600 dark:text-gray-300 leading-relaxed">Support, feedback, partnerships, and press all start here. Tell us what you need and we’ll route it to the right person.</p>
                 </div>
 
-                {/* Quick Links */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
-                  {quickLinks.map((q, i) => (
-                    <Link key={i} to={q.href}>
-                      <Card className="group hover:shadow-md transition-shadow h-full">
-                        <h4 className="font-semibold text-gray-900 dark:text-white text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{q.label}</h4>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{q.desc}</p>
-                      </Card>
-                    </Link>
-                  ))}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-0 border-y public-rule mb-12">
+                    {quickLinks.map((q, i) => (
+                        <Link key={i} to={q.href}>
+                            <div className="group h-full p-5 sm:border-r last:border-r-0 public-rule hover:bg-white dark:hover:bg-[#182431] transition-colors">
+                                <h4 className="font-semibold text-[#122033] dark:text-white text-sm group-hover:text-[#2F5BEA] transition-colors">{q.label}</h4>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{q.desc}</p>
+                            </div>
+                        </Link>
+                    ))}
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
                     {/* Contact Info — 2 cols */}
                     <div className="lg:col-span-2 space-y-6">
-                        <Card className="h-auto">
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Contact Information</h2>
+                        <div className="study-strip p-6 h-auto">
+                            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#168C86] mb-3">Before you write</p>
+                            <h2 className="public-display text-3xl font-normal text-[#122033] dark:text-white mb-6">Contact information</h2>
 
                             <div className="space-y-5">
                                 <div className="flex items-start gap-4">
@@ -105,13 +98,14 @@ const Contact: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                        </Card>
+                        </div>
                     </div>
 
                     {/* Form — 3 cols */}
                     <div className="lg:col-span-3">
-                        <Card>
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Send us a Message</h2>
+                        <div className="bg-white dark:bg-[#182431] border public-rule p-6 md:p-8">
+                            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#E56B4D] mb-3">Your message</p>
+                            <h2 className="public-display text-3xl font-normal text-[#122033] dark:text-white mb-6">Send us a message</h2>
 
                             {submitSuccess && (
                                 <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
@@ -212,7 +206,7 @@ const Contact: React.FC = () => {
                                     )}
                                 </button>
                             </form>
-                        </Card>
+                        </div>
                     </div>
                 </div>
             </ContentContainer>

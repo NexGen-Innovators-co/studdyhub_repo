@@ -1,7 +1,8 @@
 // src/pages/DocumentationPage.tsx
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { AppLayout, ContentContainer, SectionHeading, Card, ThemedImg } from '../modules/layout/components/LayoutComponents';
+import { AppLayout, ContentContainer, Card } from '../modules/layout/components/LayoutComponents';
+import { Search, ArrowRight, BookOpen, Code2, LifeBuoy } from 'lucide-react';
 
 const DocumentationPage: React.FC = () => {
     const documentationSections = [
@@ -109,64 +110,81 @@ const DocumentationPage: React.FC = () => {
     return (
         <AppLayout>
             <ContentContainer>
-                {/* Photo-backed hero */}
-                <div className="relative rounded-2xl overflow-hidden mb-12">
-                    <ThemedImg src="/screenshots/documents-light.jpg" alt="StuddyHub Documentation" className="w-full h-72 md:h-80 object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-black/20" />
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
-                        <span className="text-blue-300 text-sm font-semibold tracking-widest uppercase mb-3">Resources & Guides</span>
-                        <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4">Documentation</h1>
-                        <p className="text-gray-200 max-w-2xl text-lg">
-                            Everything you need to make the most of StuddyHub AI's features and capabilities.
-                        </p>
+                <div className="grid lg:grid-cols-[1fr_0.8fr] gap-10 items-end mb-12">
+                    <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#168C86] mb-4">Resources / Find your next step</p>
+                        <h1 className="public-display text-5xl md:text-6xl font-normal text-[#122033] dark:text-white leading-tight mb-5">Documentation that gets you unstuck.</h1>
+                        <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl leading-relaxed">Start with the guide, browse a topic, or jump straight to the answers people ask most.</p>
+                    </div>
+                    <div className="study-strip p-4">
+                        <label className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+                            <Search className="h-4 w-4 text-[#2F5BEA]" />
+                            <input aria-label="Search documentation" placeholder="Search the guides" className="w-full bg-transparent outline-none text-[#122033] dark:text-white placeholder:text-gray-400" />
+                        </label>
                     </div>
                 </div>
 
                 <div className="mb-16">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+                        {[
+                            { title: 'Start here', description: 'Set up your first study session in a few minutes.', link: '/user-guide-page', icon: BookOpen, accent: '#2F5BEA' },
+                            { title: 'For developers', description: 'Explore the architecture and internal API surface.', link: '/api', icon: Code2, accent: '#168C86' },
+                            { title: 'Need a hand?', description: 'Find answers or send the team a message.', link: '/contact', icon: LifeBuoy, accent: '#E56B4D' },
+                        ].map((entry) => (
+                            <Link to={entry.link} key={entry.title} className="group border public-rule bg-white dark:bg-[#182431] p-5 hover:border-[#2F5BEA] transition-colors">
+                                <entry.icon className="h-5 w-5 mb-8" style={{ color: entry.accent }} />
+                                <h2 className="public-display text-2xl font-normal text-[#122033] dark:text-white mb-2">{entry.title}</h2>
+                                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-4">{entry.description}</p>
+                                <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#2F5BEA] inline-flex items-center gap-2">Open <ArrowRight className="h-3.5 w-3.5" /></span>
+                            </Link>
+                        ))}
+                    </div>
+                    <div className="border-t public-rule pt-8">
+                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#E56B4D] mb-3">Browse by topic</p>
+                        <h2 className="public-display text-3xl font-normal text-[#122033] dark:text-white mb-6">Everything in StuddyHub, arranged for humans.</h2>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                         {documentationSections.map((section, index) => (
                             <Link to={section.link} key={index}>
-                                <Card className="h-full hover:shadow-xl transition-all duration-200 hover:-translate-y-1 group overflow-hidden !p-0">
-                                    <ThemedImg src={section.img} alt={section.title} className="w-full h-32 object-cover" />
-                                    <div className="p-5">
-                                        <h3 className="font-bold text-gray-900 dark:text-white mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                                            {section.title}
-                                        </h3>
-                                        <p className="text-gray-500 dark:text-gray-400 text-sm mb-3">
-                                            {section.description}
-                                        </p>
-                                        <ul className="space-y-1.5">
-                                            {section.items.map((item, idx) => (
-                                                <li key={idx} className="text-gray-600 dark:text-gray-400 text-sm flex items-center gap-2">
-                                                    <span className="w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0" />
-                                                    {item}
-                                                </li>
-                                            ))}
-                                        </ul>
+                                <div className="h-full border-b public-rule py-5 group">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div>
+                                            <h3 className="font-bold text-[#122033] dark:text-white mb-1 group-hover:text-[#2F5BEA] transition-colors">
+                                                {section.title}
+                                            </h3>
+                                            <p className="text-gray-500 dark:text-gray-400 text-sm mb-3">
+                                                {section.description}
+                                            </p>
+                                            <span className="text-xs text-gray-500 dark:text-gray-400">{section.items.length} topics</span>
+                                        </div>
+                                        <ArrowRight className="h-4 w-4 text-[#2F5BEA] mt-1 transition-transform group-hover:translate-x-1" />
                                     </div>
-                                </Card>
+                                </div>
                             </Link>
                         ))}
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-8">
-                    <Card>
-                        <SectionHeading title="Frequently Asked Questions" description="Quick answers to the most common queries." />
+                <div className="border-t public-rule pt-10">
+                    <div className="max-w-2xl mb-8">
+                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#168C86] mb-3">Quick answers</p>
+                        <h2 className="public-display text-3xl font-normal text-[#122033] dark:text-white mb-2">Frequently asked questions</h2>
+                        <p className="text-gray-600 dark:text-gray-300">Short answers for the moments when you need to keep moving.</p>
+                    </div>
 
-                        <div className="space-y-5">
-                            {faqs.map((faq, index) => (
-                                <div key={index} className="border-b border-gray-200 dark:border-gray-700 pb-5 last:border-0 last:pb-0">
-                                    <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
-                                        {faq.question}
-                                    </h3>
-                                    <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
-                                        {faq.answer}
-                                    </p>
-                                </div>
-                            ))}
-                        </div>
-                    </Card>
+                    <div className="max-w-3xl space-y-0 border-t public-rule">
+                        {faqs.map((faq, index) => (
+                            <details key={index} className="border-b public-rule py-5 group">
+                                <summary className="font-semibold text-[#122033] dark:text-white cursor-pointer list-none flex items-center justify-between gap-4">
+                                    {faq.question}
+                                    <span className="text-[#2F5BEA] text-xl font-normal group-open:rotate-45 transition-transform">+</span>
+                                </summary>
+                                <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed pt-3 pr-8">
+                                    {faq.answer}
+                                </p>
+                            </details>
+                        ))}
+                    </div>
                 </div>
             </ContentContainer>
         </AppLayout>

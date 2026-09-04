@@ -66,6 +66,12 @@ fun AuthScreen(
     var showForgotPasswordDialog by remember { mutableStateOf(false) }
     var hasNavigated by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.checkSessionExpiredNotice(context)
+    }
+
     // Navigate to main after successful email verification or sign in (single execution safeguard)
     LaunchedEffect(uiState.isSuccess, uiState.showVerificationScreen) {
         if (uiState.isSuccess && !uiState.showVerificationScreen && !hasNavigated) {

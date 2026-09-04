@@ -32,6 +32,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun SplashScreen(
     viewModel: SplashViewModel,
+    onNavigateToWelcome: () -> Unit,
     onNavigateToOnboarding: () -> Unit,
     onNavigateToAuth: () -> Unit,
     onNavigateToDashboard: () -> Unit
@@ -53,6 +54,7 @@ fun SplashScreen(
     // Modern production auto-navigation logic based on session state
     LaunchedEffect(navigationState) {
         when (navigationState) {
+            is SplashNavigationState.NavigateToWelcome -> onNavigateToWelcome()
             is SplashNavigationState.NavigateToOnboarding -> onNavigateToOnboarding()
             is SplashNavigationState.NavigateToAuth -> onNavigateToAuth()
             is SplashNavigationState.NavigateToDashboard -> onNavigateToDashboard()

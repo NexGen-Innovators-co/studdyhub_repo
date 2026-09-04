@@ -41,31 +41,16 @@ const TermsOfService: React.FC = () => {
     return (
         <AppLayout>
             <ContentContainer>
-                {/* Photo-backed hero */}
-                <div className="relative rounded-2xl overflow-hidden mb-12">
-                    <ThemedImg src="/screenshots/dashboard-light.jpg" alt="Terms of Service" className="w-full h-72 md:h-80 object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-black/20" />
+                <div className="relative rounded-xl overflow-hidden mb-12">
+                    <ThemedImg src="/screenshots/dashboard-light.jpg" alt="Terms of Service" className="w-full h-64 object-cover" />
+                    <div className="absolute inset-0 bg-black/50" />
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
-                        <span className="text-gray-300 text-sm font-semibold tracking-widest uppercase mb-3">Legal Agreement</span>
-                        <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4">Terms of Service</h1>
-                        <p className="text-gray-200 max-w-2xl text-lg">
-                            Last updated: February 1, 2026. Please read these terms carefully before using our services.
-                        </p>
+                        <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Terms of Service</h1>
+                        <p className="text-gray-300">Last updated: September 4, 2026</p>
                     </div>
                 </div>
 
                 <div className="mb-12">
-                    <Card className="mb-8">
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Important Legal Agreement</h2>
-                        <p className="text-gray-600 dark:text-gray-400 mb-3">
-                            These Terms of Service govern your use of StuddyHub AI. By using our service,
-                            you agree to these terms in full.
-                        </p>
-                        <p className="text-sm text-blue-600 dark:text-blue-400">
-                            This is a legally binding agreement. Please read carefully.
-                        </p>
-                    </Card>
-
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                         {sections.map((section, index) => (
                             <Card key={index} className="hover:shadow-md transition-shadow">

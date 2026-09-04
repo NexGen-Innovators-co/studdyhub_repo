@@ -208,6 +208,11 @@ fun StuddyHubApp() {
                 val splashVm: SplashViewModel = viewModel(factory = viewModelFactory)
                 SplashScreen(
                     viewModel = splashVm,
+                    onNavigateToWelcome = {
+                        navController.navigate(Screen.Welcome.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
                     onNavigateToOnboarding = {
                         navController.navigate(Screen.Onboarding.route) {
                             popUpTo(0) { inclusive = true }
@@ -221,6 +226,16 @@ fun StuddyHubApp() {
                     onNavigateToDashboard = {
                         navController.navigate(Screen.Dashboard.route) {
                             popUpTo(0) { inclusive = true }
+                        }
+                    }
+                )
+            }
+
+            composable(Screen.Welcome.route) {
+                com.example.ui.screens.welcome.WelcomeCarouselScreen(
+                    onNavigateToAuth = {
+                        navController.navigate(Screen.Auth.route) {
+                            popUpTo(Screen.Welcome.route) { inclusive = true }
                         }
                     }
                 )
@@ -757,7 +772,10 @@ fun StuddyHubApp() {
                     onBack = { navController.popBackStack() },
                     onLevelCompleted = { score, stars ->
                         coroutineScope.launch {
-                            repository.claimDailyQuest(stars * 25)
+                            // Use recordGameResult — NOT claimDailyQuest.
+                            // claimDailyQuest was incorrectly consuming the user's daily quest
+                            // slot and double-awarding XP via award_xp RPC + awardPoints().
+                            repository.recordGameResult("math_asteroid_blaster", 1, stars.coerceAtMost(8), 8)
                         }
                     }
                 )

@@ -41,7 +41,7 @@ class ViewModelFactory(
             modelClass.isAssignableFrom(AIChatViewModel::class.java) -> AIChatViewModel(repository) as T
             modelClass.isAssignableFrom(ProfileViewModel::class.java) -> ProfileViewModel(repository) as T
             modelClass.isAssignableFrom(DocumentsViewModel::class.java) -> DocumentsViewModel(repository) as T
-            modelClass.isAssignableFrom(com.example.ui.screens.splash.SplashViewModel::class.java) -> com.example.ui.screens.splash.SplashViewModel(repository) as T
+            modelClass.isAssignableFrom(com.example.ui.screens.splash.SplashViewModel::class.java) -> com.example.ui.screens.splash.SplashViewModel(repository, appContext) as T
             modelClass.isAssignableFrom(com.example.ui.screens.settings.SettingsViewModel::class.java) -> com.example.ui.screens.settings.SettingsViewModel(repository) as T
             modelClass.isAssignableFrom(com.example.ui.screens.search.SearchViewModel::class.java) -> com.example.ui.screens.search.SearchViewModel(repository, appContext) as T
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")

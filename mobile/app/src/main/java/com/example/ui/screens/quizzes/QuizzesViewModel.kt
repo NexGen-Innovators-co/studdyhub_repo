@@ -349,14 +349,19 @@ class QuizzesViewModel(private val repository: StuddyHubRepository) : ViewModel(
         if (quiz != null) {
             viewModelScope.launch {
                 repository.saveQuiz(quiz)
-                repository.recordQuizAttempt(quiz.id, score, total, timeTakenSec)
-                val xp = score * 25 + 50
                 val session = _explorerSession.value
                 if (session != null) {
+                    // Explorer game: only record via recordGameResult — it awards XP through the
+                    // submit_game_result RPC. Do NOT also call recordQuizAttempt which would
+                    // double-award via submit_quiz_result RPC.
                     repository.recordGameResult(session.gameKey, session.levelIndex, score, total)
+                    val xp = score * 25 + 50
                     val stars = starsForPercent(if (total > 0) (score * 100) / total else 0)
                     _userMessage.value = "${session.gameTitle} Level ${session.levelIndex} — $stars stars! +$xp XP 🎉"
                 } else {
+                    // Standard academic quiz: recordQuizAttempt handles XP via submit_quiz_result RPC
+                    repository.recordQuizAttempt(quiz.id, score, total, timeTakenSec)
+                    val xp = score * 25 + 50
                     _userMessage.value = "Quiz Completed! You earned $xp XP 🎉"
                 }
                 _activeQuiz.value = null
@@ -430,8 +435,9 @@ class QuizzesViewModel(private val repository: StuddyHubRepository) : ViewModel(
     /** Records a Spelling Bee level result (bypasses the shared quiz runner). */
     fun recordSpellingResult(gameKey: String, gameTitle: String, levelIndex: Int, score: Int, total: Int) {
         viewModelScope.launch {
+            // recordGameResult awards XP via submit_game_result RPC — do NOT also call
+            // recordQuizAttempt here which would double-award via submit_quiz_result RPC.
             repository.recordGameResult(gameKey, levelIndex, score, total)
-            repository.recordQuizAttempt("spelling_bee_${gameKey}_$levelIndex", score, total, 60)
             val stars = starsForPercent(if (total > 0) (score * 100) / total else 0)
             _userMessage.value = "$gameTitle Level $levelIndex — $stars stars! 🐝"
         }

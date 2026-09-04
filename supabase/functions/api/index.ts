@@ -337,9 +337,8 @@ serve(async (req: Request) => {
         const attempt = { id: body.id || crypto.randomUUID(), quiz_id: subId, user_id: userId, score: body.score || 0, total_questions: body.total_questions || 1, percentage: body.percentage || 0, time_taken_seconds: body.time_taken_seconds || 0, answers: body.answers || [], xp_earned: body.xp_earned || 0, live_results: body.live_results || null };
         const { data, error } = await supabase.from("quiz_attempts").upsert(attempt, { onConflict: "id" }).select().single();
         if (error) throw error;
-        if (attempt.xp_earned > 0) {
-          try { await supabase.rpc("award_xp", { p_user_id: userId, p_xp_amount: attempt.xp_earned, p_reason: "quiz_completed" }); } catch (_) {}
-        }
+        // XP is already awarded by the submit_quiz_result RPC called directly by the client.
+        // Calling award_xp here on offline sync would triple-award XP — removed.
         return ok(data, 201);
       }
     }

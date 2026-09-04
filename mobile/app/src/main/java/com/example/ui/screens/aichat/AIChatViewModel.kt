@@ -261,11 +261,12 @@ class AIChatViewModel(private val repository: StuddyHubRepository) : ViewModel()
         val scrollIdx = flowsArray[7] as Int
 
         // Merge optimistic messages with Room messages, deduped by id.
-        // Optimistic entries are superseded once Room emits the real version.
+        // Optimistic entries are sorted by timestamp so they appear at the bottom
+        // of the chat list, preserving chronological order (ORDER BY timestamp ASC).
         val mergedMsgs = if (optimistic.isNotEmpty()) {
             val roomIds = msgs.map { it.id }.toSet()
             val orphanedOptimistic = optimistic.filter { it.id !in roomIds }
-            orphanedOptimistic + msgs
+            (msgs + orphanedOptimistic).sortedBy { it.timestamp }
         } else {
             msgs
         }

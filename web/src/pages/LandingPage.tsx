@@ -1,115 +1,90 @@
 // src/pages/LandingPage.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { Button } from '../modules/ui/components/button';
-import { Sparkles, ArrowRight, Play, Shield, Globe, Award, Users, FileText, TrendingUp, Star, Zap, ChevronLeft, ChevronRight, Loader2, Mic, MessageSquare, Brain, LayoutDashboard, ArrowUp } from 'lucide-react';
+import { ArrowRight, Users, FileText, Star, ChevronLeft, ChevronRight, Loader2, Mic, MessageSquare, Brain, LayoutDashboard, ArrowUp, Download } from 'lucide-react';
 import { apiClient } from '@/services/apiClient';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout, ContentContainer } from '../modules/layout/components/LayoutComponents';
 import { RateAppDialog } from '../modules/ratings/components/RateAppDialog';
-// Update src/pages/LandingPage.tsx - Add this after features section
 import { ScreenshotGallery } from '../modules/layout/components/ScreenshotGallery';
+
 const appScreenshots = [
+  { id: 1, title: "Dashboard", description: "Track progress and upcoming deadlines", darkUrl: "/screenshots/dashboard-dark.jpg", lightUrl: "/screenshots/dashboard-light.jpg", category: "Dashboard" },
+  { id: 2, title: "AI Chat", description: "Ask questions and get instant explanations", darkUrl: "/screenshots/chat-dark.jpg", lightUrl: "/screenshots/chat-light.jpg", category: "AI Assistant" },
+  { id: 3, title: "Notes", description: "Rich editor with AI-powered organisation", darkUrl: "/screenshots/notes-dark.jpg", lightUrl: "/screenshots/notes-light.jpg", category: "Notes" },
+  { id: 4, title: "Documents", description: "Upload PDFs and study materials for analysis", darkUrl: "/screenshots/documents-dark.jpg", lightUrl: "/screenshots/documents-light.jpg", category: "Documents" },
+  { id: 5, title: "Recordings", description: "Record and transcribe lectures", darkUrl: "/screenshots/recordings-dark.jpg", lightUrl: "/screenshots/recordings-light.jpg", category: "Recordings" },
+  { id: 6, title: "Analytics", description: "Visualise your learning progress", darkUrl: "/screenshots/dashboardanalytics-dark.jpg", lightUrl: "/screenshots/dashboardanalytics-light.jpg", category: "Analytics" },
+  { id: 7, title: "Social", description: "Connect with classmates and study groups", darkUrl: "/screenshots/social-dark.jpg", lightUrl: "/screenshots/social-light.jpg", category: "Social" },
+];
+
+const heroCapabilities = [
   {
-    id: 1,
-    title: "Dashboard Overview",
-    description: "Your personalized learning dashboard with AI insights and progress tracking",
-    darkUrl: "/screenshots/dashboard-dark.jpg", // Your dark mode screenshot
-    lightUrl: "/screenshots/dashboard-light.jpg", // Your light mode screenshot
-    category: "Dashboard"
+    eyebrow: 'The new Explorer experience',
+    title: 'Learning that feels like progress.',
+    description: 'Meet Ollie, your friendly AI study buddy. Learn through stories, quick challenges, flashcards, and games that make every session feel worth coming back to.',
+    label: 'Understand',
+    capabilityTitle: 'Ask Ollie anything.',
+    capabilityDescription: 'Get friendly, step-by-step explanations that make difficult ideas easier to grasp.',
+    support: 'A little help can change the whole study session.',
+    icon: MessageSquare,
+    accent: '#8FD8FF',
   },
   {
-    id: 2,
-    title: "AI Chat Interface",
-    description: "Interactive conversation with your AI learning assistant",
-    darkUrl: "/screenshots/chat-dark.jpg",
-    lightUrl: "/screenshots/chat-light.jpg",
-    category: "AI Assistant"
+    eyebrow: 'Practice without the pressure',
+    title: 'Turn learning into play.',
+    description: 'Challenge yourself with quizzes, battles, spelling, maths, and quick daily activities that make practice feel rewarding.',
+    label: 'Practice',
+    capabilityTitle: 'Your next challenge is ready.',
+    capabilityDescription: 'Try a quick quiz, enter a battle, or build confidence one small answer at a time.',
+    support: 'Small wins add up to real understanding.',
+    icon: Brain,
+    accent: '#FFB08D',
   },
   {
-    id: 3,
-    title: "Smart Note Editor",
-    description: "Rich text editor with AI-powered suggestions",
-    darkUrl: "/screenshots/notes-dark.jpg",
-    lightUrl: "/screenshots/notes-light.jpg",
-    category: "Notes"
+    eyebrow: 'Make progress visible',
+    title: 'Build progress that lasts.',
+    description: 'Collect XP, unlock badges, grow your streak, and follow a roadmap made for the goals you want to reach.',
+    label: 'Remember',
+    capabilityTitle: 'Every session leaves a mark.',
+    capabilityDescription: 'See your streak grow, collect badges, and know exactly what to try next.',
+    support: 'Progress feels better when you can see it.',
+    icon: Star,
+    accent: '#8DE0C8',
   },
   {
-    id: 4,
-    title: "Document Analysis",
-    description: "Upload and analyze documents with AI insights",
-    darkUrl: "/screenshots/documents-dark.jpg",
-    lightUrl: "/screenshots/documents-light.jpg",
-    category: "Documents"
+    eyebrow: 'Learning is better together',
+    title: 'Study with your people.',
+    description: 'Share ideas, join study groups, and learn alongside classmates wherever you are.',
+    label: 'Connect',
+    capabilityTitle: 'Bring your study group in.',
+    capabilityDescription: 'Share ideas, compare answers, and make revision feel less like something you do alone.',
+    support: 'There is always another way to learn it.',
+    icon: Users,
+    accent: '#FFD57A',
   },
-  {
-    id: 5,
-    title: "Voice Recording",
-    description: "Record and transcribe lectures automatically",
-    darkUrl: "/screenshots/recordings-dark.jpg",
-    lightUrl: "/screenshots/recordings-light.jpg",
-    category: "Recordings"
-  },
-  {
-    id: 6,
-    title: "Progress Analytics",
-    description: "Track your learning progress with detailed analytics",
-    darkUrl: "/screenshots/dashboardanalytics-dark.jpg",
-    lightUrl: "/screenshots/dashboardanalytics-light.jpg",
-    category: "Analytics"
-  },
-  {
-    id: 7,
-    title: "Social networking",
-    description: "Connect with individuals in your scope of studies",
-    darkUrl: "/screenshots/social-dark.jpg",
-    lightUrl: "/screenshots/social-light.jpg",
-    category: "social feeds"
-  }
 ];
 
 const LandingPage: React.FC = () => {
-  const [activeFeature, setActiveFeature] = useState(0);
   const [currentTestimonialIndex, setCurrentTestimonialIndex] = useState(0);
   const [appStats, setAppStats] = useState({
-    activeUsers: '0+',
-    totalUsers: '0',
-    notesProcessed: '0+',
-    quizzesTaken: '0+',
-    documentsUploaded: '0+',
-    podcastsGenerated: '0+',
-    uptime: '0%',
-    userRating: '0/5',
+    activeUsers: '0+', totalUsers: '0', notesProcessed: '0+', quizzesTaken: '0+',
+    podcastsGenerated: '0+', userRating: '0/5',
   });
   const [loadingStats, setLoadingStats] = useState(true);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [liveTestimonials, setLiveTestimonials] = useState<any[]>([]);
-  const [liveRatingStats, setLiveRatingStats] = useState<{ average: number; count: number } | null>(null);
   const carouselRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
+  const [activeCapability, setActiveCapability] = useState(0);
+  const [isCapabilityPaused, setIsCapabilityPaused] = useState(false);
 
-  // Handle scroll-to-top button visibility
   useEffect(() => {
-    const handleScroll = () => {
-      setShowScrollTop(window.scrollY > 400);
-    };
+    const handleScroll = () => setShowScrollTop(window.scrollY > 400);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  useEffect(() => {
-    const featureInterval = setInterval(() => {
-      setActiveFeature((prev) => (prev + 1) % features.length);
-    }, 4000);
-    return () => clearInterval(featureInterval);
-  }, []);
-
-  // Fetch App Stats directly from Supabase (RLS allows public SELECT)
   useEffect(() => {
     const fetchAppStats = async () => {
       setLoadingStats(true);
@@ -125,586 +100,316 @@ const LandingPage: React.FC = () => {
             totalUsers: (data as any).total_users || '0',
             notesProcessed: (data as any).notes_processed || '0+',
             quizzesTaken: (data as any).quizzes_taken || '0+',
-            documentsUploaded: (data as any).documents_uploaded || '0+',
             podcastsGenerated: (data as any).podcasts_generated || '0+',
-            uptime: (data as any).uptime || '99.9%',
             userRating: (data as any).user_rating || '4.9/5',
           });
         }
-      } catch (error) {
-        // Fallback to defaults if table doesn't exist yet
-      } finally {
-        setLoadingStats(false);
-      }
+      } catch { /* fallback defaults */ }
+      finally { setLoadingStats(false); }
     };
-
     fetchAppStats();
   }, []);
 
-  // Static fallback testimonials (shown when no approved user testimonials exist)
   const staticTestimonials = [
-    {
-      name: "Doris",
-      role: "SHS student",
-      avatar: "D",
-      content: "StuddyHub AI has completely revolutionized how I study. The AI chat is incredibly helpful, and the document analysis saves me so much time!",
-      rating: 5,
-      verified: true,
-      imageUrl: "/testimonial1.jpg"
-    },
-    {
-      name: "Isabel",
-      role: "Computer Science student at UMaT",
-      avatar: "I",
-      content: "The voice recording feature with AI transcription is a game-changer for my research interviews. Absolutely incredible!",
-      rating: 5,
-      verified: true,
-      imageUrl: '/testimonial3.jpg'
-    },
-    {
-      name: "Dr. Effah Emmanuel",
-      role: "Computer Science lecturer at UMaT",
-      avatar: "DE",
-      content: "Finally, an AI tool that actually understands my learning style. My productivity has increased by 300%!",
-      rating: 5,
-      verified: true,
-      imageUrl: '/testimonial2.jpg'
-    },
+    { name: "Doris", role: "SHS student", avatar: "D", content: "StuddyHub helps me organise my notes and study for exams. The AI chat explains things in a way that actually makes sense.", rating: 5, verified: true, imageUrl: "/testimonial1.jpg" },
+    { name: "Isabel", role: "Computer Science student at UMaT", avatar: "I", content: "The voice recording feature saves me during lectures. I can record everything and search through it later when I revise.", rating: 5, verified: true, imageUrl: '/testimonial3.jpg' },
+    { name: "Dr. Effah Emmanuel", role: "Computer Science lecturer at UMaT", avatar: "DE", content: "My students have told me their study habits have improved since using StuddyHub. The quiz generation tool is particularly useful for exam prep.", rating: 5, verified: true, imageUrl: '/testimonial2.jpg' },
   ];
 
-  // Merge: approved user testimonials first, then static fallbacks
-  const testimonials = [
-    ...liveTestimonials,
-    ...staticTestimonials,
-  ];
+  const testimonials = [...liveTestimonials, ...staticTestimonials];
 
-  // Fetch approved testimonials and live rating stats
   useEffect(() => {
     const fetchLiveData = async () => {
       try {
-        // Use SECURITY DEFINER RPC so anonymous visitors see real names + avatars
         const testimonialRows = await apiClient.rpc('get_approved_testimonials', { p_limit: 20 });
-
         if (Array.isArray(testimonialRows) && testimonialRows.length > 0) {
-          const mapped = testimonialRows.map((t: any) => {
+          setLiveTestimonials(testimonialRows.map((t: any) => {
             const name = t.author_name || 'StuddyHub User';
             const initials = name.split(' ').map((w: string) => w[0]).join('').substring(0, 2).toUpperCase();
-            return {
-              name,
-              role: 'Verified User',
-              avatar: initials,
-              content: t.content,
-              rating: t.rating,
-              verified: true,
-              imageUrl: t.author_avatar_url || '',
-            };
-          });
-          setLiveTestimonials(mapped);
+            return { name, role: 'Verified User', avatar: initials, content: t.content, rating: t.rating, verified: true, imageUrl: t.author_avatar_url || '' };
+          }));
         }
-
-        // Fetch aggregate rating stats
-        const ratingData = await apiClient.rpc('get_app_rating_stats');
-        if (ratingData) {
-          setLiveRatingStats({
-            average: ratingData.average_rating || 0,
-            count: ratingData.total_ratings || 0,
-          });
-        }
-      } catch (err) {
-        // Silently fail — static fallbacks will show
-      }
+      } catch { /* static fallbacks */ }
     };
-
     fetchLiveData();
   }, []);
 
-  const nextTestimonial = () => {
-    setCurrentTestimonialIndex((prevIndex) => (prevIndex + 1) % testimonials.length);
-  };
-
-  const prevTestimonial = () => {
-    setCurrentTestimonialIndex((prevIndex) =>
-      prevIndex === 0 ? testimonials.length - 1 : prevIndex - 1
-    );
-  };
+  const nextTestimonial = () => setCurrentTestimonialIndex((prev) => (prev + 1) % testimonials.length);
+  const prevTestimonial = () => setCurrentTestimonialIndex((prev) => prev === 0 ? testimonials.length - 1 : prev - 1);
 
   useEffect(() => {
-    const autoPlayInterval = setInterval(nextTestimonial, 7000);
-    const carouselElement = carouselRef.current;
+    const interval = setInterval(nextTestimonial, 7000);
+    return () => clearInterval(interval);
+  }, [testimonials.length]);
 
-    if (carouselElement) {
-      const handleMouseEnter = () => clearInterval(autoPlayInterval);
-      const handleMouseLeave = () => setInterval(nextTestimonial, 7000);
+  useEffect(() => {
+    if (isCapabilityPaused) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const interval = setInterval(() => {
+      setActiveCapability((current) => (current + 1) % heroCapabilities.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [isCapabilityPaused]);
 
-      carouselElement.addEventListener('mouseenter', handleMouseEnter);
-      carouselElement.addEventListener('mouseleave', handleMouseLeave);
-
-      return () => {
-        clearInterval(autoPlayInterval);
-        carouselElement.removeEventListener('mouseenter', handleMouseEnter);
-        carouselElement.removeEventListener('mouseleave', handleMouseLeave);
-      };
-    }
-  }, [currentTestimonialIndex, testimonials.length]);
+  const capability = heroCapabilities[activeCapability];
 
   const features = [
-    {
-      icon: LayoutDashboard,
-      title: "Smart Dashboard",
-      description: "Your personal command centre. Track study streaks, upcoming deadlines, recent activity, and AI-generated insights — all in one glance.",
-      color: "bg-blue-600"
-    },
-    {
-      icon: MessageSquare,
-      title: "AI Chat Assistant",
-      description: "24/7 study companion powered by multiple AI models. Ask questions, clarify concepts, and generate flashcards from any topic.",
-      color: "bg-indigo-600"
-    },
-    {
-      icon: FileText,
-      title: "Intelligent Notes",
-      description: "Rich-text editor with AI summarisation, auto-formatting, and smart organisation. Turn scattered thoughts into structured study material.",
-      color: "bg-green-600"
-    },
-    {
-      icon: Brain,
-      title: "Document Analysis",
-      description: "Upload PDFs, slides, or images and chat with your documents. Extract key points, generate quizzes, and build study guides instantly.",
-      color: "bg-orange-600"
-    },
-    {
-      icon: Mic,
-      title: "Podcasts & Recordings",
-      description: "Record lectures, create study podcasts, and get AI-powered transcriptions with automatic chapter markers and searchable text.",
-      color: "bg-red-600"
-    },
-    {
-      icon: Users,
-      title: "Social & Study Groups",
-      description: "Join study groups, share resources, participate in live quiz sessions, and build a learning community with classmates.",
-      color: "bg-purple-600"
-    }
+    { icon: LayoutDashboard, title: "Dashboard", description: "Track study streaks, deadlines, and recent activity in one place." },
+    { icon: MessageSquare, title: "AI Chat", description: "Ask questions, clarify concepts, and get help on any topic — available 24/7." },
+    { icon: FileText, title: "Smart Notes", description: "Rich-text editor with AI summarisation and auto-formatting for organised study material." },
+    { icon: Brain, title: "Document Analysis", description: "Upload PDFs or slides, then chat with your documents to extract key points and generate quizzes." },
+    { icon: Mic, title: "Podcasts & Recordings", description: "Record lectures and create study podcasts with AI transcription and chapter markers." },
+    { icon: Users, title: "Study Groups", description: "Join groups, share resources, and participate in live quiz sessions with classmates." },
   ];
 
   return (
     <AppLayout>
-      {/* Hero Section — Modern gradient mesh, no video */}
-      {/* -mt-16 pulls the hero under the fixed header so there's no gray gap when header is transparent */}
-      <section className="relative min-h-[92vh] -mt-16 bg-white dark:bg-gray-950 overflow-hidden flex items-center">
-        {/* Decorative mesh blobs */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute -top-32 -left-32 w-[500px] h-[500px] bg-blue-400/20 dark:bg-blue-500/10 rounded-full blur-[120px]" />
-          <div className="absolute top-1/3 right-0 w-[400px] h-[400px] bg-indigo-400/20 dark:bg-indigo-500/10 rounded-full blur-[100px]" />
-          <div className="absolute bottom-0 left-1/4 w-[350px] h-[350px] bg-purple-300/15 dark:bg-purple-500/10 rounded-full blur-[100px]" />
-          {/* Subtle dot grid */}
-          <div className="absolute inset-0 opacity-[0.035] dark:opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
-        </div>
-
-        <div className="relative z-10 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center px-4 sm:px-6 lg:px-8 pt-36 pb-16 lg:pt-40 lg:pb-20">
-          {/* Left — Copy */}
-          <div className="text-center lg:text-left">
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm font-semibold mb-6 border border-blue-200/60 dark:border-blue-800"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              AI-Powered Learning Platform
-            </motion.div>
-
-            <motion.h1
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1, duration: 0.6 }}
-              className="text-4xl sm:text-5xl lg:text-6xl xl:text-[3.5rem] font-extrabold leading-[1.1] tracking-tight text-gray-900 dark:text-white mb-6"
-            >
-              Level Up Your <br className="hidden sm:block" />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 dark:from-blue-400 dark:via-indigo-400 dark:to-purple-400">Study Game</span>
-            </motion.h1>
-
-            <motion.p
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.6 }}
-              className="text-lg sm:text-xl text-gray-600 dark:text-gray-300 max-w-xl mx-auto lg:mx-0 mb-8 leading-relaxed"
-            >
-              Notes, docs, recordings, podcasts, quizzes, scheduling &amp; social study
-              groups all supercharged by AI. One platform to ace every semester.
-            </motion.p>
-
-            <motion.div
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3, duration: 0.6 }}
-              className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mb-10"
-            >
-              <Link to="/auth">
-                <Button className="px-7 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-base rounded-xl shadow-lg shadow-blue-600/25 hover:shadow-xl hover:shadow-blue-600/30 transition-all hover:scale-[1.03] active:scale-[0.98]">
-                  Get Started Free <ArrowRight className="h-5 w-5 ml-2" />
-                </Button>
-              </Link>
-              <a href="#features">
-                <Button variant="outline" className="px-7 py-3.5 border-gray-300 dark:border-gray-700 bg-white/70 dark:bg-gray-900/60 backdrop-blur text-gray-700 dark:text-gray-200 font-semibold text-base rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all hover:scale-[1.03] active:scale-[0.98]">
-                  Explore Features
-                </Button>
-              </a>
-            </motion.div>
-
-            {/* Trust badges */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.5, duration: 0.8 }}
-              className="flex flex-wrap gap-4 justify-center lg:justify-start text-sm text-gray-500 dark:text-gray-400"
-            >
-              <span className="flex items-center gap-1.5"><Shield className="h-4 w-4 text-green-500" /> Secure &amp; Private</span>
-              <span className="flex items-center gap-1.5"><Globe className="h-4 w-4 text-blue-500" /> Global Community</span>
-              <span className="flex items-center gap-1.5"><Award className="h-4 w-4 text-yellow-500" /> Built for Students</span>
-            </motion.div>
-          </div>
-
-          {/* Right — Gamified achievement cards */}
-          <motion.div
-            initial={{ opacity: 0, x: 40 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.25, duration: 0.7, ease: 'easeOut' }}
-            className="relative hidden lg:block"
-          >
-            {/* Main dashboard mockup card */}
-            <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200/60 dark:border-gray-800 p-5 transform rotate-1 hover:rotate-0 transition-transform duration-500">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow">
-                  <Brain className="h-5 w-5" />
+      {/* Hero */}
+      <section className="relative min-h-[calc(100vh-4rem)] overflow-hidden bg-[#122033] bg-cover bg-[center_right] text-white md:bg-center" style={{ backgroundImage: "url('/heroBg.png')" }}>
+        <div className="absolute inset-0 bg-gradient-to-r from-[#122033]/90 via-[#122033]/58 to-[#122033]/15" />
+        <div className="absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-[#122033]/65 via-[#122033]/25 to-transparent" />
+        <div className="relative max-w-6xl mx-auto min-h-[calc(100vh-4rem)] px-4 sm:px-6 lg:px-8 py-20 md:py-28 flex items-center">
+          <div className="w-full px-12 md:px-16">
+            <div className={`relative z-10 max-w-3xl ${activeCapability % 2 === 1 ? 'hero-slide-right' : ''}`}>
+              <p key={`${capability.label}-eyebrow`} className="text-xs font-bold uppercase tracking-[0.2em] text-[#ff9b80] mb-5 hero-eyebrow-in">
+                {capability.eyebrow}
+              </p>
+              <h1 key={`${capability.label}-title`} className="public-display text-5xl sm:text-6xl lg:text-7xl font-normal leading-[0.98] text-white mb-7 max-w-2xl hero-title-in">
+                {capability.title}
+              </h1>
+              <p key={`${capability.label}-description`} className="text-lg text-blue-100 max-w-lg mb-8 leading-relaxed hero-copy-in">
+                {capability.description}
+              </p>
+              <div
+                key={`${capability.label}-capability`}
+                className="max-w-xl border-l-2 pl-5 mb-8 min-h-[118px] hero-capability-in"
+                style={{ borderColor: capability.accent }}
+                onMouseEnter={() => setIsCapabilityPaused(true)}
+                onMouseLeave={() => setIsCapabilityPaused(false)}
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <capability.icon className="h-5 w-5" style={{ color: capability.accent }} />
+                  <span className="text-xs font-bold uppercase tracking-[0.18em] text-blue-200">{capability.label}</span>
                 </div>
-                <div>
-                  <p className="font-semibold text-gray-900 dark:text-white text-sm">Today's Progress</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">3 of 5 goals completed</p>
-                </div>
-                <div className="ml-auto px-2.5 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold rounded-full">+120 XP</div>
+                <h2 key={capability.capabilityTitle} className="text-2xl font-bold text-white animate-in fade-in slide-in-from-left-2 duration-500 mb-1">{capability.capabilityTitle}</h2>
+                <p key={capability.capabilityDescription} className="text-sm text-blue-100 leading-relaxed animate-in fade-in duration-700">{capability.capabilityDescription}</p>
               </div>
-              {/* Progress bar */}
-              <div className="w-full h-2.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden mb-4">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: '60%' }}
-                  transition={{ delay: 0.8, duration: 1.2, ease: 'easeOut' }}
-                  className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full"
-                />
+              <p key={`${capability.label}-support`} className="text-sm text-blue-200 mb-8 hero-copy-in">{capability.support}</p>
+              <div className="flex flex-col sm:flex-row gap-3 mb-8">
+                <a href="/studdyhub-v1.0-beta.3.apk" download="studdyhub-v1.0-beta.3.apk">
+                  <Button className="min-h-12 px-6 bg-[#2F5BEA] hover:bg-[#2448c5] text-white font-semibold rounded-md transition-colors">
+                    Download the Android app <Download className="h-4 w-4 ml-2" />
+                  </Button>
+                </a>
+                <a href="#features">
+                  <Button variant="outline" className="min-h-12 px-6 border-white/50 bg-white/10 text-white font-semibold rounded-md hover:bg-white/20 hover:text-white transition-colors">
+                    Explore the experience
+                  </Button>
+                </a>
               </div>
-              {/* Mini feature grid */}
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { icon: FileText, label: 'Notes', count: '24', color: 'text-green-500 bg-green-50 dark:bg-green-900/20' },
-                  { icon: MessageSquare, label: 'AI Chats', count: '12', color: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' },
-                  { icon: Mic, label: 'Podcasts', count: '8', color: 'text-purple-500 bg-purple-50 dark:bg-purple-900/20' },
-                ].map((item, i) => (
-                  <div key={i} className={`flex flex-col items-center p-3 rounded-xl ${item.color}`}>
-                    <item.icon className={`h-5 w-5 mb-1 ${item.color.split(' ')[0]}`} />
-                    <span className="text-lg font-bold text-gray-900 dark:text-white">{item.count}</span>
-                    <span className="text-[11px] text-gray-500 dark:text-gray-400">{item.label}</span>
-                  </div>
-                ))}
-              </div>
+              <p className="text-sm text-blue-200">Built for curious learners. Designed to make practice feel less like pressure.</p>
             </div>
-
-            {/* Floating streak badge */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ delay: 1, duration: 0.5 }}
-              className="absolute -top-6 -right-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200/60 dark:border-gray-700 px-4 py-3 flex items-center gap-3"
-            >
-              <div className="w-9 h-9 bg-orange-100 dark:bg-orange-900/30 text-orange-500 rounded-lg flex items-center justify-center text-lg">🔥</div>
-              <div>
-                <p className="text-sm font-bold text-gray-900 dark:text-white">7-Day Streak!</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Keep it going</p>
-              </div>
-            </motion.div>
-
-            {/* Floating quiz score badge */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: -20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ delay: 1.2, duration: 0.5 }}
-              className="absolute -bottom-4 -left-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200/60 dark:border-gray-700 px-4 py-3 flex items-center gap-3"
-            >
-              <div className="w-9 h-9 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-lg flex items-center justify-center font-bold text-sm">A+</div>
-              <div>
-                <p className="text-sm font-bold text-gray-900 dark:text-white">Quiz Score</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">96% — Top 5%</p>
-              </div>
-            </motion.div>
-          </motion.div>
+          </div>
+          {/* <button type="button" onClick={() => setActiveCapability((activeCapability - 1 + heroCapabilities.length) % heroCapabilities.length)} className="absolute left-3 md:left-6 top-1/2 -translate-y-1/2 h-12 w-12 inline-flex items-center justify-center border border-white/40 bg-[#122033]/40 text-white hover:bg-white/15 transition-colors z-20" aria-label="Previous hero slide">
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button type="button" onClick={() => setActiveCapability((activeCapability + 1) % heroCapabilities.length)} className="absolute right-3 md:right-6 top-1/2 -translate-y-1/2 h-12 w-12 inline-flex items-center justify-center border border-white/40 bg-[#122033]/40 text-white hover:bg-white/15 transition-colors z-20" aria-label="Next hero slide">
+            <ChevronRight className="h-5 w-5" />
+          </button> */}
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20" aria-label="Hero slides">
+            {heroCapabilities.map((item, index) => (
+              <button key={item.label} type="button" onClick={() => setActiveCapability(index)} className={`h-1.5 transition-all ${index === activeCapability ? 'w-10 bg-white' : 'w-2 bg-white/50'}`} aria-label={`Show ${item.label} slide`} />
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* Stats Section */}
-      <section className="py-12 md:py-16 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
+      {/* What's New */}
+      <section className="py-8 bg-white dark:bg-[#182431] border-b public-rule">
+        <ContentContainer>
+          <div className="flex flex-col md:flex-row md:items-center gap-6">
+            <div className="md:w-1/4">
+              <p className="text-xs font-bold text-[#E56B4D] mb-2 tracking-[0.16em] uppercase">Latest release / v1.0-beta.3</p>
+              <h2 className="public-display text-2xl font-normal text-[#122033] dark:text-white">Explorer is ready to play.</h2>
+            </div>
+            <div className="md:w-3/4 grid grid-cols-1 sm:grid-cols-3 gap-5">
+              <div className="border-l-2 border-[#E56B4D] pl-4">
+                <h3 className="font-semibold text-[#122033] dark:text-white text-sm mb-1">Meet Ollie</h3>
+                <p className="text-gray-500 dark:text-gray-400 text-xs">A friendly AI tutor that explains ideas with stories and examples.</p>
+              </div>
+              <div className="border-l-2 border-[#168C86] pl-4">
+                <h3 className="font-semibold text-[#122033] dark:text-white text-sm mb-1">Learn by playing</h3>
+                <p className="text-gray-500 dark:text-gray-400 text-xs">Take on quick quizzes, battles, and learning games.</p>
+              </div>
+              <div className="border-l-2 border-[#2F5BEA] pl-4">
+                <h3 className="font-semibold text-[#122033] dark:text-white text-sm mb-1">Keep your progress</h3>
+                <p className="text-gray-500 dark:text-gray-400 text-xs">Earn XP, build streaks, collect badges, and follow your roadmap.</p>
+              </div>
+            </div>
+          </div>
+          <div className="mt-6 md:ml-[25%]">
+            <a href="/studdyhub-v1.0-beta.3.apk" download="studdyhub-v1.0-beta.3.apk">
+              <Button variant="outline" className="px-5 py-2.5 text-sm font-medium rounded-lg">
+                <Download className="h-4 w-4 mr-2" />
+                Download v1.0-beta.3
+              </Button>
+            </a>
+          </div>
+        </ContentContainer>
+      </section>
+
+      {/* Stats */}
+      <section className="py-10 bg-[#F7F8F5] dark:bg-[#101923] border-b public-rule">
         <ContentContainer>
           {loadingStats ? (
-            <div className="flex justify-center items-center h-32">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-              <p className="ml-4 text-gray-600 dark:text-gray-400">Loading stats...</p>
+            <div className="flex justify-center h-16">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
             </div>
           ) : (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 0.6, staggerChildren: 0.1 }}
-              className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6"
-            >
-              <div className="text-center group hover:-translate-y-1 transition-transform duration-300">
-                <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-blue-100 text-blue-600 rounded-full mb-4 dark:bg-blue-900/30 dark:text-blue-400 group-hover:scale-110 transition-transform duration-300 shadow-sm">
-                  <Users className="h-6 w-6 md:h-7 md:w-7" />
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-6 md:gap-8">
+              {[
+                { value: appStats.activeUsers, label: 'Active Users' },
+                { value: appStats.totalUsers, label: 'Total Users' },
+                { value: appStats.notesProcessed, label: 'Notes Created' },
+                { value: appStats.quizzesTaken, label: 'Quizzes Taken' },
+                { value: appStats.podcastsGenerated, label: 'Podcasts' },
+              ].map((stat, i) => (
+                <div key={i} className="text-center md:text-left">
+                  <div className="public-display text-3xl font-normal text-[#122033] dark:text-white">{stat.value}</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">{stat.label}</div>
                 </div>
-                <div className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">{appStats.activeUsers}</div>
-                <div className="text-gray-600 dark:text-gray-400 font-medium text-sm">Active Users</div>
-              </div>
-              <div className="text-center group hover:-translate-y-1 transition-transform duration-300">
-                <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-indigo-100 text-indigo-600 rounded-full mb-4 dark:bg-indigo-900/30 dark:text-indigo-400 group-hover:scale-110 transition-transform duration-300 shadow-sm">
-                  <Users className="h-6 w-6 md:h-7 md:w-7" />
-                </div>
-                <div className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">{appStats.totalUsers}</div>
-                <div className="text-gray-600 dark:text-gray-400 font-medium text-sm">Total Users</div>
-              </div>
-              <div className="text-center group hover:-translate-y-1 transition-transform duration-300">
-                <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-green-100 text-green-600 rounded-full mb-4 dark:bg-green-900/30 dark:text-green-400 group-hover:scale-110 transition-transform duration-300 shadow-sm">
-                  <FileText className="h-6 w-6 md:h-7 md:w-7" />
-                </div>
-                <div className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">{appStats.notesProcessed}</div>
-                <div className="text-gray-600 dark:text-gray-400 font-medium text-sm">Notes Created</div>
-              </div>
-              <div className="text-center group hover:-translate-y-1 transition-transform duration-300">
-                <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-purple-100 text-purple-600 rounded-full mb-4 dark:bg-purple-900/30 dark:text-purple-400 group-hover:scale-110 transition-transform duration-300 shadow-sm">
-                  <Zap className="h-6 w-6 md:h-7 md:w-7" />
-                </div>
-                <div className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">{appStats.quizzesTaken}</div>
-                <div className="text-gray-600 dark:text-gray-400 font-medium text-sm">Quizzes Taken</div>
-              </div>
-              <div className="text-center group hover:-translate-y-1 transition-transform duration-300">
-                <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-orange-100 text-orange-600 rounded-full mb-4 dark:bg-orange-900/30 dark:text-orange-400 group-hover:scale-110 transition-transform duration-300 shadow-sm">
-                  <Mic className="h-6 w-6 md:h-7 md:w-7" />
-                </div>
-                <div className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">{appStats.podcastsGenerated}</div>
-                <div className="text-gray-600 dark:text-gray-400 font-medium text-sm">Podcasts</div>
-              </div>
-              <div className="text-center group hover:-translate-y-1 transition-transform duration-300">
-                <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-yellow-100 text-yellow-600 rounded-full mb-4 dark:bg-yellow-900/30 dark:text-yellow-400 group-hover:scale-110 transition-transform duration-300 shadow-sm">
-                  <Star className="h-6 w-6 md:h-7 md:w-7" />
-                </div>
-                <div className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">
-                  {liveRatingStats && liveRatingStats.count > 0
-                    ? `${liveRatingStats.average}/5`
-                    : appStats.userRating}
-                </div>
-                <div className="text-gray-600 dark:text-gray-400 font-medium text-sm">
-                  Rating{liveRatingStats && liveRatingStats.count > 0 ? ` (${liveRatingStats.count})` : ''}
-                </div>
-              </div>
-            </motion.div>
+              ))}
+            </div>
           )}
         </ContentContainer>
       </section>
 
-      {/* Features Section */}
-      <section id="features" className="py-20 md:py-24 bg-gray-50/50 dark:bg-gray-950/50">
+      {/* Features */}
+      <section id="features" className="py-20 bg-white dark:bg-[#182431] border-b public-rule">
         <ContentContainer>
-          <div className="text-center mb-16 space-y-4">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold shadow-sm dark:bg-blue-900/30 dark:text-blue-300"
-            >
-              <Zap className="h-4 w-4" />
-              <span>Core Capabilities</span>
-            </motion.div>
-            <motion.h2
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
-              className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white"
-            >
-              Everything You Need to <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">Thrive</span>
-            </motion.h2>
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.2 }}
-              className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed"
-            >
-              Discover how our intelligent features can transform your learning experience and boost your productivity.
-            </motion.p>
+          <div className="max-w-2xl mb-12">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#168C86] mb-3">The study loop</p>
+            <h2 className="public-display text-4xl md:text-5xl font-normal text-[#122033] dark:text-white mb-4">
+              From scattered material to a way forward.
+            </h2>
+            <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+              StuddyHub keeps the useful parts of a study session connected, so each tool helps the next one do more.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {features.map((feature, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                className="group bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700/50 hover:shadow-2xl hover:border-blue-500/30 dark:hover:border-blue-400/30 transition-all duration-300"
-                onMouseEnter={() => setActiveFeature(index)}
-              >
-                <div className={`inline-flex items-center justify-center w-14 h-14 ${feature.color} bg-opacity-90 text-white rounded-2xl mb-6 shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300`}>
-                  {React.createElement(feature.icon, { className: "h-7 w-7" })}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 border-t public-rule">
+            {[
+              { title: 'Understand', description: 'Ask questions of your notes and documents until the difficult part becomes clear.', image: '/screenshots/chat-light.jpg', color: '#2F5BEA', icon: MessageSquare },
+              { title: 'Organize', description: 'Keep notes, recordings, deadlines, and study material in one calm, searchable place.', image: '/screenshots/notes-light.jpg', color: '#E56B4D', icon: FileText },
+              { title: 'Study together', description: 'Turn your material into quizzes, podcasts, and conversations with classmates.', image: '/screenshots/social-light.jpg', color: '#168C86', icon: Users },
+            ].map((story, index) => (
+              <div key={story.title} className={`py-8 lg:px-8 ${index > 0 ? 'lg:border-l public-rule' : 'lg:pr-8'}`}>
+                <div className="flex items-center gap-3 mb-5">
+                  <story.icon className="h-5 w-5" style={{ color: story.color }} />
+                  <span className="text-xs font-bold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">0{index + 1}</span>
                 </div>
-                <h3 className="text-xl font-bold mb-3 text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{feature.title}</h3>
-                <p className="text-gray-600 dark:text-gray-300 leading-relaxed text-base">{feature.description}</p>
-              </motion.div>
+                <h3 className="public-display text-3xl font-normal text-[#122033] dark:text-white mb-3">{story.title}</h3>
+                <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed mb-6">{story.description}</p>
+                <img src={story.image} alt={`${story.title} in StuddyHub`} className="w-full aspect-[4/3] object-cover object-top border public-rule" />
+              </div>
             ))}
           </div>
         </ContentContainer>
       </section>
-      <section className="py-12 md:py-16 bg-blue-800/10 dark:bg-gray-900">
+
+      {/* Screenshots */}
+      <section className="py-16 bg-white dark:bg-gray-950">
         <ContentContainer>
           <ScreenshotGallery
             screenshots={appScreenshots}
-            title="Beautiful & Intuitive Interface"
-            description="Experience our app in both light and dark modes"
+            title="See the App"
+            description="Available on Android with dark and light mode support"
             showThemeToggle={true}
           />
         </ContentContainer>
       </section>
 
-      {/* Demo Video Section */}
-      <section className="py-12 md:py-16 bg-gray-50 dark:bg-gray-950">
+      {/* Demo */}
+      <section className="py-16 bg-gray-50 dark:bg-gray-900">
         <ContentContainer>
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold mb-4 shadow-sm dark:bg-blue-900/30 dark:text-blue-300">
-              <Play className="h-4 w-4" />
-              <span>See It In Action</span>
-            </div>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900 dark:text-white">
-              Watch Our <span className="text-blue-600 dark:text-blue-400">Interactive Demo</span>
+          <div className="max-w-2xl mb-10">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">
+              See it in action
             </h2>
-            <p className="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              See how StuddyHub AI transforms learning with intelligent note-taking, document analysis, and AI chat.
+            <p className="text-gray-600 dark:text-gray-400">
+              Watch a quick walkthrough of the platform.
             </p>
           </div>
-
-          <div className="max-w-5xl mx-auto">
-            <div className="relative aspect-video rounded-xl overflow-hidden shadow-2xl border-4 border-white/20 dark:border-gray-800/20">
+          <div className="max-w-4xl mx-auto">
+            <div className="relative aspect-video rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
               <iframe
                 src="https://app.supademo.com/embed/cmiuw8fc53q0ml821m200i3ra"
                 className="absolute inset-0 w-full h-full"
-                title="StuddyHub AI Demo"
+                title="StuddyHub Demo"
                 allowFullScreen
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               />
             </div>
-            <div className="mt-6 text-center">
-              <a
-                href="https://app.supademo.com/demo/cmiuw8fc53q0ml821m200i3ra?utm_source=link"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                <span>Open demo in full screen</span>
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </a>
-            </div>
           </div>
         </ContentContainer>
       </section>
-      {/* Testimonials Section */}
-      <section id="testimonials" className="py-20 md:py-24 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800">
+
+      {/* Testimonials */}
+      <section id="testimonials" className="py-20 bg-white dark:bg-gray-950">
         <ContentContainer>
-          <div className="text-center mb-16 space-y-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-700 rounded-full text-sm font-semibold shadow-sm dark:bg-yellow-900/30 dark:text-yellow-400"
-            >
-              <Star className="h-4 w-4 text-yellow-500" />
-              <span>Trusted by Our Community</span>
-            </motion.div>
-            <motion.h2
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
-              className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white"
-            >
-              What Our <span className="text-blue-600 dark:text-blue-400">Users Say</span>
-            </motion.h2>
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.2 }}
-              className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed"
-            >
-              Hear directly from students and professionals who are transforming their productivity with StuddyHub AI.
-            </motion.p>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.3 }}
-              className="mt-4"
-            >
+          <div className="max-w-2xl mb-10">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">
+              What students say
+            </h2>
+            <div className="mt-4">
               <RateAppDialog
                 trigger={
-                  <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full px-6">
+                  <Button variant="outline" className="gap-2 text-sm rounded-lg">
                     <Star className="h-4 w-4" />
-                    Share Your Experience
+                    Leave a review
                   </Button>
                 }
               />
-            </motion.div>
+            </div>
           </div>
 
-          <div className="relative max-w-5xl mx-auto px-4 sm:px-12">
-            {/* Background Decorations for Immersiveness */}
-            <div className="absolute -top-10 -left-10 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
-
-            <div ref={carouselRef} className="relative w-full overflow-hidden rounded-2xl shadow-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
+          <div className="relative max-w-4xl">
+            <div ref={carouselRef} className="overflow-hidden">
               <div
-                className="flex transition-transform duration-700 cubic-bezier(0.4, 0, 0.2, 1)"
+                className="flex transition-transform duration-500 ease-in-out"
                 style={{ transform: `translateX(-${currentTestimonialIndex * 100}%)` }}
               >
                 {testimonials.map((testimonial, index) => (
-                  <div key={index} className="w-full flex-shrink-0 p-8 md:p-12">
-                    <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
+                  <div key={index} className="w-full flex-shrink-0 px-1">
+                    <div className="flex flex-col md:flex-row gap-6 items-start p-6 md:p-8 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
                       <div className="flex-shrink-0">
-                        <div className="w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden shadow-lg border-4 border-white dark:border-gray-700">
+                        <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 dark:border-gray-700">
                           {testimonial.imageUrl ? (
-                            <img src={testimonial.imageUrl} alt={`${testimonial.name}'s avatar`} className="w-full h-full object-cover" />
+                            <img src={testimonial.imageUrl} alt={testimonial.name} className="w-full h-full object-cover" />
                           ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold">
+                            <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 text-lg font-medium">
                               {testimonial.avatar}
                             </div>
                           )}
                         </div>
                       </div>
-                      <div className="flex-1 text-center md:text-left">
-                        <div className="flex justify-center md:justify-start mb-3">
+                      <div className="flex-1">
+                        <div className="flex gap-0.5 mb-3">
                           {[...Array(testimonial.rating)].map((_, i) => (
-                            <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
+                            <Star key={i} className="h-4 w-4 text-yellow-400 fill-current" />
                           ))}
                         </div>
-                        <blockquote className="text-xl md:text-2xl font-medium text-gray-800 dark:text-gray-200 leading-relaxed italic mb-6">
+                        <blockquote className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
                           "{testimonial.content}"
                         </blockquote>
-                        <div>
-                          <div className="font-bold text-lg text-gray-900 dark:text-white flex items-center justify-center md:justify-start gap-2">
-                            {testimonial.name}
-                            {testimonial.verified && (
-                              <svg className="h-5 w-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                              </svg>
-                            )}
-                          </div>
-                          <div className="text-blue-600 dark:text-blue-400 font-medium">{testimonial.role}</div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-900 dark:text-white text-sm">{testimonial.name}</span>
+                          {testimonial.verified && (
+                            <svg className="h-4 w-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                          <span className="text-gray-500 dark:text-gray-400 text-sm">· {testimonial.role}</span>
                         </div>
                       </div>
                     </div>
@@ -713,30 +418,12 @@ const LandingPage: React.FC = () => {
               </div>
             </div>
 
-            <Button
-              onClick={prevTestimonial}
-              className="absolute left-0 top-1/2 -translate-y-1/2 -ml-2 sm:-ml-5 bg-white dark:bg-gray-800 p-3 rounded-full shadow-lg border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:scale-110 transition-all z-10"
-              aria-label="Previous testimonial"
-            >
-              <ChevronLeft className="h-6 w-6" />
-            </Button>
-            <Button
-              onClick={nextTestimonial}
-              className="absolute right-0 top-1/2 -translate-y-1/2 -mr-2 sm:-mr-5 bg-white dark:bg-gray-800 p-3 rounded-full shadow-lg border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:scale-110 transition-all z-10"
-              aria-label="Next testimonial"
-            >
-              <ChevronRight className="h-6 w-6" />
-            </Button>
-
-            <div className="flex justify-center mt-8 gap-3">
+            <div className="flex gap-1.5 mt-6">
               {testimonials.map((_, index) => (
                 <button
                   key={index}
                   onClick={() => setCurrentTestimonialIndex(index)}
-                  className={`h-2 rounded-full transition-all duration-300 ${index === currentTestimonialIndex
-                    ? 'bg-blue-600 dark:bg-blue-400 w-8'
-                    : 'bg-gray-300 dark:bg-gray-600 w-2 hover:bg-gray-400 dark:hover:bg-gray-500'
-                    }`}
+                  className={`h-1.5 rounded-full transition-all duration-300 ${index === currentTestimonialIndex ? 'bg-blue-600 w-6' : 'bg-gray-300 dark:bg-gray-600 w-1.5'}`}
                   aria-label={`Go to testimonial ${index + 1}`}
                 />
               ))}
@@ -745,77 +432,36 @@ const LandingPage: React.FC = () => {
         </ContentContainer>
       </section>
 
-      {/* Call to Action Section */}
-      <section id="cta" className="relative py-20 md:py-28 overflow-hidden">
-        {/* Background Gradients */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-700 via-blue-800 to-indigo-900 dark:from-blue-900 dark:to-gray-900" />
-        <div className="absolute top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20" />
-        <div className="absolute -top-24 -right-24 w-96 h-96 bg-blue-500/30 rounded-full blur-3xl" />
-        <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-purple-500/30 rounded-full blur-3xl" />
-
-        <ContentContainer className="relative z-10">
-          <div className="max-w-4xl mx-auto text-center space-y-8">
-            <motion.h2
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="text-4xl md:text-6xl font-bold text-white tracking-tight"
-            >
-              Ready to <span className="text-yellow-300 inline-block transform hover:scale-105 transition-transform duration-300 cursor-default">Elevate</span> Your Learning?
-            </motion.h2>
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
-              className="text-xl md:text-2xl text-blue-100 max-w-2xl mx-auto leading-relaxed"
-            >
-              Join a growing community of students who study smarter, collaborate better, and achieve more with StuddyHub AI.
-            </motion.p>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.2 }}
-            >
-              <Link to="/auth">
-                <Button className="px-10 py-6 bg-white text-blue-700 hover:bg-gray-50 font-bold text-xl rounded-2xl shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 border-0 ring-4 ring-blue-500/30">
-                  Start Your Free Trial <ArrowRight className="h-6 w-6 ml-2" />
-                </Button>
-              </Link>
-            </motion.div>
-            <p className="text-sm text-blue-200 mt-4">No credit card required • Free plan available • Upgrade anytime</p>
+      {/* CTA */}
+      <section className="py-20 bg-gray-900 dark:bg-gray-950">
+        <ContentContainer>
+          <div className="max-w-2xl">
+            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+              Start studying smarter today
+            </h2>
+            <p className="text-gray-400 text-lg mb-8">
+              Free to get started. No credit card required.
+            </p>
+            <Link to="/auth">
+              <Button className="px-6 py-3 bg-white text-gray-900 hover:bg-gray-100 font-medium rounded-lg transition-colors">
+                Get Started Free <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </Link>
           </div>
         </ContentContainer>
       </section>
 
-      {/* Scroll to Top Button */}
+      {/* Scroll to top */}
       {showScrollTop && (
-        <motion.button
-          initial={{ opacity: 0, scale: 0.8, y: 20 }}
-          animate={{
-            opacity: 1,
-            scale: 1,
-            y: 0,
-          }}
-          exit={{ opacity: 0, scale: 0.8, y: 20 }}
-          whileHover={{
-            scale: 1.1,
-            y: -5,
-            boxShadow: "0 20px 40px rgba(59, 130, 246, 0.4)"
-          }}
-          whileTap={{ scale: 0.95 }}
-          onClick={scrollToTop}
-          className="fixed bottom-8 right-8 z-50 p-4 bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-full shadow-2xl transition-all duration-300"
-          style={{
-            boxShadow: "0 10px 30px rgba(59, 130, 246, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1) inset"
-          }}
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-8 right-8 z-50 p-3 bg-gray-900 dark:bg-gray-700 text-white rounded-full shadow-lg hover:bg-gray-800 dark:hover:bg-gray-600 transition-colors"
           aria-label="Scroll to top"
         >
-          <ArrowUp className="h-6 w-6" />
-        </motion.button>
+          <ArrowUp className="h-5 w-5" />
+        </button>
       )}
-    </AppLayout >
+    </AppLayout>
   );
 };
 

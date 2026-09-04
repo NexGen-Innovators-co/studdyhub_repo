@@ -1,6 +1,6 @@
 // src/components/layout/AppLayout.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '../../ui/components/button';
 import { Sun, Moon, Menu, X, MapIcon, PhoneCallIcon, Download, Smartphone, CheckCircle, Loader2, LayoutDashboard, Settings, LogOut, ChevronDown, FileText, MessageSquare, Brain, Mic, Users, BookOpen, GraduationCap, HelpCircle, Newspaper, Code2, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
@@ -43,11 +43,10 @@ const MegaNavDropdown: React.FC<{
     <div ref={containerRef} className="relative" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
       <button
         onClick={() => setOpen(o => !o)}
-        className={`flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-          open
-            ? 'text-blue-600 dark:text-blue-400 bg-blue-50/60 dark:bg-blue-900/20'
-            : 'text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800/40'
-        }`}
+        className={`flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${open
+          ? 'text-blue-600 dark:text-blue-400 bg-blue-50/60 dark:bg-blue-900/20'
+          : 'text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800/40'
+          }`}
         aria-expanded={open}
       >
         {label}
@@ -76,7 +75,9 @@ export const AppHeader: React.FC<{
   setIsMenuOpen: (open: boolean) => void;
 }> = ({ isDarkMode, toggleDarkMode, isMenuOpen, setIsMenuOpen }) => {
   const [scrollY, setScrollY] = React.useState(0);
+  const location = useLocation();
   const navigate = useNavigate();
+  const isTransparentHero = location.pathname === '/' && scrollY <= 50;
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [isPwaInstalled, setIsPwaInstalled] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
@@ -236,7 +237,7 @@ export const AppHeader: React.FC<{
       window.removeEventListener('appinstalled', handleAppInstalled);
       window.removeEventListener('trigger-install-app', handleTrigger);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // handleInstallApp is stable because it only references refs and setters
 
   // Show installation instructions
@@ -256,7 +257,7 @@ export const AppHeader: React.FC<{
         </div>
         <a
           href={APK_DOWNLOAD_URL}
-          download="studdyhub-v1.0-beta.2.apk"
+          download="studdyhub-v1.0-beta.3.apk"
         >
           <Button className="w-full mt-3">
             <Download className="h-4 w-4 mr-2" />
@@ -279,7 +280,7 @@ export const AppHeader: React.FC<{
     return 'desktop';
   };
 
-  const APK_DOWNLOAD_URL = '/studdyhub-v1.0-beta.2.apk';
+  const APK_DOWNLOAD_URL = '/studdyhub-v1.0-beta.3.apk';
 
   // Download App Button Component — device-aware
   const InstallAppButton = () => {
@@ -287,11 +288,12 @@ export const AppHeader: React.FC<{
 
     if (device === 'android') {
       return (
-        <a href={APK_DOWNLOAD_URL} download="studdyhub-v1.0-beta.2.apk">
+        <a href={APK_DOWNLOAD_URL} download="studdyhub-v1.0-beta.3.apk">
           <Button
             variant="outline"
             size="sm"
-            className="hidden md:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200 rounded-full hover:scale-105 active:scale-95 transition-all duration-300"
+            className="hidden xl:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200 rounded-full hover:scale-105 active:scale-95 transition-all duration-300"
+            style={isTransparentHero ? { backgroundColor: 'rgba(18, 32, 51, 0.62)', color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.42)' } : undefined}
           >
             <Download className="h-4 w-4 mr-2" />
             Download App
@@ -305,7 +307,8 @@ export const AppHeader: React.FC<{
       <Button
         variant="outline"
         size="sm"
-        className="hidden md:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-200 rounded-full opacity-60 cursor-not-allowed"
+        className="hidden xl:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-200 rounded-full opacity-60 cursor-not-allowed"
+        style={isTransparentHero ? { backgroundColor: 'rgba(18, 32, 51, 0.62)', color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.42)' } : undefined}
         onClick={() => {
           if (device === 'ios') {
             toast.info('StuddyHub is not available on iOS yet. Please use an Android device.');
@@ -321,9 +324,8 @@ export const AppHeader: React.FC<{
   };
 
   return (
-    <header className={`fixed top-0 left-0 w-full px-4 md:px-8 py-4 flex justify-between items-center z-50 transition-all duration-300 ${
-      scrollY > 50 ? 'bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md' : 'bg-transparent'
-    }`}>
+    <header className={`fixed top-0 left-0 w-full px-4 md:px-8 py-3 flex justify-between items-center z-50 transition-all duration-300 ${isTransparentHero ? 'public-header-hero bg-[#122033]/75 border-b border-white/10 shadow-sm backdrop-blur-md' : 'border-b public-rule bg-[#F7F8F5]/95 dark:bg-[#101923]/95 shadow-sm backdrop-blur-md'
+      }`}>
       {/* Site Icon and Name - Linked to home */}
       <Link to="/" className="flex items-center gap-3 group">
         <img
@@ -332,15 +334,15 @@ export const AppHeader: React.FC<{
           className="h-12 w-12 md:h-14 md:w-14 object-contain group-hover:scale-110 transition-transform"
         />
         <div className="flex flex-row">
-          <span className="text-2xl md:text-3xl font-bold text-blue-700/95 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+          <span className="text-2xl md:text-3xl font-bold text-[#2F5BEA] dark:text-gray-100 group-hover:text-[#2448C5] dark:group-hover:text-blue-300 transition-colors">
             StuddyHub
           </span>
-          <span className="text-2xl mx-2 md:text-3xl font-bold text-red-600/65 font-claude">AI</span>
+          <span className="text-2xl mx-2 md:text-3xl font-bold text-[#E56B4D]">AI</span>
         </div>
       </Link>
 
       {/* Desktop Navigation — Mega Nav */}
-      <nav className="hidden md:flex items-center gap-1">
+      <nav className="hidden xl:flex items-center gap-1">
         <InstallAppButton />
 
         {/* Features mega dropdown */}
@@ -466,6 +468,7 @@ export const AppHeader: React.FC<{
           size="icon"
           onClick={toggleDarkMode}
           className="min-w-[40px] min-h-[40px] w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          style={isTransparentHero ? { backgroundColor: 'rgba(18, 32, 51, 0.62)', color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.42)' } : undefined}
           title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
           aria-label={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
         >
@@ -474,10 +477,10 @@ export const AppHeader: React.FC<{
       </nav>
 
       {/* Mobile Menu Button */}
-      <div className="flex items-center md:hidden gap-1">
+      <div className="flex items-center xl:hidden gap-1">
         {detectDevice() === 'android' ? (
-          <a href={APK_DOWNLOAD_URL} download="studdyhub-v1.0-beta.2.apk">
-            <Button variant="outline" size="icon" className="rounded-full min-w-[44px] min-h-[44px] w-11 h-11" aria-label="Download App">
+          <a href={APK_DOWNLOAD_URL} download="studdyhub-v1.0-beta.3.apk">
+            <Button variant="outline" size="icon" className="rounded-full min-w-[44px] min-h-[44px] w-11 h-11" aria-label="Download App" style={isTransparentHero ? { backgroundColor: 'rgba(18, 32, 51, 0.62)', color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.42)' } : undefined}>
               <Download className="h-5 w-5" />
             </Button>
           </a>
@@ -486,6 +489,7 @@ export const AppHeader: React.FC<{
             variant="outline"
             size="icon"
             className="rounded-full min-w-[44px] min-h-[44px] w-11 h-11 opacity-60 cursor-not-allowed"
+            style={isTransparentHero ? { backgroundColor: 'rgba(18, 32, 51, 0.62)', color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.42)', opacity: 1 } : undefined}
             aria-label="Download App"
             onClick={() => {
               if (detectDevice() === 'ios') {
@@ -503,6 +507,7 @@ export const AppHeader: React.FC<{
           size="icon"
           onClick={toggleDarkMode}
           className="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          style={isTransparentHero ? { backgroundColor: 'rgba(18, 32, 51, 0.62)', color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.42)' } : undefined}
           title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
           aria-label={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
         >
@@ -512,6 +517,7 @@ export const AppHeader: React.FC<{
           variant="ghost"
           size="icon"
           className="min-w-[44px] min-h-[44px] w-11 h-11 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          style={isTransparentHero ? { backgroundColor: 'rgba(18, 32, 51, 0.62)', color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.42)' } : undefined}
           onClick={() => setIsMenuOpen(!isMenuOpen)}
           aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
         >
@@ -521,15 +527,15 @@ export const AppHeader: React.FC<{
 
       {/* Mobile Menu */}
       {isMenuOpen && (
-        <div className="absolute top-full left-0 w-full bg-white dark:bg-gray-900 shadow-lg md:hidden">
+        <div className="public-mobile-menu absolute top-full left-0 w-full bg-[#122033] text-white shadow-2xl xl:hidden">
           <nav className="flex flex-col gap-1 p-6">
             {/* Download App in Mobile Menu — device-aware */}
             {detectDevice() === 'android' ? (
               <a
                 href={APK_DOWNLOAD_URL}
-                download="studdyhub-v1.0-beta.2.apk"
+                download="studdyhub-v1.0-beta.3.apk"
                 onClick={() => setIsMenuOpen(false)}
-                className="w-full mb-2 min-h-[44px] flex items-center justify-center gap-2 px-4 py-3 rounded-md bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-200 font-medium"
+                className="w-full mb-2 min-h-[44px] flex items-center justify-center gap-2 px-4 py-3 rounded-md bg-[#2F5BEA] border border-[#2F5BEA] text-white font-semibold hover:bg-[#2448C5] transition-colors"
               >
                 <Download className="h-5 w-5" />
                 Download App
@@ -544,7 +550,7 @@ export const AppHeader: React.FC<{
                     toast.info('StuddyHub is a mobile app. Open this page on an Android phone to download.');
                   }
                 }}
-                className="w-full mb-2 min-h-[44px] flex items-center justify-center gap-2 px-4 py-3 rounded-md bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-200 font-medium opacity-60 cursor-not-allowed"
+                className="w-full mb-2 min-h-[44px] flex items-center justify-center gap-2 px-4 py-3 rounded-md bg-[#2F5BEA] border border-[#2F5BEA] text-white font-semibold opacity-75 cursor-not-allowed"
               >
                 <Download className="h-5 w-5" />
                 Download App
@@ -553,49 +559,49 @@ export const AppHeader: React.FC<{
 
             <a
               href="/#features"
-              className="min-h-[44px] flex items-center px-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-800 transition-colors font-medium"
+              className="min-h-[44px] flex items-center px-3 rounded-md text-white hover:text-white hover:bg-white/10 transition-colors font-medium"
               onClick={() => setIsMenuOpen(false)}
             >
               Features
             </a>
             <Link
               to="/documentation-page"
-              className="min-h-[44px] flex items-center px-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-800 transition-colors font-medium"
+              className="min-h-[44px] flex items-center px-3 rounded-md text-white hover:text-white hover:bg-white/10 transition-colors font-medium"
               onClick={() => setIsMenuOpen(false)}
             >
               Documentation
             </Link>
             <Link
               to="/user-guide-page"
-              className="min-h-[44px] flex items-center px-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-800 transition-colors font-medium"
+              className="public-mobile-nav-link min-h-[44px] flex items-center px-3 rounded-md text-white font-medium transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
               User Guide
             </Link>
             <Link
               to="/blogs"
-              className="min-h-[44px] flex items-center px-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-800 transition-colors font-medium"
+              className="public-mobile-nav-link min-h-[44px] flex items-center px-3 rounded-md text-white font-medium transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
               Blog
             </Link>
             <Link
               to="/pricing"
-              className="min-h-[44px] flex items-center px-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-800 transition-colors font-medium"
+              className="public-mobile-nav-link min-h-[44px] flex items-center px-3 rounded-md text-white font-medium transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
               Pricing
             </Link>
             <Link
               to="/about-us"
-              className="min-h-[44px] flex items-center px-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-800 transition-colors font-medium"
+              className="public-mobile-nav-link min-h-[44px] flex items-center px-3 rounded-md text-white font-medium transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
               About
             </Link>
             <Link
               to="/contact"
-              className="min-h-[44px] flex items-center px-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-800 transition-colors font-medium"
+              className="public-mobile-nav-link min-h-[44px] flex items-center px-3 rounded-md text-white font-medium transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
               Contact
@@ -637,12 +643,12 @@ export const AppHeader: React.FC<{
             ) : (
               <>
                 <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
-                  <Button className="w-full bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors">
+                  <Button variant="outline" className="w-full bg-white/10 border-white/20 text-white font-semibold rounded-md hover:bg-white/20 hover:text-white transition-colors">
                     Sign In
                   </Button>
                 </Link>
                 <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
-                  <Button className="w-full bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors">
+                  <Button className="w-full bg-[#2F5BEA] border border-[#2F5BEA] text-white font-semibold rounded-md shadow-md hover:bg-[#2448C5] transition-colors">
                     Get Started
                   </Button>
                 </Link>
@@ -660,7 +666,7 @@ export const AppFooter: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="bg-gradient-to-b from-gray-100 to-gray-300 dark:from-gray-900 dark:to-gray-950 border-t border-gray-200 dark:border-gray-800">
+    <footer className="bg-[#122033] dark:bg-[#0B1118] border-t border-[#304052] text-white">
       <div className="container mx-auto px-4 md:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="md:col-span-2">
@@ -671,56 +677,56 @@ export const AppFooter: React.FC = () => {
                 className="h-12 w-12 object-contain group-hover:scale-110 transition-transform"
               />
               <div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">StuddyHub AI</h3>
-                <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">Intelligent Learning Platform</p>
+                <h3 className="text-xl font-bold text-white">StuddyHub <span className="text-[#E56B4D]">AI</span></h3>
+                <p className="text-sm text-blue-200 font-medium">A study desk for the way you learn</p>
               </div>
             </div>
-            <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md">
+            <p className="text-gray-300 mb-6 max-w-md">
               Empowering students and professionals with AI-powered tools for notes, recordings, and schedules.
               Based at the University of Mines and Technology, Tarkwa, Ghana.
             </p>
-            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+            <div className="flex items-center gap-2 text-sm text-gray-300">
               <span className="font-medium text-green-700"><MapIcon /></span>
               <span>Agri-IoT Lab, UMaT, Tarkwa, Ghana</span>
             </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mt-2">
+            <div className="flex items-center gap-2 text-sm text-gray-300 mt-2">
               <span className="font-medium text-blue-700"><PhoneCallIcon /></span>
               <span>0534396808</span>
             </div>
           </div>
 
           <div>
-            <h4 className="font-bold text-gray-900 dark:text-white mb-4">Product</h4>
+            <h4 className="font-bold text-white mb-4">Product</h4>
             <ul className="space-y-1">
-              <li><a href="/#features" className="inline-flex items-center min-h-[44px] text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Features</a></li>
-              <li><Link to="/documentation-page" className="inline-flex items-center min-h-[44px] text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Documentation</Link></li>
-              <li><Link to="/user-guide-page" className="inline-flex items-center min-h-[44px] text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">User Guide</Link></li>
-              <li><Link to="/api" className="inline-flex items-center min-h-[44px] text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">API Reference</Link></li>
-              <li><Link to="/pricing" className="inline-flex items-center min-h-[44px] text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Pricing</Link></li>
+              <li><a href="/#features" className="inline-flex items-center min-h-[44px] text-gray-300 hover:text-white transition-colors">Features</a></li>
+              <li><Link to="/documentation-page" className="inline-flex items-center min-h-[44px] text-gray-300 hover:text-white transition-colors">Documentation</Link></li>
+              <li><Link to="/user-guide-page" className="inline-flex items-center min-h-[44px] text-gray-300 hover:text-white transition-colors">User Guide</Link></li>
+              <li><Link to="/api" className="inline-flex items-center min-h-[44px] text-gray-300 hover:text-white transition-colors">API Reference</Link></li>
+              <li><Link to="/pricing" className="inline-flex items-center min-h-[44px] text-gray-300 hover:text-white transition-colors">Pricing</Link></li>
             </ul>
           </div>
 
           <div>
-            <h4 className="font-bold text-gray-900 dark:text-white mb-4">Company</h4>
+            <h4 className="font-bold text-white mb-4">Company</h4>
             <ul className="space-y-1">
-              <li><Link to="/about-us" className="inline-flex items-center min-h-[44px] text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">About Us</Link></li>
-              <li><Link to="/blogs" className="inline-flex items-center min-h-[44px] text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Blog</Link></li>
-              <li><Link to="/careers" className="inline-flex items-center min-h-[44px] text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Careers</Link></li>
-              <li><Link to="/contact" className="inline-flex items-center min-h-[44px] text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Contact</Link></li>
+              <li><Link to="/about-us" className="inline-flex items-center min-h-[44px] text-gray-300 hover:text-white transition-colors">About Us</Link></li>
+              <li><Link to="/blogs" className="inline-flex items-center min-h-[44px] text-gray-300 hover:text-white transition-colors">Blog</Link></li>
+              <li><Link to="/careers" className="inline-flex items-center min-h-[44px] text-gray-300 hover:text-white transition-colors">Careers</Link></li>
+              <li><Link to="/contact" className="inline-flex items-center min-h-[44px] text-gray-300 hover:text-white transition-colors">Contact</Link></li>
             </ul>
           </div>
         </div>
 
         <div className="border-t border-gray-300 dark:border-gray-800 mt-8 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-gray-600 dark:text-gray-400 text-sm">
+            <p className="text-gray-300 text-sm">
               &copy; {currentYear} StuddyHub AI. All rights reserved.
             </p>
             <div className="flex gap-6">
-              <Link to="/privacy-policy" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 text-sm transition-colors">
+              <Link to="/privacy-policy" className="text-gray-300 hover:text-white text-sm transition-colors">
                 Privacy Policy
               </Link>
-              <Link to="/terms-of-service" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 text-sm transition-colors">
+              <Link to="/terms-of-service" className="text-gray-300 hover:text-white text-sm transition-colors">
                 Terms of Service
               </Link>
             </div>
@@ -735,6 +741,7 @@ export const AppFooter: React.FC = () => {
 export const AppLayout: React.FC<{
   children: React.ReactNode;
 }> = ({ children }) => {
+  const location = useLocation();
   const [isDarkMode, setIsDarkMode] = React.useState(() => {
     if (typeof window !== 'undefined') {
       const savedTheme = localStorage.getItem('theme');
@@ -759,14 +766,14 @@ export const AppLayout: React.FC<{
   const toggleDarkMode = () => setIsDarkMode(prevMode => !prevMode);
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased overflow-x-hidden">
+    <div className="public-site min-h-screen text-gray-900 dark:text-gray-100 antialiased overflow-x-hidden">
       <AppHeader
         isDarkMode={isDarkMode}
         toggleDarkMode={toggleDarkMode}
         isMenuOpen={isMenuOpen}
         setIsMenuOpen={setIsMenuOpen}
       />
-      <main className="pt-16">
+      <main className={location.pathname === '/' ? '' : 'pt-16'}>
         {children}
       </main>
       <AppFooter />
@@ -780,7 +787,7 @@ export const ContentContainer: React.FC<{
   className?: string;
 }> = ({ children, className = '' }) => {
   return (
-    <div className={`container mx-auto px-4 md:px-8 py-12 ${className}`}>
+    <div className={`container mx-auto px-4 md:px-8 py-10 md:py-16 ${className}`}>
       <div className="max-w-6xl mx-auto">
         {children}
       </div>
@@ -795,17 +802,17 @@ export const PageHeader: React.FC<{
   description?: string;
 }> = ({ title, subtitle, description }) => {
   return (
-    <div className="text-center mb-12 md:mb-16">
+    <div className="mb-12 md:mb-16 max-w-3xl">
       {subtitle && (
-        <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-sm font-medium mb-4">
+        <div className="inline-flex items-center gap-2 border-b-2 border-[#E56B4D] text-[#2F5BEA] dark:text-blue-300 text-xs font-bold uppercase tracking-[0.18em] mb-5 pb-2">
           {subtitle}
         </div>
       )}
-      <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
+      <h1 className="public-display text-4xl md:text-6xl font-normal text-[#122033] dark:text-white mb-4 leading-tight">
         {title}
       </h1>
       {description && (
-        <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+        <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl leading-relaxed">
           {description}
         </p>
       )}
@@ -870,7 +877,7 @@ export const Card: React.FC<{
   className?: string;
 }> = ({ children, className = '' }) => {
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-xl transition-shadow ${className}`}>
+    <div className={`bg-white dark:bg-[#182431] rounded-lg border border-[#D8DEE8] dark:border-[#304052] p-6 transition-colors ${className}`}>
       {children}
     </div>
   );
@@ -888,7 +895,7 @@ export const ThemedImg: React.FC<{
   const dark = darkSrc || src.replace('-light.', '-dark.');
   return (
     <>
-      <img src={src}  alt={alt} className={`dark:hidden ${className}`} />
+      <img src={src} alt={alt} className={`dark:hidden ${className}`} />
       <img src={dark} alt={alt} className={`hidden dark:block ${className}`} />
     </>
   );

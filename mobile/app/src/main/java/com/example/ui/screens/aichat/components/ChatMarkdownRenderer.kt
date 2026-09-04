@@ -1328,7 +1328,7 @@ private fun buildMermaidHtml(code: String, isDark: Boolean = true): String {
     return """
     <!DOCTYPE html><html><head>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@9.4.3/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
     <style>
       html,body{margin:0;padding:0;background:$bgColor;width:100%;min-height:100%;}
       #container{width:100%;min-height:100%;display:flex;align-items:flex-start;justify-content:center;padding:10px;box-sizing:border-box;}
@@ -1336,6 +1336,8 @@ private fun buildMermaidHtml(code: String, isDark: Boolean = true): String {
       #diagram svg{width:100% !important;height:auto !important;max-width:100% !important;}
       #err{display:none;color:$errColor;font-family:monospace;font-size:12px;white-space:pre-wrap;padding:12px;}
       #loading{color:$loadingColor;font-family:sans-serif;font-size:13px;padding:12px;}
+      /* Hide leaked error SVGs from older mermaid versions */
+      body > svg[id*="mermaid"] { display: none !important; }
     </style></head><body>
     <div id="err"></div>
     <div id="container"><div id="loading">Rendering diagram…</div><pre class="mermaid" id="diagram">$escaped</pre></div>
@@ -1351,10 +1353,14 @@ private fun buildMermaidHtml(code: String, isDark: Boolean = true): String {
       if(l){
         l.style.display='none';
       }
+      var d=document.getElementById('diagram');
+      if(d){
+        d.style.display='none';
+      }
       try{AndroidBridge.onError(m);}catch(brErr){console.log('Bridge error:',brErr);}
     }
     var renderAttempts = 0;
-    function renderNow(){
+    async function renderNow(){
       try{
         if (typeof mermaid === 'undefined') {
           throw new Error('Mermaid library not loaded. Check your connection or the CDN URL.');
@@ -1369,24 +1375,21 @@ private fun buildMermaidHtml(code: String, isDark: Boolean = true): String {
           return;
         }
         mermaid.initialize({
-          startOnLoad:false,
-          theme:'$mermaidTheme',
-          securityLevel:'loose',
-          flowchart:{useMaxWidth:true,htmlLabels:true},
-          sequence:{useMaxWidth:true},
+          startOnLoad: false,
+          theme: '$mermaidTheme',
+          securityLevel: 'loose',
+          suppressErrorRendering: true,
+          flowchart: { useMaxWidth: true, htmlLabels: true },
+          sequence: { useMaxWidth: true },
+          mindmap: { useMaxWidth: true },
           parseError: function(err, hash) {
             reportError(err);
           }
         });
-        mermaid.init(undefined, document.getElementById('diagram'));
+        await mermaid.run({
+          nodes: [document.getElementById('diagram')]
+        });
 
-        // DOM fallback: if parseError didn't fire but the error div is visible,
-        // re-send its text so the Kotlin side captures the real error.
-        var errEl=document.getElementById('err');
-        if(errEl&&errEl.style.display==='block'&&errEl.textContent){
-          try{AndroidBridge.onError(errEl.textContent.replace('Mermaid error: ',''));}catch(_){}
-        }
-        
         // Ensure SVG generated scales correctly
         var svg = document.querySelector('#diagram svg');
         if (svg) {
@@ -2342,7 +2345,7 @@ private fun MarkdownImageBlock(image: ChatBlock.ImageBlock) {
 
 @Composable
 private fun YouTubeEmbedBlock(yt: ChatBlock.YouTubeBlock) {
-    val embedUrl = "https://www.youtube.com/embed/${yt.videoId}?autoplay=0&rel=0"
+    val embedUrl = "https://www.youtube-nocookie.com/embed/${yt.videoId}?enablejsapi=1&origin=https://studdyhub.app&rel=0&playsinline=1"
     val watchUrl = "https://www.youtube.com/watch?v=${yt.videoId}"
     val thumbnailUrl = "https://img.youtube.com/vi/${yt.videoId}/hqdefault.jpg"
     val context = LocalContext.current
@@ -2377,13 +2380,10 @@ private fun YouTubeEmbedBlock(yt: ChatBlock.YouTubeBlock) {
             AndroidView(
                 factory = { ctx ->
                     // Enable third-party cookies globally — required by YouTube's embed player
-                    // (error 152 = HTML5 player can't initialise without cookie access).
                     android.webkit.CookieManager.getInstance().apply {
                         setAcceptCookie(true)
                     }
                     WebView(ctx).apply {
-                        // Accept third-party cookies for THIS WebView so YouTube's iframe
-                        // player can initialise without hitting error 152.
                         android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
@@ -2392,6 +2392,10 @@ private fun YouTubeEmbedBlock(yt: ChatBlock.YouTubeBlock) {
                         settings.loadWithOverviewMode = true
                         settings.mediaPlaybackRequiresUserGesture = false
                         settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        // Remove "; wv" from user agent to allow full HTML5 embed playback
+                        try {
+                            settings.userAgentString = settings.userAgentString.replace("; wv", "")
+                        } catch (_: Exception) {}
                         setBackgroundColor(android.graphics.Color.TRANSPARENT)
                         overScrollMode = View.OVER_SCROLL_NEVER
                         webChromeClient = object : android.webkit.WebChromeClient() {}
@@ -2401,14 +2405,32 @@ private fun YouTubeEmbedBlock(yt: ChatBlock.YouTubeBlock) {
                                 request: WebResourceRequest?
                             ): Boolean {
                                 val url = request?.url?.toString() ?: return false
-                                return openUrlExternally(view, url)
+                                // Only intercept user clicks that navigate away to external pages.
+                                // Do NOT intercept subframes, tokens, or embed URLs (prevents Error 4).
+                                val isMainFrame = request.isForMainFrame
+                                val isEmbedOrInternal = url.contains("youtube.com/embed") ||
+                                    url.contains("youtube-nocookie.com/embed") ||
+                                    url.contains("googlevideo.com") ||
+                                    url.contains("ytimg.com")
+                                if (isMainFrame && !isEmbedOrInternal) {
+                                    return openUrlExternally(view, url)
+                                }
+                                return false
                             }
                             @Suppress("DEPRECATION")
                             override fun shouldOverrideUrlLoading(
                                 view: android.webkit.WebView?,
                                 url: String?
                             ): Boolean {
-                                return openUrlExternally(view, url)
+                                if (url == null) return false
+                                val isEmbedOrInternal = url.contains("youtube.com/embed") ||
+                                    url.contains("youtube-nocookie.com/embed") ||
+                                    url.contains("googlevideo.com") ||
+                                    url.contains("ytimg.com")
+                                if (!isEmbedOrInternal) {
+                                    return openUrlExternally(view, url)
+                                }
+                                return false
                             }
                             override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
                                 super.onPageFinished(view, url)
@@ -2416,7 +2438,7 @@ private fun YouTubeEmbedBlock(yt: ChatBlock.YouTubeBlock) {
                             }
                         }
                         loadDataWithBaseURL(
-                            "https://www.youtube.com",
+                            "https://studdyhub.app",
                             """<!DOCTYPE html>
 <html>
 <head>
@@ -2719,9 +2741,8 @@ fun parseChatMarkdownBlocks(text: String): List<ChatBlock> {
         // Check for markdown image link wrapping YouTube first: [![alt](thumb)](https://youtube.com/watch?v=ID)
         val ytImageLinkMatch = YOUTUBE_IMAGE_LINK_REGEX.find(line)
         if (ytImageLinkMatch != null) {
-            val videoId = ytImageLinkMatch.groupValues[1]
-            val title = line.replace(YOUTUBE_IMAGE_LINK_REGEX, "").replace(Regex("[\\[\\]()]"), "").trim()
-                .ifEmpty { "YouTube Video" }
+            val videoId = ytImageLinkMatch.groupValues[2]
+            val title = ytImageLinkMatch.groupValues[1].trim().ifEmpty { "YouTube Video" }
             blocks.add(ChatBlock.YouTubeBlock(videoId, title))
             i++
             continue

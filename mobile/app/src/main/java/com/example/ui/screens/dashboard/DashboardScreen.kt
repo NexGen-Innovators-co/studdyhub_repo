@@ -371,5 +371,58 @@ fun DashboardScreen(
                 }
             }
         }
+
+        // Guided First Action ("Aha Moment") Spotlight Modal
+        // Shows once after onboarding until the user dismisses it (seen flag).
+        // Actual task completion (has_completed_guided_first_action) is tracked separately
+        // by QuizzesViewModel / AIChatViewModel upon genuine first activity.
+        val context = androidx.compose.ui.platform.LocalContext.current
+        var showFirstActionModal by remember(state.profile?.onboardingCompleted) {
+            mutableStateOf(
+                run {
+                    val prefs = context.getSharedPreferences("studdyhub_session", android.content.Context.MODE_PRIVATE)
+                    val hasCompletedOnboarding = state.profile?.onboardingCompleted == true
+                    val hasSeenSpotlight = prefs.getBoolean("has_seen_first_action_spotlight", false)
+                    hasCompletedOnboarding && !hasSeenSpotlight
+                }
+            )
+        }
+
+        if (showFirstActionModal) {
+            val userName = state.profile?.fullName?.split(" ")?.firstOrNull() ?: ""
+            com.example.ui.components.FirstActionSpotlightModal(
+                userName = userName,
+                onStartGame = {
+                    showFirstActionModal = false
+                    onNavigate(Screen.Quizzes.route)
+                },
+                onStartChat = {
+                    showFirstActionModal = false
+                    onNavigate(Screen.AIChat.route)
+                },
+                onDismiss = {
+                    showFirstActionModal = false
+                }
+            )
+        } else {
+            // What's New Bottom Sheet for Returning Users on App Version Update
+            var showWhatsNewSheet by remember(state.profile?.onboardingCompleted) {
+                mutableStateOf(
+                    run {
+                        val prefs = context.getSharedPreferences("studdyhub_session", android.content.Context.MODE_PRIVATE)
+                        val hasCompletedOnboarding = state.profile?.onboardingCompleted == true
+                        val lastSeenVersion = prefs.getInt("last_seen_version_code", 0)
+                        val currentVersion = com.example.BuildConfig.VERSION_CODE
+                        hasCompletedOnboarding && lastSeenVersion < currentVersion
+                    }
+                )
+            }
+
+            if (showWhatsNewSheet) {
+                com.example.ui.components.WhatsNewBottomSheet(
+                    onDismiss = { showWhatsNewSheet = false }
+                )
+            }
+        }
     }
 }

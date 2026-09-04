@@ -47,6 +47,17 @@ class AuthViewModel(private val repository: StuddyHubRepository) : ViewModel() {
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
+    fun checkSessionExpiredNotice(context: android.content.Context) {
+        val prefs = context.getSharedPreferences("studdyhub_session", android.content.Context.MODE_PRIVATE)
+        val sessionExpired = prefs.getBoolean("session_expired_notice", false)
+        if (sessionExpired) {
+            prefs.edit().remove("session_expired_notice").apply()
+            _uiState.value = _uiState.value.copy(
+                infoMessage = "Your session has expired. Please sign in again to continue your study session."
+            )
+        }
+    }
+
     fun selectTab(tabIndex: Int) {
         _uiState.value = _uiState.value.copy(
             selectedTab = tabIndex,

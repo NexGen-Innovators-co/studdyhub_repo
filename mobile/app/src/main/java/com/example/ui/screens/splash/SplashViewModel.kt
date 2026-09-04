@@ -12,12 +12,16 @@ import kotlinx.coroutines.launch
 
 sealed interface SplashNavigationState {
     object Loading : SplashNavigationState
+    object NavigateToWelcome : SplashNavigationState
     object NavigateToOnboarding : SplashNavigationState
     object NavigateToAuth : SplashNavigationState
     object NavigateToDashboard : SplashNavigationState
 }
 
-class SplashViewModel(private val repository: StuddyHubRepository) : ViewModel() {
+class SplashViewModel(
+    private val repository: StuddyHubRepository,
+    private val appContext: android.content.Context? = null
+) : ViewModel() {
 
     private val _navigationState = MutableStateFlow<SplashNavigationState>(SplashNavigationState.Loading)
     val navigationState: StateFlow<SplashNavigationState> = _navigationState.asStateFlow()
@@ -43,8 +47,14 @@ class SplashViewModel(private val repository: StuddyHubRepository) : ViewModel()
             }
 
             if (profile == null || !profile.isLoggedIn) {
-                // User is not logged in -> must authenticate first
-                _navigationState.value = SplashNavigationState.NavigateToAuth
+                // User is not logged in -> check if they have seen the welcome carousel
+                val prefs = appContext?.getSharedPreferences("studdyhub_session", android.content.Context.MODE_PRIVATE)
+                val hasSeenWelcome = prefs?.getBoolean("has_seen_welcome_carousel", false) ?: false
+                if (!hasSeenWelcome) {
+                    _navigationState.value = SplashNavigationState.NavigateToWelcome
+                } else {
+                    _navigationState.value = SplashNavigationState.NavigateToAuth
+                }
             } else {
                 // Restore session credentials in BackendApiService (access token, refresh token, expiry)
                 com.example.data.remote.BackendApiService.currentUserId = profile.supabaseUserId.ifBlank { profile.id }
