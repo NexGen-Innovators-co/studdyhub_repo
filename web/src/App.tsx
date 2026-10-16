@@ -90,7 +90,7 @@ const Fallback = () => <BrandedLoader />;
 
 // Set to true to gate the web app for maintenance.
 // Admin panel (/admin/*) remains accessible for administrators.
-const IS_MAINTENANCE_MODE = true;
+const IS_MAINTENANCE_MODE = false;
 
 // Create a wrapper component for SEO
 const AppWithSEO = () => {
@@ -158,8 +158,8 @@ const AppWithSEO = () => {
             <Route path="/api" element={<Suspense fallback={<EmptyFallback />}><APIPage /></Suspense>} />
             <Route path="/documentation-page" element={<Suspense fallback={<EmptyFallback />}><DocumentationPage /></Suspense>} />
             <Route path="/user-guide-page" element={<Suspense fallback={<EmptyFallback />}><UserGuidePage /></Suspense>} />
-            <Route path="/auth" element={<Suspense fallback={<EmptyFallback />}>{location.search.includes('admin') ? <Auth /> : <MaintenanceNotice />}</Suspense>} />
-            <Route path="/reset-password" element={<Suspense fallback={<EmptyFallback />}><MaintenanceNotice /></Suspense>} />
+            <Route path="/auth" element={<Suspense fallback={<EmptyFallback />}>{<Auth />}</Suspense>} />
+            <Route path="/reset-password" element={<Suspense fallback={<EmptyFallback />}><ResetPassword /></Suspense>} />
             <Route path="/calendar-callback" element={<Suspense fallback={<EmptyFallback />}><CalendarCallback /></Suspense>} />
             <Route path="/join/:inviteToken" element={<Suspense fallback={<EmptyFallback />}><JoinInstitution /></Suspense>} />
 

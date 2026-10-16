@@ -77,7 +77,6 @@ export const AppHeader: React.FC<{
   const [scrollY, setScrollY] = React.useState(0);
   const location = useLocation();
   const navigate = useNavigate();
-  const isTransparentHero = location.pathname === '/' && scrollY <= 50;
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [isPwaInstalled, setIsPwaInstalled] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
@@ -293,7 +292,7 @@ export const AppHeader: React.FC<{
             variant="outline"
             size="sm"
             className="hidden xl:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200 rounded-full hover:scale-105 active:scale-95 transition-all duration-300"
-            style={isTransparentHero ? { backgroundColor: 'rgba(18, 32, 51, 0.62)', color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.42)' } : undefined}
+            style={undefined}
           >
             <Download className="h-4 w-4 mr-2" />
             Download App
@@ -308,7 +307,7 @@ export const AppHeader: React.FC<{
         variant="outline"
         size="sm"
         className="hidden xl:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-200 rounded-full opacity-60 cursor-not-allowed"
-        style={isTransparentHero ? { backgroundColor: 'rgba(18, 32, 51, 0.62)', color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.42)' } : undefined}
+        style={undefined}
         onClick={() => {
           if (device === 'ios') {
             toast.info('StuddyHub is not available on iOS yet. Please use an Android device.');
@@ -324,8 +323,7 @@ export const AppHeader: React.FC<{
   };
 
   return (
-    <header className={`fixed top-0 left-0 w-full px-4 md:px-8 py-3 flex justify-between items-center z-50 transition-all duration-300 ${isTransparentHero ? 'public-header-hero bg-[#122033]/75 border-b border-white/10 shadow-sm backdrop-blur-md' : 'border-b public-rule bg-[#F7F8F5]/95 dark:bg-[#101923]/95 shadow-sm backdrop-blur-md'
-      }`}>
+    <header className="fixed top-0 left-0 w-full px-4 md:px-8 py-3 flex justify-between items-center z-50 transition-all duration-300 border-b public-rule bg-[#F7F8F5]/95 dark:bg-[#101923]/95 shadow-sm backdrop-blur-md">
       {/* Site Icon and Name - Linked to home */}
       <Link to="/" className="flex items-center gap-3 group">
         <img
@@ -468,7 +466,7 @@ export const AppHeader: React.FC<{
           size="icon"
           onClick={toggleDarkMode}
           className="min-w-[40px] min-h-[40px] w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-          style={isTransparentHero ? { backgroundColor: 'rgba(18, 32, 51, 0.62)', color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.42)' } : undefined}
+          style={undefined}
           title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
           aria-label={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
         >
@@ -480,7 +478,7 @@ export const AppHeader: React.FC<{
       <div className="flex items-center xl:hidden gap-1">
         {detectDevice() === 'android' ? (
           <a href={APK_DOWNLOAD_URL} download="studdyhub-v1.0-beta.3.apk">
-            <Button variant="outline" size="icon" className="rounded-full min-w-[44px] min-h-[44px] w-11 h-11" aria-label="Download App" style={isTransparentHero ? { backgroundColor: 'rgba(18, 32, 51, 0.62)', color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.42)' } : undefined}>
+            <Button variant="outline" size="icon" className="rounded-full min-w-[44px] min-h-[44px] w-11 h-11" aria-label="Download App" style={undefined}>
               <Download className="h-5 w-5" />
             </Button>
           </a>
@@ -489,7 +487,7 @@ export const AppHeader: React.FC<{
             variant="outline"
             size="icon"
             className="rounded-full min-w-[44px] min-h-[44px] w-11 h-11 opacity-60 cursor-not-allowed"
-            style={isTransparentHero ? { backgroundColor: 'rgba(18, 32, 51, 0.62)', color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.42)', opacity: 1 } : undefined}
+            style={undefined}
             aria-label="Download App"
             onClick={() => {
               if (detectDevice() === 'ios') {
@@ -506,8 +504,8 @@ export const AppHeader: React.FC<{
           variant="ghost"
           size="icon"
           onClick={toggleDarkMode}
-          className="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-          style={isTransparentHero ? { backgroundColor: 'rgba(18, 32, 51, 0.62)', color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.42)' } : undefined}
+          className="hidden sm:flex min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          style={undefined}
           title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
           aria-label={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
         >
@@ -517,7 +515,7 @@ export const AppHeader: React.FC<{
           variant="ghost"
           size="icon"
           className="min-w-[44px] min-h-[44px] w-11 h-11 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          style={isTransparentHero ? { backgroundColor: 'rgba(18, 32, 51, 0.62)', color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.42)' } : undefined}
+          style={undefined}
           onClick={() => setIsMenuOpen(!isMenuOpen)}
           aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
         >
