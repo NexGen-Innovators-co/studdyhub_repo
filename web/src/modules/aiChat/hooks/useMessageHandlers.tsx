@@ -425,7 +425,9 @@ export const useMessageHandlers = () => {
 
                 // Replace or insert mapped messages into existing UI messages
                 setChatMessages(prev => {
-                  const prevList = prev || [];
+                  const prevList = (prev || []).filter(pm =>
+                    pm.id !== optimisticUserMessageId && pm.id !== optimisticAiMessageId
+                  );
                   const result = prevList.map(pm => {
                     const found = mappedMessages.find(mm => mm.id === pm.id);
                     return found ? found : pm;
@@ -478,7 +480,9 @@ export const useMessageHandlers = () => {
                 };
 
                 setChatMessages(prev => {
-                  const prevList = prev || [];
+                  const prevList = (prev || []).filter(pm =>
+                    pm.id !== optimisticUserMessageId && pm.id !== optimisticAiMessageId
+                  );
                   const replacements = [realUserMessage, finalMessage];
                   const result = prevList.map(pm => {
                     const found = replacements.find(r => r.id === pm.id);
@@ -596,7 +600,9 @@ export const useMessageHandlers = () => {
         };
 
         setChatMessages(prev => {
-          const prevList = prev || [];
+          const prevList = (prev || []).filter(pm =>
+            pm.id !== optimisticUserMessageId && pm.id !== optimisticAiMessageId
+          );
           const replacements = [realUserMessage, realAiMessage];
           const result = prevList.map(pm => {
             const found = replacements.find(r => r.id === pm.id);

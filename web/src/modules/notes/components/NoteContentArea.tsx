@@ -61,6 +61,7 @@ import { FlashcardDeck } from './FlashcardDeck';
 import { InlineAIEditor } from './InlineAIEditor';
 import { Note, UserProfile, NoteCategory } from '../../../types';
 import { Button } from '../../ui/components/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../ui/components/dialog';
 import { PodcastGenerator } from '../../podcasts/components/PodcastGenerator';
 
 import { Select } from '../../ui/components/select';
@@ -616,16 +617,6 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     const [showDeck, setShowDeck] = useState(false);
     const [savedCards, setSavedCards] = useState<any[]>([]);
     const [lastFlashcardUpdate, setLastFlashcardUpdate] = useState<number>(0);
-    const flashcardsRef = useRef<HTMLDivElement>(null);
-
-    // Auto-scroll to flashcards when shown
-    useEffect(() => {
-      if (showDeck && flashcardsRef.current) {
-        setTimeout(() => {
-          flashcardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 100);
-      }
-    }, [showDeck]);
 
     const generate = async () => {
       setGenerating(true);
@@ -1835,11 +1826,18 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         )}
 
         {/* ---------- FLASHCARD DECK ---------- */}
-        {showDeck && (
-          <div 
-            ref={flashcardsRef}
-            className="border-t border-gray-300 dark:border-gray-700 p-4 sm:p-6 bg-gray-50 dark:bg-gray-800/50 h-[70vh] overflow-y-auto"
-          >
+        <Dialog open={showDeck} onOpenChange={setShowDeck}>
+          <DialogContent className="flex h-[85dvh] max-h-[850px] w-[calc(100vw-2rem)] max-w-5xl flex-col gap-0 overflow-hidden rounded-2xl border-slate-200 bg-white p-0 dark:border-slate-700 dark:bg-slate-900">
+            <DialogHeader className="shrink-0 border-b border-slate-200 px-5 py-4 text-left dark:border-slate-700 sm:px-6">
+              <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                <Brain className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                Flashcards
+              </DialogTitle>
+              <DialogDescription>
+                Review and flip through the flashcards created from this note.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 modern-scrollbar sm:p-6">
             <FlashcardDeck
               noteId={note?.id || ''}
               userId={userProfile?.id ?? ''}
@@ -1847,8 +1845,9 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
               lastUpdated={lastFlashcardUpdate}
               onClose={() => setShowDeck(false)}
             />
-          </div>
-        )}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Tutorial Component */}
         <UniversalTutorial

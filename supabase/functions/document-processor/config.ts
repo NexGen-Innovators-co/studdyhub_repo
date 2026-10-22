@@ -108,13 +108,13 @@ export const ENHANCED_FILE_TYPES: Record<string, { type: string; strategy: strin
   'application/gzip':             { type: 'archive', strategy: 'metadata_only', priority: 5, maxSize: 100 * 1024 * 1024 },
 
   // Audio
-  'audio/mpeg':  { type: 'audio', strategy: 'transcription', priority: 3, maxSize: 200 * 1024 * 1024 },
-  'audio/wav':   { type: 'audio', strategy: 'transcription', priority: 3, maxSize: 200 * 1024 * 1024 },
-  'audio/ogg':   { type: 'audio', strategy: 'transcription', priority: 3, maxSize: 200 * 1024 * 1024 },
-  'audio/m4a':   { type: 'audio', strategy: 'transcription', priority: 3, maxSize: 200 * 1024 * 1024 },
-  'audio/webm':  { type: 'audio', strategy: 'transcription', priority: 3, maxSize: 200 * 1024 * 1024 },
-  'audio/flac':  { type: 'audio', strategy: 'transcription', priority: 3, maxSize: 200 * 1024 * 1024 },
-  'audio/x-m4a': { type: 'audio', strategy: 'transcription', priority: 3, maxSize: 200 * 1024 * 1024 },
+  'audio/mpeg':  { type: 'audio', strategy: 'transcription', priority: 3, maxSize: 1024 * 1024 * 1024 },
+  'audio/wav':   { type: 'audio', strategy: 'transcription', priority: 3, maxSize: 1024 * 1024 * 1024 },
+  'audio/ogg':   { type: 'audio', strategy: 'transcription', priority: 3, maxSize: 1024 * 1024 * 1024 },
+  'audio/m4a':   { type: 'audio', strategy: 'transcription', priority: 3, maxSize: 1024 * 1024 * 1024 },
+  'audio/webm':  { type: 'audio', strategy: 'transcription', priority: 3, maxSize: 1024 * 1024 * 1024 },
+  'audio/flac':  { type: 'audio', strategy: 'transcription', priority: 3, maxSize: 1024 * 1024 * 1024 },
+  'audio/x-m4a': { type: 'audio', strategy: 'transcription', priority: 3, maxSize: 1024 * 1024 * 1024 },
 
   // Video
   'video/mp4':  { type: 'video', strategy: 'frame_analysis', priority: 4, maxSize: 500 * 1024 * 1024 },

@@ -348,43 +348,43 @@ const ENHANCED_FILE_TYPES = {
         type: 'audio',
         strategy: 'transcription',
         priority: 3,
-        maxSize: 200 * 1024 * 1024
+        maxSize: 1024 * 1024 * 1024
     },
     'audio/wav': {
         type: 'audio',
         strategy: 'transcription',
         priority: 3,
-        maxSize: 200 * 1024 * 1024
+        maxSize: 1024 * 1024 * 1024
     },
     'audio/ogg': {
         type: 'audio',
         strategy: 'transcription',
         priority: 3,
-        maxSize: 200 * 1024 * 1024
+        maxSize: 1024 * 1024 * 1024
     },
     'audio/m4a': {
         type: 'audio',
         strategy: 'transcription',
         priority: 3,
-        maxSize: 200 * 1024 * 1024
+        maxSize: 1024 * 1024 * 1024
     },
     'audio/webm': {
         type: 'audio',
         strategy: 'transcription',
         priority: 3,
-        maxSize: 200 * 1024 * 1024
+        maxSize: 1024 * 1024 * 1024
     },
     'audio/flac': {
         type: 'audio',
         strategy: 'transcription',
         priority: 3,
-        maxSize: 200 * 1024 * 1024
+        maxSize: 1024 * 1024 * 1024
     },
     'audio/x-m4a': {
         type: 'audio',
         strategy: 'transcription',
         priority: 3,
-        maxSize: 200 * 1024 * 1024
+        maxSize: 1024 * 1024 * 1024
     },
     // Video (for frame analysis)
     'video/mp4': {

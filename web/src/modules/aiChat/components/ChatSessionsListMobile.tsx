@@ -84,7 +84,7 @@ export const ChatSessionsListMobile: React.FC<ChatSessionsListMobileProps> = ({
             AI Assistant
           </h1>
           <Button
-            onClick={onNewChatSession}
+            onClick={() => onNewChatSession()}
             size="sm"
             className="bg-blue-600 hover:bg-blue-700"
           >
@@ -110,7 +110,7 @@ export const ChatSessionsListMobile: React.FC<ChatSessionsListMobileProps> = ({
           <div className="flex flex-col items-center justify-center h-full text-center p-8">
             <MessageCircle className="h-16 w-16 text-gray-300 dark:text-gray-600 mb-4" />
             <p className="text-lg text-gray-500 dark:text-gray-400">No conversations yet</p>
-            <Button onClick={onNewChatSession} className="mt-4">
+            <Button onClick={() => onNewChatSession()} className="mt-4">
               Start New Chat
             </Button>
           </div>

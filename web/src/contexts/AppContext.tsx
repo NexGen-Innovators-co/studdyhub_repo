@@ -33,7 +33,7 @@ import type { UserEducationContext, EducatorPermissions } from '../types/Educati
 
 // Context interface
 interface AppContextType extends AppState {
-    setPendingAttachment: (ids: string[] | null) => void;
+  setPendingAttachment: (ids: string[] | null) => void;
   // Auth & data hooks
   user: any;
   authLoading: boolean;
@@ -68,7 +68,7 @@ interface AppContextType extends AppState {
 
   // Chat session actions
   loadChatSessions: () => Promise<void>;
-  createNewChatSession: () => Promise<string | null>;
+  createNewChatSession: (sourceIds?: string[]) => Promise<string | null>;
   deleteChatSession: (sessionId: string) => Promise<void>;
   renameChatSession: (sessionId: string, newTitle: string) => Promise<void>;
   handleLoadMoreChatSessions: () => void;
@@ -259,10 +259,10 @@ const useLoadingWithTimeout = (initialState = false) => {
 // Provider component
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialAppState);
-    // Setter for pendingAttachment
-    const setPendingAttachment = useCallback((ids: string[] | null) => {
-      dispatch({ type: 'SET_PENDING_ATTACHMENT', payload: ids });
-    }, []);
+  // Setter for pendingAttachment
+  const setPendingAttachment = useCallback((ids: string[] | null) => {
+    dispatch({ type: 'SET_PENDING_ATTACHMENT', payload: ids });
+  }, []);
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -365,7 +365,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   } = appData;
 
   const refreshData = useCallback((dataType: keyof DataLoadingState) => {
-      retryLoading(dataType);
+    retryLoading(dataType);
   }, [retryLoading]);
 
   // Ref to hold social refresh (set after socialData hook is created)
@@ -491,7 +491,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Computed values
-  const currentActiveTab = useMemo((): 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings' | 'quizzes' | 'dashboard' | 'podcasts' | 'library' => {
+  const currentActiveTab = useMemo((): 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings' | 'quizzes' | 'analytics' | 'dashboard' | 'podcasts' | 'library' | 'flashcards' => {
     const path = location.pathname.split('/')[1];
     switch (path) {
       case 'notes': return 'notes';
@@ -504,6 +504,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       case 'quizzes': return 'quizzes';
       case 'podcasts': return 'podcasts';
       case 'library': return 'library';
+      case 'flashcards': return 'flashcards';
+      case 'analytics': return 'analytics';
       default: return 'dashboard';
     }
   }, [location.pathname]);
@@ -598,7 +600,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const userSessions = offlineSessions
             .filter(s => s.user_id === user.id)
             .sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
-          
+
           dispatch({ type: 'SET_CHAT_SESSIONS', payload: userSessions });
           return;
         }
@@ -639,7 +641,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const createNewChatSession = useCallback(async (): Promise<string | null> => {
+  const createNewChatSession = useCallback(async (sourceIds = state.selectedDocumentIds): Promise<string | null> => {
     try {
       if (!user) {
         toast.error('Please sign in to create a new chat session.');
@@ -655,7 +657,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           last_message_at: new Date().toISOString(),
-          document_ids: state.selectedDocumentIds,
+          document_ids: sourceIds,
           message_count: 0,
           user_id: user.id,
         };
@@ -664,18 +666,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await offlineStorage.addPendingSync('create', STORES.CHAT_SESSIONS, {
           user_id: user.id,
           title: 'New Chat',
-          document_ids: state.selectedDocumentIds,
+          document_ids: sourceIds,
           message_count: 0,
         });
 
         dispatch({ type: 'ADD_CHAT_SESSION', payload: newSession });
         dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: offlineId });
+        dispatch({ type: 'SET_SELECTED_DOCUMENT_IDS', payload: sourceIds });
+        navigate(`/chat/${offlineId}`, { replace: true });
         return offlineId;
       }
 
       // online: delegate to edge function which performs subscription/limit checks
       const { data: result, error: fnError } = await supabase.functions.invoke('create-ai-chat-session', {
-        body: { document_ids: state.selectedDocumentIds },
+        body: { document_ids: sourceIds },
       });
 
       if (fnError) throw fnError;
@@ -686,7 +690,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const sessionId = (result as any).id as string;
       const existing = (result as any).existing;
       if (existing && sessionId) {
-        // reuse existing empty session
+        dispatch({
+          type: 'UPDATE_CHAT_SESSION',
+          payload: { id: sessionId, updates: { document_ids: sourceIds } },
+        });
+        dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: sessionId });
+        dispatch({ type: 'SET_SELECTED_DOCUMENT_IDS', payload: sourceIds });
         navigate(`/chat/${sessionId}`, { replace: true });
         return sessionId;
       }
@@ -834,7 +843,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const sessionMsgs = offlineMsgs
             .filter(m => m.session_id === sessionId)
             .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-          
+
           setChatMessages(sessionMsgs);
           return;
         }
@@ -1259,6 +1268,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           loadDataIfNeeded('quizzes');
           break;
         case 'chat':
+          loadDataIfNeeded('notes');
+          loadDataIfNeeded('recordings');
           loadDataIfNeeded('documents');
           break;
         default:
@@ -1271,7 +1282,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const contextValue: AppContextType = {
     // State
     ...state,
-  setPendingAttachment,
+    setPendingAttachment,
 
     // Auth & data
     user,

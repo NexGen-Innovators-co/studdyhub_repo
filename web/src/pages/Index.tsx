@@ -334,6 +334,14 @@ const Index = () => {
         title: 'Quizzes | StuddyHub',
         description: 'Test your knowledge with AI-generated quizzes',
       },
+      analytics: {
+        title: 'Learning Analytics | StuddyHub',
+        description: 'Review your study patterns and learning progress',
+      },
+      flashcards: {
+        title: 'Flashcards | StuddyHub',
+        description: 'Review and practice your saved study flashcards',
+      },
     };
 
     return pageData[currentActiveTab as keyof typeof pageData] || pageData.dashboard;
@@ -361,6 +369,9 @@ const Index = () => {
     isSidebarOpen,
     onToggleSidebar: () => setIsSidebarOpen(prev => !prev),
     activeTab: currentActiveTab as any,
+    workspaceTitle: currentActiveTab === 'chat'
+      ? chatSessions?.find(session => session.id === activeChatSessionId)?.title
+      : undefined,
     fullName: userProfile?.full_name || '',
     avatarUrl: userProfile?.avatar_url || '',
     activeSocialTab,
@@ -399,7 +410,7 @@ const Index = () => {
     onNavigateToSubscription: () => handleNavigateToTab('subscription'),
   }), [subscriptionTier, subscriptionLoading, daysRemaining,
     isSidebarOpen, setIsSidebarOpen, setIsCreateNoteDialogOpen,
-    currentActiveTab, userProfile, activeSocialTab, socialPostId,
+    currentActiveTab, userProfile, activeSocialTab, socialPostId, chatSessions, activeChatSessionId,
     socialGroupId, navigate, dataErrors, currentTheme, handleThemeChange,
   ]);
 
@@ -494,13 +505,22 @@ const Index = () => {
     onProfileUpdate: appOperations.handleProfileUpdate,
     chatSessions: chatSessions ?? [],
     activeChatSessionId,
-    onChatSessionSelect: (sessionId: string) =>
-      dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: sessionId }),
+    onChatSessionSelect: (sessionId: string) => {
+      dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: sessionId });
+      navigate(`/chat/${sessionId}`);
+    },
     onNewChatSession: createNewChatSession,
     onDeleteChatSession: deleteChatSession,
     onRenameChatSession: renameChatSession,
-    onSelectedDocumentIdsChange: (ids: string[]) =>
-      dispatch({ type: 'SET_SELECTED_DOCUMENT_IDS', payload: ids }),
+    onSelectedDocumentIdsChange: (ids: string[]) => {
+      dispatch({ type: 'SET_SELECTED_DOCUMENT_IDS', payload: ids });
+      if (activeChatSessionId) {
+        dispatch({
+          type: 'UPDATE_CHAT_SESSION',
+          payload: { id: activeChatSessionId, updates: { document_ids: ids } },
+        });
+      }
+    },
     selectedDocumentIds: selectedDocumentIds ?? [],
     isNotesHistoryOpen,
     onToggleNotesHistory: () =>
@@ -565,6 +585,7 @@ const Index = () => {
     userProfile,
     isAILoading,
     dispatch,
+    navigate,
     setActiveNote,
     appOperations,
     handleSubmitMessage,
@@ -689,15 +710,7 @@ const Index = () => {
       )}
       {/* Hide the header on podcast pages and live podcast routes */}
       {!(isLiveRoute || isPodcastPage) && (
-        <header className={`
-          sticky top-0 
-          bg-white dark:bg-slate-900 
-          border-b border-slate-200 dark:border-slate-800 
-          shadow-sm z-40
-          ${(currentActiveTab !== 'chat')
-            ? '  lg:z-40 '
-            : 'block lg:hidden'}
-        `}>
+        <header className={`sticky top-0 z-40 border-0 bg-gray-50 shadow-none dark:bg-slate-900`}>
           <Header onThemeChange={handleThemeChange} {...headerProps} />
         </header>
       )}
@@ -718,14 +731,18 @@ const Index = () => {
         }}
       />
 
-      <div className="flex-1 flex relative overflow-hidden">
-        <div className={`${currentActiveTab === 'chat' ? 'block' : 'lg:hidden'}`}>
+      <div className="flex-1 flex min-h-0 relative overflow-hidden">
+        <div className="lg:hidden">
           <Sidebar {...sidebarProps} />
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 h-full overflow-y-auto modern-scrollbar bg-gray-50 dark:bg-slate-900">
-          <div className="min-h-full">
+        <div className={`flex-1 min-h-0 modern-scrollbar bg-gray-50 dark:bg-slate-900 ${
+          currentActiveTab === 'chat' || currentActiveTab === 'notes'
+            ? 'min-h-0 overflow-hidden'
+            : 'h-full overflow-y-auto'
+        }`}>
+          <div className={currentActiveTab === 'chat' || currentActiveTab === 'notes' ? 'flex h-full min-h-0 flex-col' : 'min-h-full'}>
             {isLiveRoute && liveId ? (
               // Render the live page inline instead of a modal
               liveHostMode ? (

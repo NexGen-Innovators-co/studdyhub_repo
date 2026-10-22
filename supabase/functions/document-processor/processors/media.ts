@@ -1,6 +1,12 @@
 import { EXTRACTION_PROMPTS } from '../prompts.ts';
 import { callEnhancedGeminiAPI } from '../geminiApi.ts';
 
+function withCustomInstruction(prompt: string, instruction?: string | null): string {
+  return instruction
+    ? `${prompt}\n\nCUSTOM USER INSTRUCTION:\n${instruction}\n\nFollow this instruction while preserving the required extraction output.`
+    : prompt;
+}
+
 // ============================================================================
 // IMAGE
 // ============================================================================
@@ -11,7 +17,7 @@ export async function processImageWithVision(file: any, geminiApiKey: string): P
       {
         role: 'user',
         parts: [
-          { text: EXTRACTION_PROMPTS.image },
+          { text: withCustomInstruction(EXTRACTION_PROMPTS.image, file.customInstruction) },
           { inlineData: { mimeType: file.mimeType, data: file.data } },
         ],
       },
@@ -36,7 +42,7 @@ export async function processAudioWithTranscription(file: any, geminiApiKey: str
       {
         role: 'user',
         parts: [
-          { text: EXTRACTION_PROMPTS.audio },
+          { text: withCustomInstruction(EXTRACTION_PROMPTS.audio, file.customInstruction) },
           { inlineData: { mimeType: file.mimeType, data: file.data } },
         ],
       },
@@ -61,7 +67,7 @@ export async function processVideoWithFrameAnalysis(file: any, geminiApiKey: str
       {
         role: 'user',
         parts: [
-          { text: EXTRACTION_PROMPTS.video },
+          { text: withCustomInstruction(EXTRACTION_PROMPTS.video, file.customInstruction) },
           { inlineData: { mimeType: file.mimeType, data: file.data } },
         ],
       },

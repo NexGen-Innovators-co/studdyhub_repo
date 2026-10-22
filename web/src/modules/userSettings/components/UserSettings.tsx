@@ -49,6 +49,7 @@ import { CalendarIntegrationSettings } from '../../settings/components/CalendarI
 import { Separator } from '../../ui/components/separator';
 import { EducationSettingsTab } from './EducationSettingsTab';
 import { RoleUpgradePanel } from '../../educator/components/RoleUpgradePanel';
+import { ProfileAvatar } from '../../layout/components/ProfileAvatar';
 
 interface UserSettingsProps {
   profile: UserProfile | null;
@@ -967,7 +968,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                       {avatarPreview ? (
                         <img src={avatarPreview} alt="Avatar Preview" className="w-full h-full object-cover" />
                       ) : avatarUrl && typeof avatarUrl === 'string' ? (
-                        <img src={avatarUrl} alt="Current Avatar" className="w-full h-full object-cover" />
+                        <ProfileAvatar avatarValue={avatarUrl} fullName={fullName} alt="Current Avatar" className="h-full w-full" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-white text-2xl font-bold">
                           {fullName.split(' ').map(n => n[0]).join('').toUpperCase() || 'U'}

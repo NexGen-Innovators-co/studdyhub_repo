@@ -44,7 +44,7 @@ function getPdfGetDocument() {
  */
 async function extractPdfTextWithGemini(
   buffer: Uint8Array,
-  options: { startPage?: number; prevText?: string } = {},
+  options: { startPage?: number; prevText?: string; customInstruction?: string | null } = {},
 ): Promise<{ fullText: string; lastPageProcessed: number; isComplete: boolean; totalPages: number }> {
   const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
   if (!geminiApiKey) {
@@ -81,7 +81,8 @@ async function extractPdfTextWithGemini(
     `Preserve the original structure, headings, paragraphs, lists, and formatting as much as possible. ` +
     `Output ONLY the extracted text — no commentary, no summaries, no markdown formatting beyond ` +
     `what exists in the document. If there are code blocks, preserve them. ` +
-    `If there are tables, format them readably.`;
+    `If there are tables, format them readably.` +
+    (options.customInstruction ? `\n\nCUSTOM USER INSTRUCTION:\n${options.customInstruction}\n\nFollow this instruction while preserving complete extraction fidelity.` : '');
 
   for (const model of models) {
     try {
@@ -159,7 +160,7 @@ async function extractPdfTextWithGemini(
 
 export async function extractPdfTextWithPdfjsChunked(
   buffer: Uint8Array,
-  options: { startPage?: number; endPage?: number | null; prevText?: string } = {},
+  options: { startPage?: number; endPage?: number | null; prevText?: string; customInstruction?: string | null } = {},
 ) {
   // Try pdf.js first
   try {
@@ -172,6 +173,7 @@ export async function extractPdfTextWithPdfjsChunked(
   return await extractPdfTextWithGemini(buffer, {
     startPage: options.startPage,
     prevText: options.prevText,
+    customInstruction: options.customInstruction,
   });
 }
 
@@ -545,7 +547,10 @@ export async function processWithMultipleLibraries(file: any, _geminiApiKey: str
         let totalPages = 0;
 
         while (true) {
-          const result = await extractPdfTextWithPdfjsChunked(buffer, { startPage: currentStart });
+          const result = await extractPdfTextWithPdfjsChunked(buffer, {
+            startPage: currentStart,
+            customInstruction: file.customInstruction,
+          });
           allTexts.push(result.fullText);
           lastPage = result.lastPageProcessed;
           totalPages = result.totalPages;

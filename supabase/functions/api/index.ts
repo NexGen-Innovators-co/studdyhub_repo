@@ -444,6 +444,37 @@ serve(async (req: Request) => {
           if (error) throw error;
           return ok(data, 201);
         }
+        if (method === "PATCH" && subId2) {
+          const body = await req.json().catch(() => ({}));
+          const updates: { document_ids?: string[]; updated_at?: string } = {};
+
+          if ("document_ids" in body) {
+            if (!Array.isArray(body.document_ids) || !body.document_ids.every((id: unknown) => typeof id === "string")) {
+              return err("document_ids must be an array of strings", 400);
+            }
+            updates.document_ids = body.document_ids;
+          }
+          if ("updated_at" in body) {
+            if (typeof body.updated_at !== "string") {
+              return err("updated_at must be a string", 400);
+            }
+            updates.updated_at = body.updated_at;
+          }
+          if (Object.keys(updates).length === 0) {
+            return err("No supported chat session fields provided", 400);
+          }
+
+          const { data, error } = await supabase
+            .from("chat_sessions")
+            .update(updates)
+            .eq("id", subId2)
+            .eq("user_id", userId)
+            .select()
+            .maybeSingle();
+          if (error) throw error;
+          if (!data) return err("Chat session not found", 404);
+          return ok(data);
+        }
         if (method === "DELETE" && subId2) {
           const { error } = await supabase.from("chat_sessions").delete().eq("id", subId2).eq("user_id", userId);
           if (error) throw error;
@@ -465,6 +496,19 @@ serve(async (req: Request) => {
           const { data, error } = await supabase.from("chat_messages").upsert(msg, { onConflict: "id" }).select().single();
           if (error) throw error;
           return ok(data, 201);
+        }
+        if ((method === "PATCH" || method === "PUT") && subId2) {
+          const body = await req.json().catch(() => ({}));
+          const { data, error } = await supabase
+            .from("chat_messages")
+            .update(body)
+            .eq("id", subId2)
+            .eq("session_id", getParam(url, "session_id", ""))
+            .eq("user_id", userId)
+            .select()
+            .single();
+          if (error) throw error;
+          return ok(data);
         }
         if (method === "DELETE" && subId2) {
           const { error } = await supabase.from("chat_messages").delete().eq("id", subId2).eq("user_id", userId);

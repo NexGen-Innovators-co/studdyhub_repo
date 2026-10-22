@@ -2,9 +2,79 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/components/card';
 import { Badge as UIBadge } from '../../ui/components/badge';
-import { Trophy, Lock } from 'lucide-react';
+import {
+  Award,
+  CheckCircle2,
+  Crown,
+  Flame,
+  Gem,
+  Lock,
+  Microscope,
+  Shield,
+  Sparkles,
+  Star,
+  Target,
+  Trophy,
+  Zap,
+} from 'lucide-react';
 import { Badge, Achievement } from '../../../types/Class';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../ui/components/tooltip';
+
+const badgeArtwork: Record<string, string> = {
+  badge_adinkra: 'img_badge_adinkra_1787333607984.jpg',
+  badge_oware: 'img_badge_oware_1787333621590.jpg',
+  badge_spelling: 'img_badge_spelling_1787333633448.jpg',
+  badge_black_star: 'img_badge_black_star_1787333645565.jpg',
+  badge_scientist: 'img_badge_scientist_1787333657585.jpg',
+  badge_streak: 'img_trophy_showcase_1786761343079.jpg',
+  badge_speed: 'img_badge_adinkra_1787333607984.jpg',
+  badge_all_round: 'img_trophy_showcase_1786761343079.jpg',
+};
+
+const badgeIconComponents: Record<string, React.ElementType> = {
+  sparkles: Sparkles,
+  fire: Flame,
+  'shield-fire': Shield,
+  crown: Crown,
+  abacus: Award,
+  bee: Award,
+  star: Star,
+  microscope: Microscope,
+  zap: Zap,
+  trophy: Trophy,
+  'check-circle': CheckCircle2,
+  target: Target,
+  gem: Gem,
+  award: Award,
+  'crown-check': Crown,
+};
+
+const getBadgeTitle = (badge: Badge) => {
+  const descriptionTitle = badge.description.match(/^(.+?)\s+[—–-]\s+/)?.[1]?.trim();
+  if (descriptionTitle) return descriptionTitle;
+  if (!/^badge_|^[a-z0-9_-]+$/.test(badge.name)) return badge.name;
+  return badge.name
+    .replace(/^badge_/, '')
+    .split(/[_-]+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
+
+const isEmojiIcon = (icon: string) => /[^\u0000-\u007f]/.test(icon) && !/^[a-z0-9_-]+$/i.test(icon);
+
+const BadgeIcon: React.FC<{ badge: Badge }> = ({ badge }) => {
+  const image = badgeArtwork[badge.name.toLowerCase()];
+  if (image) {
+    return <img src={`/mobile/${image}`} alt="" className="h-12 w-12 rounded-full object-cover" />;
+  }
+
+  if (isEmojiIcon(badge.icon)) {
+    return <span aria-hidden="true">{badge.icon}</span>;
+  }
+
+  const Icon = badgeIconComponents[badge.icon.toLowerCase()] ?? Trophy;
+  return <Icon aria-hidden="true" className="h-10 w-10 text-amber-500" />;
+};
 
 interface BadgesPanelProps {
   allBadges: Badge[];
@@ -72,15 +142,15 @@ export const BadgesPanel: React.FC<BadgesPanelProps> = ({
                       `}
                     >
                       <div className="flex flex-col items-center text-center space-y-2">
-                        <div className="text-4xl relative">
-                          {badge.icon || '🏆'}
+                        <div className="relative flex h-12 w-12 items-center justify-center text-4xl">
+                          <BadgeIcon badge={badge} />
                           {!isEarned && (
                             <Lock className="absolute -top-1 -right-1 h-4 w-4 text-gray-500" />
                           )}
                         </div>
                         <div>
                           <p className="font-semibold text-sm line-clamp-1">
-                            {badge.name}
+                            {getBadgeTitle(badge)}
                           </p>
                           <p className="text-xs text-gray-500 dark:text-gray-400">
                             +{badge.xp_reward} XP
@@ -96,7 +166,7 @@ export const BadgesPanel: React.FC<BadgesPanelProps> = ({
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs dark:bg-slate- bg-slate-50">
                     <div className="space-y-1">
-                      <p className="font-semibold">{badge.name}</p>
+                      <p className="font-semibold">{getBadgeTitle(badge)}</p>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         {badge.description}
                       </p>

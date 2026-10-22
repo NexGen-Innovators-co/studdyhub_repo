@@ -2,18 +2,15 @@ import React, { useState, useEffect } from 'react';
 
 import { Button } from '../../ui/components/button';
 import { ClassRecording } from '../../../types/Class';
+import { ClipPlayer } from '@/components/ClipPlayer';
 import {
   Clipboard,
   Check,
   RefreshCw,
   Trash2,
   FileText,
-  Play,
-  Pause,
-  Download,
-  Copy,
-  Volume2,
-  Sparkles } from 'lucide-react';
+  Sparkles,
+  Volume2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface RecordingDetailsPanelProps {
@@ -51,63 +48,27 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
 }) => {
   const [copySuccess, setCopySuccess] = useState(false);
   const [activeSection, setActiveSection] = useState<string>('transcript');
-  const [currentTime, setCurrentTime] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(0);
 
-  // Manage audio playback state
+  // Manage audio playback state (source + events are owned by ClipPlayer)
   useEffect(() => {
     const audio = audioPlayerRef.current;
     if (!audio || !audioUrl) return;
 
-    // Set audio source if it's different
+    // Keep the shared audio element in sync so Panel controls (play/pause) and
+    // ClipPlayer both use the same underlying HTMLAudioElement.
     if (audio.src !== audioUrl) {
       audio.src = audioUrl;
     }
 
-    // Event handlers
-    const handleLoadedMetadata = () => {
-      setDuration(audio.duration);
-    };
-
-    const handleTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
-    };
-
-    const handleError = (e: Event) => {
-
-      toast.error('Failed to load audio. Please try again.');
-      onPauseAudio();
-    };
-
     const handleEnded = () => {
       onAudioEnded();
-      setCurrentTime(0);
     };
 
-    // Add event listeners
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('error', handleError);
     audio.addEventListener('ended', handleEnded);
-
-    // Cleanup
     return () => {
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('error', handleError);
       audio.removeEventListener('ended', handleEnded);
     };
-  }, [audioUrl, audioPlayerRef, onPauseAudio, onAudioEnded]);
-
-  // Reset audio when the panel is closed
-  useEffect(() => {
-    return () => {
-      if (audioPlayerRef.current && isPlayingAudio) {
-        audioPlayerRef.current.pause();
-        setCurrentTime(0);
-      }
-    };
-  }, [audioPlayerRef, isPlayingAudio]);
+  }, [audioUrl, audioPlayerRef, onAudioEnded]);
 
   const handleCopyTranscript = () => {
     if (recording.transcript) {
@@ -122,28 +83,8 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
     }
   };
 
-  const formatDuration = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-
-    if (hours > 0) {
-      return `${hours}h ${minutes}m ${secs}s`;
-    }
-    return `${minutes}m ${secs}s`;
-  };
-
   const getWordCount = (text: string) => {
     return text ? text.split(/\s+/).filter(word => word.length > 0).length : 0;
-  };
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const audio = audioPlayerRef.current;
-    if (audio) {
-      const newTime = Number(e.target.value);
-      audio.currentTime = newTime;
-      setCurrentTime(newTime);
-    }
   };
 
   return (
@@ -163,58 +104,21 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
                 <h4 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-100">Audio Playback</h4>
               </div>
 
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={isPlayingAudio ? onPauseAudio : onPlayAudio}
-                    className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100 dark:bg-green-950/50 dark:text-green-300 dark:border-green-800 dark:hover:bg-green-900/50 transition-colors"
-                    disabled={!recording.audioUrl}
-                  >
-                    {isPlayingAudio ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
-                    {isPlayingAudio ? 'Pause' : 'Play'}
-                  </Button>
+              <ClipPlayer
+                audioUrl={recording.audioUrl ?? undefined}
+                title="Recording"
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onDownloadAudio}
-                    className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/50 transition-colors"
-                    disabled={!recording.audioUrl}
-                  >
-                    <Download className="h-4 w-4 mr-2" /> Download
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onCopyAudioUrl}
-                    className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/50 transition-colors"
-                    disabled={!recording.audioUrl}
-                  >
-                    <Copy className="h-4 w-4 mr-2" /> Copy URL
-                  </Button>
-                </div>
-
-                {/* Playback Progress */}
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {formatDuration(currentTime)}
-                  </span>
-                  <input
-                    type="range"
-                    min="0"
-                    max={duration || 100}
-                    value={currentTime}
-                    onChange={handleSeek}
-                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
-                  />
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {formatDuration(duration)}
-                  </span>
-                </div>
-              </div>
+                onPlayPause={(playing) => {
+                  if (playing) onPlayAudio(); else onPauseAudio();
+                }}
+                onSeek={(time) => {
+                  const audio = audioPlayerRef.current;
+                  if (audio) {
+                    audio.currentTime = time;
+                  }
+                }}
+                onClose={onClose}
+              />
             </div>
           )}
 
@@ -343,7 +247,7 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
                 onClick={() => onReprocessAudio(recording)}
                 variant="outline"
                 className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800 transition-colors py-2.5"
-                disabled={!recording.audioUrl}
+                disabled={!recording.audioUrl || !recording.transcript}
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Reprocess

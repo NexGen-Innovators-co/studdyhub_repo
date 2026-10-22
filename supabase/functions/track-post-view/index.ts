@@ -35,12 +35,15 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Check for existing view (deduplicate)
-    const { data: existingView } = await supabase
+    const { data: existingView, error: existingViewError } = await supabase
       .from('social_post_views')
       .select('id')
       .eq('post_id', post_id)
       .eq('user_id', userId)
+      .limit(1)
       .maybeSingle();
+
+    if (existingViewError) throw existingViewError;
 
     if (existingView) {
       // Already viewed, no-op
@@ -50,7 +53,8 @@ serve(async (req) => {
       );
     }
 
-    // Insert new view
+    // The unique constraint in the social engagement migration protects this
+    // insert against concurrent requests for the same user and post.
     const { error: viewError } = await supabase
       .from('social_post_views')
       .insert({
@@ -58,20 +62,41 @@ serve(async (req) => {
         user_id: userId,
       });
 
-    if (viewError) throw viewError;
+    if (viewError) {
+      if (viewError.code === '23505') {
+        const { data: racedView, error: racedViewError } = await supabase
+          .from('social_post_views')
+          .select('id')
+          .eq('post_id', post_id)
+          .eq('user_id', userId)
+          .limit(1)
+          .maybeSingle();
+        if (racedViewError) throw racedViewError;
+        if (racedView) {
+          return new Response(
+            JSON.stringify({ success: true, already_viewed: true }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
+      throw viewError;
+    }
 
     // Update the post's views_count atomically
-    const { data: post } = await supabase
+    const { data: post, error: postError } = await supabase
       .from('social_posts')
       .select('views_count')
       .eq('id', post_id)
       .single();
+    if (postError) throw postError;
 
     if (post) {
-      await supabase
+      const { error: updateError } = await supabase
         .from('social_posts')
         .update({ views_count: (post.views_count || 0) + 1 })
         .eq('id', post_id);
+      if (updateError) throw updateError;
     }
 
     return new Response(

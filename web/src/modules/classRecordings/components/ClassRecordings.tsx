@@ -1,5 +1,6 @@
 // Redesigned ClassRecordings with modern design matching Social & Dashboard patterns
 import React, { useState, useCallback, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '../../ui/components/card';
 import { Badge } from '../../ui/components/badge';
 import { Button } from '../../ui/components/button';
@@ -56,6 +57,8 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
   onSearchChange,
 }) => {
   const { refreshData, dataLoading } = useAppContext();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [selectedRecording, setSelectedRecording] = useState<ClassRecording | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
@@ -70,6 +73,22 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
   const [isRecordingPaused, setIsRecordingPaused] = useState(false);
 
   const effectiveSearch = externalSearchQuery ?? internalSearch;
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const recordingId = params.get('recordingId');
+    if (!recordingId) return;
+
+    const recording = recordings.find(item => item.id === recordingId);
+    if (!recording) return;
+
+    setSelectedRecording(recording);
+    params.delete('recordingId');
+    navigate(
+      { pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : '' },
+      { replace: true }
+    );
+  }, [location.pathname, location.search, navigate, recordings]);
 
   // Handle recording state changes from EnhancedVoiceRecorder
   const handleRecordingStateChange = useCallback((state: { isRecording: boolean; isPaused: boolean }) => {

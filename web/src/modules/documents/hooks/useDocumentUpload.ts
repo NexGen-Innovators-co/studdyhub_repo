@@ -5,6 +5,7 @@ import { Document } from '../../../types/Document'; // Update path if needed
 import { User } from '@supabase/supabase-js';
 import { overrideTsMimeType } from '../utils/documentUtils';
 import { useUserActivityLogger } from '@/hooks/useUserActivityLogger';
+import { useUploadActivity } from '@/contexts/UploadActivityContext';
 
 interface AppOperations {
   addDocumentToFolder: (docId: string, folderId: string) => Promise<void | boolean>;
@@ -22,6 +23,24 @@ interface UseDocumentUploadProps {
   setUploadTargetFolderId: (id: string | null) => void;
 }
 
+// Supabase Free allows at most 50MB per storage request — larger uploads are
+// split into parts client-side and assembled server-side by the edge functions.
+const CHUNK_SIZE = 20 * 1024 * 1024;
+// Above this size, files go to storage in parts instead of one base64 payload
+// (also keeps every single storage request comfortably under the 50MB cap).
+const STORAGE_UPLOAD_THRESHOLD_FOR_JOB = 5 * 1024 * 1024;
+
+/**
+ * processing_metadata may reach the client as a jsonb object OR as a
+ * JSON-encoded string, depending on how the row was fetched.
+ */
+const parseDocMetadata = (raw: unknown): any => {
+  if (raw && typeof raw === 'string') {
+    try { return JSON.parse(raw); } catch { return null; }
+  }
+  return raw ?? null;
+};
+
 export const useDocumentUpload = ({
   user,
   documents,
@@ -35,13 +54,18 @@ export const useDocumentUpload = ({
 }: UseDocumentUploadProps) => {
   const { logUserActivity } = useUserActivityLogger();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [customInstruction, setCustomInstruction] = useState('');
   const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
   const [dragLocked, setDragLocked] = useState(false);
   const [processingDocuments, setProcessingDocuments] = useState<Set<string>>(new Set());
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Stage/progress for the current upload lives in the global activity
+  // provider so it survives navigating away; the screen keeps the job id.
+  const { createJob, updateJob } = useUploadActivity();
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
   const getBase64 = useCallback((file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -54,7 +78,7 @@ export const useDocumentUpload = ({
 
   const handleFileSelection = useCallback((file: File) => {
     file = overrideTsMimeType(file);
-    const MAX_FILE_SIZE_MB = 200;
+    const MAX_FILE_SIZE_MB = 1024;
     if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
       toast.error(`File size exceeds ${MAX_FILE_SIZE_MB}MB limit.`);
       setSelectedFile(null);
@@ -126,6 +150,54 @@ export const useDocumentUpload = ({
   }, [handleFileSelection]);
 
 
+  /**
+   * Splits the file into ≤20MB parts and uploads them one at a time, with
+   * per-part retry and real progress. Each request stays far below the
+   * free-plan 50MB single-upload cap, so big files no longer fail/reject.
+   */
+  const uploadInChunks = useCallback(async (
+    file: File,
+    uid: string,
+    onChunkDone: (done: number, total: number) => void,
+  ): Promise<string[]> => {
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const basePath = `${uid}/uploads/${Date.now()}_${safeName}`;
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    const paths: string[] = [];
+
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, file.size);
+      const partType = file.type || 'application/octet-stream';
+      const part = file.slice(start, end, partType);
+      const path = `${basePath}/part_${String(i).padStart(3, '0')}`;
+
+      let uploadError: { message: string } | null = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const { error } = await supabase.storage.from('documents').upload(path, part, {
+          upsert: true,
+          contentType: partType,
+        });
+        if (!error) { uploadError = null; break; }
+        uploadError = error;
+        await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+      }
+
+      if (uploadError) {
+        // Best-effort cleanup of the parts we already stored
+        if (paths.length > 0) {
+          try { await supabase.storage.from('documents').remove(paths); } catch { /* ignore */ }
+        }
+        throw new Error(`Upload failed on part ${i + 1}/${totalChunks}: ${uploadError.message}`);
+      }
+
+      paths.push(path);
+      onChunkDone(i + 1, totalChunks);
+    }
+
+    return paths;
+  }, []);
+
   const handleUpload = useCallback(async () => {
     if (!selectedFile || !user?.id) {
       toast.error('Please select a file and ensure you are logged in.');
@@ -138,16 +210,17 @@ export const useDocumentUpload = ({
     }
 
     setIsUploading(true);
-    setUploadProgress(0);
 
-    // Keep a reference so we can clear it in finally
-    let progressInterval: number | null = null;
-    progressInterval = window.setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 90) return prev;
-        return prev + Math.random() * 10;
-      });
-    }, 200);
+    // Real, byte-accurate job in the global activity provider — every percent
+    // now maps to actual work (the old simulated progress interval is gone).
+    const totalChunks = Math.ceil(selectedFile.size / CHUNK_SIZE);
+    const jobId = createJob({
+      fileName: selectedFile.name,
+      fileSize: selectedFile.size,
+      userId: user.id,
+      partsTotal: selectedFile.size > STORAGE_UPLOAD_THRESHOLD_FOR_JOB ? totalChunks : 1,
+    });
+    setActiveJobId(jobId);
 
     const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/document-processor`;
 
@@ -156,27 +229,42 @@ export const useDocumentUpload = ({
         duration: 5000,
       });
 
-      // If the file is large, upload it to Storage and send a file_url
-      const STORAGE_UPLOAD_THRESHOLD = 5 * 1024 * 1024; // 5MB
       const payloadFiles: any[] = [];
 
-      if (selectedFile.size > STORAGE_UPLOAD_THRESHOLD) {
-        // Upload to storage to avoid sending huge base64 payloads
-        const safeFileName = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const filePath = `${user.id}/uploads/${Date.now()}_${safeFileName}`;
-        const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, selectedFile, { upsert: true });
-        if (uploadError) throw uploadError;
-
-        const { data: publicUrlData } = supabase.storage.from('documents').getPublicUrl(filePath) as any;
-        const publicUrl = publicUrlData?.publicUrl || (publicUrlData && publicUrlData.publicUrl) || null;
-        if (!publicUrl) throw new Error('Failed to obtain public URL for uploaded file');
-
-        payloadFiles.push({ name: selectedFile.name, mimeType: selectedFile.type, file_url: publicUrl, size: selectedFile.size });
-        setUploadProgress(60);
+      if (selectedFile.size > STORAGE_UPLOAD_THRESHOLD_FOR_JOB) {
+        // Supabase Free caps a single storage request at 50MB — upload in
+        // parts with real byte progress; the edge functions extract
+        // server-side round by round (the parts stay as the stored form).
+        const chunkPaths = await uploadInChunks(selectedFile, user.id, (done, total) => {
+          updateJob(jobId, {
+            partsDone: done,
+            partsTotal: total,
+            uploadedBytes: Math.min(done * CHUNK_SIZE, selectedFile.size),
+            percent: Math.round((done / total) * 100),
+          });
+        });
+        payloadFiles.push({
+          name: selectedFile.name,
+          mimeType: selectedFile.type,
+          size: selectedFile.size,
+          chunkPaths,
+          customInstruction: customInstruction.trim() || undefined,
+        });
       } else {
         const base64Data = await getBase64(selectedFile);
-        setUploadProgress(30);
-        payloadFiles.push({ name: selectedFile.name, mimeType: selectedFile.type, data: base64Data, size: selectedFile.size });
+        updateJob(jobId, {
+          uploadedBytes: selectedFile.size,
+          partsDone: 1,
+          percent: 100,
+          detail: 'Encoded — sending to the processor…',
+        });
+        payloadFiles.push({
+          name: selectedFile.name,
+          mimeType: selectedFile.type,
+          data: base64Data,
+          size: selectedFile.size,
+          customInstruction: customInstruction.trim() || undefined,
+        });
       }
 
       const { data: { session } } = await supabase.auth.getSession();
@@ -186,7 +274,7 @@ export const useDocumentUpload = ({
 
       const payload = { userId: user.id, files: payloadFiles };
 
-      setUploadProgress(75);
+      updateJob(jobId, { stage: 'registering', percent: 100 });
 
       // warn if the file is in a size range that often triggers long AI work
       const LARGE_NOTIFY_THRESHOLD = 3 * 1024 * 1024; // 3MB
@@ -198,15 +286,34 @@ export const useDocumentUpload = ({
         body: payload,
       });
 
-      setUploadProgress(90);
-
       if (fnError) {
         throw new Error(fnError.message || 'Function invocation failed');
       }
-      setUploadProgress(100);
 
       if (result?.documents && result.documents.length > 0) {
         const uploadedDoc = result.documents[0];
+
+        // Hand the job over to the global activity provider: it will poll the
+        // document row and drive/observe every extraction round from here,
+        // including after the user navigates away.
+        const docStatus = String(uploadedDoc.processing_status ?? '');
+        updateJob(jobId, {
+          docId: uploadedDoc.id,
+          stage:
+            docStatus === 'completed'
+              ? 'completed'
+              : docStatus === 'partial' || docStatus === 'processing'
+                ? 'extracting'
+                : 'failed',
+          percent: docStatus === 'completed' ? 100 : 0,
+          detail:
+            docStatus === 'processing'
+              ? 'AI analysis running…'
+              : docStatus === 'partial'
+                ? 'Queued for background analysis…'
+                : null,
+          error: docStatus === 'failed' ? (uploadedDoc.processing_error ?? 'Processing failed') : null,
+        });
 
         if (uploadTargetFolderId) {
           await appOperations.addDocumentToFolder(uploadedDoc.id, uploadTargetFolderId);
@@ -220,38 +327,15 @@ export const useDocumentUpload = ({
           void logUserActivity(user.id, 'document', 20);
         }
 
-        // If the document is still processing, poll until completion.
-        if (uploadedDoc.processing_status === 'processing' || uploadedDoc.processing_status === 'partial') {
-          toast.info("Large file detected, processing in background. We'll notify when complete.");
-          const pollInterval = 5000;
-          const maxAttempts = 60;
-          let attempts = 0;
-          const poller = setInterval(async () => {
-            attempts++;
-            try {
-              const { data: docs, error: pollErr } = await supabase
-                .from('documents')
-                .select('processing_status,processing_metadata')
-                .eq('id', uploadedDoc.id)
-                .single();
-              if (pollErr) throw pollErr;
-
-              if (docs && docs.processing_status !== 'processing' && docs.processing_status !== 'partial') {
-                clearInterval(poller);
-                if (docs.processing_status === 'completed') {
-                  toast.success(`"${selectedFile.name}" finished processing!`);
-                  forceRefreshDocuments?.();
-                } else {
-                  toast.error(`Processing of "${selectedFile.name}" failed.`);
-                }
-              } else if (attempts >= maxAttempts) {
-                clearInterval(poller);
-                toast.warning('Processing is taking longer than expected. Please check back later.');
-              }
-            } catch {
-              clearInterval(poller);
-            }
-          }, pollInterval);
+        // Handoff: extraction rounds continue server-side, observed AND
+        // driven by the global activity provider — on this screen and after
+        // navigating away.
+        if (docStatus === 'partial' || docStatus === 'processing') {
+          // The global UploadActivityProvider observes AND drives these
+          // extraction rounds — on this screen and after you navigate away.
+          toast.info('Processing continues in the background — see the activity tray at the bottom right.');
+        } else if (docStatus === 'failed') {
+          toast.error(`Processing failed: ${uploadedDoc.processing_error ?? 'unknown error'}`);
         } else {
           toast.success(
             uploadTargetFolderId
@@ -266,6 +350,7 @@ export const useDocumentUpload = ({
       }
 
       setSelectedFile(null);
+      setCustomInstruction('');
       if (fileInputRef.current) fileInputRef.current.value = '';
 
     } catch (error: any) {
@@ -286,6 +371,13 @@ export const useDocumentUpload = ({
         toast.error(`Failed to process file: ${error.message}`);
       }
 
+      updateJob(jobId, {
+        stage: 'failed',
+        error: isTimeout
+          ? 'Upload timed out — processing may still be running; check the activity tray or refresh later.'
+          : msg || 'Upload failed',
+      });
+
       // attempt to refresh documents regardless so any early-saved record shows up
       try {
         await forceRefreshDocuments();
@@ -293,13 +385,9 @@ export const useDocumentUpload = ({
         console.error('[document upload] force refresh after error failed', e);
       }
     } finally {
-      if (progressInterval) {
-        clearInterval(progressInterval);
-      }
       setIsUploading(false);
-      setUploadProgress(0);
     }
-  }, [selectedFile, user?.id, isUploading, uploadTargetFolderId, appOperations, forceRefreshDocuments, setUploadTargetFolderId, getBase64]);
+  }, [selectedFile, customInstruction, user?.id, isUploading, uploadTargetFolderId, appOperations, forceRefreshDocuments, setUploadTargetFolderId, getBase64, uploadInChunks, createJob, updateJob]);
 
   // ============================================================================
   // RESUME LARGE FILE PROCESSING
@@ -355,15 +443,18 @@ export const useDocumentUpload = ({
         }
 
         const result = await resp.json();
+        // Server nests the round result inside `documents[]` — reading the
+        // top-level object would always look "done" after round 1.
+        const round: any = Array.isArray(result.documents) ? result.documents[0] : result;
 
-        if (result.isComplete) {
+        if (round.isComplete) {
           toast.success(`"${fileName}" has been fully extracted!`);
           exitedCleanly = true;
           forceRefreshDocuments?.();
           break;
         }
 
-        if (!result.canResumeAgain) {
+        if (!round.canResumeAgain) {
           // Server says it's done but not complete — surface a warning
           toast.warning(`"${fileName}" was partially extracted. Some content may be missing.`);
           exitedCleanly = true;
@@ -405,6 +496,18 @@ export const useDocumentUpload = ({
     // For partial documents, resume extraction instead of re-processing from scratch
     if ((doc.processing_status as string) === 'partial') {
       toast.info(`Resuming extraction for "${doc.file_name}"…`);
+      const retryJobId = createJob({
+        fileName: doc.file_name || 'document',
+        fileSize: doc.file_size ?? 0,
+        userId: user.id,
+      });
+      updateJob(retryJobId, {
+        docId: doc.id,
+        stage: 'extracting',
+        percent: 0,
+        detail: 'Queued for background analysis…',
+      });
+      setActiveJobId(retryJobId);
       resumeDocumentProcessing(doc.id, doc.file_name || 'document', user.id);
       return;
     }
@@ -417,14 +520,27 @@ export const useDocumentUpload = ({
     try {
       toast.info(`${doc.processing_status === 'failed' ? 'Retrying' : 'Starting'} analysis for "${doc.file_name}"...`);
 
-      // If we have a file_url stored, prefer sending the URL to the function
-      // so the function can fetch server-side (avoids large client-side transfers).
-      const base64Data: string | null = null;
-      let preferFileUrl = false;
-      if (doc.file_url) {
-        preferFileUrl = true;
-      } else {
-        throw new Error('No file URL available for re-analysis');
+      // Resolve the stored source: single file_url, chunk parts (large
+      // uploads), or nothing at all. Oversized files fail fast with an honest
+      // plan-limit message instead of a cryptic "No file URL" error.
+      const meta = parseDocMetadata((doc as any).processing_metadata);
+      const rawParts = Array.isArray(meta?.chunk_paths) ? meta.chunk_paths : [];
+      const chunkPaths: string[] = rawParts.filter((p: unknown): p is string => typeof p === 'string');
+
+      const MAX_PROCESS_BYTES = 100 * 1024 * 1024;
+      const fileBytes = Number(doc.file_size ?? 0);
+      // The whole-file cap applies to PDFs/office (assembled in memory);
+      // audio is transcribed part-by-part and is exempt.
+      const isAudio = String((doc as any).file_type ?? '').startsWith('audio/');
+      if (fileBytes > MAX_PROCESS_BYTES && !isAudio) {
+        throw new Error(
+          `"${doc.file_name}" is ${Math.round(fileBytes / 1024 / 1024)}MB — above the 100MB processing limit for this plan. Split or trim the file, then re-upload it.`,
+        );
+      }
+
+      const source = doc.file_url ? 'url' : chunkPaths.length > 0 ? 'chunks' : null;
+      if (!source) {
+        throw new Error('No stored file found for this document — re-upload it to analyze it again.');
       }
 
       const { data: { session } } = await supabase.auth.getSession();
@@ -432,12 +548,13 @@ export const useDocumentUpload = ({
         throw new Error('No valid authentication token found');
       }
 
+      const baseFile = { name: doc.file_name, mimeType: doc.file_type, size: doc.file_size, idToUpdate: doc.id };
       const payload = {
         userId: user.id,
         files: [
-          preferFileUrl
-            ? { name: doc.file_name, mimeType: doc.file_type, file_url: doc.file_url, size: doc.file_size, idToUpdate: doc.id }
-            : { name: doc.file_name, mimeType: doc.file_type, data: base64Data, size: doc.file_size, idToUpdate: doc.id }
+          source === 'url'
+            ? { ...baseFile, file_url: doc.file_url }
+            : { ...baseFile, chunkPaths },
         ]
       };
 
@@ -459,7 +576,28 @@ export const useDocumentUpload = ({
       if (result.documents && result.documents.length > 0) {
         const updatedDoc = result.documents.find((d: Document) => d.id === doc.id) || result.documents[0];
         onDocumentUpdated(updatedDoc);
-        toast.success('Document analysis completed successfully!');
+        const st = String(updatedDoc.processing_status ?? '');
+        if (st === 'partial' || st === 'processing') {
+          // Hand off to the global activity provider, which observes AND
+          // drives the extraction rounds from here on.
+          const retryJobId = createJob({
+            fileName: doc.file_name || 'document',
+            fileSize: doc.file_size ?? 0,
+            userId: user.id,
+          });
+          updateJob(retryJobId, {
+            docId: updatedDoc.id,
+            stage: 'extracting',
+            percent: 0,
+            detail: 'Queued for background analysis…',
+          });
+          setActiveJobId(retryJobId);
+          toast.info('Analysis continues in the background — see the activity tray.');
+        } else if (st === 'failed') {
+          toast.error(`Analysis failed: ${updatedDoc.processing_error ?? 'unknown error'}`);
+        } else {
+          toast.success('Document analysis completed successfully!');
+        }
       } else {
         toast.warning('Analysis request sent, but no updated document data received.');
       }
@@ -478,13 +616,14 @@ export const useDocumentUpload = ({
         return newSet;
       });
     }
-  }, [user?.id, processingDocuments, onDocumentUpdated, resumeDocumentProcessing]);
+  }, [user?.id, processingDocuments, onDocumentUpdated, resumeDocumentProcessing, createJob, updateJob]);
 
   return {
     selectedFile,
     setSelectedFile,
+    customInstruction,
+    setCustomInstruction,
     isUploading,
-    uploadProgress,
     dragActive,
     dragLocked,
     fileInputRef,
@@ -493,6 +632,7 @@ export const useDocumentUpload = ({
     handleDrop,
     handleFileChange,
     handleUpload,
-    triggerAnalysis
+    triggerAnalysis,
+    activeJobId
   };
 }

@@ -162,6 +162,7 @@ export const DiagramPanel = memo(({
   const containerRef = useRef<HTMLDivElement>(null);
   const resizeStartX = useRef<number>(0);
   const resizeStartWidth = useRef<number>(0);
+  const resizeContainerWidth = useRef<number>(0);
   const innerContentWrapperRef = useRef<HTMLDivElement>(null);
   const htmlIframeRef = useRef<HTMLIFrameElement>(null);
   const mermaidIframeRef = useRef<HTMLIFrameElement>(null);
@@ -280,6 +281,7 @@ export const DiagramPanel = memo(({
     setIsResizing(true);
     resizeStartX.current = e.clientX;
     resizeStartWidth.current = panelWidth;
+    resizeContainerWidth.current = e.currentTarget.parentElement?.clientWidth || window.innerWidth;
   }, [panelWidth]);
 
   // Throttle resize updates to reduce re-renders
@@ -289,8 +291,7 @@ export const DiagramPanel = memo(({
 
   const handleResizeMove = useCallback((e: MouseEvent) => {
     const deltaX = resizeStartX.current - e.clientX;
-    const windowWidth = window.innerWidth;
-    const deltaPercent = (deltaX / windowWidth) * 100;
+    const deltaPercent = (deltaX / resizeContainerWidth.current) * 100;
     const newWidth = Math.min(Math.max(resizeStartWidth.current + deltaPercent, 30), 90);
 
     // Update immediately for smooth visual feedback
@@ -308,8 +309,7 @@ export const DiagramPanel = memo(({
     if (isResizing && !isPhone()) {
       const handleMove = (e: MouseEvent) => {
         const deltaX = resizeStartX.current - e.clientX;
-        const windowWidth = window.innerWidth;
-        const deltaPercent = (deltaX / windowWidth) * 100;
+        const deltaPercent = (deltaX / resizeContainerWidth.current) * 100;
         const newWidth = Math.min(Math.max(resizeStartWidth.current + deltaPercent, 30), 90);
         setPanelWidth(newWidth);
       };

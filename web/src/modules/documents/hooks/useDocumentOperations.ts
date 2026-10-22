@@ -52,7 +52,7 @@ export const useDocumentOperations = ({
 
       if (targetFolderId) {
         try {
-          await apiClient.post('document_folder_items', { folder_id: targetFolderId, document_id: documentId });
+          await apiClient.post('document-folder-items', { folder_id: targetFolderId, document_id: documentId });
         } catch {
           // Ignore unique constraint violations — may already exist
         }
@@ -145,7 +145,7 @@ export const useDocumentOperations = ({
         return;
       }
 
-      await apiClient.patch(`document_folders/${folderId}`, { parent_folder_id: targetParentId });
+      await apiClient.patch(`document-folders/${folderId}`, { parent_folder_id: targetParentId });
 
       await loadDataIfNeeded('folders', true);
       toast.success('Folder moved successfully!');
@@ -154,6 +154,36 @@ export const useDocumentOperations = ({
       toast.error(`Failed to move folder: ${error.message}`);
     }
   }, [folders, user, loadDataIfNeeded]);
+
+  // Pure helper: Supabase object URL → { bucket, path }, or null when the
+  // URL is not a storage object URL (or is empty for text/chunked docs).
+  const deriveStorageObject = (rawUrl: string): { bucket: string; path: string } | null => {
+    if (!rawUrl) return null;
+    try {
+      const pathname = new URL(rawUrl).pathname;
+
+      // Standard shape: /storage/v1/object/<mode>/<bucket>/<path…>
+      const std = pathname.match(/^\/storage\/v1\/object\/[^/]+\/([^/]+)\/(.+)$/);
+      if (std) {
+        let path = std[2];
+        try { path = decodeURIComponent(path); } catch { /* keep raw */ }
+        return { bucket: std[1], path };
+      }
+
+      // Legacy shapes the app used to write
+      const chatSegs = pathname.split('/chat-documents/');
+      if (chatSegs.length > 1) return { bucket: 'chat-documents', path: chatSegs[1] };
+
+      const docSegs = pathname.split('/documents/');
+      if (docSegs.length > 1) return { bucket: 'documents', path: docSegs[1] };
+
+      const match = pathname.match(/\/user_uploads\/[^/]+\/[^/]+$/);
+      if (match) return { bucket: 'chat-documents', path: `user_uploads${match[0].split('/user_uploads')[1]}` };
+    } catch {
+      // invalid URL → fall through
+    }
+    return null;
+  };
 
   const handleDeleteDocument = useCallback(async (documentId: string, fileUrl: string) => {
     if (processingDocuments.has(documentId)) {
@@ -166,37 +196,51 @@ export const useDocumentOperations = ({
         label: 'Confirm Delete',
         onClick: async () => {
           try {
-            let storagePath: string | null = null;
+            // ── Storage cleanup ────────────────────────────────────────────────
+            // A row may store its file in either bucket, may have an empty
+            // file_url (text docs / chunked uploads), and chunked uploads keep
+            // their parts in processing_metadata.chunk_paths. Resolve all of
+            // that against the row itself before removing anything.
+            let rowFileUrl = fileUrl;
+            let chunkPaths: string[] = [];
             try {
-              const url = new URL(fileUrl);
-              const pathSegments = url.pathname.split('/chat-documents/');
-              if (pathSegments.length > 1) {
-                storagePath = pathSegments[1];
-              } else {
-                const oldPathSegments = url.pathname.split('/documents/');
-                if (oldPathSegments.length > 1) {
-                  storagePath = oldPathSegments[1];
-                } else {
-                  const match = fileUrl.match(/\/user_uploads\/[^/]+\/[^/]+$/);
-                  if (match) {
-                    storagePath = `user_uploads${match[0].split('/user_uploads')[1]}`;
-                  }
-                }
-              }
-            } catch (urlError) {
-                // Ignore url parsing errors
+              const { data: row } = await supabase
+                .from('documents')
+                .select('file_url, processing_metadata')
+                .eq('id', documentId)
+                .single();
+              if (!rowFileUrl && row?.file_url) rowFileUrl = row.file_url;
+              const rawMeta: any = row?.processing_metadata;
+              const meta: any =
+                typeof rawMeta === 'string'
+                  ? (() => { try { return JSON.parse(rawMeta); } catch { return null; } })()
+                  : rawMeta;
+              const parts = Array.isArray(meta?.chunk_paths) ? meta.chunk_paths : [];
+              chunkPaths = parts.filter((p: unknown): p is string => typeof p === 'string');
+            } catch {
+              // best-effort row lookup — fall back to the passed fileUrl
             }
 
-            if (storagePath) {
-              const { error: storageError } = await supabase.storage
-                .from('chat-documents')
-                .remove([storagePath]);
+            // bucket → paths to remove
+            const removals = new Map<string, string[]>();
+            const addObject = (bucket: string, path: string) => {
+              removals.set(bucket, [...(removals.get(bucket) ?? []), path]);
+            };
 
+            const derived = deriveStorageObject(rowFileUrl);
+            if (derived) addObject(derived.bucket, derived.path);
+            for (const partPath of chunkPaths) addObject('documents', partPath);
+
+            if (removals.size === 0 && rowFileUrl) {
+              // URL exists but is not parseable — only then is it worth warning.
+              toast.warning('Could not derive storage path from file URL. File will not be deleted from storage.');
+            }
+
+            for (const [bucket, paths] of removals) {
+              const { error: storageError } = await supabase.storage.from(bucket).remove(paths);
               if (storageError) {
                 toast.warning(`File might not have been removed from storage. Error: ${storageError.message}`);
               }
-            } else {
-              toast.warning('Could not derive storage path from file URL. File will not be deleted from storage.');
             }
 
             await apiClient.delete(`documents/${documentId}`);

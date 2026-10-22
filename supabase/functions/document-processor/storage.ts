@@ -57,6 +57,45 @@ export async function uploadFileToStorage(file: any, userId: string): Promise<st
 // DATABASE SAVE
 // ============================================================================
 
+// Hard cap when re-assembling parts — matches resume-processing's
+// MAX_PROCESS_BYTES. Anything larger OOMs the free-plan edge isolate
+// ("Memory limit exceeded" seen in the function logs).
+const CHUNK_ASSEMBLY_MAX = 100 * 1024 * 1024;
+
+/**
+ * Downloads every part written by the client's chunked upload, in order, and
+ * concatenates them into a single in-memory buffer. Returns null on any
+ * missing part or when the assembled size would exceed CHUNK_ASSEMBLY_MAX.
+ */
+export async function assembleChunksFromStorage(
+  paths: string[],
+  bucket = 'documents',
+): Promise<Uint8Array | null> {
+  try {
+    const parts: Uint8Array[] = [];
+    let total = 0;
+
+    for (const path of paths) {
+      const { data, error } = await supabase.storage.from(bucket).download(path);
+      if (error || !data) return null;
+      const bytes = new Uint8Array(await data.arrayBuffer());
+      total += bytes.byteLength;
+      if (total > CHUNK_ASSEMBLY_MAX) return null;
+      parts.push(bytes);
+    }
+
+    const assembled = new Uint8Array(total);
+    let offset = 0;
+    for (const part of parts) {
+      assembled.set(part, offset);
+      offset += part.byteLength;
+    }
+    return assembled;
+  } catch {
+    return null;
+  }
+}
+
 const BINARY_TYPES = ['image', 'pdf', 'document', 'spreadsheet', 'presentation', 'archive', 'audio', 'video'];
 
 export async function saveFileToDatabase(file: any, userId: string): Promise<string | null> {
@@ -64,8 +103,13 @@ export async function saveFileToDatabase(file: any, userId: string): Promise<str
   let processingStatus = file.processing_status;
   let processingError = file.processing_error;
 
+  // Chunked uploads already live in the bucket as their parts — never
+  // "upload" the placeholder content as if it were the real file.
+  const chunkedParts = file.processing_metadata?.chunk_paths;
+  const isChunked = Array.isArray(chunkedParts) && chunkedParts.length > 0;
+
   // ensure any binary file is uploaded if not already
-  if (BINARY_TYPES.includes(file.type) && !file.file_url) {
+  if (BINARY_TYPES.includes(file.type) && !file.file_url && !isChunked) {
     fileUrl = await uploadFileToStorage(file, userId);
     if (!fileUrl) {
       processingStatus = 'failed';

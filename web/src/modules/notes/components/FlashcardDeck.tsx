@@ -146,89 +146,85 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({ noteId, userId, on
                 style={{ perspective: '1000px' }}
                 onClick={() => handleFlip(card.id)}
               >
-                {/* Front Side */}
                 <motion.div
-                  className="absolute inset-0 w-full h-full"
+                  className="relative h-full w-full"
                   initial={false}
                   animate={{ rotateY: flipped.has(card.id) ? 180 : 0 }}
                   transition={{ duration: 0.6, ease: 'easeInOut' }}
-                  style={{ 
-                    backfaceVisibility: 'hidden',
-                    transformStyle: 'preserve-3d'
-                  }}
+                  style={{ transformStyle: 'preserve-3d' }}
                 >
-                  <div className="h-full bg-gradient-to-br from-blue-500 to-gray-500 rounded-xl shadow-lg p-4 flex flex-col justify-between text-white overflow-hidden">
-                    <div className="flex-1 overflow-y-auto">
-                      <div className="flex items-center justify-between mb-3 flex-shrink-0">
-                        <span className="px-3 py-1 bg-white/20 backdrop-blur rounded-full text-xs font-medium">
-                          Question
-                        </span>
-                        {card.difficulty && (
-                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                            card.difficulty === 'easy' ? 'bg-green-400 text-green-900' :
-                            card.difficulty === 'hard' ? 'bg-red-400 text-red-900' : 'bg-yellow-400 text-yellow-900'
-                          }`}>
-                            {card.difficulty.toUpperCase()}
+                  {/* Front Side */}
+                  <div
+                    className="absolute inset-0 h-full rounded-xl bg-gradient-to-br from-blue-500 to-gray-500 p-4 text-white shadow-lg [backface-visibility:hidden]"
+                    style={{ transform: 'rotateY(0deg)' }}
+                  >
+                    <div className="flex h-full flex-col justify-between overflow-hidden">
+                      <div className="flex-1 overflow-y-auto">
+                        <div className="mb-3 flex flex-shrink-0 items-center justify-between">
+                          <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-medium backdrop-blur">
+                            Question
                           </span>
+                          {card.difficulty && (
+                            <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                              card.difficulty === 'easy' ? 'bg-green-400 text-green-900' :
+                              card.difficulty === 'hard' ? 'bg-red-400 text-red-900' : 'bg-yellow-400 text-yellow-900'
+                            }`}>
+                              {card.difficulty.toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <p className="break-words text-base font-medium leading-relaxed sm:text-lg">
+                          {card.front}
+                        </p>
+                        {card.hint && (
+                          <p className="mt-3 break-words text-xs italic opacity-80 sm:text-sm">
+                            💡 Hint: {card.hint}
+                          </p>
                         )}
                       </div>
-                      <p className="text-base sm:text-lg font-medium leading-relaxed break-words">
-                        {card.front}
-                      </p>
-                      {card.hint && (
-                        <p className="text-xs sm:text-sm opacity-80 mt-3 italic break-words">
-                          💡 Hint: {card.hint}
-                        </p>
-                      )}
-                    </div>
-                    <div className="text-center text-xs sm:text-sm opacity-70 mt-2 flex-shrink-0">
-                      Click to reveal answer
+                      <div className="mt-2 flex-shrink-0 text-center text-xs opacity-70 sm:text-sm">
+                        Click to reveal answer
+                      </div>
                     </div>
                   </div>
-                </motion.div>
 
-                {/* Back Side */}
-                <motion.div
-                  className="absolute inset-0 w-full h-full"
-                  initial={false}
-                  animate={{ rotateY: flipped.has(card.id) ? 0 : -180 }}
-                  transition={{ duration: 0.6, ease: 'easeInOut' }}
-                  style={{ 
-                    backfaceVisibility: 'hidden',
-                    transformStyle: 'preserve-3d'
-                  }}
-                >
-                  <div className="h-full bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl shadow-lg p-4 flex flex-col justify-between text-white overflow-hidden">
-                    <div className="flex-1 overflow-y-auto">
-                      <div className="flex items-center justify-between mb-3 flex-shrink-0">
-                        <span className="px-3 py-1 bg-white/20 backdrop-blur rounded-full text-xs font-medium">
-                          Answer
-                        </span>
+                  {/* Back Side */}
+                  <div
+                    className="absolute inset-0 h-full rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 p-4 text-white shadow-lg [backface-visibility:hidden]"
+                    style={{ transform: 'rotateY(180deg)' }}
+                  >
+                    <div className="flex h-full flex-col justify-between overflow-hidden">
+                      <div className="flex-1 overflow-y-auto">
+                        <div className="mb-3 flex flex-shrink-0 items-center justify-between">
+                          <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-medium backdrop-blur">
+                            Answer
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(card.id);
+                            }}
+                            className="flex-shrink-0 rounded-lg p-2 transition-colors hover:bg-white/20"
+                            aria-label="Delete flashcard"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <p className="break-words text-base font-medium leading-relaxed sm:text-lg">
+                          {card.back || 'No answer is available for this flashcard.'}
+                        </p>
+                      </div>
+                      <div className="mt-2 flex flex-shrink-0 justify-center">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDelete(card.id);
+                            handleFlip(card.id);
                           }}
-                          className="p-2 hover:bg-white/20 rounded-lg transition-colors flex-shrink-0"
-                          aria-label="Delete flashcard"
+                          className="rounded-lg bg-white/20 px-4 py-2 text-sm font-medium transition-colors backdrop-blur hover:bg-white/30"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          Show question
                         </button>
                       </div>
-                      <p className="text-base sm:text-lg font-medium leading-relaxed break-words">
-                        {card.back}
-                      </p>
-                    </div>
-                    <div className="flex gap-2 justify-center mt-2 flex-shrink-0">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleFlip(card.id);
-                        }}
-                        className="px-4 py-2 bg-white/20 backdrop-blur hover:bg-white/30 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        Flip Back
-                      </button>
                     </div>
                   </div>
                 </motion.div>

@@ -29,6 +29,7 @@ import { Badge } from '../../ui/components/badge';
 import { SubscriptionGuard } from '../../subscription/components/SubscriptionGuard';
 import { NotificationCenter } from '../../notifications/components/NotificationCenter';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { ProfileAvatar } from './ProfileAvatar';
 
 interface HeaderProps {
   onNewNote: () => void;
@@ -50,13 +51,14 @@ interface HeaderProps {
   subscriptionLoading: boolean;
   daysRemaining: number;
   onNavigateToSubscription: () => void;
+  workspaceTitle?: string;
 }
 
 const tabNames: Record<HeaderProps['activeTab'], string> = {
   notes: 'Notes',
   recordings: 'Class Recordings',
   schedule: 'Schedule & Timetable',
-  chat: 'AI Study Assistant',
+  chat: 'Workspace',
   podcasts: 'AI Podcasts',
   documents: 'Document Upload',
   settings: 'Learning Settings',
@@ -116,11 +118,6 @@ const sectionTabs = {
     { id: 'today', label: 'Today', icon: Clock },
     { id: 'past', label: 'Past', icon: History },
   ],
-  dashboard: [
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'activity', label: 'Activity', icon: TrendingUp },
-  ],
   library: [
     { id: 'my-school', label: 'My School', icon: School },
     { id: 'global', label: 'Global', icon: Globe },
@@ -137,11 +134,6 @@ const sectionTabs = {
     { id: 'security', label: 'Security', icon: Lock },
     { id: 'notifications', label: 'notifications', icon: Bell },
   ],
-};
-
-const getInitials = (name: string | null) => {
-  if (!name) return 'U';
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 };
 
 // ─── Global PWA prompt store ──────────────────────────────────────────────────
@@ -172,16 +164,30 @@ export const Header: React.FC<HeaderProps> = ({
   subscriptionLoading,
   daysRemaining,
   onNavigateToSubscription,
+  workspaceTitle,
 }) => {
   const navigate = useNavigate();
   const { isAdmin, canPostSocials } = useFeatureAccess();
   const canCreatePosts = canPostSocials();
   const location = useLocation();
   const { signOut } = useAuth();
-  const { handleNavigateToTab, createNewChatSession } = useAppContext();
+  const {
+    handleNavigateToTab,
+    createNewChatSession,
+    chatSessions,
+    activeChatSessionId,
+    dispatch,
+    hasMoreChatSessions,
+    handleLoadMoreChatSessions,
+    notes,
+    recordings,
+    documents,
+    scheduleItems,
+  } = useAppContext();
 
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
   const [isAppMenuOpen, setIsAppMenuOpen] = useState(false);
+  const [isChatHistoryOpen, setIsChatHistoryOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [activeSectionTab, setActiveSectionTab] = useState<string>('');
@@ -194,6 +200,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   const avatarRef = useRef<HTMLDivElement>(null);
   const appMenuRef = useRef<HTMLDivElement>(null);
+  const chatHistoryRef = useRef<HTMLDivElement>(null);
 
   // ── Outside click handler ────────────────────────────────────────────────
   useEffect(() => {
@@ -201,15 +208,18 @@ export const Header: React.FC<HeaderProps> = ({
       if (appMenuRef.current && !appMenuRef.current.contains(event.target as Node)) {
         setIsAppMenuOpen(false);
       }
+      if (chatHistoryRef.current && !chatHistoryRef.current.contains(event.target as Node)) {
+        setIsChatHistoryOpen(false);
+      }
       if (avatarRef.current && !avatarRef.current.contains(event.target as Node)) {
         setIsAvatarMenuOpen(false);
       }
     };
-    if (isAppMenuOpen || isAvatarMenuOpen) {
+    if (isAppMenuOpen || isAvatarMenuOpen || isChatHistoryOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => { document.removeEventListener('mousedown', handleClickOutside); };
-  }, [isAppMenuOpen, isAvatarMenuOpen]);
+  }, [isAppMenuOpen, isAvatarMenuOpen, isChatHistoryOpen]);
 
   // ── PWA install state ────────────────────────────────────────────────────
   useEffect(() => {
@@ -349,14 +359,6 @@ export const Header: React.FC<HeaderProps> = ({
     toast.success(`Switched to ${newTheme} mode`);
   };
 
-  const {
-    notes,
-    recordings,
-    documents,
-    scheduleItems,
-    chatSessions,
-  } = useAppContext();
-
   // ── Primary action button per tab ────────────────────────────────────────
   const getPrimaryAction = () => {
     switch (activeTab) {
@@ -406,15 +408,16 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Button
               onClick={async () => {
-                const id = await createNewChatSession?.();
+                const id = await createNewChatSession?.([]);
                 if (id) navigate(`/chat/${id}`);
               }}
               size="sm"
               variant="ghost"
-              className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-              title="New Chat"
+              className="gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+              title="New workspace"
             >
-              <MessageCircle className="h-4 w-4" />
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">New workspace</span>
             </Button>
           </SubscriptionGuard>
         );
@@ -552,7 +555,7 @@ export const Header: React.FC<HeaderProps> = ({
   // ── Render ───────────────────────────────────────────────────────────────
   return (
     <>
-      <header className="bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 relative">
+      <header className="relative border-0 bg-gray-50 shadow-none dark:bg-slate-900">
         {/* Main Header Row */}
         <div className="flex items-center justify-between min-h-16 px-3 sm:px-4 py-3 sm:py-0 gap-2 sm:gap-3">
 
@@ -644,7 +647,70 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
 
-            <h1 className="text-sm sm:text-lg font-bold hidden sm:block truncate">{tabNames[activeTab]}</h1>
+            {activeTab === 'chat' && (
+              <div ref={chatHistoryRef} className="relative shrink-0">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setIsChatHistoryOpen(open => !open)}
+                  aria-expanded={isChatHistoryOpen}
+                  aria-label="Open chat history"
+                  className="flex items-center gap-2 px-2 sm:px-3"
+                >
+                  <History className="h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline">Chats</span>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${isChatHistoryOpen ? 'rotate-180' : ''}`} />
+                </Button>
+
+                {isChatHistoryOpen && (
+                  <div className="absolute left-0 top-full z-50 mt-2 flex max-h-[min(70vh,32rem)] w-[min(20rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-800">
+                    <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+                      <p className="text-sm font-semibold">Your conversations</p>
+                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Switch to a previous workspace</p>
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                      {chatSessions.length === 0 ? (
+                        <p className="px-3 py-6 text-center text-sm text-slate-500 dark:text-slate-400">No conversations yet</p>
+                      ) : chatSessions.map(session => (
+                        <button
+                          key={session.id}
+                          type="button"
+                          onClick={() => {
+                            dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: session.id });
+                            navigate(`/chat/${session.id}`);
+                            setIsChatHistoryOpen(false);
+                          }}
+                          className={`flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
+                            activeChatSessionId === session.id
+                              ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                              : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700'
+                          }`}
+                        >
+                          <MessageSquare className="mt-0.5 h-4 w-4 shrink-0" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">{session.title || 'New conversation'}</span>
+                            <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                              {new Date(session.last_message_at || session.created_at).toLocaleDateString()}
+                            </span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    {hasMoreChatSessions && (
+                      <button
+                        type="button"
+                        onClick={handleLoadMoreChatSessions}
+                        className="border-t border-slate-200 px-4 py-3 text-sm font-medium text-blue-600 hover:bg-slate-50 dark:border-slate-700 dark:text-blue-400 dark:hover:bg-slate-700"
+                      >
+                        Load more conversations
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <h1 className="text-sm sm:text-lg font-bold hidden sm:block truncate">{activeTab === 'chat' ? workspaceTitle || tabNames[activeTab] : tabNames[activeTab]}</h1>
           </div>
 
           {/* Center: Section Tabs — desktop only */}
@@ -728,11 +794,7 @@ export const Header: React.FC<HeaderProps> = ({
                     'hover:ring-blue-300 dark:hover:ring-blue-800'
                   }`}
                 >
-                  {avatarUrl ? (
-                    <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <span>{getInitials(fullName)}</span>
-                  )}
+                  <ProfileAvatar avatarValue={avatarUrl} fullName={fullName} className="h-full w-full" />
                 </button>
                 {isAdmin && (
                   <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-purple-600 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900">

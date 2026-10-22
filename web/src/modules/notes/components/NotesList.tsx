@@ -1,6 +1,6 @@
 // NotesList.tsx
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
-import { Trash2, X, Edit, Save, X as CloseIcon, RefreshCw, Search, CheckSquare, Square, Podcast } from 'lucide-react';
+import { Trash2, X, Edit, Save, X as CloseIcon, RefreshCw, Search, CheckSquare, Square, Podcast, PanelLeftClose, PanelLeftOpen, BookOpen } from 'lucide-react';
 import { Button } from '../../ui/components/button';
 import { Note, NoteCategory } from '../../../types/Note';
 import { getCategoryColor } from '../../classRecordings/utils/helpers';
@@ -21,6 +21,8 @@ interface NotesListProps {
   onNoteUpdate: (noteId: string, updates: Partial<Note>) => void;
   isOpen?: boolean;
   onClose?: () => void;
+  isPanelCollapsed?: boolean;
+  onTogglePanelCollapsed?: () => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
   onLoadMore?: () => void;
@@ -41,6 +43,8 @@ export const NotesList: React.FC<NotesListProps> = ({
   onNoteUpdate,
   isOpen,
   onClose,
+  isPanelCollapsed = false,
+  onTogglePanelCollapsed,
   hasMore,
   isLoadingMore,
   onLoadMore,
@@ -344,14 +348,14 @@ export const NotesList: React.FC<NotesListProps> = ({
   const showLoading = isLoading && !hasInitialNotes;
 
   return (
-    <div className={`flex flex-col h-full ${isOpen
-      ? 'translate-x-0 w-72 md:w-64 lg:w-80 max-h-screen lg:max-h-[95vh] overflow-y-auto'
-      : 'h-0 lg:h-full lg:translate-x-0 lg:w-80'
-      } bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-gray-800 lg:static lg:shadow-none`}>
+    <div className={`flex h-full min-h-0 flex-col overflow-hidden ${isOpen
+      ? 'translate-x-0 w-72 md:w-64 lg:w-full'
+      : 'h-0 lg:h-full lg:translate-x-0 lg:w-full'
+      } bg-white dark:bg-slate-900 lg:static ${isPanelCollapsed ? 'lg:items-center' : ''}`}>
       {/* Mobile Header with Close Button */}
-      <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-gray-800">
+      <div className={`shrink-0 border-b border-slate-200 p-3 dark:border-gray-800 sm:p-4 ${isPanelCollapsed ? 'lg:w-full lg:px-2' : ''}`}>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className={`flex min-w-0 items-center gap-2 ${isPanelCollapsed ? 'lg:hidden' : ''}`}>
             <h3 className="font-medium text-slate-800 text-sm sm:text-base dark:text-gray-100">
               {showLoading ? 'Loading...' : isAnySearching ? 'Searching...' : `${filteredNotes.length} ${filteredNotes.length === 1 ? 'Note' : 'Notes'}`}
             </h3>
@@ -370,20 +374,36 @@ export const NotesList: React.FC<NotesListProps> = ({
               </Button>
             )}
           </div>
-          {onClose && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="lg:hidden h-8 w-8 p-0 hover:bg-slate-100 dark:hover:bg-gray-800 dark:text-gray-400"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
+          <div className="flex shrink-0 items-center gap-1">
+            {onTogglePanelCollapsed && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={onTogglePanelCollapsed}
+                className="hidden h-8 w-8 text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white lg:inline-flex"
+                aria-label={isPanelCollapsed ? 'Expand notes panel' : 'Collapse notes panel'}
+                title={isPanelCollapsed ? 'Expand notes panel' : 'Collapse notes panel'}
+              >
+                {isPanelCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              </Button>
+            )}
+            {onClose && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                className="h-8 w-8 p-0 hover:bg-slate-100 dark:hover:bg-gray-800 dark:text-gray-400 lg:hidden"
+                aria-label="Close notes history"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Podcast and Selection Controls */}
-        {!showLoading && filteredNotes.length > 0 && (
+        {!isPanelCollapsed && !showLoading && filteredNotes.length > 0 && (
           <div className="mt-3 flex items-center gap-2">
             <Button
               variant={showSelection ? "default" : "outline"}
@@ -414,8 +434,31 @@ export const NotesList: React.FC<NotesListProps> = ({
         )}
       </div>
 
+      {isPanelCollapsed && (
+        <div className="hidden min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto overscroll-contain py-2 modern-scrollbar lg:flex">
+          {safeNotes.map(note => (
+            <Button
+              key={note.id}
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => handleNoteSelect(note)}
+              className={`h-9 w-9 shrink-0 rounded-lg ${
+                activeNote?.id === note.id
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                  : 'text-slate-500 hover:bg-slate-100 hover:text-blue-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-blue-300'
+              }`}
+              aria-label={`Open note: ${note.title || 'Untitled note'}`}
+              title={note.title || 'Untitled note'}
+            >
+              <BookOpen className="h-4 w-4" />
+            </Button>
+          ))}
+        </div>
+      )}
+
       {/* Search */}
-      <div className="px-3 sm:px-4 pt-2">
+      <div className={`shrink-0 px-3 pt-2 sm:px-4 ${isPanelCollapsed ? 'lg:hidden' : ''}`}>
         <div className="relative">
           <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <Input
@@ -444,7 +487,7 @@ export const NotesList: React.FC<NotesListProps> = ({
       </div>
 
       {/* Notes List */}
-      <div className={`flex-wrap flex-1 overflow-y-auto modern-scrollbar`}>
+      <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain modern-scrollbar ${isPanelCollapsed ? 'lg:hidden' : ''}`}>
         <div className="divide-y divide-slate-100 dark:divide-gray-800">
           {showLoading ? (
             // Show loading skeleton

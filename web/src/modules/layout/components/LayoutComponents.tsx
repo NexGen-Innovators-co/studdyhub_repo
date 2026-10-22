@@ -5,6 +5,7 @@ import { Button } from '../../ui/components/button';
 import { Sun, Moon, Menu, X, MapIcon, PhoneCallIcon, Download, Smartphone, CheckCircle, Loader2, LayoutDashboard, Settings, LogOut, ChevronDown, FileText, MessageSquare, Brain, Mic, Users, BookOpen, GraduationCap, HelpCircle, Newspaper, Code2, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../../integrations/supabase/client';
+import { ProfileAvatar } from './ProfileAvatar';
 
 // ─── Global PWA prompt store ──────────────────────────────────────────────────
 // beforeinstallprompt fires once per page load. Storing it on window lets any
@@ -414,11 +415,7 @@ export const AppHeader: React.FC<{
               aria-expanded={isAvatarDropdownOpen}
             >
               <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-semibold overflow-hidden ring-2 ring-white dark:ring-gray-800">
-                {authUser.avatarUrl ? (
-                  <img src={authUser.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <span>{authUser.fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</span>
-                )}
+                <ProfileAvatar avatarValue={authUser.avatarUrl} fullName={authUser.fullName} className="h-full w-full" />
               </div>
               <ChevronDown className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform ${isAvatarDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -609,11 +606,7 @@ export const AppHeader: React.FC<{
               <>
                 <div className="flex items-center gap-3 px-2 py-2">
                   <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-semibold overflow-hidden ring-2 ring-white dark:ring-gray-800 flex-shrink-0">
-                    {authUser.avatarUrl ? (
-                      <img src={authUser.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                    ) : (
-                      <span>{authUser.fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</span>
-                    )}
+                    <ProfileAvatar avatarValue={authUser.avatarUrl} fullName={authUser.fullName} className="h-full w-full" />
                   </div>
                   <span className="font-medium text-gray-800 dark:text-gray-200 truncate">{authUser.fullName}</span>
                 </div>

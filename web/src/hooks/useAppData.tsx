@@ -671,7 +671,7 @@ export const useAppData = (authUser?: any) => {
             if (!freshDataApplied && offlineDocs && offlineDocs.length > 0) {
               setDocuments(offlineDocs);
             }
-          }).catch(() => {});
+          }).catch(() => { });
         }
       }
 
@@ -767,7 +767,10 @@ export const useAppData = (authUser?: any) => {
         }
 
         const newOffset = offset + data.length; // Use original data length for offset
-        const hasMore = data.length === limit; // Use original data length for hasMore
+        // A full page is not enough to prove that another useful page exists:
+        // deduplication can leave a page with no new documents, while the last
+        // visible card keeps the intersection observer active.
+        const hasMore = data.length === limit && (isInitial || formattedDocuments.length > 0);
 
         setDataPagination(prev => ({
           ...prev,
@@ -824,7 +827,7 @@ export const useAppData = (authUser?: any) => {
             if (!freshDataApplied && offlineRecs && offlineRecs.length > 0) {
               setRecordings(offlineRecs);
             }
-          }).catch(() => {});
+          }).catch(() => { });
         }
       }
 
@@ -835,9 +838,7 @@ export const useAppData = (authUser?: any) => {
 
       const { data, error } = await withRetry<ClassRecording[]>(
         () => withTimeout<ClassRecording[]>(
-          apiQuery(apiClient.get('class_recordings', {
-            select: '*',
-            user_id: `eq.${userId}`,
+          apiQuery(apiClient.get('class-recordings', {
             order: 'created_at.desc',
             offset: String(offset),
             limit: String(limit),
@@ -903,7 +904,9 @@ export const useAppData = (authUser?: any) => {
         }
 
         const newOffset = offset + data.length;
-        const hasMore = data.length === limit;
+        // The gateway's class-recordings route ignores offset/limit and always
+        // returns the full list, so there is never another page to fetch.
+        const hasMore = false;
 
         setDataPagination(prev => ({
           ...prev,
@@ -957,21 +960,18 @@ export const useAppData = (authUser?: any) => {
             if (!freshDataApplied && offlineItems && offlineItems.length > 0) {
               setScheduleItems(offlineItems);
             }
-          }).catch(() => {});
+          }).catch(() => { });
         }
       }
 
       const limit = isInitial ? INITIAL_LOAD_LIMITS.scheduleItems : LOAD_MORE_LIMITS.scheduleItems;
       const offset = isInitial ? 0 : dataPagination.scheduleItems.offset;
-      
+
       // OPTIMIZATION: Only fetch future events and minimal columns
       const now = new Date().toISOString();
 
       const { data, error } = await withTimeout<SupabaseScheduleItem[]>(
-        apiQuery(apiClient.get('schedule_items', {
-          select: 'id,title,subject,start_time,end_time,type,description,location,color,user_id,created_at,calendar_event_id,is_recurring,recurrence_pattern,recurrence_interval,recurrence_days,recurrence_end_date',
-          user_id: `eq.${userId}`,
-          or: `and(is_recurring.eq.true,or(recurrence_end_date.is.null,recurrence_end_date.gte.${now})),end_time.gte.${now}`,
+        apiQuery(apiClient.get('schedule', {
           order: 'start_time.asc',
           offset: String(offset),
           limit: String(limit),
@@ -1000,10 +1000,16 @@ export const useAppData = (authUser?: any) => {
       if (data) {
         freshDataApplied = true;
 
-        // Filter out duplicates before formatting
-        const newScheduleData = data.filter(item =>
-          !loadedIdsRef.current.scheduleItems.has(item.id)
-        );
+        // The gateway returns ALL schedule items (it doesn't support the old
+        // PostgREST `or` filter), so keep only upcoming events and active
+        // recurring ones to match the previous server-side filtering.
+        const nowTs = new Date(now).getTime();
+        const newScheduleData = data.filter(item => {
+          if (loadedIdsRef.current.scheduleItems.has(item.id)) return false;
+          const recurringActive = item.is_recurring &&
+            (!item.recurrence_end_date || new Date(item.recurrence_end_date).getTime() >= nowTs);
+          return recurringActive || new Date(item.end_time).getTime() >= nowTs;
+        });
 
         const formattedItems: ScheduleItem[] = newScheduleData.map(item => ({
           id: item.id,
@@ -1038,7 +1044,9 @@ export const useAppData = (authUser?: any) => {
         }
 
         const newOffset = offset + data.length;
-        const hasMore = data.length === limit;
+        // The gateway's schedule route ignores offset/limit and always returns
+        // the full list, so there is never another page to fetch.
+        const hasMore = false;
 
         setDataPagination(prev => ({
           ...prev,
@@ -1073,28 +1081,28 @@ export const useAppData = (authUser?: any) => {
     let freshDataApplied = false;
 
     try {
-    // Optimistically load from offline storage for initial load
-    if (isInitial) {
-      if (!navigator.onLine) {
-        try {
-          const offlineQuizzes = await offlineStorage.getAll<Quiz>(STORES.QUIZZES);
-          if (offlineQuizzes && offlineQuizzes.length > 0) {
-            setQuizzes(offlineQuizzes);
-            offlineQuizzes.forEach(quiz => loadedIdsRef.current.quizzes.add(quiz.id));
-            setDataLoaded(prev => new Set([...prev, 'quizzes']));
-            return; // finally block will clean up
+      // Optimistically load from offline storage for initial load
+      if (isInitial) {
+        if (!navigator.onLine) {
+          try {
+            const offlineQuizzes = await offlineStorage.getAll<Quiz>(STORES.QUIZZES);
+            if (offlineQuizzes && offlineQuizzes.length > 0) {
+              setQuizzes(offlineQuizzes);
+              offlineQuizzes.forEach(quiz => loadedIdsRef.current.quizzes.add(quiz.id));
+              setDataLoaded(prev => new Set([...prev, 'quizzes']));
+              return; // finally block will clean up
+            }
+          } catch (err) {
+            //console.warn('Failed to load offline quizzes:', err);
           }
-        } catch (err) {
-          //console.warn('Failed to load offline quizzes:', err);
+        } else {
+          offlineStorage.getAll<Quiz>(STORES.QUIZZES).then(offlineQuizzes => {
+            if (!freshDataApplied && offlineQuizzes && offlineQuizzes.length > 0) {
+              setQuizzes(offlineQuizzes);
+            }
+          }).catch(() => { });
         }
-      } else {
-        offlineStorage.getAll<Quiz>(STORES.QUIZZES).then(offlineQuizzes => {
-          if (!freshDataApplied && offlineQuizzes && offlineQuizzes.length > 0) {
-            setQuizzes(offlineQuizzes);
-          }
-        }).catch(() => {});
       }
-    }
 
       const limit = isInitial ? INITIAL_LOAD_LIMITS.quizzes : LOAD_MORE_LIMITS.quizzes;
       const offset = isInitial ? 0 : dataPagination.quizzes.offset;
@@ -1274,7 +1282,7 @@ export const useAppData = (authUser?: any) => {
             if (!freshDataApplied && offlineFolders && offlineFolders.length > 0) {
               setFolders(offlineFolders);
             }
-          }).catch(() => {});
+          }).catch(() => { });
         }
       }
 
@@ -1282,9 +1290,7 @@ export const useAppData = (authUser?: any) => {
 
       const { data, error } = await withRetry<DocumentFolder[]>(
         () => withTimeout<DocumentFolder[]>(
-          apiQuery(apiClient.get('document_folders', {
-            select: '*',
-            user_id: `eq.${userId}`,
+          apiQuery(apiClient.get('document-folders', {
             order: 'created_at.desc',
           }, API_TIMEOUT)),
           API_TIMEOUT,
@@ -1371,106 +1377,193 @@ export const useAppData = (authUser?: any) => {
     loadingLocksRef.current.add('profile');
 
     try {
-    const cacheKey = `profile_${user.id}`;
-    const cached = getCachedData(cacheKey);
-    if (cached) {
-      setUserProfile(cached);
-      setDataLoaded(prev => new Set([...prev, 'profile']));
-      return; // finally block will clean up
-    }
-
-    // Offline check for profile
-    if (!navigator.onLine) {
-      try {
-        const offlineProfiles = await offlineStorage.getAll<UserProfile>(STORES.PROFILE);
-        if (offlineProfiles && offlineProfiles.length > 0) {
-          const myProfile = offlineProfiles.find(p => p.id === user.id) || offlineProfiles[0];
-          if (myProfile) {
-            setUserProfile(myProfile);
-            setDataLoaded(prev => new Set([...prev, 'profile']));
-            return; // finally block will clean up
-          }
-        }
-      } catch (e) {
-        //console.warn('Failed to load offline profile:', e);
+      const cacheKey = `profile_${user.id}`;
+      const cached = getCachedData(cacheKey);
+      if (cached) {
+        setUserProfile(cached);
+        setDataLoaded(prev => new Set([...prev, 'profile']));
+        return; // finally block will clean up
       }
-    }
 
-    setDataLoading('profile', true);
-
-    try {
-      const startTime = Date.now();
-
-      const { data: profileData, error: profileError, retriesUsed } = await withRetry<any>(
-        () => withTimeout<UserProfile>(
-          apiQuery(apiClient.get('v1/profile', undefined, API_TIMEOUT)),
-          API_TIMEOUT,
-          'Failed to load user profile'
-        ),
-        'Failed to load user profile',
-        'profile',
-        1 // Only 1 retry for profile
-      );
-
-      const responseTime = Date.now() - startTime;
-      recordResponseTime(responseTime);
-
-      if (profileError && profileError.code !== 'PGRST116') {
-        if (!navigator.onLine || profileError.message?.includes('network') || profileError.message?.includes('timeout')) {
-          // Try to load from IndexedDB
+      // Offline check for profile
+      if (!navigator.onLine) {
+        try {
           const offlineProfiles = await offlineStorage.getAll<UserProfile>(STORES.PROFILE);
-          const myProfile = offlineProfiles.find(p => p.id === user.id);
-          if (myProfile) {
-            setUserProfile(myProfile);
-            setDataLoaded(prev => new Set([...prev, 'profile']));
-            return;
+          if (offlineProfiles && offlineProfiles.length > 0) {
+            const myProfile = offlineProfiles.find(p => p.id === user.id) || offlineProfiles[0];
+            if (myProfile) {
+              setUserProfile(myProfile);
+              setDataLoaded(prev => new Set([...prev, 'profile']));
+              return; // finally block will clean up
+            }
           }
+        } catch (e) {
+          //console.warn('Failed to load offline profile:', e);
         }
-        //console.error('Error loading user profile:', profileError);
       }
 
-      let finalProfile: UserProfile;
+      setDataLoading('profile', true);
 
-      if (profileData) {
-        finalProfile = {
-          id: profileData.id,
-          email: profileData.email || user.email || '',
-          full_name: profileData.full_name || '',
-          avatar_url: profileData.avatar_url || '',
-          learning_style: (profileData.learning_style || 'visual') as 'visual' | 'auditory' | 'kinesthetic' | 'reading',
-          learning_preferences: (profileData.learning_preferences as any) || {
-            explanation_style: 'detailed',
-            examples: true,
-            difficulty: 'intermediate'
-          },
-          bonus_ai_credits: profileData.bonus_ai_credits,
-          is_public: profileData.is_public,
-          points_balance: profileData.points_balance,
-          quiz_preferences: profileData.quiz_preferences,
-          referral_code: profileData.referral_code,
-          referral_count: profileData.referral_count,
-          school: profileData.school,
-          username: profileData.username,
-          personal_context: profileData.personal_context || '',
-          institution_id: profileData.institution_id || null,
-          onboarding_completed: profileData.onboarding_completed ?? false,
-          user_role: profileData.user_role ?? null,
-          role_verified_at: profileData.role_verified_at ?? null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-      } else {
-        // Create default profile
-        finalProfile = {
+      try {
+        const startTime = Date.now();
+
+        const { data: profileData, error: profileError, retriesUsed } = await withRetry<any>(
+          () => withTimeout<UserProfile>(
+            apiQuery(apiClient.get('v1/profile', undefined, API_TIMEOUT)),
+            API_TIMEOUT,
+            'Failed to load user profile'
+          ),
+          'Failed to load user profile',
+          'profile',
+          1 // Only 1 retry for profile
+        );
+
+        const responseTime = Date.now() - startTime;
+        recordResponseTime(responseTime);
+
+        if (profileError && profileError.code !== 'PGRST116') {
+          if (!navigator.onLine || profileError.message?.includes('network') || profileError.message?.includes('timeout')) {
+            // Try to load from IndexedDB
+            const offlineProfiles = await offlineStorage.getAll<UserProfile>(STORES.PROFILE);
+            const myProfile = offlineProfiles.find(p => p.id === user.id);
+            if (myProfile) {
+              setUserProfile(myProfile);
+              setDataLoaded(prev => new Set([...prev, 'profile']));
+              return;
+            }
+          }
+          //console.error('Error loading user profile:', profileError);
+        }
+
+        let finalProfile: UserProfile;
+
+        if (profileData) {
+          finalProfile = {
+            id: profileData.id,
+            email: profileData.email || user.email || '',
+            full_name: profileData.full_name || '',
+            avatar_url: profileData.avatar_url || '',
+            learning_style: (profileData.learning_style || 'visual') as 'visual' | 'auditory' | 'kinesthetic' | 'reading',
+            learning_preferences: (profileData.learning_preferences as any) || {
+              explanation_style: 'detailed',
+              examples: true,
+              difficulty: 'intermediate'
+            },
+            bonus_ai_credits: profileData.bonus_ai_credits,
+            is_public: profileData.is_public,
+            points_balance: profileData.points_balance,
+            quiz_preferences: profileData.quiz_preferences,
+            referral_code: profileData.referral_code,
+            referral_count: profileData.referral_count,
+            school: profileData.school,
+            username: profileData.username,
+            personal_context: profileData.personal_context || '',
+            institution_id: profileData.institution_id || null,
+            onboarding_completed: profileData.onboarding_completed ?? false,
+            user_role: profileData.user_role ?? null,
+            role_verified_at: profileData.role_verified_at ?? null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+        } else {
+          // Create default profile
+          finalProfile = {
+            id: user.id,
+            email: user.email || '',
+            full_name: '',
+            avatar_url: '',
+            learning_style: 'visual' as const,
+            learning_preferences: {
+              explanation_style: 'detailed' as const,
+              examples: true,
+              difficulty: 'intermediate' as const
+            },
+            bonus_ai_credits: 0,
+            is_public: false,
+            points_balance: 0,
+            quiz_preferences: null,
+            referral_code: null,
+            referral_count: 0,
+            school: null,
+            username: null,
+            personal_context: null,
+            institution_id: null,
+            onboarding_completed: false,
+            user_role: 'student',
+            role_verified_at: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+
+          // Create in background without blocking
+          setTimeout(async () => {
+            try {
+              const profileInsertPayload = {
+                id: user.id,
+                email: user.email || '',
+                full_name: '',
+                avatar_url: '',
+                learning_style: 'visual',
+                learning_preferences: {
+                  explanation_style: 'detailed',
+                  examples: true,
+                  difficulty: 'intermediate'
+                },
+                bonus_ai_credits: 0,
+                is_public: false,
+                points_balance: 0,
+                onboarding_completed: false,
+                user_role: 'student'
+              };
+
+              await withTimeout(
+                apiQuery(apiClient.post('v1/profiles', profileInsertPayload, API_TIMEOUT)),
+                API_TIMEOUT,
+                'Failed to create profile'
+              );
+
+              // Create default notification preferences for new user
+              const { createDefaultNotificationPreferences } = await import('@/services/notificationPreferencesService');
+              await createDefaultNotificationPreferences(user.id);
+            } catch (error) {
+              //console.error('Error creating default profile:', error);
+            }
+          }, 0);
+        }
+
+        setUserProfile(finalProfile);
+        setCachedData(cacheKey, finalProfile);
+
+        // Save to IndexedDB for offline access
+        offlineStorage.save(STORES.PROFILE, finalProfile);
+
+        // Ensure notification preferences exist for user (handles all signup methods)
+        // Non-blocking: runs in background without delaying app load
+        setTimeout(async () => {
+          try {
+            const { createDefaultNotificationPreferences } = await import('@/services/notificationPreferencesService');
+            await createDefaultNotificationPreferences(user.id);
+          } catch (error) {
+            console.warn('[Profile] Failed to ensure notification preferences:', error);
+            // Don't block profile loading if preferences creation fails
+          }
+        }, 100);
+
+        setDataLoaded(prev => new Set([...prev, 'profile']));
+
+      } catch (error) {
+        //console.error('❌ Error in loadUserProfile:', error);
+        // Fallback profile
+        const fallbackProfile: UserProfile = {
           id: user.id,
           email: user.email || '',
           full_name: '',
           avatar_url: '',
-          learning_style: 'visual' as const,
+          learning_style: 'visual',
           learning_preferences: {
-            explanation_style: 'detailed' as const,
+            explanation_style: 'detailed',
             examples: true,
-            difficulty: 'intermediate' as const
+            difficulty: 'intermediate'
           },
           bonus_ai_credits: 0,
           is_public: false,
@@ -1488,98 +1581,11 @@ export const useAppData = (authUser?: any) => {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
-
-        // Create in background without blocking
-        setTimeout(async () => {
-          try {
-            const profileInsertPayload = {
-              id: user.id,
-              email: user.email || '',
-              full_name: '',
-              avatar_url: '',
-              learning_style: 'visual',
-              learning_preferences: {
-                explanation_style: 'detailed',
-                examples: true,
-                difficulty: 'intermediate'
-              },
-              bonus_ai_credits: 0,
-              is_public: false,
-              points_balance: 0,
-              onboarding_completed: false,
-              user_role: 'student'
-            };
-
-            await withTimeout(
-              apiQuery(apiClient.post('v1/profiles', profileInsertPayload, API_TIMEOUT)),
-              API_TIMEOUT,
-              'Failed to create profile'
-            );
-
-            // Create default notification preferences for new user
-            const { createDefaultNotificationPreferences } = await import('@/services/notificationPreferencesService');
-            await createDefaultNotificationPreferences(user.id);
-          } catch (error) {
-            //console.error('Error creating default profile:', error);
-          }
-        }, 0);
+        setUserProfile(fallbackProfile);
+        setDataLoaded(prev => new Set([...prev, 'profile']));
+      } finally {
+        setDataLoading('profile', false);
       }
-
-      setUserProfile(finalProfile);
-      setCachedData(cacheKey, finalProfile);
-
-      // Save to IndexedDB for offline access
-      offlineStorage.save(STORES.PROFILE, finalProfile);
-
-      // Ensure notification preferences exist for user (handles all signup methods)
-      // Non-blocking: runs in background without delaying app load
-      setTimeout(async () => {
-        try {
-          const { createDefaultNotificationPreferences } = await import('@/services/notificationPreferencesService');
-          await createDefaultNotificationPreferences(user.id);
-        } catch (error) {
-          console.warn('[Profile] Failed to ensure notification preferences:', error);
-          // Don't block profile loading if preferences creation fails
-        }
-      }, 100);
-
-      setDataLoaded(prev => new Set([...prev, 'profile']));
-
-    } catch (error) {
-      //console.error('❌ Error in loadUserProfile:', error);
-      // Fallback profile
-      const fallbackProfile: UserProfile = {
-        id: user.id,
-        email: user.email || '',
-        full_name: '',
-        avatar_url: '',
-        learning_style: 'visual',
-        learning_preferences: {
-          explanation_style: 'detailed',
-          examples: true,
-          difficulty: 'intermediate'
-        },
-        bonus_ai_credits: 0,
-        is_public: false,
-        points_balance: 0,
-        quiz_preferences: null,
-        referral_code: null,
-        referral_count: 0,
-        school: null,
-        username: null,
-        personal_context: null,
-        institution_id: null,
-        onboarding_completed: false,
-        user_role: 'student',
-        role_verified_at: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      setUserProfile(fallbackProfile);
-      setDataLoaded(prev => new Set([...prev, 'profile']));
-    } finally {
-      setDataLoading('profile', false);
-    }
     } finally {
       loadingLocksRef.current.delete('profile');
       setDataLoading('profile', false);
@@ -1652,7 +1658,7 @@ export const useAppData = (authUser?: any) => {
             if (!freshDataApplied && offlineNotes && offlineNotes.length > 0) {
               setNotes(offlineNotes);
             }
-          }).catch(() => {});
+          }).catch(() => { });
         }
       }
 
@@ -1863,7 +1869,7 @@ export const useAppData = (authUser?: any) => {
       setLoading(false);
       setLoadingPhase({ phase: 'complete', progress: 100 });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);// Enhanced loading state computation, only run on user change (others are stable)
 
   // Only report loading=true when startProgressiveDataLoading has actually begun.
@@ -2088,6 +2094,17 @@ export const useAppData = (authUser?: any) => {
     toast.success('Notes refreshed!');
   }, [currentUser, loadNotesPage, setNotes, setDataPagination, setDataErrors]);
 
+  // Cap automatic retries per data type so a persistent failure (e.g. a 404
+  // or 500 from the gateway) can't trigger an infinite refetch storm.
+  const retryAttemptsRef = useRef<Record<string, number>>({});
+
+  // A successful load resets the retry counter for that data type
+  useEffect(() => {
+    dataLoaded.forEach(key => {
+      if (retryAttemptsRef.current[key]) delete retryAttemptsRef.current[key];
+    });
+  }, [dataLoaded]);
+
   // Add automatic retry for failed loads
   useEffect(() => {
     const failedLoads = Object.entries(dataErrors).filter(([_, error]) => error);
@@ -2095,6 +2112,13 @@ export const useAppData = (authUser?: any) => {
     if (failedLoads.length > 0 && currentUser?.id) {
 
       failedLoads.forEach(([dataType]) => {
+        const attempts = retryAttemptsRef.current[dataType] || 0;
+        if (attempts >= MAX_RETRIES) {
+          // Give up — keep the error visible instead of looping forever
+          return;
+        }
+        retryAttemptsRef.current[dataType] = attempts + 1;
+
         // Clear the error first
         setDataErrors(prev => ({ ...prev, [dataType]: '' }));
 

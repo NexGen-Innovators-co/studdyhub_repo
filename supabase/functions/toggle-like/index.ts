@@ -40,11 +40,10 @@ serve(async (req) => {
       .select('id')
       .eq('post_id', post_id)
       .eq('user_id', userId)
+      .limit(1)
       .maybeSingle();
 
-    if (checkError && checkError.code !== 'PGRST116') {
-      throw checkError;
-    }
+    if (checkError) throw checkError;
 
     const isCurrentlyLiked = !!existingLike;
 
@@ -65,25 +64,29 @@ serve(async (req) => {
     } else {
       // Like — ensure the social_users record exists (self-heal instead of 400ing
       // when a client hasn't created its profile row yet), then insert.
-      const { data: socialUser, error: socialUserError } = await supabase
+      let { data: socialUser, error: socialUserError } = await supabase
         .from('social_users')
         .select('id, display_name, avatar_url')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
-      if (socialUserError || !socialUser) {
+      if (socialUserError) throw socialUserError;
+
+      if (!socialUser) {
         // Pull the display name from the profiles table and create the social profile
         // on the fly so a fresh/partial client never gets blocked from liking a post.
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('full_name, email')
           .eq('id', userId)
-          .single();
+          .maybeSingle();
+        if (profileError) throw profileError;
+
         const displayName = (profile?.full_name || profile?.email?.split('@')[0] || 'Scholar').slice(0, 50);
         const cleanName = displayName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
         const suffix = userId.slice(-4);
         const username = (cleanName && cleanName.length >= 2 ? cleanName : 'scholar') + '_' + suffix;
-        await supabase
+        const { data: createdSocialUser, error: createSocialUserError } = await supabase
           .from('social_users')
           .upsert(
             {
@@ -93,7 +96,12 @@ serve(async (req) => {
               status: 'active',
             },
             { onConflict: 'id' }
-          );
+          )
+          .select('id, display_name, avatar_url')
+          .single();
+        if (createSocialUserError) throw createSocialUserError;
+        if (!createdSocialUser) throw new Error('Failed to create social profile');
+        socialUser = createdSocialUser;
       }
 
       const { error: insertError } = await supabase
@@ -101,12 +109,21 @@ serve(async (req) => {
         .insert({ post_id, user_id: userId });
 
       if (insertError) {
-        // Handle race-condition duplicate key gracefully
-        if (insertError.code === '23505' || insertError.message?.includes('social_likes_user_id_post_id_key')) {
-          return new Response(
-            JSON.stringify({ success: true, is_liked: true, idempotent: true }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+        if (insertError.code === '23505') {
+          const { data: racedLike, error: racedLikeError } = await supabase
+            .from('social_likes')
+            .select('id')
+            .eq('post_id', post_id)
+            .eq('user_id', userId)
+            .limit(1)
+            .maybeSingle();
+          if (racedLikeError) throw racedLikeError;
+          if (racedLike) {
+            return new Response(
+              JSON.stringify({ success: true, is_liked: true, idempotent: true, actor_name: socialUser.display_name }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
         }
         throw insertError;
       }

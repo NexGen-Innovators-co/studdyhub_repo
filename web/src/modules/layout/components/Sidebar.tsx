@@ -37,10 +37,13 @@ import {
   Menu,
   Podcast,
   BookOpen,
+  BookMarked,
+  BarChart3,
   GraduationCap,
   Star
 } from 'lucide-react';
 import { Button } from '../../ui/components/button';
+import { ProfileAvatar } from './ProfileAvatar';
 import { Card, CardContent } from '../../ui/components/card';
 import { useAuth } from '../../../hooks/useAuth';
 import { useFeatureAccess } from '../../../hooks/useFeatureAccess';
@@ -95,7 +98,7 @@ interface SidebarProps {
   chatSessions: ChatSession[];
   activeChatSessionId: string | null;
   onChatSessionSelect: (sessionId: string) => void;
-  onNewChatSession: () => Promise<string | null>;
+  onNewChatSession: (sourceIds?: string[]) => Promise<string | null>;
   onDeleteChatSession: (sessionId: string) => Promise<void>;
   onRenameChatSession: (sessionId: string, newTitle: string) => Promise<void>;
   hasMoreChatSessions: boolean;
@@ -146,8 +149,8 @@ const CategoriesList = memo(
             key={category.id}
             variant={isActive ? 'secondary' : 'ghost'}
             className={`w-full justify-start h-9 text-sm ${isActive
-                ? 'bg-slate-100 text-slate-800 dark:bg-gray-700 dark:text-white'
-                : 'hover:bg-slate-50 text-slate-600 dark:hover:bg-gray-800 dark:text-gray-300'
+              ? 'bg-slate-100 text-slate-800 dark:bg-gray-700 dark:text-white'
+              : 'hover:bg-slate-50 text-slate-600 dark:hover:bg-gray-800 dark:text-gray-300'
               } ${!isOpen && 'px-2'}`}
             onClick={() => onCategoryChange(category.id)}
           >
@@ -157,8 +160,8 @@ const CategoriesList = memo(
             />
             <span
               className={`truncate ${isOpen
-                  ? ''
-                  : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
+                ? ''
+                : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
                 }`}
             >
               {category.name}
@@ -193,8 +196,8 @@ const SocialNavList = memo(
             key={item.id}
             variant={isActive ? 'secondary' : 'ghost'}
             className={`w-full justify-start h-9 text-sm ${isActive
-                ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
-                : 'hover:bg-slate-50 text-slate-600 dark:hover:bg-gray-800 dark:text-gray-300'
+              ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
+              : 'hover:bg-slate-50 text-slate-600 dark:hover:bg-gray-800 dark:text-gray-300'
               } ${!isOpen && 'px-2'}`}
             onClick={() => onTabChange(item.path)}
           >
@@ -204,8 +207,8 @@ const SocialNavList = memo(
             />
             <span
               className={`truncate ${isOpen
-                  ? ''
-                  : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
+                ? ''
+                : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
                 }`}
             >
               {item.name}
@@ -246,8 +249,8 @@ const TabsList = memo(
             key={tab.id}
             variant={isActive ? 'default' : 'ghost'}
             className={`w-full justify-start h-10 ${isActive
-                ? 'bg-blue-600 text-white font-bold text-lg py-3 rounded-lg shadow-lg hover:bg-blue-700 transition-all duration-300 transform hover:scale-[1.005] disabled:opacity-50 disabled:cursor-not-allowed h-12'
-                : 'hover:bg-slate-100 text-slate-700 dark:text-gray-300 dark:hover:bg-gray-800'
+              ? 'bg-blue-600 text-white font-bold text-lg py-3 rounded-lg shadow-lg hover:bg-blue-700 transition-all duration-300 transform hover:scale-[1.005] disabled:opacity-50 disabled:cursor-not-allowed h-12'
+              : 'hover:bg-slate-100 text-slate-700 dark:text-gray-300 dark:hover:bg-gray-800'
               } ${!isOpen && 'px-2'}`}
             onClick={() => {
               if (isChatTab) {
@@ -265,8 +268,8 @@ const TabsList = memo(
             />
             <span
               className={`truncate ${isOpen
-                  ? ''
-                  : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
+                ? ''
+                : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
                 }`}
             >
               {tab.name}
@@ -318,8 +321,8 @@ const ChatSessionsList = memo(
             <div
               key={session.id}
               className={`flex items-center justify-between group cursor-pointer rounded-lg transition-colors duration-200 ${isActive
-                  ? 'bg-slate-100 text-slate-800 dark:bg-gray-700 dark:text-white'
-                  : 'hover:bg-slate-50 text-slate-600 dark:hover:bg-gray-800 dark:text-gray-300'
+                ? 'bg-slate-100 text-slate-800 dark:bg-gray-700 dark:text-white'
+                : 'hover:bg-slate-50 text-slate-600 dark:hover:bg-gray-800 dark:text-gray-300'
                 } ${isDeleting || isRenaming ? 'opacity-60 pointer-events-none' : ''}`}
               onClick={() => !isDeleting && !isRenaming && onChatSessionSelect(session.id)}
             >
@@ -344,8 +347,8 @@ const ChatSessionsList = memo(
                 )}
                 <span
                   className={`truncate ${isOpen
-                      ? ''
-                      : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none text'
+                    ? ''
+                    : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none text'
                     }`}
                 >
                   {session.title}
@@ -425,8 +428,8 @@ const ThemeToggle = memo(
       )}
       <span
         className={`truncate ${isOpen
-            ? ''
-            : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
+          ? ''
+          : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
           }`}
       >
         {currentTheme === 'light' ? 'Dark Mode' : 'Light Mode'}
@@ -440,33 +443,23 @@ const UserAvatar = memo(
   ({
     fullName,
     avatarUrl,
-    getInitials,
     onAvatarClick,
-    handleImageError,
     isAvatarMenuOpen,
   }: {
     fullName: string | null;
     avatarUrl: string | null;
-    getInitials: (name: string | null) => string;
     onAvatarClick: () => void;
-    handleImageError: (e: React.SyntheticEvent<HTMLImageElement, Event>) => void;
     isAvatarMenuOpen: boolean;
   }) => (
-    <div
-      className="relative w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-blue-500 dark:bg-blue-600 flex items-center justify-center text-white font-bold text-sm cursor-pointer hover:opacity-80 transition-opacity"
+    <ProfileAvatar
+      avatarValue={avatarUrl}
+      fullName={fullName}
+      alt="User avatar"
+      className="h-8 w-8 flex-shrink-0 rounded-full bg-blue-500 text-white dark:bg-blue-600"
+      fallbackClassName="text-sm font-bold"
       onClick={onAvatarClick}
       title={isAvatarMenuOpen ? 'Close Menu' : 'Open Menu'}
-    >
-      <span>{getInitials(fullName || '')}</span>
-      {avatarUrl && (
-        <img
-          src={avatarUrl}
-          alt="User Avatar"
-          className="w-full h-full object-cover absolute top-0 left-0"
-          onError={handleImageError}
-        />
-      )}
-    </div>
+    />
   ),
 );
 
@@ -488,7 +481,7 @@ const AvatarMenu = memo(
     <>
       {isOpen && (
         <div className="flex items-center gap-2">
-         
+
           <Button
             variant="ghost"
             size="sm"
@@ -689,16 +682,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const avatarMenuRef = useRef<HTMLDivElement>(null);
 
-  const getInitials = useCallback((name: string | null) => {
-    if (!name) return 'U';
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .substring(0, 2);
-  }, []);
-
   const handleSignOut = useCallback(async () => {
     setIsLoggingOut(true);
     try {
@@ -711,10 +694,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setIsLoggingOut(false);
     }
   }, [signOut, navigate]);
-
-  const handleImageError = useCallback((e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    e.currentTarget.style.display = 'none';
-  }, []);
 
   const handleAvatarClick = useCallback(() => {
     setIsAvatarMenuOpen((prev) => !prev);
@@ -800,7 +779,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (isNewChatLoading) return;
     setIsNewChatLoading(true);
     try {
-      const newSessionId = await onNewChatSession();
+      const newSessionId = await onNewChatSession([]);
       if (newSessionId) {
         onTabChange(`chat/${newSessionId}`);
       } else {
@@ -877,20 +856,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'notes', name: 'Notes', icon: FileText },
         { id: 'recordings', name: 'Recordings', icon: Mic },
         { id: 'quizzes', name: 'Quizzes', icon: Lightbulb },
+        { id: 'analytics', name: 'Analytics', icon: BarChart3 },
         { id: 'schedule', name: 'Schedule', icon: Calendar },
-        { id: 'chat', name: 'AI Chat', icon: MessageCircle },
+        { id: 'chat', name: 'Workspace', icon: MessageCircle },
         { id: 'documents', name: 'Documents', icon: Upload },
         { id: 'library', name: 'Library', icon: BookOpen },
+        { id: 'flashcards', name: 'Flashcards', icon: BookMarked },
         { id: 'podcasts', name: 'Podcasts', icon: Podcast },
         { id: 'social', name: 'Social Feed', icon: Users },
         { id: 'settings', name: 'Settings', icon: Settings },
         { id: 'educator', name: 'Educator Portal', icon: GraduationCap },
       ];
-      
+
       if (isAdmin) {
         baseTabs.push({ id: 'admin', name: 'Admin Panel', icon: Shield });
       }
-      
+
       return baseTabs;
     },
     [isAdmin],
@@ -961,6 +942,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       isOpen,
       isDeletingSession,
       isRenamingSession,
+      isSidebarExpanded,
     ],
   );
 
@@ -977,12 +959,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     () => ({
       fullName,
       avatarUrl,
-      getInitials,
       onAvatarClick: handleAvatarClick,
-      handleImageError,
       isAvatarMenuOpen,
     }),
-    [fullName, avatarUrl, getInitials, handleAvatarClick, handleImageError, isAvatarMenuOpen],
+    [fullName, avatarUrl, handleAvatarClick, isAvatarMenuOpen],
   );
 
   const avatarMenuProps = useMemo(
@@ -1010,8 +990,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div
         ref={sidebarRef}
         className={`bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 border-r h-full transition-all duration-300 ease-in-out ${isOpen
-            ? 'translate-x-0 w-72 md:w-64'
-            : '-translate-x-full md:translate-x-0'
+          ? 'translate-x-0 w-72 md:w-64'
+          : '-translate-x-full md:translate-x-0'
           } ${isSidebarExpanded ? 'md:w-64' : 'md:w-16'} fixed inset-y-0 left-0 z-[60] md:z-auto flex flex-col shadow-lg md:shadow-none md:translate-x-0 md:relative overflow-hidden overflow-y-scroll modern-scrollbar pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]`}
       >
         <div className="p-6 sm:p-4 flex-1">
@@ -1083,7 +1063,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onClick={handleNewChat}
                   className={`text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800 ${!(isOpen || isSidebarExpanded) && 'px-2'
                     }`}
-                  title="New Chat"
+                  title="New workspace"
                   disabled={isNewChatLoading}
                 >
                   {isNewChatLoading ? (
@@ -1093,19 +1073,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   )}
                   <span
                     className={`${(isOpen || isSidebarExpanded)
-                        ? ''
-                        : 'hidden'
+                      ? ''
+                      : 'hidden'
                       }`}
                   >
-                    New Chat
+                    New workspace
                   </span>
                 </Button>
               </div>
               <div
                 ref={chatSessionsRef}
                 className={`space-y-1 transition-all duration-300 ease-in-out ${(isOpen || isSidebarExpanded)
-                    ? 'max-h-[50vh] overflow-y-auto modern-scrollbar'
-                    : 'max-h-0 overflow-hidden'
+                  ? 'max-h-[50vh] overflow-y-auto modern-scrollbar'
+                  : 'max-h-0 overflow-hidden'
                   }`}
               >
                 <ChatSessionsList {...chatSessionsListProps} />
@@ -1172,9 +1152,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <div
           ref={avatarMenuRef}
-          className={`flex-shrink-0 border-t border-slate-200 p-4 dark:border-gray-700 transition-all duration-300 ease-in-out relative ${
-            (isOpen || isSidebarExpanded) ? 'flex items-center gap-2' : 'flex justify-center'
-          }`}
+          className={`flex-shrink-0 border-t border-slate-200 p-4 dark:border-gray-700 transition-all duration-300 ease-in-out relative ${(isOpen || isSidebarExpanded) ? 'flex items-center gap-2' : 'flex justify-center'
+            }`}
         >
           <AvatarMenu {...avatarMenuProps} />
           <div className="flex items-center gap-2">

@@ -12,6 +12,7 @@ import {
 import { Button } from '../../ui/components/button';
 import { Badge } from '../../ui/components/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/components/card';
+import { Textarea } from '../../ui/components/textarea';
 
 import { toast } from 'sonner';
 import { useConfirmDialog } from '../../ui/components/confirm-dialog';
@@ -19,6 +20,7 @@ import { supabase } from '../../../integrations/supabase/client';
 import { Document } from '../../../types/Document';
 import { useAuth } from '../../../hooks/useAuth';
 import { useAppContext } from '../../../hooks/useAppContext';
+import { UploadStageCard } from './UploadStageCard';
 import { DocumentFolder, CreateFolderInput, UpdateFolderInput } from '../../../types/Folder';
 import { useGlobalSearch } from '../../layout/hooks/useGlobalSearch';
 import { SEARCH_CONFIGS } from '../../../services/globalSearchService';
@@ -34,12 +36,12 @@ import { DocumentGridSkeleton, DocumentListSkeleton, FolderTreeSkeleton } from '
 import { useDocumentFiltering } from '../hooks/useDocumentFiltering';
 import { useDocumentOperations } from '../hooks/useDocumentOperations';
 import { useDocumentUpload } from '../hooks/useDocumentUpload';
-import { 
-  formatFileSize,  
-  formatDate, 
-  getFileCategory, 
-  getCategoryIcon, 
-  getStatusColor 
+import {
+  formatFileSize,
+  formatDate,
+  getFileCategory,
+  getCategoryIcon,
+  getStatusColor
 } from '../utils/documentUtils';
 
 interface DocumentUploadProps {
@@ -103,7 +105,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     if (!user?.id) return;
     setDocUserId(user.id);
   }, [user?.id]);
-  
+
   // Podcast selection state
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [showSelection, setShowSelection] = useState(false);
@@ -112,22 +114,22 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
- // Inside DocumentUpload component
-const { 
-  documents: contextDocuments, // <--- Add this
-  loadMoreDocuments, 
-  dataPagination, 
-  folders, 
-  folderTree, 
-  appOperations, 
-  loadDataIfNeeded, 
-  dataLoading 
-} = useAppContext();
-const isLoading = dataLoading?.documents || false; 
-// Create a merged source of truth. Prefer Context, fallback to props.
-const allDocuments = contextDocuments || documents;
+  // Inside DocumentUpload component
+  const {
+    documents: contextDocuments, // <--- Add this
+    loadMoreDocuments,
+    dataPagination,
+    folders,
+    folderTree,
+    appOperations,
+    loadDataIfNeeded,
+    dataLoading
+  } = useAppContext();
+  const isLoading = dataLoading?.documents || false;
+  // Create a merged source of truth. Prefer Context, fallback to props.
+  const allDocuments = contextDocuments || documents;
 
-    // Folder state
+  // Folder state
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [mobileFolderOpen, setMobileFolderOpen] = useState(false);
@@ -142,8 +144,8 @@ const allDocuments = contextDocuments || documents;
 
   // Hook Integration
   const {
-    selectedFile, setSelectedFile,
-    isUploading, uploadProgress,
+    selectedFile, setSelectedFile, customInstruction, setCustomInstruction,
+    isUploading, activeJobId,
     dragActive, dragLocked,
     fileInputRef, processingDocuments,
     handleDrag, handleDrop, handleFileChange, handleUpload, triggerAnalysis
@@ -198,7 +200,7 @@ const allDocuments = contextDocuments || documents;
     loadDataIfNeeded,
     processingDocuments
   });
-  
+
   const effectiveSearch = hookEffectiveSearch;
 
   const handleClosePreview = useCallback(() => {
@@ -214,7 +216,7 @@ const allDocuments = contextDocuments || documents;
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const previewId = searchParams.get('preview');
-    
+
     const fetchAndOpenPreview = async (id: string) => {
       try {
         const { data, error } = await supabase
@@ -222,7 +224,7 @@ const allDocuments = contextDocuments || documents;
           .select('*')
           .eq('id', id)
           .single();
-        
+
         if (data) {
           setSelectedDocument(data as Document);
           setPreviewOpen(true);
@@ -253,7 +255,7 @@ const allDocuments = contextDocuments || documents;
         // Attempt to fetch blob for a proper download 
         const response = await fetch(doc.file_url);
         if (!response.ok) throw new Error('Network response was not ok');
-        
+
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -272,20 +274,20 @@ const allDocuments = contextDocuments || documents;
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        
+
         // Smart filename: respect file_name (which usually has extension) or title
         let filename = doc.file_name || doc.title || 'document';
-        
+
         // If filename lacks extension, attempt to add one based on mimetype
         if (!filename.includes('.')) {
-             if (mimeType.includes('json')) filename += '.json';
-             else if (mimeType.includes('javascript') || mimeType.includes('js')) filename += '.js';
-             else if (mimeType.includes('typescript') || mimeType.includes('ts')) filename += '.ts';
-             else if (mimeType.includes('markdown')) filename += '.md';
-             else if (mimeType.includes('html')) filename += '.html';
-             else if (mimeType.includes('css')) filename += '.css';
-             else if (mimeType.includes('csv')) filename += '.csv';
-             else filename += '.txt';
+          if (mimeType.includes('json')) filename += '.json';
+          else if (mimeType.includes('javascript') || mimeType.includes('js')) filename += '.js';
+          else if (mimeType.includes('typescript') || mimeType.includes('ts')) filename += '.ts';
+          else if (mimeType.includes('markdown')) filename += '.md';
+          else if (mimeType.includes('html')) filename += '.html';
+          else if (mimeType.includes('css')) filename += '.css';
+          else if (mimeType.includes('csv')) filename += '.csv';
+          else filename += '.txt';
         }
 
         a.download = filename;
@@ -414,39 +416,39 @@ const allDocuments = contextDocuments || documents;
   };
 
   // Replace your existing observer logic with this:
-const observer = useRef<IntersectionObserver | null>(null);
-const lastDocumentElementRef = useCallback(
-  (node: HTMLDivElement | null) => {
-    // FIX: Check the boolean 'isLoading', not the object 'dataLoading'
-    if (isLoading) return; 
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastDocumentElementRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      // FIX: Check the boolean 'isLoading', not the object 'dataLoading'
+      if (isLoading) return;
 
-    if (observer.current) {
-      observer.current.disconnect();
-    }
-
-    observer.current = new IntersectionObserver(
-      (entries) => {
-        if (
-          entries[0].isIntersecting &&
-          dataPagination.documents.hasMore
-        ) {
-          // // console.log('Load more triggered'); 
-          loadMoreDocuments();
-        }
-      },
-      { 
-        root: scrollContainerRef.current,
-        threshold: 0.1,
-        rootMargin: "100px"
+      if (observer.current) {
+        observer.current.disconnect();
       }
-    );
 
-    if (node) {
-      observer.current.observe(node);
-    }
-  },
-  [loadMoreDocuments, dataPagination.documents.hasMore, isLoading] // FIX: Dependency
-);
+      observer.current = new IntersectionObserver(
+        (entries) => {
+          if (
+            entries[0].isIntersecting &&
+            dataPagination.documents.hasMore
+          ) {
+            // // console.log('Load more triggered'); 
+            loadMoreDocuments();
+          }
+        },
+        {
+          root: scrollContainerRef.current,
+          threshold: 0.1,
+          rootMargin: "100px"
+        }
+      );
+
+      if (node) {
+        observer.current.observe(node);
+      }
+    },
+    [loadMoreDocuments, dataPagination.documents.hasMore, isLoading] // FIX: Dependency
+  );
   // Calculate document counts per folder
   const documentCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -525,10 +527,10 @@ const lastDocumentElementRef = useCallback(
   // Optimized initial data load with error handling
   useEffect(() => {
     let isMounted = true;
-    
+
     const loadInitialData = async () => {
       if (!user?.id || dataLoading) return;
-      
+
       try {
         // Load documents and folders in parallel for better performance
         await Promise.allSettled([
@@ -588,7 +590,7 @@ const lastDocumentElementRef = useCallback(
 
   return (
     <>
-    <div className="min-h-[50vh] max-w-7xl max-h-[90vh] overflow-auto mx-auto p-4 md:p-6 lg:p-8 shadow-sm">
+      <div className="min-h-[50vh] max-w-7xl max-h-[90vh] overflow-auto mx-auto p-4 md:p-6 lg:p-8 shadow-sm">
         {/* Enhanced Header */}
         <div className="text-center mb-8 md:mb-12">
           <div className="inline-flex items-center gap-2 px-4 py-2 mb-4 bg-blue-100 dark:bg-blue-500/20 rounded-full text-blue-700 dark:text-blue-300 text-sm font-medium">
@@ -696,8 +698,7 @@ const lastDocumentElementRef = useCallback(
               <Card className="overflow-hidden border-0 shadow-xl bg-white dark:bg-slate-800 mb-8">
                 <CardContent className="p-0">
                   <div
-                    className={`relative border-2 border-dashed rounded-lg transition-[border-color,background-color,transform,box-shadow,opacity] duration-300 ${
-                      dragLocked
+                    className={`relative border-2 border-dashed rounded-lg transition-[border-color,background-color,transform,box-shadow,opacity] duration-300 ${dragLocked
                         ? 'border-red-400 bg-red-50 dark:bg-red-500/10 scale-[1.02] shadow-lg cursor-not-allowed opacity-60'
                         : dragActive
                           ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 scale-[1.02] shadow-lg'
@@ -723,15 +724,14 @@ const lastDocumentElementRef = useCallback(
                     <div className="text-center">
                       {dragLocked && !selectedFile && (
                         <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg flex items-center justify-center gap-3">
-                          <Lock/>
+                          <Lock />
                           <div className="text-left">
                             <p className="font-semibold text-red-800 dark:text-red-300">Upload limit reached</p>
                             <p className="text-sm text-red-700 dark:text-red-400">Upgrade to upload more documents</p>
                           </div>
                         </div>
                       )}
-                      <div className={`inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full ${
-                        dragLocked
+                      <div className={`inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full ${dragLocked
                           ? 'bg-red-100 dark:bg-red-500/20'
                           : selectedFile
                             ? 'bg-green-100 dark:bg-green-500/20 animate-pulse'
@@ -740,7 +740,7 @@ const lastDocumentElementRef = useCallback(
                         {isUploading ? (
                           <Loader2 className="h-8 w-8 md:h-10 md:w-10 text-blue-600 dark:text-blue-400 animate-spin" />
                         ) : dragLocked && !selectedFile ? (
-                          <Lock/>
+                          <Lock />
                         ) : selectedFile ? (
                           React.createElement(getCategoryIcon(getFileCategory(selectedFile.type)), {
                             className: "h-8 w-8 md:h-10 md:w-10 text-green-600 dark:text-green-400"
@@ -751,33 +751,16 @@ const lastDocumentElementRef = useCallback(
                       </div>
 
                       {isUploading ? (
-                        <div className="space-y-4">
-                          <div>
-                            <h3 className="text-xl md:text-2xl font-semibold text-slate-800 dark:text-slate-200 mb-2">
-                              Processing your file...
-                            </h3>
-                            <p className="text-slate-600 dark:text-slate-400">
-                              AI is analyzing and extracting content from "{selectedFile?.name}"
-                            </p>
-                          </div>
-                          <div className="w-full max-w-md mx-auto bg-slate-200 dark:bg-slate-700 rounded-full h-2">
-                            <div
-                              className="bg-gradient-to-r from-blue-500 to-blue-500 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${uploadProgress}%` }}
-                            />
-                          </div>
-                          <p className="text-sm text-slate-500 dark:text-slate-400">{Math.round(uploadProgress)}% complete</p>
-                        </div>
+                        <UploadStageCard jobId={activeJobId} />
                       ) : selectedFile ? (
                         <div className="w-full max-w-md mx-auto animate-in fade-in zoom-in-95 duration-200">
                           <div className="bg-white/50 dark:bg-slate-800/50 rounded-xl p-6 shadow-sm border border-slate-200/50 dark:border-slate-700/50 backdrop-blur-sm">
                             <div className="flex flex-col items-center text-center">
                               {/* Icon Preview */}
-                              <div className={`h-20 w-20 rounded-2xl flex items-center justify-center mb-4 transition-transform hover:scale-105 shadow-sm border border-slate-200 dark:border-slate-700 ${
-                                getFileCategory(selectedFile.type) === 'image'
+                              <div className={`h-20 w-20 rounded-2xl flex items-center justify-center mb-4 transition-transform hover:scale-105 shadow-sm border border-slate-200 dark:border-slate-700 ${getFileCategory(selectedFile.type) === 'image'
                                   ? 'bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-300'
                                   : 'bg-white text-slate-600 dark:bg-slate-700 dark:text-slate-300'
-                              }`}>
+                                }`}>
                                 {React.createElement(getCategoryIcon(getFileCategory(selectedFile.type)), {
                                   className: "h-10 w-10"
                                 })}
@@ -798,6 +781,25 @@ const lastDocumentElementRef = useCallback(
                                   <FileText className="h-3.5 w-3.5" />
                                   {selectedFile.type.split('/')[1] || 'FILE'}
                                 </span>
+                              </div>
+
+                              <div className="w-full mb-6 text-left" onClick={(e) => e.stopPropagation()}>
+                                <label htmlFor="document-upload-instruction" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                  Custom processing instructions <span className="font-normal text-slate-500">(optional)</span>
+                                </label>
+                                <Textarea
+                                  id="document-upload-instruction"
+                                  value={customInstruction}
+                                  onChange={(e) => setCustomInstruction(e.target.value)}
+                                  placeholder="Example: Focus on key definitions and exam-relevant concepts."
+                                  maxLength={2000}
+                                  rows={3}
+                                  disabled={isUploading}
+                                  className="resize-none bg-white dark:bg-slate-900"
+                                />
+                                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                  Used to guide AI extraction for supported document, image, audio, and video processing.
+                                </p>
                               </div>
 
                               {/* Actions */}
@@ -844,7 +846,7 @@ const lastDocumentElementRef = useCallback(
                             <span className="sm:hidden">Tap to upload files</span>
                           </h3>
                           <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 max-w-md mx-auto">
-                            Supports documents, images, videos, audio files, and code up to 200MB
+                            Supports documents, images, videos, audio files, and code up to 1GB
                           </p>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-2xl mx-auto">
                             {[
@@ -916,23 +918,23 @@ const lastDocumentElementRef = useCallback(
               onViewModeChange={setViewMode}
               documentStats={documentStats}
             >
-                      {/* Selection toggle */}
-                      <Button
-                        variant={showSelection ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setShowSelection(!showSelection);
-                          if (showSelection) {
-                            setSelectedDocumentIds([]); // Clear selections
-                          }
-                        }}
-                        className="px-3 gap-2"
-                      >
-                        {showSelection ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-                        {showSelection ? `Selected (${selectedDocumentIds.length})` : 'Select'}
-                      </Button>
-                      
-                      {/* Podcast button
+              {/* Selection toggle */}
+              <Button
+                variant={showSelection ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setShowSelection(!showSelection);
+                  if (showSelection) {
+                    setSelectedDocumentIds([]); // Clear selections
+                  }
+                }}
+                className="px-3 gap-2"
+              >
+                {showSelection ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                {showSelection ? `Selected (${selectedDocumentIds.length})` : 'Select'}
+              </Button>
+
+              {/* Podcast button
                       {showSelection && selectedDocumentIds.length > 0 && (
                         <PodcastButton 
                           selectedDocumentIds={selectedDocumentIds}
@@ -1011,7 +1013,7 @@ const lastDocumentElementRef = useCallback(
                   >
                     {filteredDocumentsByFolder.map((doc, idx) => {
                       const isLast = idx === filteredDocumentsByFolder.length - 1;
-                      
+
                       return (
                         <DocumentCardItem
                           key={doc.id}
@@ -1035,36 +1037,36 @@ const lastDocumentElementRef = useCallback(
                   </div>
                 </Suspense>
               )}
-            {/* Loading More / No More Indicator */}
-            {(dataPagination?.documents?.hasMore || isLoading) && (
-              <div
-                key="loading-indicator"
-                className={`w-full flex flex-col justify-center items-center py-8 ${viewMode === 'grid' ? 'col-span-full' : ''}`}
-              >
-                {isLoading ? ( // FIX: Use isLoading boolean
-                  /* CASE 1: Actually Loading - Show Spinner */
-                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    <span className="font-medium">Fetching more documents...</span>
-                  </div>
-                ) : (
-                  /* CASE 2: Idle but has more - Show Scroll Hint or Manual Button */
-                  <div className="flex flex-col items-center gap-2">
-                    <span className="text-sm text-slate-400 dark:text-gray-500">
-                      Scroll to load more
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => loadMoreDocuments()}
-                      className="text-xs text-blue-500 hover:text-blue-600"
-                    >
-                      Click here if not loading
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
+              {/* Loading More / No More Indicator */}
+              {(dataPagination?.documents?.hasMore || isLoading) && (
+                <div
+                  key="loading-indicator"
+                  className={`w-full flex flex-col justify-center items-center py-8 ${viewMode === 'grid' ? 'col-span-full' : ''}`}
+                >
+                  {isLoading ? ( // FIX: Use isLoading boolean
+                    /* CASE 1: Actually Loading - Show Spinner */
+                    <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span className="font-medium">Fetching more documents...</span>
+                    </div>
+                  ) : (
+                    /* CASE 2: Idle but has more - Show Scroll Hint or Manual Button */
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="text-sm text-slate-400 dark:text-gray-500">
+                        Scroll to load more
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => loadMoreDocuments()}
+                        className="text-xs text-blue-500 hover:text-blue-600"
+                      >
+                        Click here if not loading
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1135,15 +1137,14 @@ const lastDocumentElementRef = useCallback(
           <Suspense fallback={null}>
             <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4 md:p-6 animate-in fade-in duration-200">
               <div className="bg-white dark:bg-slate-900 w-full h-full sm:h-[90vh] sm:max-w-6xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 dark:border-slate-800">
-                
+
                 {/* Modern Header */}
                 <div className="flex-none px-4 py-3 md:px-6 md:py-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3 overflow-hidden">
-                    <div className={`flex-none h-10 w-10 md:h-12 md:w-12 rounded-xl flex items-center justify-center border shadow-sm transition-colors ${
-                      getFileCategory(selectedDocument.file_type) === 'image'
+                    <div className={`flex-none h-10 w-10 md:h-12 md:w-12 rounded-xl flex items-center justify-center border shadow-sm transition-colors ${getFileCategory(selectedDocument.file_type) === 'image'
                         ? 'bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400 border-purple-100 dark:border-purple-500/20'
                         : 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 border-blue-100 dark:border-blue-500/20'
-                    }`}>
+                      }`}>
                       {getFileCategory(selectedDocument.file_type) === 'image' && selectedDocument.file_url ? (
                         <img src={selectedDocument.file_url} alt="" className="w-full h-full object-cover rounded-xl" />
                       ) : (
@@ -1165,9 +1166,8 @@ const lastDocumentElementRef = useCallback(
                           <Calendar className="h-3 w-3" />
                           {formatDate(selectedDocument.created_at)}
                         </span>
-                        <span className={`px-2 py-0.5 rounded-md flex items-center gap-1 font-medium text-[10px] uppercase tracking-wider border ${
-                          getStatusColor(selectedDocument.processing_status as string)
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded-md flex items-center gap-1 font-medium text-[10px] uppercase tracking-wider border ${getStatusColor(selectedDocument.processing_status as string)
+                          }`}>
                           {selectedDocument.processing_status}
                         </span>
                       </div>
@@ -1191,13 +1191,13 @@ const lastDocumentElementRef = useCallback(
                         size="sm"
                         onClick={() => {
                           if (selectedDocument.content_extracted) {
-                           copyToClipboard(selectedDocument.content_extracted);
+                            copyToClipboard(selectedDocument.content_extracted);
                           } else {
-                           toast.error("No content to copy");
+                            toast.error("No content to copy");
                           }
                         }}
                         className="text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                         title="Copy Content"
+                        title="Copy Content"
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
@@ -1238,55 +1238,55 @@ const lastDocumentElementRef = useCallback(
 
                 {/* Responsive Content Area */}
                 <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-slate-50/50 dark:bg-slate-950/50">
-                  
+
                   {/* Left Panel: Preview */}
                   <div className="flex-none lg:flex-1 lg:basis-[45%] lg:max-h-full min-h-[180px] sm:min-h-[250px] lg:min-h-0 relative flex flex-col border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-black/20">
-                     <div className="absolute inset-4 md:inset-8 flex items-center justify-center">
-                        <div className="w-full h-full bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex items-center justify-center relative group">
-                          {getFileCategory(selectedDocument.file_type) === 'image' && selectedDocument.file_url ? (
-                            <>
-                              <img
-                                src={selectedDocument.file_url}
-                                alt={selectedDocument.title}
-                                className="max-w-full max-h-full object-contain p-2"
-                              />
-                              <a 
-                                href={selectedDocument.file_url} 
-                                target="_blank" 
-                                rel="noreferrer"
-                                className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 hover:bg-black/70 text-white p-2 rounded-lg backdrop-blur-sm"
-                              >
-                                <Maximize2 className="h-4 w-4" />
-                              </a>
-                            </>
-                          ) : (
-                            <div className="flex flex-col items-center justify-center gap-4 p-8 text-center">
-                              <div className="h-24 w-24 rounded-full bg-slate-50 dark:bg-slate-700/50 flex items-center justify-center">
-                                {React.createElement(getCategoryIcon(getFileCategory(selectedDocument.file_type)), {
-                                  className: "h-10 w-10 text-slate-400"
-                                })}
-                              </div>
-                              <div>
-                                <h3 className="text-sm font-medium text-slate-900 dark:text-slate-200 mb-1">
-                                  Preview Unavailable
-                                </h3>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-[200px]">
-                                  This file type cannot be previewed directly in the browser.
-                                </p>
-                              </div>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDownload(selectedDocument)}
-                                className="bg-white dark:bg-slate-800"
-                              >
-                                <Download className="h-4 w-4 mr-2" />
-                                Download File
-                              </Button>
+                    <div className="absolute inset-4 md:inset-8 flex items-center justify-center">
+                      <div className="w-full h-full bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex items-center justify-center relative group">
+                        {getFileCategory(selectedDocument.file_type) === 'image' && selectedDocument.file_url ? (
+                          <>
+                            <img
+                              src={selectedDocument.file_url}
+                              alt={selectedDocument.title}
+                              className="max-w-full max-h-full object-contain p-2"
+                            />
+                            <a
+                              href={selectedDocument.file_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 hover:bg-black/70 text-white p-2 rounded-lg backdrop-blur-sm"
+                            >
+                              <Maximize2 className="h-4 w-4" />
+                            </a>
+                          </>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center gap-4 p-8 text-center">
+                            <div className="h-24 w-24 rounded-full bg-slate-50 dark:bg-slate-700/50 flex items-center justify-center">
+                              {React.createElement(getCategoryIcon(getFileCategory(selectedDocument.file_type)), {
+                                className: "h-10 w-10 text-slate-400"
+                              })}
                             </div>
-                          )}
-                        </div>
-                     </div>
+                            <div>
+                              <h3 className="text-sm font-medium text-slate-900 dark:text-slate-200 mb-1">
+                                Preview Unavailable
+                              </h3>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-[200px]">
+                                This file type cannot be previewed directly in the browser.
+                              </p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDownload(selectedDocument)}
+                              className="bg-white dark:bg-slate-800"
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              Download File
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Right Panel: Content & Metadata */}
@@ -1300,24 +1300,24 @@ const lastDocumentElementRef = useCallback(
                         <span className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Extracted Content</span>
                       </div>
                       <Badge variant="secondary" className="text-xs font-normal">
-                         AI Analysis
+                        AI Analysis
                       </Badge>
                     </div>
 
                     {/* Scrollable Text Content */}
                     <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
-                       {selectedDocument.processing_status === 'failed' && (
+                      {selectedDocument.processing_status === 'failed' && (
                         <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex flex-col gap-3">
-                           <div className="flex items-start gap-3">
-                              <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
-                              <div className="flex-1">
-                                <h4 className="text-sm font-semibold text-red-900 dark:text-red-200">Processing Failed</h4>
-                                <p className="text-sm text-red-700 dark:text-red-300 mt-1">
-                                  {selectedDocument.processing_error || 'An unknown error occurred during AI processing.'}
-                                </p>
-                              </div>
-                           </div>
-                           <Button
+                          <div className="flex items-start gap-3">
+                            <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                              <h4 className="text-sm font-semibold text-red-900 dark:text-red-200">Processing Failed</h4>
+                              <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                                {selectedDocument.processing_error || 'An unknown error occurred during AI processing.'}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
                             variant="outline"
                             size="sm"
                             onClick={() => {
@@ -1330,20 +1330,20 @@ const lastDocumentElementRef = useCallback(
                             Retry
                           </Button>
                         </div>
-                       )}
+                      )}
 
-                       {selectedDocument.processing_status === 'partial' && (
+                      {selectedDocument.processing_status === 'partial' && (
                         <div className="p-4 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 flex flex-col gap-3">
-                           <div className="flex items-start gap-3">
-                              <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400 shrink-0 mt-0.5" />
-                              <div className="flex-1">
-                                <h4 className="text-sm font-semibold text-orange-900 dark:text-orange-200">Partially Extracted</h4>
-                                <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
-                                  This document was only partially processed. Some content may be missing.
-                                </p>
-                              </div>
-                           </div>
-                           <Button
+                          <div className="flex items-start gap-3">
+                            <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400 shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                              <h4 className="text-sm font-semibold text-orange-900 dark:text-orange-200">Partially Extracted</h4>
+                              <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
+                                This document was only partially processed. Some content may be missing.
+                              </p>
+                            </div>
+                          </div>
+                          <Button
                             variant="outline"
                             size="sm"
                             onClick={() => {
@@ -1356,34 +1356,34 @@ const lastDocumentElementRef = useCallback(
                             Resume Extraction
                           </Button>
                         </div>
-                       )}
+                      )}
 
-                       {selectedDocument.content_extracted ? (
-                         <div className="prose prose-sm dark:prose-invert max-w-none prose-slate">
-                            {/* Simple markdown check and render */}
-                            {/^(#{1,6}\s)|(^```)|(^-\s)|(^\*\s)|(^>\s)/m.test(selectedDocument.content_extracted) ? (
-                              <DocumentMarkdownRenderer content={selectedDocument.content_extracted} />
-                            ) : (
-                              <p className="whitespace-pre-wrap text-slate-700 dark:text-slate-300 leading-relaxed font-sans text-sm">
-                                {selectedDocument.content_extracted}
-                              </p>
-                            )}
-                         </div>
-                       ) : (
-                         <div className="flex flex-col items-center justify-center py-12 text-slate-400 dark:text-slate-600">
-                            {selectedDocument.processing_status === 'processing' ? (
-                                <>
-                                  <Loader2 className="h-8 w-8 animate-spin mb-3 text-blue-500" />
-                                  <p className="text-sm">AI is analyzing this document...</p>
-                                </>
-                            ) : (
-                                <>
-                                  <FileText className="h-10 w-10 mb-3 opacity-20" />
-                                  <p className="text-sm">No content extracted yet.</p>
-                                </>
-                            )}
-                         </div>
-                       )}
+                      {selectedDocument.content_extracted ? (
+                        <div className="prose prose-sm dark:prose-invert max-w-none prose-slate">
+                          {/* Simple markdown check and render */}
+                          {/^(#{1,6}\s)|(^```)|(^-\s)|(^\*\s)|(^>\s)/m.test(selectedDocument.content_extracted) ? (
+                            <DocumentMarkdownRenderer content={selectedDocument.content_extracted} />
+                          ) : (
+                            <p className="whitespace-pre-wrap text-slate-700 dark:text-slate-300 leading-relaxed font-sans text-sm">
+                              {selectedDocument.content_extracted}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-12 text-slate-400 dark:text-slate-600">
+                          {selectedDocument.processing_status === 'processing' ? (
+                            <>
+                              <Loader2 className="h-8 w-8 animate-spin mb-3 text-blue-500" />
+                              <p className="text-sm">AI is analyzing this document...</p>
+                            </>
+                          ) : (
+                            <>
+                              <FileText className="h-10 w-10 mb-3 opacity-20" />
+                              <p className="text-sm">No content extracted yet.</p>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Mobile Only Sticky Actions Footer */}
@@ -1392,19 +1392,19 @@ const lastDocumentElementRef = useCallback(
                         <Download className="h-4 w-4 mr-2" />
                         Download
                       </Button>
-                      <Button 
-                         variant="outline"
-                         size="sm" 
-                         onClick={() => {
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
                           if (selectedDocument.content_extracted) copyToClipboard(selectedDocument.content_extracted);
-                         }}
-                         disabled={!selectedDocument.content_extracted}
+                        }}
+                        disabled={!selectedDocument.content_extracted}
                       >
                         <Copy className="h-4 w-4 mr-2" />
                         Copy
                       </Button>
-                      <Button 
-                        variant="destructive" 
+                      <Button
+                        variant="destructive"
                         size="sm"
                         className="col-span-2"
                         disabled={processingDocuments.has(selectedDocument.id)}
@@ -1421,8 +1421,8 @@ const lastDocumentElementRef = useCallback(
                           }
                         }}
                       >
-                         <Trash2 className="h-4 w-4 mr-2" />
-                         Delete Document
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Document
                       </Button>
                     </div>
                   </div>
@@ -1432,9 +1432,9 @@ const lastDocumentElementRef = useCallback(
             </div>
           </Suspense>
         )}
-        
+
       </div>
-    {ConfirmDialogComponent}
+      {ConfirmDialogComponent}
     </>
   );
 };

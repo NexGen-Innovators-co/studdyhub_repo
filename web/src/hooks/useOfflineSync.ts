@@ -42,6 +42,8 @@ export const useOfflineSync = (refreshData: () => void) => {
         const tableName = tableMap[storeName] || storeName;
 
         // Map database table names to API endpoint paths
+        // Map database table names to the API gateway's resource paths
+        // (the gateway uses kebab-case / custom route names, not table names)
         const apiPathMap: Record<string, string> = {
           social_users: 'social-users',
           social_likes: 'social-likes',
@@ -50,6 +52,12 @@ export const useOfflineSync = (refreshData: () => void) => {
           podcast_listeners: 'podcast-listeners',
           notes: 'notes',
           documents: 'documents',
+          document_folders: 'document-folders',
+          document_folder_items: 'document-folder-items',
+          class_recordings: 'class-recordings',
+          schedule_items: 'schedule',
+          ai_podcasts: 'ai-podcasts',
+          chat_sessions: 'chat/sessions',
         };
         const apiPath = apiPathMap[tableName] || tableName;
 

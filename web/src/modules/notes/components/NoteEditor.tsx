@@ -10,14 +10,13 @@ import mermaid from 'mermaid';
 import { Chart, registerables } from 'chart.js';
 import katex from 'katex';
 import { Button } from '../../ui/components/button';
-import { Sparkles, Lightbulb, Eye } from 'lucide-react';
+import { Sparkles, Lightbulb, Eye, Languages, PanelRightOpen } from 'lucide-react';
 import { useUserActivityLogger } from '@/hooks/useUserActivityLogger';
 
 Chart.register(...registerables);
 
 import { NoteContentArea } from './NoteContentArea';
 import { AISummarySection } from './AISummarySection';
-import { TranslatedContentSection } from './TranslatedContentSection';
 import { AudioOptionsSection } from './AudioOptionsSection';
 // Dialogs
 import { SectionSelectionDialog } from './SectionSelectionDialog';
@@ -1588,7 +1587,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   // The component must return JSX here!
   return (
-    <div className="flex bg-white flex-col h-full w-full dark:bg-gray-950">
+    <div className="flex h-full w-full flex-col overflow-hidden rounded-2xl bg-slate-50 dark:bg-slate-950">
       {/* Read-only banner for shared course notes */}
       {readOnly && (
         <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-4 py-2 flex items-center gap-2 text-amber-700 dark:text-amber-400 text-sm">
@@ -1621,10 +1620,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       />
 
       {/* Main Editor Container - Centered with max-width */}
-      <div className="flex-1 h-full overflow-hidden flex">
-        <div className="w-full max-w-[1200px] mx-auto flex flex-col lg:flex-row shadow-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-900">
+      <div className="flex h-full flex-1 overflow-hidden bg-slate-50 dark:bg-slate-950">
+        <div className="mx-auto flex min-h-0 w-full flex-col bg-transparent dark:bg-transparent lg:flex-row lg:gap-4 lg:p-3">
           {/* Content Area */}
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-slate-900">
             <NoteContentArea
               ref={contentAreaRef}
               content={content}
@@ -1708,15 +1707,76 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               ai_summary={note.ai_summary}
               isSummaryVisible={isSummaryVisible}
               setIsSummaryVisible={setIsSummaryVisible}
+              noteDetails={{
+                category,
+                tags: tags.split(',').map(tag => tag.trim()).filter(Boolean),
+                wordCount: (content || '').trim().split(/\s+/).filter(Boolean).length,
+                updatedAt: note.updated_at,
+              }}
+              translatedContent={translatedContent}
+              targetLanguage={targetLanguage}
+              setTranslatedContent={setTranslatedContent}
               onSummaryChange={readOnly ? undefined : handleSummaryChange}
               onRegenerateSummary={readOnly ? undefined : handleRegenerateSummary}
               isGenerating={isGeneratingSummary}
             />
           )}
+          {!isSummaryVisible && (
+            <aside className="hidden h-full w-14 shrink-0 flex-col items-center gap-2 rounded-2xl bg-white py-3 text-slate-500 shadow-sm dark:bg-slate-900 dark:text-slate-400 lg:flex">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsSummaryVisible(true)}
+                className="h-9 w-9 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-slate-800"
+                aria-label="Open summary and note details"
+                title="Summary and note details"
+              >
+                <PanelRightOpen className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsSummaryVisible(true)}
+                className="h-9 w-9 rounded-lg hover:bg-slate-100 hover:text-blue-700 dark:hover:bg-slate-800 dark:hover:text-blue-300"
+                aria-label="Show AI summary"
+                title="AI summary"
+              >
+                <Sparkles className="h-4 w-4" />
+              </Button>
+              {translatedContent && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsSummaryVisible(true)}
+                  className="h-9 w-9 rounded-lg hover:bg-slate-100 hover:text-blue-700 dark:hover:bg-slate-800 dark:hover:text-blue-300"
+                  aria-label={`Show ${targetLanguage} translation`}
+                  title={`${targetLanguage.toUpperCase()} translation`}
+                >
+                  <Languages className="h-4 w-4" />
+                </Button>
+              )}
+              {(window as any).__toggleTips && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => (window as any).__toggleTips?.()}
+                  className="mt-auto h-9 w-9 rounded-lg text-amber-500 hover:bg-amber-50 dark:hover:bg-slate-800"
+                  aria-label="Open study tips"
+                  title="Study tips"
+                >
+                  <Lightbulb className="h-4 w-4" />
+                </Button>
+              )}
+            </aside>
+          )}
 
           {/* Floating Action Buttons */}
           {!isSummaryVisible && (
-            <div className="fixed bottom-16 right-2 lg:bottom-4 lg:right-4 flex flex-col gap-3 z-50">
+            <div className="fixed bottom-16 right-2 z-50 flex flex-col gap-3 lg:hidden">
               {/* Tips Button */}
               {(window as any).__toggleTips && (
                 <button
@@ -1745,16 +1805,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           )}
 
 
-          {/* Translated Content Section */}
-          {translatedContent && (
-            <div className="lg:w-80 lg:border-l lg:border-gray-200 lg:dark:border-gray-700">
-              <TranslatedContentSection
-                translatedContent={translatedContent}
-                targetLanguage={targetLanguage}
-                setTranslatedContent={setTranslatedContent}
-              />
-            </div>
-          )}
         </div>
       </div>
 
@@ -1785,4 +1835,3 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     </div>
   );
 };
-

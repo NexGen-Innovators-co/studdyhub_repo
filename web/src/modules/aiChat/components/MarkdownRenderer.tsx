@@ -93,7 +93,7 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
 
   const textColorClass = isUserMessage
     ? 'text-white dark:text-gray-100'
-    : 'text-back dark:text-gray-100';
+    : 'text-gray-900 dark:text-gray-100';
 
   const linkColorClass = isUserMessage
     ? 'text-blue-200 hover:text-blue-100 hover:underline dark:text-blue-300'
@@ -184,10 +184,10 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
       />
     ),
     ul: (props) => (
-      <ul className="list-disc ml-5 text-gray-700 dark:text-gray-300" {...props} />
+      <ul className="list-disc ml-5 text-gray-900 dark:text-gray-100" {...props} />
     ),
     ol: (props) => (
-      <ol className="list-decimal ml-5 text-gray-700 dark:text-gray-300" {...props} />
+      <ol className="list-decimal ml-5 text-gray-900 dark:text-gray-100" {...props} />
     ),
     li: (props) => (
       <li

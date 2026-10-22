@@ -129,30 +129,17 @@ CONTEXTUAL UNDERSTANDING:
 - Provide meaningful insights and relationships
 - Explain technical content and diagrams`,
 
-  audio: `Perform comprehensive audio transcription and analysis:
+    audio: `Produce a complete VERBATIM transcript of this audio. This is a transcription task, NOT a summary or analysis.
 
-TRANSCRIPTION REQUIREMENTS:
-1. Complete verbatim transcription of all speech
-2. Include all speakers with identification
-3. Preserve filler words and natural speech patterns
-4. Note timestamps for key segments
-5. Include background sounds and context
-6. Transcribe multiple languages if present
-7. Handle overlapping speech and interruptions
-8. Maintain conversation flow and context
-
-QUALITY STANDARDS:
-- Maximum accuracy for all spoken content
-- Preserve speaker intentions and meaning
-- Include emotional context and tone
-- Note technical terms and specialized vocabulary
-- Maintain chronological flow of conversation
-
-ANALYSIS OUTPUT:
-- Complete transcript with speaker identification
-- Summary of key topics and themes
-- Metadata about audio quality and characteristics
-- Technical analysis of speech patterns if relevant`,
+RULES:
+1. Transcribe every utterance, in order, from the first second to the last. Never skip, merge, shorten, paraphrase or summarise any turn, including short ones such as "mm", "okay", laughter.
+2. First identify the language of every turn, then transcribe each language as spoken. Do not translate or replace non-English speech with labels such as "<foreign spoken>", "[Foreign speech]", "[foreign language]", "[non-English]", or "[unintelligible]" merely because the language is unfamiliar. For Akan (Twi) and other Ghanaian languages, use standard spelling with special letters (ɛ, ɔ) when possible. If you are unsure of a word, provide your best phonetic spelling followed by [unclear]. Use [unintelligible, about N seconds] only when the audio itself cannot be understood, not when the language is non-English.
+3. Under every turn that is not in English, add a line "Translation:" with the English meaning. Do not add translation lines for English turns.
+4. Start every turn on a new line with a [mm:ss] timestamp and the speaker label. Use role labels if clear from context (Researcher, Interpreter, Informant); otherwise Speaker 1, Speaker 2, and keep each label consistent for the same person.
+5. Keep false starts, repetitions, fillers and overlapping speech exactly as spoken. Do not correct grammar.
+6. Mark non-speech sounds in square brackets, for example [laughter], [baby crying].
+7. Output ONLY the transcript. Do NOT include a summary, key themes, metadata, audio-quality notes or analysis.
+8. If you cannot finish within your output limit, stop at the end of a complete turn and write "LAST TIMESTAMP REACHED: mm:ss". Never compress or summarise to make it fit.`,
 
   code: `Analyze this code file with complete preservation:
 

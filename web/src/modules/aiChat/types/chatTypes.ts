@@ -1,5 +1,9 @@
 // src/modules/aiChat/types/chatTypes.ts
-// Shared types extracted from AiChat.tsx to break circular dependency.
-// AiChat.tsx and ContextBadges.tsx both import from here instead of each other.
+// Shared types for the AI chat module.
 
-export interface AttachedFile = // TODO: paste definition here
+export interface AttachedFile {
+  file: File;
+  preview?: string;
+  type: 'image' | 'document' | 'other';
+  id: string;
+}

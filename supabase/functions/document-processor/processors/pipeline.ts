@@ -11,6 +11,7 @@ import {
   processVideoWithFrameAnalysis,
   processArchiveWithMetadata,
 } from './media.ts';
+import { callEnhancedGeminiAPI } from '../geminiApi.ts';
 
 // ============================================================================
 // VALIDATION
@@ -68,6 +69,24 @@ export async function enhancedFileProcessing(file: any, geminiApiKey: string): P
       case 'metadata_only':         processArchiveWithMetadata(file);                                 break;
       default:
         throw new Error(`Unknown processing strategy: ${fileConfig.strategy}`);
+    }
+
+    const instruction = typeof file.customInstruction === 'string' ? file.customInstruction.trim() : '';
+    const locallyExtracted = ['chunk_text', 'enhanced_structured', 'extract_and_chunk', 'enhanced_local_extract']
+      .includes(fileConfig.strategy);
+    if (instruction && locallyExtracted && file.content) {
+      const response = await callEnhancedGeminiAPI(
+        [{
+          role: 'user',
+          parts: [{ text: `Apply the following custom instruction to the extracted document content. Return only the resulting content.\n\nCUSTOM INSTRUCTION:\n${instruction}\n\nEXTRACTED DOCUMENT CONTENT:\n${String(file.content).slice(0, 900000)}` }],
+        }],
+        geminiApiKey,
+      );
+      if (!response.success || !response.content) {
+        throw new Error(response.error ?? 'Failed to apply custom document instruction');
+      }
+      file.content = response.content;
+      file.extraction_model_used = response.finishReason === 'OPENROUTER' ? 'openrouter/free' : 'gemini-with-fallbacks';
     }
 
     // If status is still 'processing' after strategy, then mark as completed.
@@ -333,6 +352,49 @@ export async function processFile(file: any): Promise<any | null> {
 export async function processBase64File(fileData: any): Promise<any | null> {
   if (!fileData.name || !fileData.mimeType) return null;
 
+  // ── Chunked upload: the client split a large file into storage parts ──────
+  // Parts are already in the bucket; extraction happens later via
+  // /resume-processing, which assembles them server-side in safe windows.
+  // Never base64 a payload the free plan cannot accept in one request.
+  if (Array.isArray(fileData.chunkPaths) && fileData.chunkPaths.length > 0) {
+    const fileConfig = ENHANCED_FILE_TYPES[fileData.mimeType];
+    if (!fileConfig) return null;
+
+    const validation = validateFile(fileData, fileConfig.type);
+    if (!validation.valid) {
+      return makeFailedFile(fileData.name, fileConfig.type, fileData.mimeType, fileData.size ?? 0, validation.error!);
+    }
+
+    const fileSizeMB = Math.round((fileData.size / 1024 / 1024) * 10) / 10;
+    console.log(`[intake] Chunked file ${fileData.name} (${fileSizeMB}MB, ${fileData.chunkPaths.length} parts) — queued for resume-processing`);
+
+    return {
+      name: fileData.name,
+      type: fileConfig.type,
+      mimeType: fileData.mimeType,
+      data: null,
+      content: `[Large file pending extraction: ${fileData.name} (${fileSizeMB}MB)]`,
+      size: fileData.size,
+      processing_status: 'partial',
+      ...(fileData.idToUpdate ? { id: fileData.idToUpdate } : {}),
+      customInstruction: sanitizeInstruction(fileData.customInstruction),
+      file_url: fileData.file_url ?? '',
+      ...nullTimings(),
+      // NOTE: must come after ...nullTimings(), which nulls processing_metadata —
+      // otherwise resume-processing loses the chunk paths / PDF cursor.
+      processing_metadata: {
+        resume_cursor: fileData.mimeType === 'application/pdf'
+          ? { type: 'pdf_pages', lastPage: 0, totalPages: null, windowsProcessed: 0 }
+          : null,
+        needsResumeProcessing: true,
+        customInstruction: sanitizeInstruction(fileData.customInstruction),
+        chunked: true,
+        chunk_paths: fileData.chunkPaths,
+        fileSizeMB,
+      },
+    };
+  }
+
   // For files with a URL that are large, skip fetching into memory entirely.
   // Create a partial record so resume-processing handles extraction in smaller chunks.
   // This avoids OOM: a 14MB file becomes ~18MB base64 + ~14MB decoded buffer + pdf.js overhead.
@@ -352,6 +414,10 @@ export async function processBase64File(fileData: any): Promise<any | null> {
           processing_status: 'partial',
           file_url: fileData.file_url,
           ...(fileData.idToUpdate ? { id: fileData.idToUpdate } : {}),
+          customInstruction: sanitizeInstruction(fileData.customInstruction),
+          ...nullTimings(),
+          // Must come after ...nullTimings(), which resets processing_metadata —
+          // otherwise the resume cursor is wiped on intake.
           processing_metadata: {
             resume_cursor: fileData.mimeType === 'application/pdf'
               ? { type: 'pdf_pages', lastPage: 0, totalPages: null, windowsProcessed: 0 }
@@ -359,7 +425,6 @@ export async function processBase64File(fileData: any): Promise<any | null> {
             needsResumeProcessing: true,
             fileSizeMB: Math.round((fileData.size / 1024 / 1024) * 10) / 10,
           },
-          ...nullTimings(),
         };
       }
     }
@@ -412,9 +477,16 @@ export async function processBase64File(fileData: any): Promise<any | null> {
     size: fileData.size ?? (decodedContent ? decodedContent.length : 0),
     processing_status: fileData.processing_status ?? (TEXT_MIME_TYPES.includes(fileConfig.type) ? 'completed' : 'pending'),
     ...(fileData.idToUpdate ? { id: fileData.idToUpdate } : {}),
+    customInstruction: sanitizeInstruction(fileData.customInstruction),
     file_url: fileData.file_url ?? null,
     ...nullTimings(),
   };
+}
+
+function sanitizeInstruction(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const instruction = value.trim().slice(0, 2000);
+  return instruction || null;
 }
 
 // ============================================================================

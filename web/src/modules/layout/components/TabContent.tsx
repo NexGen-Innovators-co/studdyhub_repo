@@ -19,6 +19,8 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ChatSessionsListMobile } from '../../aiChat/components/ChatSessionsListMobile';
 import { NotificationsPage } from '../../notifications/components/NotificationsPage';
 import { CourseLibrary } from '../../courseLibrary/components/CourseLibrary';
+import { FlashcardsLibrary } from '../../flashcards/components/FlashcardsLibrary';
+import { AnalyticsPage } from '../../dashboard/components/AnalyticsPage';
 import { CreateNoteFlowDialog } from '../../notes/components/CreateNoteFlowDialog';
 import { Card } from '../../ui/components/card';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -29,7 +31,8 @@ import {
   Headphones,
   Users,
   Archive,
-  Sparkles } from 'lucide-react';
+  Sparkles
+} from 'lucide-react';
 // import { PodcastsPage } from '../../podcasts/components/PodcastsPage';
 
 // Lazy load PodcastsPage
@@ -50,7 +53,7 @@ import { RefObject } from 'react';
 
 interface TabContentProps {
   socialGroupId?: string; // Added
-  activeTab: 'dashboard' | 'notes' | 'recordings' | 'quizzes' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social' | 'podcasts' | 'library';
+  activeTab: 'dashboard' | 'notes' | 'recordings' | 'quizzes' | 'analytics' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social' | 'podcasts' | 'library' | 'flashcards';
   activeSocialTab?: string;
   socialPostId?: string;
   podcastId?: string;
@@ -111,8 +114,8 @@ interface TabContentProps {
   onProfileUpdate: (profile: UserProfile) => Promise<void>;
   chatSessions: ChatSession[];
   activeChatSessionId: string | null;
-  onChatSessionSelect: React.Dispatch<React.SetStateAction<string | null>>;
-  onNewChatSession: () => Promise<string | null>;
+  onChatSessionSelect: (sessionId: string) => void;
+  onNewChatSession: (sourceIds?: string[]) => Promise<string | null>;
   onDeleteChatSession: (sessionId: string) => Promise<void>;
   onRenameChatSession: (sessionId: string, newTitle: string) => Promise<void>;
   onSelectedDocumentIdsChange: React.Dispatch<React.SetStateAction<string[]>>;
@@ -166,7 +169,7 @@ interface TabContentProps {
 }
 
 
-export const EmptyNotesState: React.FC<{ 
+export const EmptyNotesState: React.FC<{
   recordings?: ClassRecording[];
   documents?: Document[];
   onCreateNote?: () => void;
@@ -175,7 +178,7 @@ export const EmptyNotesState: React.FC<{
 }> = ({ recordings, documents, onCreateNote, onToggleSidebar, onCreateNoteWithTemplate }) => {
   const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
-  
+
   const features = [
     {
       id: 'organization',
@@ -246,7 +249,7 @@ export const EmptyNotesState: React.FC<{
           onCreateNoteWithTemplate?.(data);
         }}
       />
-      
+
       <div className="h-full w-full overflow-y-auto pb-24 sm:pb-0">
         <div className="min-h-full bg-gradient-to-br from-white via-blue-50/30 to-white dark:from-slate-900 dark:via-slate-800/50 dark:to-slate-900">
           {/* Hero Header - Mobile optimized */}
@@ -263,7 +266,7 @@ export const EmptyNotesState: React.FC<{
                     <BookMarked className="relative h-10 w-10 sm:h-16 sm:w-16 text-blue-600 dark:text-blue-400" />
                   </div>
                 </div>
-                
+
                 <h1 className="text-2xl sm:text-4xl lg:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600 dark:from-gray-100 dark:to-gray-300 mb-2">
                   Start Taking Notes
                 </h1>
@@ -343,7 +346,7 @@ export const EmptyNotesState: React.FC<{
 
                             {/* Text Content */}
                             <div className="flex-1">
-                              <h3 className="text-base sm:text-lg lg:text-xl font-bold text-slate-800 dark:text-gray-100 mb-1.5 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r transition-all duration-300" style={{backgroundImage: hoveredCard === feature.id ? `linear-gradient(to right, var(--color-start), var(--color-end))` : 'none'}}>
+                              <h3 className="text-base sm:text-lg lg:text-xl font-bold text-slate-800 dark:text-gray-100 mb-1.5 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r transition-all duration-300" style={{ backgroundImage: hoveredCard === feature.id ? `linear-gradient(to right, var(--color-start), var(--color-end))` : 'none' }}>
                                 {feature.title}
                               </h3>
                               <p className="text-xs sm:text-sm lg:text-base text-slate-600 dark:text-gray-400 leading-snug">
@@ -431,6 +434,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const [isNotesPanelCollapsed, setIsNotesPanelCollapsed] = useState(false);
 
   // Check if we should show notifications view
   const showNotifications = activeTab === 'dashboard' && searchParams.get('view') === 'notifications';
@@ -511,12 +515,23 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
   const chatProps = useMemo(() => ({
     messages: props.activeChatSessionId ? props.chatMessages : [],
     documents: props.documents,
+    recordings: props.recordings ?? [],
+    chatSessionTitle: props.chatSessions.find(session => session.id === props.activeChatSessionId)?.title,
+    onNavigateToTab: props.onNavigateToTab || (() => undefined),
+    onOpenSource: (sourceKind: 'note' | 'document' | 'recording', sourceId: string) => {
+      if (sourceKind === 'note') {
+        props.navigateToNote(sourceId);
+      } else if (sourceKind === 'document') {
+        navigate({ pathname: '/documents', search: new URLSearchParams({ preview: sourceId }).toString() });
+      } else {
+        navigate({ pathname: '/recordings', search: new URLSearchParams({ recordingId: sourceId }).toString() });
+      }
+    },
     onSendMessage: props.onSendMessage,
     notes: props.filteredNotes,
     selectedDocumentIds: props.selectedDocumentIds,
     onSelectionChange: props.onSelectedDocumentIdsChange,
     activeChatSessionId: props.activeChatSessionId,
-    onNewChatSession: props.onNewChatSession,
     onDeleteChatSession: props.onDeleteChatSession,
     onRenameChatSession: props.onRenameChatSession,
     onChatSessionSelect: props.onChatSessionSelect,
@@ -592,6 +607,12 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
       props.activeChatSessionId,
       props.chatMessages,
       props.documents,
+      props.recordings,
+      props.chatSessions,
+      props.activeChatSessionId,
+      props.onNavigateToTab,
+      props.navigateToNote,
+      navigate,
       props.onSendMessage,
       props.filteredNotes,
       props.selectedDocumentIds,
@@ -682,6 +703,9 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     userProfile: props.userProfile,
     onNavigateToTab: props.onNavigateToTab || (() => { }),
     onCreateNew: props.onCreateNew || (() => { }),
+    onNewChatSession: props.onNewChatSession,
+    chatSessions: props.chatSessions,
+    onChatSessionSelect: props.onChatSessionSelect,
   }), [
     props.filteredNotes,
     props.recordings,
@@ -691,6 +715,9 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     props.userProfile,
     props.onNavigateToTab,
     props.onCreateNew,
+    props.onNewChatSession,
+    props.chatSessions,
+    props.onChatSessionSelect,
   ]);
 
   // Keep track of visited tabs to maintain state/cache
@@ -745,9 +772,9 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
             case 'notes':
               return (
                 <ErrorBoundary>
-                  <div className="h-full w-full flex items-center justify-center dark:bg-transparent overflow-hidden">
+                  <div className="h-full w-full flex items-center justify-center overflow-hidden bg-slate-50 p-2 dark:bg-slate-950 sm:p-3">
                     {/* Centered Container with max-width */}
-                    <div className="w-full h-full max-w-[1400px] mx-auto flex relative lg:shadow-2xl">
+                    <div className="relative mx-auto flex h-full min-h-0 w-full max-w-[1500px] gap-3">
                       {/* Click overlay for mobile when sidebar is open */}
                       {isNotesHistoryOpen && (
                         <div
@@ -759,20 +786,22 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
                       {/* Notes List - Sidebar */}
                       <div className={`
                         ${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'}
-                        lg:translate-x-0 lg:static lg:w-80 lg:flex-shrink-0
-                        fixed inset-y-0 left-0 lg:z-0 z-50 w-72 bg-white dark:bg-slate-900 shadow-lg lg:shadow-none
-                        transition-transform duration-300 ease-in-out lg:transition-none
-                        lg:border-r lg:border-gray-200 lg:dark:border-gray-700 lg:max-h-[90vh]
+                        lg:translate-x-0 lg:static ${isNotesPanelCollapsed ? 'lg:w-14' : 'lg:w-80'} lg:flex-shrink-0
+                        fixed inset-y-0 left-0 lg:z-0 z-50 w-72 overflow-hidden rounded-2xl bg-white shadow-lg dark:bg-slate-900
+                        transition-[transform,width] duration-300 ease-in-out lg:shadow-sm
+                        lg:my-0 lg:h-full lg:max-h-full lg:overflow-hidden lg:rounded-2xl lg:bg-white lg:shadow-sm lg:dark:bg-slate-900
                       `}>
                         <NotesList
                           {...notesHistoryProps}
                           isOpen={isNotesHistoryOpen}
                           onClose={onToggleNotesHistory}
+                          isPanelCollapsed={isNotesPanelCollapsed}
+                          onTogglePanelCollapsed={() => setIsNotesPanelCollapsed(collapsed => !collapsed)}
                         />
                       </div>
 
                       {/* Editor Area - Centered content */}
-                      <div className="flex-1 h-full lg:max-h-[90vh] bg-white dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-y-auto">
+                      <div className="h-full min-h-0 min-w-0 flex-1 overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-slate-900">
                         {notesProps.activeNote ? (
                           <NoteEditor
                             note={notesProps.activeNote}
@@ -783,7 +812,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
                             readOnly={!!userProfile?.id && notesProps.activeNote.user_id !== userProfile.id}
                           />
                         ) : (
-                          <EmptyNotesState 
+                          <EmptyNotesState
                             recordings={props.recordings}
                             documents={props.documents}
                             onCreateNote={() => props.onCreateNew?.('note')}
@@ -822,6 +851,18 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
                 </div>
               );
 
+            case 'analytics':
+              return (
+                <div className="flex-1 overflow-y-auto modern-scrollbar dark:bg-transparent">
+                  <ErrorBoundary>
+                    <AnalyticsPage
+                      userProfile={props.userProfile}
+                      onCreateNew={props.onCreateNew || (() => undefined)}
+                    />
+                  </ErrorBoundary>
+                </div>
+              );
+
             case 'schedule':
               return (
                 <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
@@ -846,7 +887,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
                       navigate(`/chat/${sessionId}`);
                     }}
                     onNewChatSession={async () => {
-                      const newId = await props.onNewChatSession();
+                      const newId = await props.onNewChatSession([]);
                       if (newId) navigate(`/chat/${newId}`);
                     }}
                     onDeleteChatSession={props.onDeleteChatSession}
@@ -858,7 +899,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
                 </div>
               ) : (
                 // Desktop: Side-by-side OR Mobile: Full chat
-                <div className="flex-1 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800">
+                <div className="h-full min-h-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800">
                   <ErrorBoundary>
                     <AIChat {...chatProps} setIsLoading={props.setIsAILoading} />
                   </ErrorBoundary>
@@ -896,6 +937,14 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
         <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent" style={{ display: activeTab === 'library' ? 'block' : 'none', height: activeTab === 'library' ? '100%' : '0px' }}>
           <ErrorBoundary>
             <CourseLibrary />
+          </ErrorBoundary>
+        </div>
+      )}
+
+      {activeTab === 'flashcards' && (
+        <div className="flex-1 overflow-y-auto modern-scrollbar dark:bg-transparent">
+          <ErrorBoundary>
+            <FlashcardsLibrary userId={props.userProfile?.id || ''} />
           </ErrorBoundary>
         </div>
       )}

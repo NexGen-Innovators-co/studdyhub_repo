@@ -81,7 +81,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
       // Apply update if we found a valid duration
       if (newDuration > 0) {
         try {
-          await apiClient.patch(`class_recordings/${recording.id}`, { duration: newDuration });
+          await apiClient.patch(`class-recordings/${recording.id}`, { duration: newDuration });
           onUpdateRecording({ ...recording, duration: newDuration });
         } catch {
           // Best-effort duration fix — ignore errors
@@ -205,30 +205,29 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
         updated_at: new Date().toISOString(),
       };
 
-      // Update duration if returned from processor and current duration is 0 or null
-      if (duration) {
-        const recordingsResult = await apiClient.get('class_recordings', {
-          select: 'duration',
-          document_id: documentId,
-        });
-        const currentRecording = Array.isArray(recordingsResult) ? recordingsResult[0] : recordingsResult;
+      // Look up the recording for this document so we can PATCH it by id
+      // (the gateway's class-recordings route requires an id for updates).
+      const existingRecordings = await apiClient.get('class-recordings', {
+        document_id: documentId,
+      });
+      const currentRecording = Array.isArray(existingRecordings) ? existingRecordings[0] : existingRecordings;
 
-        if (currentRecording && (currentRecording.duration === 0 || currentRecording.duration === null)) {
-          recordingUpdate.duration = duration;
-        }
+      // Update duration if returned from processor and current duration is 0 or null
+      if (duration && currentRecording && (currentRecording.duration === 0 || currentRecording.duration === null)) {
+        recordingUpdate.duration = duration;
+      }
+
+      if (!currentRecording?.id) {
+        throw new Error('Failed to update recording: no recording found for this document');
       }
 
       try {
-        await apiClient.patch('class_recordings', {
-          ...recordingUpdate,
-          document_id: documentId,
-        });
+        await apiClient.patch(`class-recordings/${currentRecording.id}`, recordingUpdate);
       } catch (err: any) {
         throw new Error(`Failed to update recording: ${err.message}`);
       }
 
-      const fetchedRecordings = await apiClient.get('class_recordings', {
-        select: '*',
+      const fetchedRecordings = await apiClient.get('class-recordings', {
         document_id: documentId,
       });
       const fetchedRecording = Array.isArray(fetchedRecordings) ? fetchedRecordings[0] : fetchedRecordings;
@@ -258,18 +257,20 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
     } catch (error: any) {
       let errorMessage = 'Failed to process audio.';
       if (error instanceof FunctionsHttpError) {
-        errorMessage = `Function error (${error.context.status}): ${error.context.statusText}. Check function logs.`;
-        if (error.message.includes("The model is overloaded")) {
-          errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+        const responseDetails = await error.context.clone().json().catch(() => null);
+        errorMessage = responseDetails?.error ||
+          `Audio processing function failed (${error.context.status} ${error.context.statusText}).`;
+        if (errorMessage.includes('The model is overloaded')) {
+          errorMessage = 'AI model is currently overloaded. Please try again in a few moments.';
         }
       } else if (error instanceof Error) {
         errorMessage = error.message;
-        if (errorMessage.includes("The model is overloaded")) {
-          errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+        if (errorMessage.includes('The model is overloaded')) {
+          errorMessage = 'AI model is currently overloaded. Please try again in a few moments.';
         }
       }
+      console.error('[audio processing] Failed:', error);
       toast.error(errorMessage, { id: toastId });
-      //console.error('Error during audio processing:', error);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -309,8 +310,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
     const maxRecordings = tier === 'free' ? 50 : tier === 'scholar' ? 500 : Infinity;
     
     // Count existing recordings
-    const recordingsList = await apiClient.get('class_recordings', {
-      select: 'id',
+    const recordingsList = await apiClient.get('class-recordings', {
       user_id: user.id,
     });
     const recordingCount = Array.isArray(recordingsList) ? recordingsList.length : 0;
@@ -333,10 +333,10 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
       return;
     }
 
-    // File size limit raised to 200MB — chunked processing handles long audio
-    const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
+    // File size limit raised to 1GB — chunked processing handles long audio
+    const MAX_FILE_SIZE = 1024 * 1024 * 1024; // 1GB
     if (file.size > MAX_FILE_SIZE) {
-        toast.error('File exceeds the 200MB upload limit. Please compress the audio or split it into smaller parts.', { duration: 5000 });
+        toast.error('File exceeds the 1GB upload limit. Please compress the audio or split it into smaller parts.', { duration: 5000 });
         if (event.target) event.target.value = '';
         return;
     }
@@ -413,7 +413,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
       };
 
       try {
-        await apiClient.post('class_recordings', {
+        await apiClient.post('class-recordings', {
           id: newRecording.id,
           user_id: newRecording.userId,
           title: newRecording.title,
@@ -622,7 +622,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
       };
 
       try {
-        await apiClient.post('class_recordings', {
+        await apiClient.post('class-recordings', {
           id: newRecording.id,
           user_id: newRecording.userId,
           title: newRecording.title,
@@ -663,14 +663,10 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCr
         if (result.duration && (!newRecording.duration || newRecording.duration === 0)) {
           recUpdate.duration = result.duration;
         }
-        await apiClient.patch('class_recordings', {
-          ...recUpdate,
-          document_id: newDocumentId,
-        });
+        await apiClient.patch(`class-recordings/${newRecording.id}`, recUpdate);
 
         // Refresh local state
-        const fetchedRecResult = await apiClient.get('class_recordings', {
-          select: '*',
+        const fetchedRecResult = await apiClient.get('class-recordings', {
           document_id: newDocumentId,
         });
         const fetchedRec = Array.isArray(fetchedRecResult) ? fetchedRecResult[0] : fetchedRecResult;

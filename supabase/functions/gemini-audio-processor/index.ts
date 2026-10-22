@@ -38,27 +38,69 @@ const MODEL_CHAIN = [
   'gemini-1.5-flash',
 ];
 
-async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 3): Promise<any> {
-  for (let attempt = 0; attempt < Math.min(maxAttempts, MODEL_CHAIN.length); attempt++) {
-    const model = MODEL_CHAIN[attempt % MODEL_CHAIN.length];
+const TRANSCRIPTION_INSTRUCTIONS = `Transcribe the audio and identify each distinct audible speaker.
+
+Speaker identification requirements:
+- Listen for changes in voice, turn-taking, interruptions, and short replies. Do not assume the recording has only one speaker.
+- Assign labels in order of first appearance: Speaker 1, Speaker 2, Speaker 3, etc. Keep each voice's label consistent throughout.
+- Label every spoken turn, including brief acknowledgments and questions. Never omit labels, even when only one speaker is present.
+- Use a role or name instead of a numbered label only when it is explicitly clear from the audio; never guess identities.
+- Start each new turn on a new line as "**Speaker N:** words spoken". Separate turns when the speaker changes.
+- Do not merge different speakers into one paragraph or attribute a turn based only on conversational context.
+- If voices overlap or the speaker cannot be determined, mark that turn as "[Speaker uncertain]" rather than guessing.
+- Preserve the words and language spoken. Do not translate, paraphrase, or remove a turn.`;
+
+async function callGeminiWithModelChain(requestBody: any, apiKey: string): Promise<any> {
+  let lastError = 'No Gemini model returned a response.';
+
+  for (let attempt = 0; attempt < MODEL_CHAIN.length; attempt++) {
+    const model = MODEL_CHAIN[attempt];
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    let response: Response;
+
     try {
-      const resp = await fetch(url, {
+      response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
       });
+    } catch (error) {
+      lastError = `Network error with ${model}: ${error instanceof Error ? error.message : String(error)}`;
+      console.error(`[gemini-audio-processor] ${lastError}`);
+      continue;
+    }
 
-      if (resp.ok) return await resp.json();
-      const txt = await resp.text();
-      // console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
-      if (resp.status === 429 || resp.status === 503) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
-    } catch (err) {
-      // console.error(`Error calling Gemini ${model}:`, err);
-      if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
+    if (!response.ok) {
+      const responseText = await response.text();
+      lastError = `Gemini ${model} returned ${response.status}: ${responseText.slice(0, 500)}`;
+      console.error(`[gemini-audio-processor] ${lastError}`);
+
+      if (response.status === 429 || response.status === 503) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        continue;
+      }
+
+      if (response.status === 400 || response.status === 404) continue;
+      throw new Error(lastError);
+    }
+
+    try {
+      const result = await response.json();
+      const text = result?.candidates?.[0]?.content?.parts
+        ?.map((part: { text?: string }) => part.text ?? '')
+        .join('')
+        .trim();
+      if (text) return result;
+
+      lastError = `Gemini ${model} returned no transcription content.`;
+      console.error(`[gemini-audio-processor] ${lastError}`);
+    } catch (error) {
+      lastError = `Invalid response from ${model}: ${error instanceof Error ? error.message : String(error)}`;
+      console.error(`[gemini-audio-processor] ${lastError}`);
     }
   }
-  throw new Error('All Gemini models failed');
+
+  throw new Error(`All Gemini models failed. ${lastError}`);
 }
 
 // Declare EdgeRuntime for background tasks
@@ -77,7 +119,7 @@ async function uploadToGemini(url: string, mimeType: string): Promise<string> {
   // By uploading raw bytes, we avoid the Base64 overhead (33% larger) and the massive JSON string.
 
   // 2. Initial Resumable Upload Request (if larger than 5MB usually, but straightforward to just use media upload for now)
-  // Using Simple Upload for simplicity in this context (up to 200MB usually fine via this endpoint)
+  // Using Simple Upload for simplicity in this context (up to 1GB via Gemini File API)
   const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${GEMINI_API_KEY}`;
   
   const uploadResponse = await fetch(uploadUrl, {
@@ -178,14 +220,10 @@ async function processAudioBackground(recordingId: string, fileUrl: string, targ
 }
 
 Transcript guidelines:
-- Clean up filler words (um, uh, like, you know, right) and false starts
-- Organize into clear paragraphs by topic or speaker change
-- If multiple speakers are detected, label them as "**Speaker 1:**", "**Speaker 2:**", etc.
-- If only one speaker is detected, do NOT add any speaker labels
-- Fix grammar and incomplete sentences while preserving the original meaning
+${TRANSCRIPTION_INSTRUCTIONS}
+- Organize the transcript by speaker turn
 - Use proper punctuation and capitalization
 - Keep technical terms and proper nouns accurate
-- Break long monologues into logical paragraphs
 
 Summary guidelines:
 - Provide a structured summary with key points and takeaways
@@ -372,16 +410,7 @@ Keep it concise but comprehensive (150-300 words).\n\nTranscript:\n${inputTransc
       : '';
     const transcriptionPayload = {
       contents: [{ role: 'user', parts: [
-        { text: `You are a professional audio transcription assistant. Transcribe this audio recording with the following guidelines:
-
-- Clean up filler words (um, uh, like, you know, right) and false starts
-- Organize into clear paragraphs by topic or speaker change
-- If multiple speakers are detected, label them as "Speaker 1:", "Speaker 2:", etc.
-- If only one speaker is detected, do NOT add any speaker labels — just transcribe the speech directly
-- Fix grammar and incomplete sentences while preserving the original meaning
-- Use proper punctuation and capitalization
-- Keep technical terms and proper nouns accurate
-- Break long monologues into logical paragraphs${chunkHint}` },
+        { text: `You are a professional audio transcription assistant. ${TRANSCRIPTION_INSTRUCTIONS}${chunkHint}` },
         syncContentPart
       ]}],
     };
@@ -471,4 +500,3 @@ Keep it concise but comprehensive (150-300 words).\n\nTranscript:\n${transcript}
     });
   }
 });
-

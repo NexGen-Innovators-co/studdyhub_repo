@@ -3,12 +3,13 @@ import { Toaster } from "./modules/ui/components/toaster";
 import { Toaster as Sonner } from "./modules/ui/components/sonner";
 import { TooltipProvider } from "./modules/ui/components/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { AuthProvider } from "./hooks/useAuth";
 import { AdminAuthProvider } from "./hooks/useAdminAuth";
 import React, { Suspense, lazy } from "react";
 import { Analytics } from "@vercel/analytics/react";
 import { AppProvider } from "./contexts/AppContext";
+import { UploadActivityProvider } from "./contexts/UploadActivityContext";
 import { AdminLayout } from "./modules/admin/components/AdminLayout";
 import { HelmetProvider } from "react-helmet-async";
 import DynamicHead from "./modules/seo/components/DynamicHead";
@@ -101,7 +102,7 @@ const AppWithSEO = () => {
   const isAdminRoute = location.pathname.startsWith('/admin');
   const protectedRoutePrefixes = [
     '/dashboard', '/notes', '/note', '/recordings', '/schedule', '/chat',
-    '/documents', '/settings', '/quizzes', '/library', '/course',
+    '/documents', '/settings', '/quizzes', '/analytics', '/notebooks', '/library', '/flashcards', '/course',
     '/subscription', '/pricing', '/podcasts', '/podcast', '/social', '/educator',
     '/calendar-callback', '/join'
   ];
@@ -125,7 +126,7 @@ const AppWithSEO = () => {
     const appShellRoutes = [
       '/dashboard', '/notes', '/note', '/recordings', '/schedule',
       '/chat', '/documents', '/settings', '/quizzes', '/library',
-      '/podcasts', '/social', '/educator'
+      '/podcasts', '/social', '/analytics', '/notebooks', '/flashcards', '/educator'
     ];
 
     // Check if current path matches any app shell route
@@ -179,6 +180,9 @@ const AppWithSEO = () => {
             <Route path="/quizzes" element={<Index />} />
             <Route path="/quizzes/:tab" element={<Index />} />
             <Route path="/quizzes/:tab/:sessionId" element={<Index />} />
+            <Route path="/analytics" element={<Index />} />
+            <Route path="/notebooks" element={<Navigate to="/chat" replace />} />
+            <Route path="/flashcards" element={<Index />} />
             <Route path="/library" element={<Index />} />
             <Route path="/library/:tab" element={<Index />} />
             <Route path="/course/:courseId" element={<Suspense fallback={<Fallback />}><CourseDashboard /></Suspense>} />
@@ -250,13 +254,15 @@ const App = () => (
           <Toaster />
           <Sonner />
           <OfflineIndicator />
-          <BrowserRouter future={{ v7_relativeSplatPath: true }}>
+          <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
             <AuthProvider>
               <AdminAuthProvider>
                 <AppProvider>
-                  <OnboardingGuard>
-                    <AppWithSEO />
-                  </OnboardingGuard>
+                  <UploadActivityProvider>
+                    <OnboardingGuard>
+                      <AppWithSEO />
+                    </OnboardingGuard>
+                  </UploadActivityProvider>
                 </AppProvider>
               </AdminAuthProvider>
             </AuthProvider>

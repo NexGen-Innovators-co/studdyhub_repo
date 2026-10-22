@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
-import { Send, Loader2, FileText, Camera, Paperclip, Mic, Podcast, MenuIcon, Layout, ArrowUp, ArrowDown, Image, Square, Pause, Play, X } from 'lucide-react';
+import { Send, Loader2, FileText, Camera, Paperclip, Mic, Podcast, MenuIcon, Layout, ArrowUp, ArrowDown, Image, Square, Pause, Play, X, BookOpen, Check, Plus, Sparkles, MessageCircle, Search, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, MoreVertical, ExternalLink, Eye, Unlink } from 'lucide-react';
 import { Button } from '../../ui/components/button';
 import {
   Menubar,
@@ -12,7 +12,6 @@ import {
 } from '../../ui/components/menubar';
 import { UserProfile, Document } from '../../../types/Document';
 import { Note } from '../../../types/Note';
-import { supabase } from '../../../integrations/supabase/client';
 import { apiClient } from '@/services/apiClient';
 import { DocumentSelector } from './DocumentSelector';
 import { toast } from 'sonner';
@@ -20,7 +19,7 @@ import { DiagramPanel } from './DiagramPanel';
 import { generateId } from '@/modules/classRecordings/utils/helpers';
 import { MessageList } from './MessageList';
 import { ConfirmationModal } from '../../ui/components/ConfirmationModal';
-import { Message } from '../../../types/Class';
+import { ClassRecording, Message } from '../../../types/Class';
 import BookPagesAnimation from '../../ui/components/bookloader';
 import { useDragAndDrop } from '../hooks/useDragAndDrop';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
@@ -38,6 +37,14 @@ import { PodcastPanel } from '../../podcasts/components/PodcastPanel';
 import { ImageGenerator } from './ImageGenerator';
 import { useImageGenerationDetector } from '@/modules/aiChat/hooks/useImageGenerationDetector';
 import { useUserActivityLogger } from '@/hooks/useUserActivityLogger';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/modules/ui/components/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/ui/components/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/modules/ui/components/dropdown-menu';
 
 export interface AttachedFile {
   file: File;
@@ -46,17 +53,33 @@ export interface AttachedFile {
   id: string;
 }
 
+interface WorkspaceSource {
+  id: string;
+  title: string;
+  kind: 'Note' | 'Document' | 'Recording';
+  detail: string;
+  icon: React.ElementType;
+  sourceKind: 'note' | 'document' | 'recording';
+  content: string | null;
+  fileUrl?: string | null;
+  imageUrl?: string | null;
+  audioUrl?: string | null;
+}
+
 interface AIChatProps {
   messages: Message[];
   isLoading: boolean;
   setIsLoading: (isLoading: boolean) => void;
   userProfile: UserProfile | null;
   documents: Document[];
+  recordings: ClassRecording[];
   notes: Note[];
+  chatSessionTitle?: string;
+  onNavigateToTab: (tab: string) => void;
+  onOpenSource: (sourceKind: WorkspaceSource['sourceKind'], sourceId: string) => void;
   selectedDocumentIds: string[];
   onSelectionChange: (ids: string[]) => void;
   activeChatSessionId: string | null;
-  onNewChatSession: () => Promise<string | null>;
   onDeleteChatSession: (sessionId: string) => void;
   onRenameChatSession: (sessionId: string, newTitle: string) => void;
   onChatSessionSelect: (sessionId: string) => void;
@@ -151,11 +174,14 @@ const AIChat: React.FC<AIChatProps> = ({
   setIsLoading,
   userProfile,
   documents,
+  recordings,
   notes,
+  chatSessionTitle,
+  onNavigateToTab,
+  onOpenSource,
   selectedDocumentIds,
   onSelectionChange,
   activeChatSessionId,
-  onNewChatSession,
   onDeleteMessage,
   onRegenerateResponse,
   onRetryFailedMessage,
@@ -199,6 +225,9 @@ const AIChat: React.FC<AIChatProps> = ({
   const [showPodcastGenerator, setShowPodcastGenerator] = useState(false);
   const [activePodcast, setActivePodcast] = useState<PodcastData | null>(null);
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
+  const [showSourcePicker, setShowSourcePicker] = useState(false);
+  const [sourceSearch, setSourceSearch] = useState('');
+  const [draftSourceIds, setDraftSourceIds] = useState<string[]>([]);
   const [showImageGenerator, setShowImageGenerator] = useState(false);
   const [detectedImagePrompt, setDetectedImagePrompt] = useState<string>('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -227,6 +256,8 @@ const AIChat: React.FC<AIChatProps> = ({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [activeDiagram, setActiveDiagram] = useState<{ content?: string; type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'threejs' | 'unknown' | 'document-text' | 'html' | 'slides'; language?: string; imageUrl?: string } | null>(null);
   const isDiagramPanelOpen = !!activeDiagram;
+  const [isSourcesPanelOpen, setIsSourcesPanelOpen] = useState(true);
+  const [isStudioPanelOpen, setIsStudioPanelOpen] = useState(true);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [imagePrompt, setImagePrompt] = useState('');
@@ -502,8 +533,8 @@ const AIChat: React.FC<AIChatProps> = ({
     }, []),
   });
 
-  const handleSendMessage = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendMessage = useCallback(async (e?: React.FormEvent) => {
+    e?.preventDefault();
 
     if (isRecognizing) {
       stopRecognition();
@@ -563,7 +594,7 @@ const AIChat: React.FC<AIChatProps> = ({
       }
 
       if (activeChatSessionId) {
-        try { await apiClient.patch(`chat/sessions/${activeChatSessionId}`, { document_ids: selectedDocumentIds, updated_at: new Date().toISOString() }); } catch {}
+        try { await apiClient.patch(`chat/sessions/${activeChatSessionId}`, { document_ids: selectedDocumentIds, updated_at: new Date().toISOString() }); } catch { }
       }
 
       const documentIds = selectedDocumentIds.filter(id =>
@@ -623,6 +654,27 @@ const AIChat: React.FC<AIChatProps> = ({
           };
         })
       );
+      const recordingContextFiles = recordings
+        .filter(recording => selectedDocumentIds.includes(recording.id))
+        .map(recording => {
+          const content = [
+            `Class recording: ${recording.title || 'Untitled recording'}`,
+            recording.subject ? `Subject: ${recording.subject}` : '',
+            recording.summary ? `Summary: ${recording.summary}` : '',
+            recording.transcript ? `Transcript:\n${recording.transcript}` : 'Transcript is not available yet.',
+          ].filter(Boolean).join('\n\n');
+
+          return {
+            name: `${recording.title || 'Class recording'} transcript.txt`,
+            mimeType: 'text/plain',
+            data: null,
+            type: 'document' as const,
+            size: new Blob([content]).size,
+            content,
+            processing_status: 'completed',
+            processing_error: null,
+          };
+        });
       setInputValue('');
 
       // Note: Message count updates automatically via realtime subscription when AI responds
@@ -630,7 +682,7 @@ const AIChat: React.FC<AIChatProps> = ({
         inputMessage.trim(),
         documentIds,
         noteIds,
-        filesForBackend
+        [...filesForBackend, ...recordingContextFiles]
       );
       void logUserActivity(userProfile?.id, 'chat', 10);
 
@@ -680,6 +732,7 @@ const AIChat: React.FC<AIChatProps> = ({
     activeChatSessionId,
     selectedDocumentIds,
     documents,
+    recordings,
     notes,
     onSendMessageToBackend,
     isCurrentlySending,
@@ -701,17 +754,26 @@ const AIChat: React.FC<AIChatProps> = ({
       return;
     }
 
+    // The typing callback is only wired to the last assistant message. Unlock
+    // the composer immediately instead of relying on the callback's possibly
+    // stale messages snapshot to identify that message as last.
+    setIsLastAiMessageDisplayed(true);
+
     try {
-      await apiClient.patch(`chat/messages/${messageId}`, { has_been_displayed: true });
+      await apiClient.patch(
+        `chat/messages/${messageId}?session_id=${encodeURIComponent(activeChatSessionId)}`,
+        { has_been_displayed: true },
+      );
 
-      onMessageUpdate({
-        ...messages.find(msg => msg.id === messageId)!,
-        has_been_displayed: true
-      });
+      const displayedMessage = messages.find(msg => msg.id === messageId);
+      if (displayedMessage) {
+        onMessageUpdate({
+          ...displayedMessage,
+          has_been_displayed: true
+        });
+      }
 
-      if (messages.length > 0 &&
-        messages[messages.length - 1].id === messageId &&
-        messages[messages.length - 1].role === 'assistant') {
+      if (displayedMessage?.role === 'assistant') {
         setIsLastAiMessageDisplayed(true);
       }
     } catch (error) {
@@ -883,8 +945,8 @@ const AIChat: React.FC<AIChatProps> = ({
   }, []);
 
   const handleEditClick = useCallback((message: Message) => {
-      // LOG: AiChat received message
-      // console.log('[AiChat] handleEditClick message:', message);
+    // LOG: AiChat received message
+    // console.log('[AiChat] handleEditClick message:', message);
     if (message.role !== 'user') return;
 
     setInputValue(message.content);
@@ -927,6 +989,133 @@ const AIChat: React.FC<AIChatProps> = ({
     return mergedDocuments
       .filter(doc => selectedDocumentIds.includes(doc.id) && doc.type === 'image');
   }, [mergedDocuments, selectedDocumentIds]);
+
+  const handleSourceSelectionChange = useCallback((ids: string[]) => {
+    onSelectionChange(ids);
+    if (!activeChatSessionId || activeChatSessionId.startsWith('offline-') || !navigator.onLine) return;
+
+    void apiClient.patch(`chat/sessions/${activeChatSessionId}`, {
+      document_ids: ids,
+      updated_at: new Date().toISOString(),
+    }).catch((error) => {
+      console.error('Failed to save chat sources:', error);
+      toast.error('Your source selection could not be saved. Try again.');
+    });
+  }, [activeChatSessionId, onSelectionChange]);
+
+  const sourceItems = useMemo<WorkspaceSource[]>(() => [
+    ...notes.map(note => ({
+      id: note.id,
+      title: note.title || 'Untitled note',
+      kind: 'Note' as const,
+      sourceKind: 'note' as const,
+      detail: 'Written note',
+      icon: BookOpen,
+      content: note.content,
+    })),
+    ...mergedDocuments.filter(document => !notes.some(note => note.id === document.id)).map(document => ({
+      id: document.id,
+      title: document.title || document.file_name || 'Untitled document',
+      kind: 'Document' as const,
+      sourceKind: 'document' as const,
+      detail: document.processing_status === 'completed' ? 'Ready to study' : 'Document',
+      icon: FileText,
+      content: document.content_extracted,
+      fileUrl: document.file_url,
+      imageUrl: document.type === 'image' ? document.file_url : null,
+    })),
+    ...recordings.map(recording => ({
+      id: recording.id,
+      title: recording.title || 'Untitled recording',
+      kind: 'Recording' as const,
+      sourceKind: 'recording' as const,
+      detail: recording.transcript?.trim() ? 'Transcript ready' : 'Recording',
+      icon: Mic,
+      content: [
+        recording.subject ? `Subject: ${recording.subject}` : '',
+        recording.summary ? `Summary:\n${recording.summary}` : '',
+        recording.transcript ? `Transcript:\n${recording.transcript}` : '',
+      ].filter(Boolean).join('\n\n') || null,
+      audioUrl: recording.audio_url || recording.audioUrl,
+    })),
+  ], [mergedDocuments, notes, recordings]);
+
+  const toggleSource = useCallback((id: string) => {
+    handleSourceSelectionChange(selectedDocumentIds.includes(id)
+      ? selectedDocumentIds.filter(selectedId => selectedId !== id)
+      : [...selectedDocumentIds, id]);
+  }, [handleSourceSelectionChange, selectedDocumentIds]);
+
+  const attachedSources = sourceItems.filter(source => selectedDocumentIds.includes(source.id));
+  const handleSourcePreview = useCallback((source: WorkspaceSource) => {
+    if (source.imageUrl) {
+      memoizedHandleViewContent('image', null, undefined, source.imageUrl);
+      return;
+    }
+    if (source.content) {
+      memoizedHandleViewContent('document-text', source.content, 'markdown', undefined);
+      return;
+    }
+    const originalUrl = source.audioUrl || source.fileUrl;
+    if (originalUrl) {
+      window.open(originalUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    toast.info('There is no content available to preview for this source yet.');
+  }, [memoizedHandleViewContent]);
+  const filteredSourceItems = sourceItems.filter(source =>
+    `${source.title} ${source.kind} ${source.detail}`.toLowerCase().includes(sourceSearch.trim().toLowerCase())
+  );
+  const studioTools = [
+    { label: 'Flashcards', action: 'flashcards', icon: BookOpen, prompt: 'Create a concise set of study flashcards from my attached sources. Use question-and-answer pairs, cover the most important concepts, and avoid duplicate cards.' },
+    { label: 'Quiz', action: 'quiz', icon: Check, prompt: 'Create a 10-question practice quiz based on my attached sources. Use multiple-choice questions, mark the correct answer, and briefly explain why it is correct.' },
+    { label: 'Study guide', action: 'study-guide', icon: FileText, prompt: 'Create a clear, well-organized study guide from my attached sources. Include key ideas, definitions, and a short review checklist.' },
+    { label: 'Summary', action: 'summary', icon: MessageCircle, prompt: 'Summarize my attached sources, highlighting the central ideas, important details, and how the ideas connect.' },
+    { label: 'Practice', action: 'practice', icon: Sparkles, prompt: 'Create a short active-recall practice session from my attached sources. Ask one question at a time and wait for my answer before revealing the explanation.' },
+    { label: 'Podcast', action: 'podcast', icon: Podcast, prompt: '' },
+  ];
+
+  const openSourcePicker = useCallback(() => {
+    setDraftSourceIds(selectedDocumentIds);
+    setSourceSearch('');
+    setShowSourcePicker(true);
+  }, [selectedDocumentIds]);
+
+  const toggleDraftSource = (id: string) => {
+    setDraftSourceIds(current => current.includes(id)
+      ? current.filter(sourceId => sourceId !== id)
+      : [...current, id]);
+  };
+
+  const attachDraftSources = () => {
+    handleSourceSelectionChange(draftSourceIds);
+    setShowSourcePicker(false);
+  };
+
+  const runStudioAction = useCallback((action: string, prompt: string) => {
+    if (selectedDocumentIds.length === 0) {
+      setIsStudioPanelOpen(true);
+      openSourcePicker();
+      toast.info('Attach a source first to create something grounded in your material.');
+      return;
+    }
+
+    if (action === 'podcast') {
+      const podcastSourceIds = selectedDocumentIds.filter(id =>
+        notes.some(note => note.id === id) || documents.some(document => document.id === id)
+      );
+      if (podcastSourceIds.length === 0) {
+        toast.info('The podcast generator needs an attached note or document. Add one to get started.');
+        openSourcePicker();
+        return;
+      }
+      setShowPodcastGenerator(true);
+      return;
+    }
+
+    setInputValue(prompt);
+    void handleSendMessage();
+  }, [documents, handleSendMessage, notes, openSourcePicker, selectedDocumentIds, setInputValue]);
 
   const { isSpeaking, speakingMessageId, isPaused, speakMessage, pauseSpeech, resumeSpeech, stopSpeech } = useTextToSpeech({
     messages,
@@ -1000,18 +1189,186 @@ const AIChat: React.FC<AIChatProps> = ({
       {/* Main Chat Container */}
       <div
         ref={dropZoneRef}
-        className={`flex h-[100dvh] lg:h-screen pt-0 lg:pt-0 border-none relative bg-transparent dark:bg-transparent overflow-hidden font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+        className={`flex h-full min-h-0 border-none relative bg-slate-50 text-foreground dark:bg-slate-950 dark:text-gray-100 overflow-hidden font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
       >
         <DragOverlay isDragging={isDragging} />
 
+        <aside className={`m-2 hidden shrink-0 flex-col rounded-2xl bg-white p-3 text-foreground shadow-sm transition-[width] duration-200 dark:bg-slate-900 dark:text-gray-200 dark:shadow-none lg:flex ${isSourcesPanelOpen ? 'w-[270px]' : 'w-14'}`}>
+          <div className={`mb-4 flex items-center ${isSourcesPanelOpen ? 'justify-between' : 'justify-center'}`}>
+            {isSourcesPanelOpen && (
+              <div>
+                <h2 className="text-sm font-semibold">Sources</h2>
+                <p className="mt-1 text-xs text-muted-foreground">{attachedSources.length} attached</p>
+              </div>
+            )}
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setIsSourcesPanelOpen(open => !open)}
+                    className="rounded-full p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    aria-label={isSourcesPanelOpen ? 'Hide sources panel' : 'Show sources panel'}
+                    aria-expanded={isSourcesPanelOpen}
+                  >
+                    {isSourcesPanelOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="border-border bg-popover text-popover-foreground dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
+                  {isSourcesPanelOpen ? 'Hide sources' : 'Show sources'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          {isSourcesPanelOpen && <>
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
+            {attachedSources.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border px-4 py-7 text-center dark:border-gray-700">
+                <BookOpen className="mx-auto mb-3 h-6 w-6 text-muted-foreground" />
+                <p className="text-sm font-medium text-foreground">No sources attached</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">Choose material from your library when you need it.</p>
+                <Button type="button" onClick={openSourcePicker} size="sm" className="mt-4 rounded-full bg-muted text-foreground hover:bg-muted/80 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">
+                  <Plus className="mr-1.5 h-4 w-4" /> Add sources
+                </Button>
+              </div>
+            ) : attachedSources.map(source => {
+              const Icon = source.icon;
+              return (
+                <div
+                  key={`${source.kind}-${source.id}`}
+                  className="flex w-full items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 p-2 transition hover:border-blue-300 hover:bg-blue-100 dark:border-blue-700/40 dark:bg-blue-900/20 dark:hover:border-gray-600 dark:hover:bg-gray-800"
+                >
+                  <button
+                    type="button"
+                    aria-label={`Preview ${source.title}`}
+                    onClick={() => handleSourcePreview(source)}
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  >
+                    <span className="rounded-lg bg-blue-100 p-2 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400"><Icon className="h-4 w-4" /></span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-foreground dark:text-gray-100">{source.title}</span>
+                      <span className="mt-1 block truncate text-xs text-muted-foreground dark:text-gray-400">{source.kind} · {source.detail}</span>
+                    </span>
+                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label={`More actions for ${source.title}`}
+                        className="rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" side="right" className="w-56 border-border bg-popover text-popover-foreground dark:border-gray-700 dark:bg-slate-800 dark:text-gray-100">
+                      <DropdownMenuItem
+                        onSelect={() => onOpenSource(source.sourceKind, source.id)}
+                        className="gap-2 text-popover-foreground hover:text-foreground dark:text-gray-100 dark:hover:text-white"
+                      >
+                        <ExternalLink className="h-4 w-4 text-blue-400" />
+                        Open detailed source
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => handleSourcePreview(source)}
+                        className="gap-2 text-popover-foreground hover:text-foreground dark:text-gray-100 dark:hover:text-white"
+                      >
+                        <Eye className="h-4 w-4 text-blue-400" />
+                        Preview in workspace
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          setInputValue(`Help me understand "${source.title}". Explain its key ideas and answer any questions I have about it.`);
+                          requestAnimationFrame(() => textareaRef.current?.focus());
+                        }}
+                        className="gap-2 text-popover-foreground hover:text-foreground dark:text-gray-100 dark:hover:text-white"
+                      >
+                        <MessageCircle className="h-4 w-4 text-blue-400" />
+                        Ask Chat about this
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => toggleSource(source.id)}
+                        className="gap-2 text-red-300 hover:text-red-200"
+                      >
+                        <Unlink className="h-4 w-4" />
+                        Remove from workspace
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              );
+            })}
+          </div>
+          {attachedSources.length > 0 && (
+            <Button type="button" variant="outline" onClick={openSourcePicker} className="mt-3 w-full rounded-full border-border bg-transparent text-xs text-muted-foreground hover:bg-muted hover:text-foreground dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white">
+              <Plus className="mr-1.5 h-4 w-4" /> Add sources
+            </Button>
+          )}
+          </>}
+          {!isSourcesPanelOpen && (
+            <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
+              {attachedSources.map(source => {
+                const Icon = source.icon;
+                return (
+                  <TooltipProvider key={`${source.kind}-${source.id}`} delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => setIsSourcesPanelOpen(true)}
+                          aria-label={`Show sources: ${source.title}`}
+                          className="flex h-9 w-full items-center justify-center rounded-lg text-blue-600 transition hover:bg-muted hover:text-blue-700 dark:text-blue-400 dark:hover:bg-gray-800 dark:hover:text-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                        >
+                          <Icon className="h-4 w-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="border-border bg-popover text-popover-foreground dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">{source.title}</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                );
+              })}
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={openSourcePicker}
+                      aria-label="Add sources"
+                      className="flex h-9 w-full items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="border-border bg-popover text-popover-foreground dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">Add sources</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          )}
+        </aside>
+
+        <div className="flex h-full min-h-0 min-w-0 flex-1">
         {/* Chat Panel */}
         <div
-          className={`flex flex-col h-full rounded-lg panel-transition bg-transparent dark:bg-transparent transition-all duration-300 relative ${isDiagramPanelOpen ? 'flex-shrink-0' : 'flex-1'} ${isPhone() ? 'fixed inset-0 z-30 rounded-none h-[100dvh] w-screen ' : ''} ${(!isDiagramPanelOpen && !activePodcast && !isPhone()) ? 'max-w-3xl mx-auto' : ''}`}
-          style={isDiagramPanelOpen && !isPhone() ? { width: `calc(${100 - panelWidth}% - 1px)` } : isPhone() ? { width: '100vw', height: '100dvh', left: 0, top: 0 } : { flex: 1 }}
+          className={`relative flex h-full min-h-0 min-w-0 flex-col bg-slate-50 text-foreground dark:bg-slate-950 dark:text-gray-100 ${isDiagramPanelOpen && !isPhone() ? 'flex-none' : 'flex-1'} ${isPhone() ? 'fixed inset-0 z-30 h-[100dvh] w-screen' : ''}`}
+          style={isDiagramPanelOpen && !isPhone() ? { width: `${100 - panelWidth}%` } : isPhone() ? { width: '100vw', height: '100dvh', left: 0, top: 0 } : { flex: 1 }}
         >
-          {/* Education context indicator */}
-          <div className="flex items-center justify-end px-3 sm:px-6 pt-2">
-            <EducationContextBadge />
+          <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
+            <div className="flex min-w-0 items-center gap-3 lg:hidden">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"><Sparkles className="h-4 w-4" /></span>
+              <div className="min-w-0">
+                <h1 className="truncate text-sm font-semibold sm:text-base">{chatSessionTitle || 'Study workspace'}</h1>
+                <p className="truncate text-xs text-muted-foreground dark:text-gray-400">
+                  {attachedSources.length
+                    ? `Chat grounded in ${attachedSources.length} ${attachedSources.length === 1 ? 'source' : 'sources'}`
+                    : 'Ask anything, or add sources for grounded answers'}
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={openSourcePicker} className="h-9 rounded-full border-border bg-transparent px-3 text-xs text-muted-foreground hover:bg-muted hover:text-foreground dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white lg:hidden">
+                <BookOpen className="mr-1.5 h-3.5 w-3.5" /> Sources <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 dark:bg-gray-800">{attachedSources.length}</span>
+              </Button>
+              <div className="hidden sm:block"><EducationContextBadge /></div>
+            </div>
           </div>
 
           {/* Enhanced Loading States */}
@@ -1027,56 +1384,72 @@ const AIChat: React.FC<AIChatProps> = ({
                 <span>Loading older messages...</span>
               </div>
             </div>
-          ) : activeChatSessionId && messages.length === 0 && !isCurrentlySending && !isSubmittingUserMessage && !isLoadingSessionMessages && !streamingState?.isStreaming && !isCurrentlySendingRef.current && !messages.some(m => m.id?.startsWith?.('optimistic-')) ? (
-            <div className="text-center text-gray-500 dark:text-gray-400 mt-10 md:mt-20 font-claude">
-              <BookPagesAnimation className="mx-auto mb-4 h-16 w-16 text-pink-500" showText={false} />
-              <p className="text-lg md:text-xl">Start the conversation by sending a message!</p>
-            </div>
           ) : null}
 
           {/* Messages */}
           <div
             ref={chatContainerRef}
             onScroll={handleScroll}
-            className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 space-y-4 pb-4 dark:bg-transparent flex flex-col modern-scrollbar"
+            className="min-h-0 flex-1 overflow-y-auto px-3 sm:px-6 py-4 space-y-4 pb-4 dark:bg-transparent flex flex-col modern-scrollbar"
           >
             {/* Show skeleton only when loading first messages */}
             {isLoadingSessionMessages && messages.length === 0 && (
               <MessageSkeleton />
             )}
+            {activeChatSessionId && messages.length === 0 && !isCurrentlySending && !isSubmittingUserMessage && !isLoadingSessionMessages && !streamingState?.isStreaming && !isCurrentlySendingRef.current && !messages.some(m => m.id?.startsWith?.('optimistic-')) && (
+              <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center px-5 py-12 text-center">
+                <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-blue-600 dark:border-gray-700 dark:bg-gray-800/70 dark:text-blue-400">
+                  <Sparkles className="h-6 w-6" />
+                </div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-400">Study workspace</p>
+                <h2 className="mt-3 text-2xl font-medium tracking-tight text-foreground sm:text-3xl">What are you working on?</h2>
+                <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">
+                  {attachedSources.length
+                    ? `Ask a question about your ${attachedSources.length === 1 ? 'attached source' : `${attachedSources.length} attached sources`}, or start with a fresh question.`
+                    : 'Start with a question, or attach notes, documents, and recordings to give the conversation context.'}
+                </p>
+                {attachedSources.length === 0 && (
+                  <Button type="button" variant="outline" onClick={openSourcePicker} className="mt-6 rounded-full border-border bg-muted text-foreground hover:bg-muted/80 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-100 dark:hover:bg-gray-700 dark:hover:text-white">
+                    <Plus className="mr-2 h-4 w-4" /> Attach existing sources
+                  </Button>
+                )}
+              </div>
+            )}
             {messages.length > 0 && (
-              <MessageList
-                messages={messages}
-                isLoading={isLoading}
-                isLoadingSessionMessages={isLoadingSessionMessages}
-                isLoadingOlderMessages={isLoadingOlderMessages}
-                hasMoreMessages={hasMoreMessages}
-                mergedDocuments={mergedDocuments}
-                onDeleteClick={handleMessageDeleteClick}
-                onRegenerateClick={onRegenerateResponse}
-                onRetryClick={onRetryFailedMessage}
-                onViewContent={memoizedHandleViewContent}
-                onMermaidError={memoizedOnMermaidError}
-                onSuggestAiCorrection={memoizedOnSuggestAiCorrection}
-                onToggleUserMessageExpansion={handleToggleUserMessageExpansion}
-                expandedMessages={expandedMessages}
-                isSpeaking={isSpeaking}
-                speakingMessageId={speakingMessageId}
-                isPaused={isPaused}
-                speakMessage={speakMessage}
-                pauseSpeech={pauseSpeech}
-                resumeSpeech={resumeSpeech}
-                stopSpeech={stopSpeech}
-                isDiagramPanelOpen={isDiagramPanelOpen}
-                enableTypingAnimation={true}
-                onMarkMessageDisplayed={handleMarkMessageDisplayed}
-                autoTypeInPanel={autoTypeInPanel}
-                onBlockDetected={memoizedHandleBlockDetected}
-                onBlockUpdate={memoizedHandleBlockDetected}
-                onBlockEnd={memoizedHandleBlockDetected}
-                onDiagramCodeUpdate={handleDiagramCodeUpdate}
-                onEditClick={handleEditClick}
-              />
+              <div className="mx-auto w-full max-w-5xl">
+                <MessageList
+                  messages={messages}
+                  isLoading={isLoading}
+                  isLoadingSessionMessages={isLoadingSessionMessages}
+                  isLoadingOlderMessages={isLoadingOlderMessages}
+                  hasMoreMessages={hasMoreMessages}
+                  mergedDocuments={mergedDocuments}
+                  onDeleteClick={handleMessageDeleteClick}
+                  onRegenerateClick={onRegenerateResponse}
+                  onRetryClick={onRetryFailedMessage}
+                  onViewContent={memoizedHandleViewContent}
+                  onMermaidError={memoizedOnMermaidError}
+                  onSuggestAiCorrection={memoizedOnSuggestAiCorrection}
+                  onToggleUserMessageExpansion={handleToggleUserMessageExpansion}
+                  expandedMessages={expandedMessages}
+                  isSpeaking={isSpeaking}
+                  speakingMessageId={speakingMessageId}
+                  isPaused={isPaused}
+                  speakMessage={speakMessage}
+                  pauseSpeech={pauseSpeech}
+                  resumeSpeech={resumeSpeech}
+                  stopSpeech={stopSpeech}
+                  isDiagramPanelOpen={isDiagramPanelOpen}
+                  enableTypingAnimation={true}
+                  onMarkMessageDisplayed={handleMarkMessageDisplayed}
+                  autoTypeInPanel={autoTypeInPanel}
+                  onBlockDetected={memoizedHandleBlockDetected}
+                  onBlockUpdate={memoizedHandleBlockDetected}
+                  onBlockEnd={memoizedHandleBlockDetected}
+                  onDiagramCodeUpdate={handleDiagramCodeUpdate}
+                  onEditClick={handleEditClick}
+                />
+              </div>
             )}
             {isCurrentlySending && isAiTyping && messages.length > 0 && (
               <div className="flex justify-center font-sans">
@@ -1119,9 +1492,8 @@ const AIChat: React.FC<AIChatProps> = ({
           </div>
 
           {/* Input area */}
-          <div className={`shrink-0 pb-[env(safe-area-inset-bottom)] bg-transparent dark:bg-transparent dark:border-gray-700 font-sans z-10
-            ${isDiagramPanelOpen ? `md:pr-[calc(${panelWidth}%+1.5rem)]` : ''}`}>
-            <div className={`w-full ${(!isDiagramPanelOpen && !activePodcast) ? 'max-w-3xl' : 'max-w-4xl'} mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:border-gray-700 p-2`}>
+          <div className="z-10 shrink-0 bg-transparent pb-[env(safe-area-inset-bottom)] font-sans">
+            <div className={`mx-auto w-full ${(!isDiagramPanelOpen && !activePodcast) ? 'max-w-3xl' : 'max-w-4xl'} rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
               <SubscriptionGuard
                 feature="AI Chat"
                 limitFeature="maxAiMessages"
@@ -1151,9 +1523,10 @@ const AIChat: React.FC<AIChatProps> = ({
                       selectedDocumentTitles={selectedDocumentTitles}
                       selectedNoteTitles={selectedNoteTitles}
                       handleRemoveAllFiles={handleRemoveAllFiles}
-                      onSelectionChange={onSelectionChange}
+                      onSelectionChange={handleSourceSelectionChange}
                       selectedDocumentIds={selectedDocumentIds}
                       documents={mergedDocuments}
+                      recordings={recordings}
                       notes={notes}
                       handleRemoveFile={handleRemoveFile}
                       onViewContent={memoizedHandleViewContent}
@@ -1161,12 +1534,12 @@ const AIChat: React.FC<AIChatProps> = ({
                   </div>
                 ) : null}
                 <div className="flex flex-row gap-2 mt-0 sm:mt-2 w-full items-end">
-                  <Menubar className="flex-shrink-0 bg-white dark:bg-gray-800 rounded-lg">
+                  <Menubar className="flex-shrink-0 rounded-lg border-border bg-muted text-foreground dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
                     <MenubarMenu>
-                      <MenubarTrigger className="h-10 w-10 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                      <MenubarTrigger className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-foreground hover:bg-muted/80 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">
                         <MenuIcon className="h-5 w-5" />
                       </MenubarTrigger>
-                      <MenubarContent align="end" className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+                      <MenubarContent align="end" className="rounded-lg border border-border bg-popover text-popover-foreground shadow-lg dark:border-gray-700 dark:bg-gray-800">
                         <MenubarItem onClick={() => setEnableStreamingMode(!enableStreamingMode)} className="flex items-center gap-2">
                           <motion.div
                             animate={enableStreamingMode ? { scale: [1, 1.2, 1] } : { scale: 1 }}
@@ -1220,7 +1593,7 @@ const AIChat: React.FC<AIChatProps> = ({
                             Generate AI Podcast
                           </span>
                         </MenubarItem>
-                        <MenubarItem 
+                        <MenubarItem
                           onClick={() => {
                             toast.info('AI Image generation is temporarily suspended. We\'re working on improvements — stay tuned!', { duration: 5000 });
                           }}
@@ -1266,7 +1639,7 @@ const AIChat: React.FC<AIChatProps> = ({
                       }
                     }}
                     placeholder="What do you want to know? (Type '/image' or 'generate image' for AI image generation)"
-                    className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[82px] dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 transition-colors duration-300 font-claude"
+                    className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[82px] rounded-xl bg-background px-4 py-3 text-foreground placeholder:text-muted-foreground dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-400 transition-colors duration-300 font-claude"
                     disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
                     rows={1}
                   />
@@ -1388,7 +1761,7 @@ const AIChat: React.FC<AIChatProps> = ({
               documents={mergedDocuments}
               notes={notes}
               selectedDocumentIds={selectedDocumentIds}
-              onSelectionChange={onSelectionChange}
+              onSelectionChange={handleSourceSelectionChange}
               isOpen={showDocumentSelector}
               onClose={() => {
                 setShowDocumentSelector(false);
@@ -1430,7 +1803,143 @@ const AIChat: React.FC<AIChatProps> = ({
             title="Delete Message"
             message="Are you sure you want to delete this message? This action cannot be undone."
           />
+          <Dialog open={showSourcePicker} onOpenChange={setShowSourcePicker}>
+            <DialogContent className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden border-border bg-background p-0 text-foreground dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100 sm:max-w-xl">
+              <DialogHeader className="border-b border-border px-5 py-5 dark:border-slate-800 sm:px-6">
+                <DialogTitle className="text-lg text-foreground dark:text-gray-100">Add sources to this workspace</DialogTitle>
+                <DialogDescription className="mt-1 text-sm text-muted-foreground dark:text-gray-400">
+                  Choose notes, documents, or recordings to use as context in this chat.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="border-b border-border px-5 py-4 dark:border-slate-800 sm:px-6">
+                <label className="relative block">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="search"
+                    value={sourceSearch}
+                    onChange={event => setSourceSearch(event.target.value)}
+                    placeholder="Search your library"
+                    aria-label="Search sources"
+                    className="h-10 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-400"
+                  />
+                </label>
+                <p className="mt-3 text-xs text-muted-foreground dark:text-gray-400">{draftSourceIds.length} selected</p>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2 sm:px-4">
+                {filteredSourceItems.length === 0 ? (
+                  <div className="px-4 py-10 text-center">
+                    <BookOpen className="mx-auto mb-3 h-6 w-6 text-muted-foreground" />
+                    <p className="text-sm font-medium text-foreground dark:text-gray-200">
+                      {sourceItems.length ? 'No sources match your search' : 'Your library is empty'}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground dark:text-gray-400">
+                      {sourceItems.length
+                        ? 'Try a different title or source type.'
+                        : 'Create or upload a note, document, or recording first.'}
+                    </p>
+                    {!sourceItems.length && (
+                      <div className="mt-4 flex justify-center gap-2">
+                        {[
+                          { label: 'Documents', tab: 'documents' },
+                          { label: 'Notes', tab: 'notes' },
+                          { label: 'Recordings', tab: 'recordings' },
+                        ].map(item => (
+                          <Button key={item.tab} type="button" variant="outline" size="sm" onClick={() => { setShowSourcePicker(false); onNavigateToTab(item.tab); }} className="border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white">
+                            {item.label}
+                          </Button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : filteredSourceItems.map(source => {
+                  const Icon = source.icon;
+                  const selected = draftSourceIds.includes(source.id);
+                  return (
+                    <button
+                      key={`${source.kind}-${source.id}`}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => toggleDraftSource(source.id)}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${selected ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-muted dark:hover:bg-gray-800'}`}
+                    >
+                      <span className={`rounded-lg p-2 ${selected ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' : 'bg-muted text-muted-foreground dark:bg-gray-800 dark:text-gray-400'}`}><Icon className="h-4 w-4" /></span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-foreground dark:text-gray-100">{source.title}</span>
+                        <span className="mt-1 block text-xs text-muted-foreground dark:text-gray-400">{source.kind} · {source.detail}</span>
+                      </span>
+                      {selected && <Check className="h-4 w-4 shrink-0 text-blue-400" />}
+                    </button>
+                  );
+                })}
+              </div>
+              <DialogFooter className="border-t border-border px-5 py-4 dark:border-slate-800 sm:px-6">
+                <Button type="button" variant="ghost" onClick={() => setShowSourcePicker(false)} className="text-muted-foreground hover:bg-muted hover:text-foreground dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white">Cancel</Button>
+                <Button type="button" onClick={attachDraftSources} className="rounded-full bg-blue-600 text-white hover:bg-blue-700">Attach {draftSourceIds.length ? `${draftSourceIds.length} source${draftSourceIds.length === 1 ? '' : 's'}` : 'sources'}</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
+
+        {!isDiagramPanelOpen && <aside className={`m-2 hidden shrink-0 flex-col rounded-2xl bg-white p-3 text-foreground shadow-sm transition-[width] duration-200 dark:bg-slate-900 dark:text-gray-200 dark:shadow-none xl:flex ${isStudioPanelOpen ? 'w-[250px]' : 'w-14'}`}>
+          <div className={`flex items-center ${isStudioPanelOpen ? 'justify-between' : 'justify-center'}`}>
+            {isStudioPanelOpen && <h2 className="text-sm font-semibold">Studio</h2>}
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setIsStudioPanelOpen(open => !open)}
+                    className="rounded-full p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    aria-label={isStudioPanelOpen ? 'Hide Studio panel' : 'Show Studio panel'}
+                    aria-expanded={isStudioPanelOpen}
+                  >
+                    {isStudioPanelOpen ? <PanelRightClose className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="left" className="border-border bg-popover text-popover-foreground dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
+                  {isStudioPanelOpen ? 'Hide Studio' : 'Show Studio'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          {isStudioPanelOpen && <>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground dark:text-gray-400">Create study materials using the sources attached to this workspace.</p>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            {studioTools.map(({ label, action, prompt, icon: Icon }) => (
+              <button key={action} type="button" onClick={() => runStudioAction(action, prompt)} className="flex min-h-[64px] flex-col items-start justify-between rounded-xl border border-border bg-muted p-3 text-left text-xs font-medium text-foreground transition hover:bg-muted/80 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-200 dark:hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                <Icon className="h-4 w-4 text-blue-400" />
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-auto rounded-xl border border-slate-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800/70">
+            <Sparkles className="mb-3 h-5 w-5 text-blue-400" />
+            <p className="text-sm font-medium">Made for this workspace</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground dark:text-gray-400">Generated results are added to the conversation.</p>
+          </div>
+          </>}
+          {!isStudioPanelOpen && (
+            <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pt-2">
+              {studioTools.map(({ label, action, prompt, icon: Icon }) => (
+                <TooltipProvider key={action} delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => runStudioAction(action, prompt)}
+                        aria-label={label}
+                        className="flex h-9 w-full items-center justify-center rounded-lg text-blue-600 transition hover:bg-muted hover:text-blue-700 dark:text-blue-400 dark:hover:bg-gray-800 dark:hover:text-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      >
+                        <Icon className="h-4 w-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left" className="border-border bg-popover text-popover-foreground dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">{label}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ))}
+            </div>
+          )}
+        </aside>}
 
         {/* Podcast Panel */}
         {activePodcast && (
@@ -1463,6 +1972,7 @@ const AIChat: React.FC<AIChatProps> = ({
             setPanelWidth={setPanelWidth}
           />
         )}
+        </div>
       </div>
 
       {/* Diagram Panel - Mobile only (fixed overlay, portal) */}
@@ -1505,6 +2015,10 @@ const arePropsEqual = (prevProps: AIChatProps, nextProps: AIChatProps) => {
     prevProps.selectedDocumentIds === nextProps.selectedDocumentIds &&
     prevProps.onSuggestAiCorrection === nextProps.onSuggestAiCorrection &&
     prevProps.documents === nextProps.documents
+    && prevProps.recordings === nextProps.recordings
+    && prevProps.notes === nextProps.notes
+    && prevProps.chatSessionTitle === nextProps.chatSessionTitle
+    && prevProps.onNavigateToTab === nextProps.onNavigateToTab
   );
 };
 

@@ -108,12 +108,12 @@ export const useDashboardStats = (userId: string | undefined) => {
   // Load persisted cache from localStorage if available to prevent refetch on mount
   useEffect(() => {
     if (!userId) return;
-    
+
     // Check in-memory cache first
     if (statsCache[userId]) {
-        setStats(statsCache[userId].data);
-        setLoading(false);
-        return;
+      setStats(statsCache[userId].data);
+      setLoading(false);
+      return;
     }
 
     try {
@@ -142,25 +142,25 @@ export const useDashboardStats = (userId: string | undefined) => {
 
       if (data) {
         return data.map((d: any) => ({
-            date: new Date(d.period || d.period_start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            rawDate: d.period || d.period_start,
-            notes: Number(d.notes_count || 0),
-            recordings: Number(d.recordings_count || 0),
-            documents: Number(d.documents_count || 0),
-            messages: Amount(d.messages_count || 0),
-            quizzes: Number(d.quizzes_count || 0),
-            total: Number(d.notes_count || 0) + Number(d.recordings_count || 0) + Number(d.documents_count || 0) + Number(d.quizzes_count || 0)
+          date: new Date(d.period || d.period_start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          rawDate: d.period || d.period_start,
+          notes: Number(d.notes_count || 0),
+          recordings: Number(d.recordings_count || 0),
+          documents: Number(d.documents_count || 0),
+          messages: Amount(d.messages_count || 0),
+          quizzes: Number(d.quizzes_count || 0),
+          total: Number(d.notes_count || 0) + Number(d.recordings_count || 0) + Number(d.documents_count || 0) + Number(d.quizzes_count || 0)
         }));
       }
       return await fetchActivityDataFallback(days, userId);
     } catch (error) {
-       try {
-          const data = await apiClient.rpc('get_user_activity_stats', {
-            p_user_id: userId,
-            p_days: days
-          });
-          if (data) return data;
-       } catch (ignore) {}
+      try {
+        const data = await apiClient.rpc('get_user_activity_stats', {
+          p_user_id: userId,
+          p_days: days
+        });
+        if (data) return data;
+      } catch (ignore) { }
 
       return await fetchActivityDataFallback(days, userId);
     }
@@ -169,26 +169,26 @@ export const useDashboardStats = (userId: string | undefined) => {
   function Amount(val: any) { return Number(val || 0); }
 
   const fetchLongTermHistory = async (userId: string) => {
-     try {
-        const data = await apiClient.rpc('get_user_activity_history', {
-            p_user_id: userId,
-            p_start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
-            p_interval: 'month'
-        });
-        
-        if (!data) return [];
+    try {
+      const data = await apiClient.rpc('get_user_activity_history', {
+        p_user_id: userId,
+        p_start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
+        p_interval: 'month'
+      });
 
-        return data.map((d: any) => ({
-            period: new Date(d.period || d.period_start).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-            notes: Number(d.notes_count || 0),
-            recordings: Number(d.recordings_count || 0),
-            documents: Number(d.documents_count || 0),
-            messages: Number(d.messages_count || 0),
-            quizzes: Number(d.quizzes_count || 0)
-        }));
-     } catch (err) {
-         return [];
-     }
+      if (!data) return [];
+
+      return data.map((d: any) => ({
+        period: new Date(d.period || d.period_start).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+        notes: Number(d.notes_count || 0),
+        recordings: Number(d.recordings_count || 0),
+        documents: Number(d.documents_count || 0),
+        messages: Number(d.messages_count || 0),
+        quizzes: Number(d.quizzes_count || 0)
+      }));
+    } catch (err) {
+      return [];
+    }
   };
 
 
@@ -215,7 +215,13 @@ export const useDashboardStats = (userId: string | undefined) => {
     try {
       const path = TABLE_PATH[table] || table;
       const result = await apiClient.get(path, { ...params, count: 'true' });
-      return { count: result?.meta?.total ?? 0, error: null };
+      // apiClient currently unwraps the gateway envelope and returns the data
+      // array, so metadata is not always available here. The dashboard mainly
+      // needs to know whether any records exist; use the returned rows as a
+      // fallback instead of incorrectly treating every count as zero.
+      const metadataTotal = result?.meta?.total;
+      const rowCount = Array.isArray(result) ? result.length : 0;
+      return { count: metadataTotal ?? rowCount, error: null };
     } catch (err) {
       // Return 0 on error instead of throwing to prevent dashboard crashes
       return { count: 0, error: null };
@@ -442,7 +448,7 @@ export const useDashboardStats = (userId: string | undefined) => {
 
       // Set minimal stats so dashboard can render quickly
       statsCache[userId] = { data: minimalStats, timestamp: Date.now() };
-      try { localStorage.setItem(`dashboard_stats_${userId}`, JSON.stringify({ ...minimalStats, lastFetched: Date.now() })); } catch (e) {}
+      try { localStorage.setItem(`dashboard_stats_${userId}`, JSON.stringify({ ...minimalStats, lastFetched: Date.now() })); } catch (e) { }
       if (mountedRef.current) {
         setStats(minimalStats);
         setProgress(20);
@@ -510,14 +516,14 @@ export const useDashboardStats = (userId: string | undefined) => {
           // Calculate weekday activity from the 30-day data we already have
           const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
           const weekdayActivity: any = daysOfWeek.map(day => ({ day, activity: 0 }));
-          
+
           if (activityData30Days && activityData30Days.length > 0) {
-              activityData30Days.forEach((dayStat: any) => {
-                  if (dayStat.rawDate) {
-                      const dayIndex = new Date(dayStat.rawDate).getDay(); // 0 = Sunday
-                      weekdayActivity[dayIndex].activity += (dayStat.total || 0);
-                  }
-              });
+            activityData30Days.forEach((dayStat: any) => {
+              if (dayStat.rawDate) {
+                const dayIndex = new Date(dayStat.rawDate).getDay(); // 0 = Sunday
+                weekdayActivity[dayIndex].activity += (dayStat.total || 0);
+              }
+            });
           }
           await new Promise(r => setTimeout(r, 200));
 
@@ -636,16 +642,16 @@ export const useDashboardStats = (userId: string | undefined) => {
             const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
             if (hasWeekdayActivity) {
-                const mostProductiveDayIndex = weekdayData.reduce((maxIndex, day, index) =>
-                    day.activity > weekdayData[maxIndex].activity ? index : maxIndex, 0
-                );
-                mostProductiveDay = days[mostProductiveDayIndex];
+              const mostProductiveDayIndex = weekdayData.reduce((maxIndex, day, index) =>
+                day.activity > weekdayData[maxIndex].activity ? index : maxIndex, 0
+              );
+              mostProductiveDay = days[mostProductiveDayIndex];
             }
 
             if (hasHourlyActivity) {
-                mostProductiveHour = hourlyData.reduce((maxIndex, hour, index) =>
-                    hour.activity > hourlyData[maxIndex].activity ? index : maxIndex, 0
-                );
+              mostProductiveHour = hourlyData.reduce((maxIndex, hour, index) =>
+                hour.activity > hourlyData[maxIndex].activity ? index : maxIndex, 0
+              );
             }
 
             return { mostProductiveDay, mostProductiveHour };
@@ -705,7 +711,7 @@ export const useDashboardStats = (userId: string | undefined) => {
           };
 
           statsCache[userId] = { data: merged, timestamp: Date.now() };
-          try { localStorage.setItem(`dashboard_stats_${userId}`, JSON.stringify({ ...merged, lastFetched: Date.now() })); } catch (e) {}
+          try { localStorage.setItem(`dashboard_stats_${userId}`, JSON.stringify({ ...merged, lastFetched: Date.now() })); } catch (e) { }
           if (mountedRef.current) {
             setStats(merged);
             setProgress(100);
@@ -776,7 +782,7 @@ export const useDashboardStats = (userId: string | undefined) => {
               cached.recentNotes = limitRecent(cached.recentNotes, { id: newRec?.id, title: newRec?.title, category: newRec?.category, created_at: newRec?.created_at });
             } else if (event === 'DELETE') {
               safeInc('totalNotes', -1);
-              cached.recentNotes = (cached.recentNotes || []).filter(r => r.id !== oldRec?.id).slice(0,3);
+              cached.recentNotes = (cached.recentNotes || []).filter(r => r.id !== oldRec?.id).slice(0, 3);
             }
             break;
           case 'class_recordings':
@@ -785,7 +791,7 @@ export const useDashboardStats = (userId: string | undefined) => {
               cached.recentRecordings = limitRecent(cached.recentRecordings, { id: newRec?.id, title: newRec?.title, duration: newRec?.duration, created_at: newRec?.created_at }, 2);
             } else if (event === 'DELETE') {
               safeInc('totalRecordings', -1);
-              cached.recentRecordings = (cached.recentRecordings || []).filter(r => r.id !== oldRec?.id).slice(0,2);
+              cached.recentRecordings = (cached.recentRecordings || []).filter(r => r.id !== oldRec?.id).slice(0, 2);
             }
             break;
           case 'documents':
@@ -794,7 +800,7 @@ export const useDashboardStats = (userId: string | undefined) => {
               cached.recentDocuments = limitRecent(cached.recentDocuments, { id: newRec?.id, title: newRec?.title, type: newRec?.type, created_at: newRec?.created_at, processing_status: newRec?.processing_status }, 2);
             } else if (event === 'DELETE') {
               safeInc('totalDocuments', -1);
-              cached.recentDocuments = (cached.recentDocuments || []).filter(r => r.id !== oldRec?.id).slice(0,2);
+              cached.recentDocuments = (cached.recentDocuments || []).filter(r => r.id !== oldRec?.id).slice(0, 2);
             }
             break;
           case 'chat_messages':
@@ -819,7 +825,7 @@ export const useDashboardStats = (userId: string | undefined) => {
 
         // persist and publish
         statsCache[userId] = { data: cached, timestamp: Date.now() };
-        try { localStorage.setItem(`dashboard_stats_${userId}`, JSON.stringify({ ...cached, lastFetched: Date.now() })); } catch (e) {}
+        try { localStorage.setItem(`dashboard_stats_${userId}`, JSON.stringify({ ...cached, lastFetched: Date.now() })); } catch (e) { }
         if (mountedRef.current) setStats(cached);
       } catch (e) {
         // on error, fallback to debounced full refresh
@@ -838,7 +844,7 @@ export const useDashboardStats = (userId: string | undefined) => {
 
       return () => {
         if (debounceTimer) clearTimeout(debounceTimer);
-        try { supabase.removeChannel(channel); } catch (e) {}
+        try { supabase.removeChannel(channel); } catch (e) { }
       };
     } catch (e) {
       // If realtime subscription fails, silently ignore — still works without realtime.

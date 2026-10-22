@@ -1,6 +1,7 @@
 import { Badge } from '../../ui/components/badge';
-import { X, Paperclip, Image as ImageIcon, BookOpen, StickyNote, FileText } from 'lucide-react';
+import { X, Paperclip, Image as ImageIcon, BookOpen, StickyNote, FileText, Mic } from 'lucide-react';
 import { Document } from '../../../types/Document';
+import { ClassRecording } from '../../../types/Class';
 import { AttachedFile } from './AiChat';
 import { Note } from '@/types';
 import { cn } from '@/lib/utils';
@@ -14,6 +15,7 @@ interface ContextBadgesProps {
   onSelectionChange: (ids: string[]) => void;
   selectedDocumentIds: string[];
   documents: Document[];
+  recordings: ClassRecording[];
   notes: Note[];
   handleRemoveFile: (fileId: string) => void;
   onViewContent: (type: 'image' | 'text' | 'document-text', content: string | null, language?: string, imageUrl?: string) => void;
@@ -24,6 +26,7 @@ export const ContextBadges = ({
   onSelectionChange,
   selectedDocumentIds,
   documents,
+  recordings,
   notes,
   handleRemoveFile,
   onViewContent
@@ -76,6 +79,28 @@ export const ContextBadges = ({
 
       {/* Selected Documents & Notes */}
       {selectedDocumentIds.map(id => {
+         const recording = recordings.find(item => item.id === id);
+         if (recording) {
+            return (
+              <Badge
+                key={id}
+                variant="secondary"
+                className="flex items-center gap-1.5 py-1 pl-2 pr-1.5 border bg-violet-100 text-violet-800 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800"
+              >
+                <Mic className="h-3.5 w-3.5" />
+                <span className="max-w-[150px] truncate" title={recording.title}>{recording.title || 'Untitled recording'}</span>
+                <button
+                  type="button"
+                  aria-label={`Remove ${recording.title || 'recording'} from chat context`}
+                  className="rounded-full p-0.5 ml-1 hover:bg-violet-300/50 dark:hover:bg-violet-800/50"
+                  onClick={() => handleRemoveDocOrNote(id)}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            );
+         }
+
          const result = getDocOrNote(id);
          if (!result) return null;
          

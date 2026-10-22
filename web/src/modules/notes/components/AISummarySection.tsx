@@ -14,11 +14,21 @@ import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
 import { convertMarkdownToHtml, convertHtmlToMarkdown } from '../utils/markdownUtils';
+import { TranslatedContentSection } from './TranslatedContentSection';
 
 interface AISummarySectionProps {
   ai_summary: string | null;
   isSummaryVisible: boolean;
   setIsSummaryVisible: (isVisible: boolean) => void;
+  noteDetails?: {
+    category: string;
+    tags: string[];
+    wordCount: number;
+    updatedAt: string;
+  };
+  translatedContent?: string | null;
+  targetLanguage?: string;
+  setTranslatedContent?: (content: string | null) => void;
   onSummaryChange?: (newSummary: string) => void;
   onRegenerateSummary?: () => void;
   isGenerating?: boolean;
@@ -28,6 +38,10 @@ export const AISummarySection: React.FC<AISummarySectionProps> = ({
   ai_summary,
   isSummaryVisible,
   setIsSummaryVisible,
+  noteDetails,
+  translatedContent,
+  targetLanguage = 'en',
+  setTranslatedContent,
   onSummaryChange,
   onRegenerateSummary,
   isGenerating = false,
@@ -146,11 +160,9 @@ export const AISummarySection: React.FC<AISummarySectionProps> = ({
       <div
         className={`
           ${/* Desktop Styles */ ''}
-          lg:block lg:relative lg:max-h-screen lg:w-80 
-          lg:border-l lg:border-gray-200 lg:dark:border-gray-700
-          lg:bg-gradient-to-br lg:from-blue-50 lg:to-indigo-50
-          lg:dark:from-gray-800 lg:dark:to-gray-900
-          lg:shadow-inner lg:overflow-y-auto lg:pb-12
+          lg:block lg:relative lg:h-full lg:max-h-full lg:w-80 lg:shrink-0
+          lg:rounded-2xl lg:bg-white lg:dark:bg-slate-900
+          lg:shadow-sm lg:overflow-hidden
           
 
           ${/* Mobile Styles */ ''}
@@ -165,11 +177,11 @@ export const AISummarySection: React.FC<AISummarySectionProps> = ({
           ${isSummaryVisible ? 'translate-y-0' : 'translate-y-full lg:translate-y-0'}
           
           ${/* Layout */ ''}
-          flex flex-col overflow-scroll
+          flex flex-col overflow-hidden
         `}
       >
         {/* Header */}
-        <div className="flex-shrink-0 sticky top-0 z-10 bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-gray-700 dark:to-gray-800 border-b border-blue-200 dark:border-gray-600 px-4 py-3">
+        <div className="flex-shrink-0 sticky top-0 z-10 bg-slate-50 dark:bg-slate-800 px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-blue-500 dark:bg-blue-600 rounded-lg">
@@ -246,7 +258,7 @@ export const AISummarySection: React.FC<AISummarySectionProps> = ({
         </div>
 
         {/* Content Area with Scroll */}
-        <div className="flex-1 overflow-y-auto modern-scrollbar px-4 py-4 bg-gradient-to-br from-blue-50/50 to-indigo-50/50 dark:from-gray-800 dark:to-gray-900">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain modern-scrollbar px-4 py-4 bg-white dark:bg-slate-900">
           {isGenerating ? (
             <div className="flex flex-col items-center justify-center h-full space-y-4 text-center">
               <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
@@ -356,6 +368,45 @@ export const AISummarySection: React.FC<AISummarySectionProps> = ({
               >
                 {String(ai_summary || '')}
               </ReactMarkdown>
+            </div>
+          )}
+          {noteDetails && (
+            <section className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/70">
+              <h5 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Note details</h5>
+              <dl className="mt-3 space-y-2 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <dt className="text-slate-500 dark:text-slate-400">Category</dt>
+                  <dd className="text-right font-medium text-slate-800 dark:text-slate-200">{noteDetails.category || 'General'}</dd>
+                </div>
+                <div className="flex items-start justify-between gap-3">
+                  <dt className="text-slate-500 dark:text-slate-400">Length</dt>
+                  <dd className="text-right font-medium text-slate-800 dark:text-slate-200">{noteDetails.wordCount} words</dd>
+                </div>
+                <div className="flex items-start justify-between gap-3">
+                  <dt className="text-slate-500 dark:text-slate-400">Updated</dt>
+                  <dd className="text-right font-medium text-slate-800 dark:text-slate-200">
+                    {new Date(noteDetails.updatedAt).toLocaleDateString()}
+                  </dd>
+                </div>
+              </dl>
+              {noteDetails.tags.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {noteDetails.tags.map(tag => (
+                    <span key={tag} className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+          {translatedContent && setTranslatedContent && (
+            <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+              <TranslatedContentSection
+                translatedContent={translatedContent}
+                targetLanguage={targetLanguage}
+                setTranslatedContent={setTranslatedContent}
+              />
             </div>
           )}
         </div>
