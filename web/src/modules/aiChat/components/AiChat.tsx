@@ -107,7 +107,7 @@ interface AIChatProps {
       processing_status: string;
       processing_error: string | null;
     }>
-  ) => Promise<void>;
+  ) => Promise<boolean | void>;
   onMessageUpdate: (message: Message) => void;
   onReplaceOptimisticMessage: (optimisticId: string, newMessage: Message) => void;
   onLoadMoreDocuments: () => void;
@@ -623,7 +623,13 @@ const AIChat: React.FC<AIChatProps> = ({
             const base64Result = await base64Promise;
             data = base64Result.split(',')[1];
 
-            if (fileType === 'document' || safeFile.type.startsWith('text/')) {
+            const textMimeTypes = [
+              'application/json',
+              'application/javascript',
+              'application/typescript',
+              'application/xml',
+            ];
+            if (safeFile.type.startsWith('text/') || textMimeTypes.includes(safeFile.type)) {
               try {
                 const textReader = new FileReader();
                 const textPromise = new Promise<string>((resolve, reject) => {
@@ -644,7 +650,7 @@ const AIChat: React.FC<AIChatProps> = ({
 
           return {
             name: safeFile.name,
-            mimeType: safeFile.type,
+            mimeType: safeFile.type || (safeFile.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream'),
             data,
             type: fileType,
             size: safeFile.size,
@@ -675,15 +681,15 @@ const AIChat: React.FC<AIChatProps> = ({
             processing_error: null,
           };
         });
-      setInputValue('');
-
       // Note: Message count updates automatically via realtime subscription when AI responds
-      await onSendMessageToBackend(
+      const sendSucceeded = await onSendMessageToBackend(
         inputMessage.trim(),
         documentIds,
         noteIds,
         [...filesForBackend, ...recordingContextFiles]
       );
+      if (sendSucceeded === false) return;
+      setInputValue('');
       void logUserActivity(userProfile?.id, 'chat', 10);
 
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -717,9 +723,6 @@ const AIChat: React.FC<AIChatProps> = ({
       }
 
       toast.error(`Error: ${errorMessage}`);
-      setInputValue('');
-      setAttachedFiles([]);
-      setExpandedMessages([]);
     } finally {
       setIsLoading(false);
       setIsCurrentlySending(false);
@@ -1348,10 +1351,10 @@ const AIChat: React.FC<AIChatProps> = ({
         <div className="flex h-full min-h-0 min-w-0 flex-1">
         {/* Chat Panel */}
         <div
-          className={`relative flex h-full min-h-0 min-w-0 flex-col bg-slate-50 text-foreground dark:bg-slate-950 dark:text-gray-100 ${isDiagramPanelOpen && !isPhone() ? 'flex-none' : 'flex-1'} ${isPhone() ? 'fixed inset-0 z-30 h-[100dvh] w-screen' : ''}`}
-          style={isDiagramPanelOpen && !isPhone() ? { width: `${100 - panelWidth}%` } : isPhone() ? { width: '100vw', height: '100dvh', left: 0, top: 0 } : { flex: 1 }}
+          className={`relative flex h-full min-h-0 min-w-0 flex-col bg-slate-50 text-foreground dark:bg-slate-950 dark:text-gray-100 ${isDiagramPanelOpen && !isPhone() ? 'flex-none' : 'flex-1'}`}
+          style={isDiagramPanelOpen && !isPhone() ? { width: `${100 - panelWidth}%` } : { flex: 1 }}
         >
-          <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          <div className="flex items-center justify-between gap-2 px-3 py-2 sm:gap-3 sm:px-6 sm:py-3">
             <div className="flex min-w-0 items-center gap-3 lg:hidden">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"><Sparkles className="h-4 w-4" /></span>
               <div className="min-w-0">
@@ -1533,7 +1536,7 @@ const AIChat: React.FC<AIChatProps> = ({
                     />
                   </div>
                 ) : null}
-                <div className="flex flex-row gap-2 mt-0 sm:mt-2 w-full items-end">
+                <div className="mt-0 flex w-full min-w-0 flex-row items-end gap-2 sm:mt-2">
                   <Menubar className="flex-shrink-0 rounded-lg border-border bg-muted text-foreground dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
                     <MenubarMenu>
                       <MenubarTrigger className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-foreground hover:bg-muted/80 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700">
@@ -1639,7 +1642,7 @@ const AIChat: React.FC<AIChatProps> = ({
                       }
                     }}
                     placeholder="What do you want to know? (Type '/image' or 'generate image' for AI image generation)"
-                    className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[82px] rounded-xl bg-background px-4 py-3 text-foreground placeholder:text-muted-foreground dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-400 transition-colors duration-300 font-claude"
+                    className="min-h-[56px] max-h-32 min-w-0 flex-1 resize-none overflow-y-auto modern-scrollbar rounded-xl bg-background px-3 py-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-400 transition-colors duration-300 font-claude sm:min-h-[82px] sm:max-h-40 sm:px-4 md:text-lg"
                     disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
                     rows={1}
                   />

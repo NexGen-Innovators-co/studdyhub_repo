@@ -20,7 +20,7 @@ interface StreamedData {
 
 interface StreamingChatHook {
   streamingState: StreamingState;
-  startStreaming: (params: StreamingParams) => Promise<void>;
+  startStreaming: (params: StreamingParams) => Promise<boolean>;
   stopStreaming: () => void;
   pauseStreaming: () => void;
   resumeStreaming: () => void;
@@ -169,7 +169,7 @@ export const useStreamingChat = (): StreamingChatHook => {
           params.onContentChunk(data.response);
           params.onComplete(data);
           stopStreaming();
-          return;
+          return true;
         }
         throw new Error('Invalid response format');
       }
@@ -258,8 +258,8 @@ export const useStreamingChat = (): StreamingChatHook => {
                   params.onComplete(data);
                   clearInterval(timeoutCheck);
                   stopStreaming();
-                  return; // Important: loop ends successfully
-                case 'error':
+                  return true;
+                case 'error': {
                   // Surface backend errors to the user instead of silently swallowing them
                   const errMsg = data.error || data.message || 'Unknown streaming error';
                   setStreamingState({
@@ -271,7 +271,8 @@ export const useStreamingChat = (): StreamingChatHook => {
                   params.onError(errMsg);
                   clearInterval(timeoutCheck);
                   stopStreaming();
-                  return;
+                  return false;
+                }
               }
             } catch (e) {
               // Non-fatal parse error on a single SSE event — skip and continue
@@ -292,6 +293,8 @@ export const useStreamingChat = (): StreamingChatHook => {
             thinkingSteps: accumulatedDataRef.current.thinkingSteps,
             interrupted: true
           });
+          stopStreaming();
+          return true;
         } else {
           // Stream ended with no content and no done event — edge function likely timed out
           const errMsg = 'The AI took too long to respond. Please try again.';
@@ -302,14 +305,16 @@ export const useStreamingChat = (): StreamingChatHook => {
             currentMessageId: null,
           });
           params.onError(errMsg);
+          stopStreaming();
+          return false;
         }
-        stopStreaming();
       }
 
+      return accumulatedDataRef.current.isDone;
     } catch (error: any) {
       if (error.name === 'AbortError') {
         //console.log('🛑 [Streaming] Stream aborted by user');
-        return;
+        return false;
       }
 
       const errorMessage = error.message || 'Unknown streaming error';
@@ -324,6 +329,7 @@ export const useStreamingChat = (): StreamingChatHook => {
 
       params.onError(errorMessage);
       stopStreaming();
+      return false;
     }
   }, [stopStreaming]);
 
@@ -336,4 +342,3 @@ export const useStreamingChat = (): StreamingChatHook => {
     accumulatedDataRef,
   };
 };
-

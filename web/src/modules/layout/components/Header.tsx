@@ -596,14 +596,14 @@ export const Header: React.FC<HeaderProps> = ({
     <>
       <header className="relative border-0 bg-gray-50 shadow-none dark:bg-slate-900">
         {/* Main Header Row */}
-        <div className="flex items-center justify-between min-h-16 px-3 sm:px-4 py-3 sm:py-0 gap-2 sm:gap-3">
+        <div className="flex items-center justify-between min-h-14 px-2 sm:min-h-16 sm:px-4 py-2 sm:py-0 gap-1 sm:gap-3">
 
           {/* Left: Toggle + App Menu + Title */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink-0">
+          <div className="flex items-center gap-1 sm:gap-3 min-w-0 flex-shrink">
             <button
               type="button"
               onClick={onToggleSidebar}
-              className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 flex-shrink-0 cursor-pointer touch-manipulation"
+              className="lg:hidden h-9 w-9 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 flex-shrink-0 cursor-pointer touch-manipulation"
               aria-label="Toggle sidebar"
             >
               <Menu className="h-5 w-5" />
@@ -694,11 +694,11 @@ export const Header: React.FC<HeaderProps> = ({
                   onClick={() => setIsChatHistoryOpen(open => !open)}
                   aria-expanded={isChatHistoryOpen}
                   aria-label="Open chat history"
-                  className="flex items-center gap-2 px-2 sm:px-3"
+                  className="flex h-9 w-9 items-center justify-center gap-2 p-0 sm:h-auto sm:w-auto sm:justify-start sm:px-3"
                 >
                   <History className="h-4 w-4 shrink-0" />
                   <span className="hidden sm:inline">Chats</span>
-                  <ChevronDown className={`h-4 w-4 transition-transform ${isChatHistoryOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`hidden h-4 w-4 transition-transform sm:block ${isChatHistoryOpen ? 'rotate-180' : ''}`} />
                 </Button>
 
                 {isChatHistoryOpen && (
@@ -812,7 +812,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Right: Install + Badge + Offline + Notifications + Action + Avatar */}
-          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+          <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
             <div className="hidden md:block">
               <InstallAppButton />
             </div>
@@ -854,7 +854,7 @@ export const Header: React.FC<HeaderProps> = ({
               <div ref={avatarRef} className="relative">
                 <button
                   onClick={() => setIsAvatarMenuOpen(!isAvatarMenuOpen)}
-                  className={`w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm hover:ring-4 transition-all overflow-hidden shadow-lg flex-shrink-0 ${
+                  className={`h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm hover:ring-4 transition-all overflow-hidden shadow-lg flex-shrink-0 ${
                     subscriptionTier === 'genius' ? 'ring-2 ring-amber-400 dark:ring-amber-500' :
                     subscriptionTier === 'scholar' ? 'ring-2 ring-blue-400 dark:ring-blue-500' :
                     'hover:ring-blue-300 dark:hover:ring-blue-800'

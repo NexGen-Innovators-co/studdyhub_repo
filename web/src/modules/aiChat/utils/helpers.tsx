@@ -39,6 +39,9 @@ export const getFileType = (file: File): 'image' | 'document' | 'other' => {
   if (fileExtension === '.ts') {
     return 'document';
   }
+  if (fileExtension === '.pdf') {
+    return 'document';
+  }
   if (imageTypes.includes(file.type)) {
     return 'image';
   } else if (documentTypes.includes(file.type)) {

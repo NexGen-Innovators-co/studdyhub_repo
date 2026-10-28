@@ -104,7 +104,7 @@ export const useMessageHandlers = () => {
 
     if (!hasTextContent && !hasAttachments) {
       toast.warning('Please enter a message or attach files to send.');
-      return;
+      return false;
     }
 
     // Validate file count limit (max 10 files)
@@ -115,7 +115,7 @@ export const useMessageHandlers = () => {
       );
       dispatch({ type: 'SET_IS_SUBMITTING_USER_MESSAGE', payload: false });
       dispatch({ type: 'SET_IS_AI_LOADING', payload: false });
-      return;
+      return false;
     }
 
     dispatch({ type: 'SET_IS_SUBMITTING_USER_MESSAGE', payload: true });
@@ -127,7 +127,7 @@ export const useMessageHandlers = () => {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) {
         toast.error('You must be logged in to chat.');
-        return;
+        return false;
       }
 
       let currentSessionId = activeChatSessionId;
@@ -151,7 +151,7 @@ export const useMessageHandlers = () => {
         currentSessionId = await createNewChatSession();
         if (!currentSessionId) {
           toast.error('Failed to create chat session. Please try again.');
-          return;
+          return false;
         }
       }
 
@@ -245,7 +245,7 @@ export const useMessageHandlers = () => {
         );
         dispatch({ type: 'SET_IS_SUBMITTING_USER_MESSAGE', payload: false });
         dispatch({ type: 'SET_IS_AI_LOADING', payload: false });
-        return;
+        return false;
       }
 
       // Show warnings if approaching limit
@@ -346,7 +346,7 @@ export const useMessageHandlers = () => {
       // Choose between streaming and regular response
       if (enableStreaming && navigator.onLine) {
         // === STREAMING MODE ===
-        await startStreaming({
+        const streamSucceeded = await startStreaming({
           userId: currentUser.id,
           sessionId: currentSessionId,
           learningStyle: userProfile?.learning_style || 'visual',
@@ -522,6 +522,7 @@ export const useMessageHandlers = () => {
             dispatch({ type: 'SET_IS_AI_LOADING', payload: false });
           },
         });
+        if (!streamSucceeded) return false;
 
       } else if (navigator.onLine) {
         // === REGULAR MODE (Non-streaming) ===
@@ -677,6 +678,7 @@ export const useMessageHandlers = () => {
 
         toast.info('Message saved offline. AI will respond when you are back online.');
       }
+      return true;
     } catch (error: any) {
       ////console.error('Error in handleSubmitMessage:', error);
 
@@ -696,6 +698,7 @@ export const useMessageHandlers = () => {
         errorMessage += `: ${error.message}`;
       }
       toast.error(errorMessage);
+      return false;
     } finally {
       if (cleanupTimeout) {
         clearTimeout(cleanupTimeout);
@@ -1143,4 +1146,3 @@ export const useDataHelpers = () => {
 };
 
 export default useMessageHandlers;
-
