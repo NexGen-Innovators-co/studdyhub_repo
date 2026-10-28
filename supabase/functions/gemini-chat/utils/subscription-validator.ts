@@ -216,7 +216,12 @@ export class SubscriptionValidator {
     }
 
     const subscription = await this.getUserSubscription(userId);
-    const maxSessions = subscription.maxChatSessions || 10;
+    const planSessionLimits: Record<SubscriptionData['subscription_tier'], number> = {
+      free: 5,
+      scholar: 20,
+      genius: Infinity,
+    };
+    const maxSessions = subscription.maxChatSessions ?? planSessionLimits[subscription.subscription_tier];
 
     const { count, error } = await this.supabase
       .from('chat_sessions')
@@ -614,4 +619,3 @@ export async function extractUserIdFromAuth(
     return null;
   }
 }
-

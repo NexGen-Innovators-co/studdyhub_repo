@@ -74,6 +74,33 @@ Development: http://localhost:54321/functions/v1
 
 ## AI & Chat Functions
 
+### Chat Sessions (API Gateway)
+
+Create chat sessions through the authenticated API Gateway rather than invoking
+the `create-ai-chat-session` Edge Function directly.
+
+**Endpoint**: `POST /functions/v1/api/v1/chat/sessions`
+
+**Request Body**:
+```json
+{
+  "title": "New Chat",
+  "document_ids": ["uuid"]
+}
+```
+
+Both fields are optional. The gateway derives `user_id` from the bearer token,
+reuses the user's newest empty session when available, and enforces the chat
+session limit before inserting a new session. Responses use the gateway
+envelope (`success`, `data`, and `error`); the web `apiClient` returns `data`.
+
+**Web Example**:
+```typescript
+const session = await apiClient.post('chat/sessions', {
+  document_ids: selectedDocumentIds,
+});
+```
+
 ### 1. Gemini Chat
 
 Send messages to AI assistant with context awareness.

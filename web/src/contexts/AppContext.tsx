@@ -30,6 +30,7 @@ import { offlineStorage, STORES } from '@/utils/offlineStorage';
 import { useEducationContext } from '../modules/onboarding/hooks/useEducationContext';
 import { useEducatorPermissions } from '../modules/educator/hooks/useEducatorPermissions';
 import type { UserEducationContext, EducatorPermissions } from '../types/Education';
+import { chatService } from '../services/chatService';
 
 // Context interface
 interface AppContextType extends AppState {
@@ -677,18 +678,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return offlineId;
       }
 
-      // online: delegate to edge function which performs subscription/limit checks
-      const { data: result, error: fnError } = await supabase.functions.invoke('create-ai-chat-session', {
-        body: { document_ids: sourceIds },
-      });
-
-      if (fnError) throw fnError;
-      if (!result || !('id' in result)) {
-        throw new Error('Unexpected response from create-ai-chat-session');
-      }
-
-      const sessionId = (result as any).id as string;
-      const existing = (result as any).existing;
+      const sessionData = await chatService.createSession({ document_ids: sourceIds });
+      const sessionId = sessionData.id;
+      const existing = sessionData.existing;
       if (existing && sessionId) {
         dispatch({
           type: 'UPDATE_CHAT_SESSION',
@@ -699,14 +691,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         navigate(`/chat/${sessionId}`, { replace: true });
         return sessionId;
       }
-
-      // fetch newly created session details so we can update state
-      const { data: sessionData, error: sessionError } = await supabase
-        .from('chat_sessions')
-        .select('*')
-        .eq('id', sessionId)
-        .single();
-      if (sessionError || !sessionData) throw sessionError || new Error('Session not found');
 
       const newSession: ChatSession = {
         id: sessionData.id,

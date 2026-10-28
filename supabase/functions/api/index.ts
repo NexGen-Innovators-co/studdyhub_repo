@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.8";
+import { SubscriptionValidator } from "../utils/subscription-validator.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -437,10 +438,66 @@ serve(async (req: Request) => {
           if (error) throw error;
           return ok(data);
         }
-        if (method === "POST") {
-          const body = await req.json().catch(() => ({}));
-          const session = { id: body.id || crypto.randomUUID(), user_id: userId, title: body.title || "New Chat" };
-          const { data, error } = await supabase.from("chat_sessions").upsert(session, { onConflict: "id" }).select().single();
+        if (method === "POST" && !subId2) {
+          let body: Record<string, unknown>;
+          try {
+            const parsedBody: unknown = await req.json();
+            if (!parsedBody || typeof parsedBody !== "object" || Array.isArray(parsedBody)) {
+              return err("Request body must be a JSON object", 400);
+            }
+            body = parsedBody as Record<string, unknown>;
+          } catch {
+            return err("Invalid JSON request body", 400);
+          }
+
+          const rawDocumentIds = body.document_ids;
+          if (rawDocumentIds !== undefined &&
+            (!Array.isArray(rawDocumentIds) || !rawDocumentIds.every((id: unknown) => typeof id === "string"))) {
+            return err("document_ids must be an array of strings", 400);
+          }
+          if (body.title !== undefined && typeof body.title !== "string") {
+            return err("title must be a string", 400);
+          }
+
+          const documentIds = Array.isArray(rawDocumentIds) ? rawDocumentIds : [];
+          const validator = new SubscriptionValidator(supabaseUrl, supabaseServiceKey);
+          const canChat = await validator.canChat(userId);
+          if (!canChat.allowed) return err(canChat.message || "Not allowed to create chat sessions", 403);
+
+          const { data: existing, error: existingError } = await supabase
+            .from("chat_sessions")
+            .select("*")
+            .eq("user_id", userId)
+            .eq("message_count", 0)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (existingError) throw existingError;
+
+          if (existing) {
+            const { data, error } = await supabase
+              .from("chat_sessions")
+              .update({ document_ids: documentIds, updated_at: new Date().toISOString() })
+              .eq("id", existing.id)
+              .eq("user_id", userId)
+              .select()
+              .single();
+            if (error) throw error;
+            return ok({ ...data, existing: true });
+          }
+
+          const limitCheck = await validator.checkChatSessionLimit(userId);
+          if (!limitCheck.allowed) {
+            return err(limitCheck.message || "Chat session limit reached", 403);
+          }
+
+          const session = {
+            user_id: userId,
+            title: body.title || "New Chat",
+            document_ids: documentIds,
+            message_count: 0,
+          };
+          const { data, error } = await supabase.from("chat_sessions").insert(session).select().single();
           if (error) throw error;
           return ok(data, 201);
         }

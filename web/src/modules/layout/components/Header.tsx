@@ -6,6 +6,7 @@ import { Plus, Menu, Bell, LogOut, Users, TrendingUp, User, Home,
   History, BarChart3, Clipboard,
   Clock, Brain, Target, Trophy, Shield,
   Smartphone, CheckCircle,
+  Pencil, Trash2,
   Lock,
   Podcast,
   Radio,
@@ -21,6 +22,15 @@ import { Button } from '../../ui/components/button';
 
 import { toast } from 'sonner';
 import { ConfirmationModal } from '../../ui/components/ConfirmationModal';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../ui/components/dialog';
+import { Input } from '../../ui/components/input';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppContext } from '@/hooks/useAppContext';
 import { useFeatureAccess } from '@/hooks/useFeatureAccess';
@@ -174,6 +184,8 @@ export const Header: React.FC<HeaderProps> = ({
   const {
     handleNavigateToTab,
     createNewChatSession,
+    deleteChatSession,
+    renameChatSession,
     chatSessions,
     activeChatSessionId,
     dispatch,
@@ -188,6 +200,10 @@ export const Header: React.FC<HeaderProps> = ({
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
   const [isAppMenuOpen, setIsAppMenuOpen] = useState(false);
   const [isChatHistoryOpen, setIsChatHistoryOpen] = useState(false);
+  const [sessionToDeleteId, setSessionToDeleteId] = useState<string | null>(null);
+  const [sessionToRenameId, setSessionToRenameId] = useState<string | null>(null);
+  const [sessionTitleDraft, setSessionTitleDraft] = useState('');
+  const [isUpdatingSession, setIsUpdatingSession] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [activeSectionTab, setActiveSectionTab] = useState<string>('');
@@ -197,6 +213,29 @@ export const Header: React.FC<HeaderProps> = ({
   // (e.g. user navigates directly to the dashboard without visiting landing page)
   const localPromptRef = useRef<any>(null);
   const isOnline = useOnlineStatus();
+
+  const handleDeleteChatSession = async () => {
+    if (!sessionToDeleteId || isUpdatingSession) return;
+    setIsUpdatingSession(true);
+    try {
+      await deleteChatSession(sessionToDeleteId);
+      setSessionToDeleteId(null);
+    } finally {
+      setIsUpdatingSession(false);
+    }
+  };
+
+  const handleRenameChatSession = async () => {
+    const title = sessionTitleDraft.trim();
+    if (!sessionToRenameId || !title || isUpdatingSession) return;
+    setIsUpdatingSession(true);
+    try {
+      await renameChatSession(sessionToRenameId, title);
+      setSessionToRenameId(null);
+    } finally {
+      setIsUpdatingSession(false);
+    }
+  };
 
   const avatarRef = useRef<HTMLDivElement>(null);
   const appMenuRef = useRef<HTMLDivElement>(null);
@@ -672,28 +711,55 @@ export const Header: React.FC<HeaderProps> = ({
                       {chatSessions.length === 0 ? (
                         <p className="px-3 py-6 text-center text-sm text-slate-500 dark:text-slate-400">No conversations yet</p>
                       ) : chatSessions.map(session => (
-                        <button
+                        <div
                           key={session.id}
-                          type="button"
-                          onClick={() => {
-                            dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: session.id });
-                            navigate(`/chat/${session.id}`);
-                            setIsChatHistoryOpen(false);
-                          }}
-                          className={`flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
+                          className={`group flex items-center gap-1 rounded-lg transition-colors ${
                             activeChatSessionId === session.id
                               ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
                               : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700'
                           }`}
                         >
-                          <MessageSquare className="mt-0.5 h-4 w-4 shrink-0" />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-medium">{session.title || 'New conversation'}</span>
-                            <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
-                              {new Date(session.last_message_at || session.created_at).toLocaleDateString()}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: session.id });
+                              navigate(`/chat/${session.id}`);
+                              setIsChatHistoryOpen(false);
+                            }}
+                            className="flex min-w-0 flex-1 items-start gap-3 rounded-lg px-3 py-2.5 text-left"
+                          >
+                            <MessageSquare className="mt-0.5 h-4 w-4 shrink-0" />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium">{session.title || 'New conversation'}</span>
+                              <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                                {new Date(session.last_message_at || session.created_at).toLocaleDateString()}
+                              </span>
                             </span>
-                          </span>
-                        </button>
+                          </button>
+                          <div className="flex shrink-0 pr-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                            <button
+                              type="button"
+                              aria-label={`Rename ${session.title || 'chat session'}`}
+                              title="Rename chat"
+                              onClick={() => {
+                                setSessionToRenameId(session.id);
+                                setSessionTitleDraft(session.title || '');
+                              }}
+                              className="rounded-md p-2 text-slate-500 hover:bg-white hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-slate-300 dark:hover:bg-slate-600 dark:hover:text-blue-300"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`Delete ${session.title || 'chat session'}`}
+                              title="Delete chat"
+                              onClick={() => setSessionToDeleteId(session.id)}
+                              className="rounded-md p-2 text-slate-500 hover:bg-white hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:text-slate-300 dark:hover:bg-slate-600 dark:hover:text-red-300"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
                       ))}
                     </div>
                     {hasMoreChatSessions && (
@@ -908,6 +974,55 @@ export const Header: React.FC<HeaderProps> = ({
         title="Sign Out"
         message="Are you sure you want to sign out?"
       />
+      <ConfirmationModal
+        isOpen={sessionToDeleteId !== null}
+        onClose={() => {
+          if (!isUpdatingSession) setSessionToDeleteId(null);
+        }}
+        onConfirm={handleDeleteChatSession}
+        title="Delete chat"
+        message="Delete this conversation and all of its messages? This cannot be undone."
+      />
+      <Dialog
+        open={sessionToRenameId !== null}
+        onOpenChange={(open) => {
+          if (!open && !isUpdatingSession) setSessionToRenameId(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename chat</DialogTitle>
+            <DialogDescription>Choose a clear name so you can find this conversation later.</DialogDescription>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={sessionTitleDraft}
+            onChange={(event) => setSessionTitleDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') void handleRenameChatSession();
+            }}
+            maxLength={120}
+            aria-label="Chat title"
+            disabled={isUpdatingSession}
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSessionToRenameId(null)}
+              disabled={isUpdatingSession}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleRenameChatSession()}
+              disabled={!sessionTitleDraft.trim() || isUpdatingSession}
+            >
+              {isUpdatingSession ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Save name
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
